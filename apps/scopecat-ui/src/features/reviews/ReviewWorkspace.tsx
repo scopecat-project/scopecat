@@ -8,6 +8,7 @@ import type {
   ReviewCompileCommand,
   ReviewSession,
 } from "../../api-contract";
+import { ApiError } from "../../api-client";
 import { errorMessage } from "../../lib/presentation";
 import { classes, primaryButton } from "../../ui/styles";
 import { CompiledInspectionView } from "../inspections/CompiledInspectionView";
@@ -35,6 +36,7 @@ export function ReviewWorkspace({ daemonUnavailable }: { daemonUnavailable: bool
       ? reviews.data?.items.find((session) => session.session_id === requestedId)
       : (reviews.data?.items.find((session) => session.active) ?? reviews.data?.items[0]);
   const selectedId = selected?.session_id;
+  const unavailable = daemonUnavailable || reviews.isError || reviews.failureCount > 0;
 
   useEffect(() => {
     if (requestedId === undefined && selectedId) {
@@ -42,10 +44,10 @@ export function ReviewWorkspace({ daemonUnavailable }: { daemonUnavailable: bool
     }
   }, [requestedId, selectedId]);
 
-  if (daemonUnavailable)
+  if (daemonUnavailable && !reviews.data)
     return <WorkspaceMessage title="本地服务暂不可用" detail="恢复连接后可继续查看检查会话。" />;
   if (reviews.isPending) return <WorkspaceMessage title="正在加载检查会话" pending />;
-  if (reviews.isError) {
+  if (!reviews.data) {
     return <WorkspaceMessage title="无法加载检查会话" detail={errorMessage(reviews.error)} />;
   }
   if (!selected && requestedId === undefined) {
@@ -58,54 +60,81 @@ export function ReviewWorkspace({ daemonUnavailable }: { daemonUnavailable: bool
   }
 
   return (
-    <div className="grid min-h-[680px] grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-lg border border-line bg-panel max-[900px]:grid-cols-1">
-      <aside className="border-r border-line bg-panel-soft p-2.5 max-[900px]:border-r-0 max-[900px]:border-b">
-        <div className="flex items-center justify-between px-2 py-2">
-          <strong className="text-xs tracking-[0.08em] text-text-dim uppercase">检查会话</strong>
-          <span className="text-xs text-text-dim">{reviews.data.items.length}</span>
-        </div>
-        <div className="grid gap-1.5 max-[900px]:grid-cols-[repeat(auto-fit,minmax(210px,1fr))]">
-          {reviews.data.items.map((session) => (
-            <button
-              aria-pressed={session.session_id === selected?.session_id}
-              className={classes(
-                "grid cursor-pointer gap-1 rounded-md border border-transparent bg-transparent px-2.5 py-2.5 text-left text-text-soft hover:bg-panel",
-                session.session_id === selected?.session_id && "border-line-strong bg-panel",
-              )}
-              key={session.session_id}
-              onClick={() => {
-                window.location.hash = `reviews/${encodeURIComponent(session.session_id)}`;
-              }}
-              type="button"
-            >
-              <span className="flex items-center justify-between gap-2 text-xs font-bold">
-                <span className="truncate">{session.title}</span>
-                <SessionState active={session.active} />
-              </span>
-              <span className="truncate font-mono text-xs text-text-dim">
-                {session.experiment_id}
-              </span>
-            </button>
-          ))}
-        </div>
-      </aside>
-      {selected ? (
-        <ReviewDetail key={selected.session_id} sessionId={selected.session_id} />
-      ) : (
-        <WorkspaceMessage
-          title="指定的检查会话不存在"
-          detail={`会话 ${requestedId} 已不可用。地址已保留；请从列表主动选择其他会话，或从 Notebook 创建新会话。`}
-        />
+    <>
+      {unavailable && (
+        <Controls.Notice role="alert">
+          {daemonUnavailable ? "本地服务暂不可用" : "无法加载检查会话"}。
+          当前显示上次收到的会话信息；未提交输入已保留，恢复连接前不能编译。
+        </Controls.Notice>
       )}
-    </div>
+      <div className="grid min-h-[680px] grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-lg border border-line bg-panel max-[900px]:grid-cols-1">
+        <aside className="border-r border-line bg-panel-soft p-2.5 max-[900px]:border-r-0 max-[900px]:border-b">
+          <div className="flex items-center justify-between px-2 py-2">
+            <strong className="text-xs tracking-[0.08em] text-text-dim uppercase">检查会话</strong>
+            <span className="text-xs text-text-dim">{reviews.data.items.length}</span>
+          </div>
+          <div className="grid gap-1.5 max-[900px]:grid-cols-[repeat(auto-fit,minmax(210px,1fr))]">
+            {reviews.data.items.map((session) => (
+              <button
+                aria-pressed={session.session_id === selected?.session_id}
+                className={classes(
+                  "grid cursor-pointer gap-1 rounded-md border border-transparent bg-transparent px-2.5 py-2.5 text-left text-text-soft hover:bg-panel",
+                  session.session_id === selected?.session_id && "border-line-strong bg-panel",
+                )}
+                key={session.session_id}
+                onClick={() => {
+                  window.location.hash = `reviews/${encodeURIComponent(session.session_id)}`;
+                }}
+                type="button"
+              >
+                <span className="flex items-center justify-between gap-2 text-xs font-bold">
+                  <span className="truncate">{session.title}</span>
+                  <SessionState active={session.active} />
+                </span>
+                <span className="truncate font-mono text-xs text-text-dim">
+                  {session.experiment_id}
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+        {selected ? (
+          <ReviewDetail
+            key={selected.session_id}
+            sessionId={selected.session_id}
+            unavailable={unavailable}
+            listedActive={selected.active}
+          />
+        ) : unavailable ? (
+          <WorkspaceMessage
+            title="暂时无法确认检查会话"
+            detail="地址已保留；恢复连接后重新确认此会话是否存在。"
+          />
+        ) : (
+          <WorkspaceMessage
+            title="指定的检查会话不存在"
+            detail={`会话 ${requestedId} 已不可用。地址已保留；请从列表主动选择其他会话，或从 Notebook 创建新会话。`}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
-function ReviewDetail({ sessionId }: { sessionId: string }) {
+function ReviewDetail({
+  sessionId,
+  unavailable,
+  listedActive,
+}: {
+  sessionId: string;
+  unavailable: boolean;
+  listedActive: boolean;
+}) {
   const queryClient = useQueryClient();
   const review = useQuery({
     queryKey: ["review", sessionId],
     queryFn: ({ signal }) => getReview(sessionId, signal),
+    enabled: !unavailable,
     refetchInterval: 500,
   });
   const compile = useMutation({
@@ -117,12 +146,34 @@ function ReviewDetail({ sessionId }: { sessionId: string }) {
   });
 
   if (review.isPending) return <WorkspaceMessage title="正在加载编译检查" pending />;
-  if (review.isError) {
+  const failure = review.error ?? review.failureReason;
+  if (failure instanceof ApiError && failure.status === 404) {
+    return (
+      <WorkspaceMessage
+        title="指定的检查会话不存在"
+        detail="地址已保留；请选择其他会话，或从 Notebook 创建新会话。"
+      />
+    );
+  }
+  if (!review.data) {
     return <WorkspaceMessage title="无法加载检查会话" detail={errorMessage(review.error)} />;
   }
-  const session = review.data;
+  const session = { ...review.data, active: review.data.active && listedActive };
+  const blocked = unavailable || review.isError || review.failureCount > 0;
+  const submitCompile = (command: ReviewCompileCommand) => {
+    if (!blocked && session.active) compile.mutate(command);
+  };
   return (
-    <section className="min-w-0 p-4 max-[680px]:p-2.5">
+    <fieldset
+      disabled={blocked}
+      aria-label="编译检查"
+      className="m-0 min-w-0 border-0 p-4 max-[680px]:p-2.5"
+    >
+      {(review.isError || review.failureCount > 0) && !unavailable && (
+        <Controls.Notice role="alert">
+          无法加载检查会话。当前显示上次收到的详情；未提交输入已保留，恢复连接前不能编译。
+        </Controls.Notice>
+      )}
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
         <div className="min-w-0 break-words">
           <div className="mb-1 flex items-center gap-2">
@@ -139,11 +190,13 @@ function ReviewDetail({ sessionId }: { sessionId: string }) {
           {session.pending_request_count > 0 && (
             <LoaderCircle className="animate-spin" size={13} aria-hidden="true" />
           )}
-          {session.pending_request_count > 0
-            ? `${session.pending_request_count} 个编译请求等待完成`
-            : session.active
-              ? "编译器就绪"
-              : "编译器已断开"}
+          {blocked
+            ? "状态暂不可用"
+            : session.pending_request_count > 0
+              ? `${session.pending_request_count} 个编译请求等待完成`
+              : session.active
+                ? "编译器就绪"
+                : "编译器已断开"}
         </span>
       </header>
 
@@ -178,11 +231,11 @@ function ReviewDetail({ sessionId }: { sessionId: string }) {
         key={pointCompilerKey(session)}
         compileError={compile.error}
         compiling={compile.isPending}
-        onCompile={(command) => compile.mutate(command)}
+        onCompile={submitCompile}
         session={session}
       />
-      <InspectionResult onCompile={(command) => compile.mutate(command)} session={session} />
-    </section>
+      <InspectionResult onCompile={submitCompile} session={session} />
+    </fieldset>
   );
 }
 

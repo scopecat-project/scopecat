@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../api-client";
 import type { ReviewSession } from "../../api-contract";
 import { ReviewWorkspace } from "./ReviewWorkspace";
 import { compileReviewPoint, getReview, getReviews } from "./review-api";
@@ -36,6 +37,114 @@ afterEach(() => {
 });
 
 describe("ReviewWorkspace", () => {
+  it.each(["list", "detail", "daemon"] as const)(
+    "retains unsubmitted coordinates and mode after a temporary %s failure",
+    async (source) => {
+      const { client, setDaemonUnavailable } = renderWorkspace();
+      await screen.findByText("编译选点");
+      fireEvent.change(screen.getByRole("spinbutton", { name: "amplification" }), {
+        target: { value: "3" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "自由坐标" }));
+      if (source === "daemon") {
+        setDaemonUnavailable(true);
+      } else {
+        const fetch = source === "list" ? vi.mocked(getReviews) : vi.mocked(getReview);
+        fetch.mockRejectedValue(new Error("temporary failure"));
+        await act(() =>
+          client.refetchQueries({
+            queryKey: source === "list" ? ["reviews"] : ["review", "review-1"],
+          }),
+        );
+      }
+      await waitFor(() => expect(screen.getByRole("button", { name: "编译波形" })).toBeDisabled());
+      fireEvent.click(screen.getByRole("button", { name: "编译波形" }));
+      fireEvent.submit(screen.getByRole("searchbox", { name: "搜索程序节点" }).closest("form")!);
+      expect(compileReviewPoint).not.toHaveBeenCalled();
+      vi.mocked(getReviews).mockResolvedValue({ items: [reviewSession()] });
+      vi.mocked(getReview).mockResolvedValue(reviewSession());
+      if (source === "daemon") setDaemonUnavailable(false);
+      else
+        await act(() =>
+          client.refetchQueries({
+            queryKey: source === "list" ? ["reviews"] : ["review", "review-1"],
+          }),
+        );
+      await waitFor(() => expect(screen.getByRole("button", { name: "编译波形" })).toBeEnabled());
+      expect(screen.getByRole("spinbutton", { name: "amplification" })).toHaveValue(3);
+      expect(screen.getByRole("button", { name: "自由坐标" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    },
+  );
+
+  it("does not carry a failed session's draft into another session", async () => {
+    const other = { ...reviewSession(), session_id: "review-2", title: "Other review" };
+    vi.mocked(getReviews).mockResolvedValue({ items: [reviewSession(), other] });
+    vi.mocked(getReview).mockImplementation(async (id) =>
+      id === "review-2" ? other : reviewSession(),
+    );
+    const { client } = renderWorkspace();
+    await screen.findByText("编译选点");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "amplification" }), {
+      target: { value: "3" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "自由坐标" }));
+    vi.mocked(getReview).mockImplementation(async (id) => {
+      if (id === "review-1") throw new Error("temporary failure");
+      return other;
+    });
+    await act(() => client.refetchQueries({ queryKey: ["review", "review-1"] }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "编译波形" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: /Other review/ }));
+    await screen.findByText("会话：review-2");
+    expect(screen.getByRole("spinbutton", { name: "amplification" })).toHaveValue(1);
+    expect(screen.getByRole("button", { name: "精确匹配" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(window.location.hash).toBe("#reviews/review-2");
+  });
+
+  it("keeps inactive recovery read-only and treats a confirmed 404 as missing", async () => {
+    const { client } = renderWorkspace();
+    await screen.findByText("编译选点");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "amplification" }), {
+      target: { value: "3" },
+    });
+    vi.mocked(getReview).mockRejectedValue(new Error("temporary failure"));
+    await act(() => client.refetchQueries({ queryKey: ["review", "review-1"] }));
+    vi.mocked(getReview).mockResolvedValue({ ...reviewSession(), active: false });
+    await act(() => client.refetchQueries({ queryKey: ["review", "review-1"] }));
+    await screen.findByText("编译器已断开");
+    expect(screen.getByRole("spinbutton", { name: "amplification" })).toHaveValue(3);
+    expect(screen.getByRole("button", { name: "编译波形" })).toBeDisabled();
+    vi.mocked(getReview).mockRejectedValue(new ApiError("missing", 404));
+    await act(() => client.refetchQueries({ queryKey: ["review", "review-1"] }));
+    expect(await screen.findByText("指定的检查会话不存在")).toBeVisible();
+    expect(screen.queryByRole("spinbutton", { name: "amplification" })).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("#reviews/review-1");
+    expect(compileReviewPoint).not.toHaveBeenCalled();
+  });
+
+  it("does not infer a missing exact session from a failed list refresh", async () => {
+    const { client } = renderWorkspace();
+    await screen.findByText("编译选点");
+    vi.mocked(getReviews).mockRejectedValue(new Error("temporary failure"));
+    await act(() => client.refetchQueries({ queryKey: ["reviews"] }));
+    act(() => {
+      window.history.replaceState(null, "", "/#reviews/unknown");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(await screen.findByText("暂时无法确认检查会话")).toBeVisible();
+    expect(screen.queryByText("指定的检查会话不存在")).not.toBeInTheDocument();
+    vi.mocked(getReviews).mockResolvedValue({ items: [reviewSession()] });
+    await act(() => client.refetchQueries({ queryKey: ["reviews"] }));
+    expect(await screen.findByText("指定的检查会话不存在")).toBeVisible();
+    expect(window.location.hash).toBe("#reviews/unknown");
+  });
+
   it("shows Chinese empty and loading states", async () => {
     window.history.replaceState(null, "", "/#reviews");
     vi.mocked(getReviews).mockResolvedValue({ items: [] });
@@ -366,13 +475,16 @@ function renderWorkspace() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchInterval: false } },
   });
+  const content = (unavailable: boolean) => (
+    <QueryClientProvider client={client}>
+      <ReviewWorkspace daemonUnavailable={unavailable} />
+    </QueryClientProvider>
+  );
+  const view = render(content(false));
   return {
     client,
-    ...render(
-      <QueryClientProvider client={client}>
-        <ReviewWorkspace daemonUnavailable={false} />
-      </QueryClientProvider>,
-    ),
+    ...view,
+    setDaemonUnavailable: (unavailable: boolean) => view.rerender(content(unavailable)),
   };
 }
 
