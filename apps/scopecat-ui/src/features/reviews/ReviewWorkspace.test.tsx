@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewSession } from "../../api-contract";
 import { ReviewWorkspace } from "./ReviewWorkspace";
@@ -23,6 +23,7 @@ vi.mock("../../ui/EChart", () => ({
 }));
 
 beforeEach(() => {
+  vi.clearAllMocks();
   const value = reviewSession();
   vi.mocked(getReviews).mockResolvedValue({ items: [value] });
   vi.mocked(getReview).mockResolvedValue(value);
@@ -35,39 +36,164 @@ afterEach(() => {
 });
 
 describe("ReviewWorkspace", () => {
+  it("shows Chinese empty and loading states", async () => {
+    window.history.replaceState(null, "", "/#reviews");
+    vi.mocked(getReviews).mockResolvedValue({ items: [] });
+    renderWorkspace();
+    expect(screen.getByText("正在加载检查会话")).toBeVisible();
+    expect(await screen.findByText("暂无实验检查会话")).toBeVisible();
+  });
+
+  it("keeps exact identity on a list error", async () => {
+    vi.mocked(getReviews).mockRejectedValue(new Error("diagnostic"));
+    renderWorkspace();
+    expect(await screen.findByText("无法加载检查会话")).toBeVisible();
+    expect(window.location.hash).toBe("#reviews/review-1");
+  });
+
+  it("shows submission failure without replacing the completed result", async () => {
+    vi.mocked(compileReviewPoint).mockRejectedValue(new Error("diagnostic"));
+    renderWorkspace();
+    await screen.findByText("编译选点");
+    fireEvent.click(screen.getByRole("button", { name: "编译波形" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("提交失败：diagnostic");
+    expect(screen.getByText("结果请求：initial")).toBeVisible();
+  });
+
+  it("preserves a missing exact identity and allows explicit reselection", async () => {
+    window.history.replaceState(null, "", "/#reviews/missing");
+    renderWorkspace();
+    expect(await screen.findByText("指定的检查会话不存在")).toBeVisible();
+    expect(window.location.hash).toBe("#reviews/missing");
+    expect(getReview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /DRAG beta review/ }));
+    expect(await screen.findByText("编译选点")).toBeVisible();
+    expect(window.location.hash).toBe("#reviews/review-1");
+  });
+
+  it("defaults only an entry without an ID and keeps it fixed when the list changes", async () => {
+    window.history.replaceState(null, "", "/#reviews");
+    const { client } = renderWorkspace();
+    await screen.findByText("编译选点");
+    expect(window.location.hash).toBe("#reviews/review-1");
+    const other = { ...reviewSession(), session_id: "other", title: "Other" };
+    await act(() => client.setQueryData(["reviews"], { items: [other] }));
+    expect(await screen.findByText("指定的检查会话不存在")).toBeVisible();
+    expect(window.location.hash).toBe("#reviews/review-1");
+  });
+
+  it("responds to same-workspace history changes and malformed exact IDs", async () => {
+    renderWorkspace();
+    await screen.findByText("编译选点");
+    act(() => {
+      window.history.replaceState(null, "", "/#reviews/%broken");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(await screen.findByText("指定的检查会话不存在")).toBeVisible();
+    expect(window.location.hash).toBe("#reviews/%broken");
+    act(() => {
+      window.history.replaceState(null, "", "/#reviews/review-1");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(await screen.findByText("编译选点")).toBeVisible();
+  });
+
+  it("labels shared pending work and the previous result without replacing typed coordinates", async () => {
+    const { client } = renderWorkspace();
+    await screen.findByText("编译选点");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "amplification" }), {
+      target: { value: "3" },
+    });
+    const pending = {
+      ...reviewSession(),
+      pending_request_count: 1,
+      latest_request: {
+        session_id: "review-1",
+        request_id: "other-request",
+        coordinates: { amplification: 2 },
+        coordinate_mode: "free" as const,
+      },
+    };
+    await act(() => client.setQueryData(["review", "review-1"], pending));
+    expect(await screen.findByText(/上一结果（新请求尚未完成）/)).toBeVisible();
+    expect(screen.getByText("请求 other-request")).toBeVisible();
+    expect(screen.getByText("结果请求：initial")).toBeVisible();
+    expect(screen.getByText("2026-08-13T09:00:01Z")).toBeVisible();
+    expect(screen.getByRole("button", { name: "编译波形" })).toBeEnabled();
+    await act(() =>
+      client.setQueryData(["review", "review-1"], {
+        ...pending,
+        pending_request_count: 0,
+        latest_result: {
+          ...pending.latest_result,
+          request_id: "other-request",
+          point: { point_index: 1, coordinates: { amplification: 2 }, source: "author" },
+        },
+      }),
+    );
+    expect(await screen.findByText("最新请求：已完成")).toBeVisible();
+    expect(screen.getByRole("spinbutton", { name: "amplification" })).toHaveValue(3);
+  });
+
+  it("shows failed result identity, disconnected state and input validation in Chinese", async () => {
+    const { client } = renderWorkspace();
+    await screen.findByText("编译选点");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "amplification" }), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "编译波形" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("amplification 需要填写值");
+    expect(compileReviewPoint).not.toHaveBeenCalled();
+    await act(() =>
+      client.setQueryData(["review", "review-1"], {
+        ...reviewSession(),
+        active: false,
+        latest_result: {
+          request_id: "failed",
+          completed_at: "2026-08-13T09:00:02Z",
+          inspections: [],
+          error: "compiler diagnostic",
+        },
+      }),
+    );
+    expect(await screen.findByText("结果请求：failed")).toBeVisible();
+    expect(screen.getByText("compiler diagnostic")).toBeVisible();
+    expect(screen.getByRole("button", { name: "编译波形" })).toBeDisabled();
+  });
+
   it("shows typed waveform inspection and physical realization identity", async () => {
     renderWorkspace();
 
-    expect(await screen.findByText("Compile point")).toBeVisible();
-    expect(screen.getByText("Planned point #1")).toBeVisible();
-    expect(screen.getByRole("img", { name: "Compiled physical waveforms" })).toBeVisible();
+    expect(await screen.findByText("编译选点")).toBeVisible();
+    expect(screen.getByText("计划点 #1")).toBeVisible();
+    expect(screen.getByRole("img", { name: "编译后的物理波形" })).toBeVisible();
     expect(screen.getByText("awg-1/outputs/i")).toBeVisible();
     expect(screen.getByText("sha256:realization")).toBeVisible();
-    expect(screen.getByText("Quantum program")).toBeVisible();
-    expect(screen.getByLabelText("Program layer overview")).toBeVisible();
-    expect(screen.getByText("Intent")).toBeVisible();
-    expect(screen.getByText("Timed events")).toBeVisible();
-    expect(screen.getByRole("tab", { name: /Scheduled pulse events/ })).toHaveAttribute(
+    expect(screen.getByText("量子程序")).toBeVisible();
+    expect(screen.getByLabelText("程序层级总览")).toBeVisible();
+    expect(screen.getByText("设计意图")).toBeVisible();
+    expect(screen.getByText("时序事件")).toBeVisible();
+    expect(screen.getByRole("tab", { name: /已调度脉冲事件/ })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(screen.getByText("play drive(q0)")).toBeVisible();
     fireEvent.click(screen.getByText("play drive(q0)"));
-    expect(screen.getByText("entity q0")).toBeVisible();
+    expect(screen.getByText("实体 q0")).toBeVisible();
   });
 
   it("navigates lowering lineage across already loaded abstraction layers", async () => {
     renderWorkspace();
-    await screen.findByText("Quantum program");
+    await screen.findByText("量子程序");
 
     fireEvent.click(screen.getByText("play drive(q0)"));
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open lineage Bound logical program x90(q0)",
+        name: "打开转换关系 绑定逻辑程序 x90(q0)",
       }),
     );
 
-    expect(screen.getByRole("tab", { name: /Bound logical program/ })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /绑定逻辑程序/ })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -75,7 +201,7 @@ describe("ReviewWorkspace", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "← Back to play drive(q0)" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "← 返回 play drive(q0)" })).toBeVisible();
   });
 
   it("queries an exact lineage node when its layer page is not loaded", async () => {
@@ -93,11 +219,11 @@ describe("ReviewWorkspace", () => {
     vi.mocked(getReview).mockResolvedValue(value);
 
     renderWorkspace();
-    await screen.findByText("Quantum program");
+    await screen.findByText("量子程序");
     fireEvent.click(screen.getByText("play drive(q0)"));
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open lineage Bound logical program logical:operation:body/gate",
+        name: "打开转换关系 绑定逻辑程序 logical:operation:body/gate",
       }),
     );
 
@@ -125,33 +251,33 @@ describe("ReviewWorkspace", () => {
     vi.mocked(getReview).mockResolvedValue(value);
 
     renderWorkspace();
-    await screen.findByText("Quantum program");
-    fireEvent.click(screen.getByRole("tab", { name: /Physical placement/ }));
+    await screen.findByText("量子程序");
+    fireEvent.click(screen.getByRole("tab", { name: /物理映射/ }));
 
-    expect(screen.getByText("selected", { selector: "span" })).toBeVisible();
-    expect(screen.getByText("rejected", { selector: "span" })).toBeVisible();
+    expect(screen.getByText("已选用", { selector: "span" })).toBeVisible();
+    expect(screen.getByText("已拒绝", { selector: "span" })).toBeVisible();
     fireEvent.click(screen.getByText("rejected drive(q0) → awg-2:q0"));
-    expect(screen.getByText("Route rejected")).toBeVisible();
+    expect(screen.getByText("路由已拒绝")).toBeVisible();
     expect(screen.getByText("requested q0 but route is configured for q1")).toBeVisible();
 
     fireEvent.click(screen.getByText("selected drive(q0) → awg-1:q0"));
-    expect(screen.getByText("Route selected")).toBeVisible();
+    expect(screen.getByText("路由已选用")).toBeVisible();
   });
 
   it("queries one bounded program layer without changing the selected point", async () => {
     renderWorkspace();
-    await screen.findByText("Quantum program");
+    await screen.findByText("量子程序");
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "Program node search" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索程序节点" }), {
       target: { value: "drive" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Program entity" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "程序实体" }), {
       target: { value: "q0" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Program result" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "程序结果" }), {
       target: { value: "readout" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Query layer" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询程序层" }));
 
     await waitFor(() =>
       expect(compileReviewPoint).toHaveBeenCalledWith("review-1", {
@@ -172,9 +298,9 @@ describe("ReviewWorkspace", () => {
 
   it("requests the next server page for a large program layer", async () => {
     renderWorkspace();
-    await screen.findByText("Quantum program");
+    await screen.findByText("量子程序");
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
 
     await waitFor(() =>
       expect(compileReviewPoint).toHaveBeenCalledWith("review-1", {
@@ -193,16 +319,16 @@ describe("ReviewWorkspace", () => {
 
   it("submits off-grid coordinates without snapping to the planned point", async () => {
     renderWorkspace();
-    await screen.findByText("Compile point");
+    await screen.findByText("编译选点");
 
-    fireEvent.click(screen.getByRole("button", { name: "free" }));
+    fireEvent.click(screen.getByRole("button", { name: "自由坐标" }));
     fireEvent.change(screen.getByRole("spinbutton", { name: /beta/i }), {
       target: { value: "0.137" },
     });
     fireEvent.change(screen.getByRole("spinbutton", { name: "amplification" }), {
       target: { value: "2" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Compile waveform" }));
+    fireEvent.click(screen.getByRole("button", { name: "编译波形" }));
 
     await waitFor(() =>
       expect(compileReviewPoint).toHaveBeenCalledWith("review-1", {
@@ -219,10 +345,12 @@ describe("ReviewWorkspace", () => {
     "submits %s matching as an explicit coordinate mode",
     async (mode) => {
       renderWorkspace();
-      await screen.findByText("Compile point");
+      await screen.findByText("编译选点");
 
-      fireEvent.click(screen.getByRole("button", { name: mode }));
-      fireEvent.click(screen.getByRole("button", { name: "Compile waveform" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: { exact: "精确匹配", snap: "就近选点" }[mode] }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "编译波形" }));
 
       await waitFor(() =>
         expect(compileReviewPoint).toHaveBeenCalledWith(
@@ -238,11 +366,14 @@ function renderWorkspace() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchInterval: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <ReviewWorkspace daemonUnavailable={false} />
-    </QueryClientProvider>,
-  );
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <ReviewWorkspace daemonUnavailable={false} />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 function placementLayer(): ProgramLayer {

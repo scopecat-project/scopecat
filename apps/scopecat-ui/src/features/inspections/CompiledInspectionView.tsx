@@ -17,7 +17,7 @@ type ProgramNodeLocation = {
 
 export function CompiledInspectionView({
   inspections,
-  emptyTitle = "No target waveform inspection",
+  emptyTitle = "暂无目标波形检查结果",
   onProgramQuery,
 }: {
   inspections: readonly PresentedInspection[];
@@ -32,7 +32,7 @@ export function CompiledInspectionView({
     );
   }
   return (
-    <div className="grid gap-3">
+    <div className="grid min-w-0 grid-cols-1 gap-3">
       {inspections.map((inspection) => (
         <div
           className="overflow-hidden rounded-md border border-line bg-panel-soft"
@@ -45,7 +45,7 @@ export function CompiledInspectionView({
             </div>
             <span className="text-xs text-text-dim">{inspection.content.kind}</span>
           </div>
-          <div className="grid gap-3 p-3.5">
+          <div className="grid min-w-0 grid-cols-1 gap-3 p-3.5">
             {inspection.content.program && (
               <ProgramInspectionView
                 inspection={inspection.content.program}
@@ -199,7 +199,7 @@ function ProgramInspectionView({
     <section className="overflow-hidden rounded-md border border-line bg-panel">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2.5">
         <div>
-          <strong className="block text-xs">Quantum program</strong>
+          <strong className="block text-xs">量子程序</strong>
           <code className="text-xs text-text-dim">{inspection.program_id}</code>
         </div>
         <span className="text-xs text-text-dim">{inspection.dialect_id}</span>
@@ -212,6 +212,7 @@ function ProgramInspectionView({
       {layer && (
         <>
           <ProgramQueryBar
+            disabled={!onQuery}
             entity={entityFilter}
             kind={kindFilter}
             onEntityChange={setEntityFilter}
@@ -229,12 +230,12 @@ function ProgramInspectionView({
               layer={layer}
               selectedNodeId={selectedNodeId}
               onNext={
-                layer.page.next_cursor == null
+                !onQuery || layer.page.next_cursor == null
                   ? undefined
                   : () => submitQuery(layer.page.next_cursor ?? undefined)
               }
               onPrevious={
-                layer.page.previous_cursor == null
+                !onQuery || layer.page.previous_cursor == null
                   ? undefined
                   : () => submitQuery(layer.page.previous_cursor ?? undefined)
               }
@@ -284,11 +285,11 @@ function ProgramLayerOverview({
   return (
     <div className="border-b border-line bg-panel-soft p-2.5">
       <div className="mb-2 flex items-center justify-between gap-2 text-xs text-text-dim">
-        <span>{inspection.layers.length} abstraction levels</span>
-        <span>Log-scaled workload · bounded pages</span>
+        <span>{inspection.layers.length} 个抽象层级</span>
+        <span>工作量按对数显示 · 分页读取</span>
       </div>
       <div
-        aria-label="Program layer overview"
+        aria-label="程序层级总览"
         className="grid grid-cols-4 gap-1.5 max-[1100px]:grid-cols-2 max-[560px]:grid-cols-1"
         role="tablist"
       >
@@ -297,7 +298,7 @@ function ProgramLayerOverview({
           const loaded = candidate.page.returned_node_count;
           return (
             <button
-              aria-label={`Open ${candidate.label}: ${candidate.node_count.toLocaleString()} nodes`}
+              aria-label={`打开 ${programLayerLabel(candidate)}：${candidate.node_count.toLocaleString()} 个节点`}
               aria-selected={selected}
               className={`group grid min-w-0 cursor-pointer gap-1 rounded border px-2.5 py-2 text-left ${
                 selected
@@ -312,10 +313,10 @@ function ProgramLayerOverview({
               <span className="text-xs font-bold tracking-[0.07em] text-text-dim uppercase">
                 {programResolutionLabel(candidate)}
               </span>
-              <span className="truncate text-xs font-bold">{candidate.label}</span>
+              <span className="truncate text-xs font-bold">{programLayerLabel(candidate)}</span>
               <span className="flex items-baseline justify-between gap-2">
                 <strong className="text-xs">{candidate.node_count.toLocaleString()}</strong>
-                <span className="text-xs text-text-dim">{loaded.toLocaleString()} loaded</span>
+                <span className="text-xs text-text-dim">{loaded.toLocaleString()} 已加载</span>
               </span>
               <span className="h-1 overflow-hidden rounded bg-panel-soft">
                 <span
@@ -324,8 +325,8 @@ function ProgramLayerOverview({
                 />
               </span>
               <span className="truncate text-xs text-text-dim">
-                {candidate.page.matching_node_count.toLocaleString()} matching
-                {candidate.nodes_truncated ? " · paged" : " · complete"}
+                {candidate.page.matching_node_count.toLocaleString()} 匹配
+                {candidate.nodes_truncated ? " · 分页" : " · 完整"}
               </span>
             </button>
           );
@@ -335,15 +336,26 @@ function ProgramLayerOverview({
   );
 }
 
+function programLayerLabel(layer: PresentedLayer): string {
+  const labels: Record<string, string> = {
+    "Authored program": "原始程序",
+    "Bound logical program": "绑定逻辑程序",
+    "Scheduled pulse events": "已调度脉冲事件",
+    "Physical placement": "物理映射",
+  };
+  return labels[layer.label] ?? layer.label;
+}
+
 function programResolutionLabel(layer: PresentedLayer): string {
-  if (layer.id === "authored") return "Intent";
-  if (layer.id === "logical") return "Bound structure";
-  if (layer.id === "scheduled") return "Timed events";
-  if (layer.id === "physical") return "Hardware";
+  if (layer.id === "authored") return "设计意图";
+  if (layer.id === "logical") return "绑定结构";
+  if (layer.id === "scheduled") return "时序事件";
+  if (layer.id === "physical") return "硬件";
   return layer.kind;
 }
 
 function ProgramQueryBar({
+  disabled,
   text,
   kind,
   entity,
@@ -356,6 +368,7 @@ function ProgramQueryBar({
   onResultChange,
   onSubmit,
 }: {
+  disabled: boolean;
   text: string;
   kind: string;
   entity: string;
@@ -377,46 +390,47 @@ function ProgramQueryBar({
       }}
     >
       <Controls.Input
-        aria-label="Program node search"
+        aria-label="搜索程序节点"
         className="min-w-0"
         onChange={(event) => onTextChange(event.target.value)}
-        placeholder="Search labels and IDs"
+        placeholder="搜索标签和 ID"
         type="search"
         value={text}
       />
       <Controls.Input
-        aria-label="Program node kind"
+        aria-label="程序节点类型"
         className="min-w-0"
         onChange={(event) => onKindChange(event.target.value)}
-        placeholder="kind"
+        placeholder="类型"
         value={kind}
       />
       <Controls.Input
-        aria-label="Program entity"
+        aria-label="程序实体"
         className="min-w-0"
         onChange={(event) => onEntityChange(event.target.value)}
-        placeholder="entity"
+        placeholder="实体"
         value={entity}
       />
       <Controls.Input
-        aria-label="Program resource"
+        aria-label="程序资源"
         className="min-w-0"
         onChange={(event) => onResourceChange(event.target.value)}
-        placeholder="resource"
+        placeholder="资源"
         value={resource}
       />
       <Controls.Input
-        aria-label="Program result"
+        aria-label="程序结果"
         className="min-w-0"
         onChange={(event) => onResultChange(event.target.value)}
-        placeholder="result"
+        placeholder="结果"
         value={result}
       />
       <button
         className="cursor-pointer rounded border border-line bg-panel-strong px-3 py-1.5 text-xs font-bold text-text-soft hover:text-text max-[1050px]:col-span-2"
         type="submit"
+        disabled={disabled}
       >
-        Query layer
+        查询程序层
       </button>
     </form>
   );
@@ -451,14 +465,17 @@ function ProgramNodeList({
     <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-xs text-text-dim">
         <span>
-          {layer.page.matching_node_count.toLocaleString()} matching ·{" "}
-          {layer.node_count.toLocaleString()} total
+          {layer.page.matching_node_count.toLocaleString()} 匹配 ·{" "}
+          {layer.node_count.toLocaleString()} 总计
         </span>
         <span>
           {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
         </span>
       </div>
-      <div className="max-h-[390px] overflow-auto p-2" aria-label={`${layer.label} nodes`}>
+      <div
+        className="max-h-[390px] overflow-auto p-2"
+        aria-label={`${programLayerLabel(layer)} 节点`}
+      >
         {layer.nodes.map((node) => {
           const candidateStatus = placementCandidateStatus(node);
           return (
@@ -486,7 +503,7 @@ function ProgramNodeList({
                       : "bg-red-soft text-red"
                   }`}
                 >
-                  {candidateStatus}
+                  {candidateStatus === "selected" ? "已选用" : "已拒绝"}
                 </span>
               )}
               {node.child_count > 0 && (
@@ -496,9 +513,7 @@ function ProgramNodeList({
           );
         })}
         {layer.nodes.length === 0 && (
-          <div className="p-4 text-center text-xs text-text-dim">
-            No nodes match this layer query.
-          </div>
+          <div className="p-4 text-center text-xs text-text-dim">此程序层没有匹配的节点。</div>
         )}
       </div>
       {(onPrevious || onNext) && (
@@ -509,10 +524,10 @@ function ProgramNodeList({
             onClick={onPrevious}
             type="button"
           >
-            Previous
+            上一页
           </button>
           <span className="text-xs text-text-dim">
-            Server-paged · {layer.page.limit.toLocaleString()} per page
+            服务端分页 · {layer.page.limit.toLocaleString()} 项/页
           </span>
           <button
             className="cursor-pointer rounded border border-line bg-panel-soft px-2.5 py-1.5 text-xs font-bold text-text-dim disabled:cursor-default disabled:opacity-35"
@@ -520,7 +535,7 @@ function ProgramNodeList({
             onClick={onNext}
             type="button"
           >
-            Next
+            下一页
           </button>
         </div>
       )}
@@ -554,10 +569,10 @@ function ProgramTimeline({
   return (
     <div className="mb-3 rounded border border-line bg-panel-soft p-2.5">
       <div className="mb-2 flex items-center justify-between text-xs text-text-dim">
-        <strong className="text-text-soft">Visible page timeline</strong>
+        <strong className="text-text-soft">当前页时间线</strong>
         <span>
-          {events.length.toLocaleString()} events · {lanes.length.toLocaleString()}
-          {allLanes.length > lanes.length ? `/${allLanes.length.toLocaleString()}` : ""} lanes ·{" "}
+          {events.length.toLocaleString()} 个事件 · {lanes.length.toLocaleString()}
+          {allLanes.length > lanes.length ? `/${allLanes.length.toLocaleString()}` : ""} 条轨道 ·{" "}
           {duration.toExponential(3)} s
         </span>
       </div>
@@ -617,11 +632,11 @@ function ProgramNodeInspector({
             onClick={onBack}
             type="button"
           >
-            ← Back to {backTarget.label}
+            ← 返回 {backTarget.label}
           </button>
         )}
         <div className="rounded border border-dashed border-line p-4 text-center text-xs text-text-dim">
-          Select a node to inspect its entities, results, timing, and lowering lineage.
+          选择节点，查看其实体、结果、时序和编译转换关系。
         </div>
       </div>
     );
@@ -648,7 +663,7 @@ function ProgramNodeInspector({
           onClick={onBack}
           type="button"
         >
-          ← Back to {backTarget.label}
+          ← 返回 {backTarget.label}
         </button>
       )}
       <div>
@@ -673,11 +688,11 @@ function ProgramNodeInspector({
           role="status"
         >
           <strong className="block">
-            {candidateStatus === "selected" ? "Route selected" : "Route rejected"}
+            {candidateStatus === "selected" ? "路由已选用" : "路由已拒绝"}
           </strong>
           <span>
             {candidateStatus === "selected"
-              ? "This candidate satisfies the requested logical signal and configured device route."
+              ? "此候选满足请求的逻辑信号和配置的设备路由。"
               : node.warnings.join(" · ")}
           </span>
         </div>
@@ -690,12 +705,12 @@ function ProgramNodeInspector({
       </div>
       {(node.start_seconds != null || node.duration_seconds != null) && (
         <div className="text-xs text-text-dim">
-          start {node.start_seconds ?? "—"} s · duration {node.duration_seconds ?? "—"} s
+          开始 {node.start_seconds ?? "—"} s · 持续 {node.duration_seconds ?? "—"} s
         </div>
       )}
       {(incoming.length > 0 || outgoing.length > 0) && (
         <div className="grid gap-1 rounded border border-line bg-panel-soft p-2 text-xs text-text-dim">
-          <strong className="text-text-soft">Lowering lineage</strong>
+          <strong className="text-text-soft">编译转换关系</strong>
           {[...incoming, ...outgoing].slice(0, 6).map((link) => {
             const isIncoming = link.target_layer_id === layer.id;
             const targetLayerId = isIncoming ? link.source_layer_id : link.target_layer_id;
@@ -708,16 +723,16 @@ function ProgramNodeInspector({
             );
             return (
               <button
-                aria-label={`Open lineage ${targetLayer?.label ?? targetLayerId} ${targetNode?.label ?? targetNodeId}`}
+                aria-label={`打开转换关系 ${targetLayer ? programLayerLabel(targetLayer) : targetLayerId} ${targetNode?.label ?? targetNodeId}`}
                 className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1 text-left text-text-dim hover:bg-panel-strong hover:text-text-soft"
                 key={`${link.source_layer_id}:${link.source_node_id}:${link.target_layer_id}:${link.target_node_id}`}
                 onClick={() => onNavigate(targetLayerId, targetNodeId)}
                 type="button"
               >
-                <span>{isIncoming ? "from" : "to"}</span>
+                <span>{isIncoming ? "来自" : "前往"}</span>
                 <span className="min-w-0">
                   <strong className="block truncate text-text-soft">
-                    {targetLayer?.label ?? targetLayerId}
+                    {targetLayer ? programLayerLabel(targetLayer) : targetLayerId}
                   </strong>
                   <code className="block truncate">{targetNode?.label ?? targetNodeId}</code>
                 </span>
@@ -726,7 +741,7 @@ function ProgramNodeInspector({
             );
           })}
           {incoming.length + outgoing.length > 6 && (
-            <span>+{incoming.length + outgoing.length - 6} more links</span>
+            <span>+{incoming.length + outgoing.length - 6} 条其他关系</span>
           )}
         </div>
       )}
@@ -754,12 +769,13 @@ function ReferenceChips({
     <>
       {visible.map((id) => (
         <span className="rounded bg-panel-strong px-2 py-1 text-xs" key={`${label}:${id}`}>
-          {label} {id}
+          {{ entity: "实体", resource: "资源", result: "结果" }[label]} {id}
         </span>
       ))}
       {total > visible.length && (
         <span className="rounded border border-line px-2 py-1 text-xs text-text-dim">
-          +{(total - visible.length).toLocaleString()} {label}s
+          +{(total - visible.length).toLocaleString()}{" "}
+          {{ entity: "实体", resource: "资源", result: "结果" }[label]}
         </span>
       )}
     </>
@@ -769,23 +785,24 @@ function ReferenceChips({
 function PointInspection({ point }: { point: PresentedPoint }) {
   const option = useMemo(() => waveformChartOption(point), [point]);
   return (
-    <div className="grid gap-3 rounded-md border border-line bg-panel p-3">
+    <div className="grid min-w-0 grid-cols-1 gap-3 rounded-md border border-line bg-panel p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <span className="text-xs font-bold text-text-soft">Physical realization</span>
+          <span className="text-xs font-bold text-text-soft">物理实现</span>
           <code className="mt-1 block max-w-[620px] truncate text-xs text-text-dim">
             {point.realization_fingerprint}
           </code>
         </div>
         <span className="text-xs text-text-dim">
-          {point.waveform_count} waveform{point.waveform_count === 1 ? "" : "s"}
+          {point.waveform_count} 条波形
           {point.waveforms_truncated ? "+" : ""}
         </span>
       </div>
       <FactGrid facts={point.facts} />
       {point.waveforms.length > 0 && (
         <EChart
-          ariaLabel="Compiled physical waveforms"
+          ariaLabel="编译后的物理波形"
+          description={`${point.waveforms.length} 组波形。通道：${point.waveforms.map((waveform) => waveform.channel_id).join("、")}。`}
           height={320}
           option={option}
           pointCount={Math.max(...point.waveforms.map((waveform) => waveform.samples.length))}
@@ -801,8 +818,8 @@ function PointInspection({ point }: { point: PresentedPoint }) {
           >
             <strong className="block truncate text-xs text-text-soft">{waveform.channel_id}</strong>
             <span className="mt-1 block text-xs text-text-dim">
-              peak {waveform.peak_abs.toPrecision(4)} · rms {waveform.rms.toPrecision(4)} ·{" "}
-              {waveform.source_sample_count.toLocaleString()} samples
+              峰值 {waveform.peak_abs.toPrecision(4)} · rms {waveform.rms.toPrecision(4)} ·{" "}
+              {waveform.source_sample_count.toLocaleString()} 个采样点
             </span>
           </div>
         ))}
@@ -836,7 +853,7 @@ function waveformChartOption(point: PresentedPoint): EChartsCoreOption {
     legend: { type: "scroll", top: 0, textStyle: { color: "#9eabb8", fontSize: 12 } },
     tooltip: { trigger: "axis" },
     xAxis: {
-      name: "sample",
+      name: "采样点",
       nameLocation: "middle",
       nameGap: 28,
       type: "value",
@@ -844,7 +861,7 @@ function waveformChartOption(point: PresentedPoint): EChartsCoreOption {
       splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },
     },
     yAxis: {
-      name: "amplitude",
+      name: "幅度",
       type: "value",
       axisLabel: { color: "#98a2ab", fontSize: 12 },
       splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },

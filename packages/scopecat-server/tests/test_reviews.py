@@ -85,6 +85,7 @@ def test_review_worker_lease_expires_without_losing_latest_result() -> None:
     assert not expired.active
     assert expired.pending_request_count == 0
     assert expired.latest_result == initial_result
+    assert expired.latest_request == claimed
     assert not service.heartbeat(session.session_id, "worker-lease").active
     with pytest.raises(BackendConflict, match="closed"):
         service.enqueue(
@@ -245,3 +246,49 @@ def _daemon_client(transport: TestClient) -> DaemonClient:
         "http://testserver",
         transport=httpx2.MockTransport(send),
     )
+
+
+@pytest.mark.parametrize("stale_finishes_first", [True, False])
+def test_shared_review_request_identity_survives_interleaved_completions(
+    stale_finishes_first: bool,
+) -> None:
+    now = datetime(2026, 8, 14, tzinfo=UTC)
+    initial = ReviewCompilationResult(request_id="initial", completed_at=now)
+    service = ReviewService(clock=lambda: now)
+    command = _review_command(0).model_copy(update={"initial_result": initial})
+    service.create(command)
+    first = service.enqueue(command.session_id, ReviewCompileCommand(point_index=0))
+    service.claim(command.session_id, command.worker_id)
+    service.enqueue(command.session_id, ReviewCompileCommand(point_index=1))
+    latest = service.enqueue(command.session_id, ReviewCompileCommand(point_index=2))
+    work = service.claim(command.session_id, command.worker_id)
+    assert work is not None and work.request_id == latest.request_id
+    waiting = service.get(command.session_id)
+    assert waiting.latest_request == work
+    assert waiting.latest_result == initial
+    assert waiting.pending_request_count == 1
+    assert service.list().items[0] == waiting
+    results = [
+        ReviewCompilationResult(
+            request_id=first.request_id, completed_at=now, error="stale"
+        ),
+        ReviewCompilationResult(request_id=latest.request_id, completed_at=now),
+    ]
+    if not stale_finishes_first:
+        results.reverse()
+    for result in results:
+        state = service.complete(
+            command.session_id,
+            ReviewCompletionCommand(
+                worker_id=command.worker_id,
+                result=result,
+            ),
+        )
+        assert state.latest_request == work
+        if result.request_id == first.request_id and stale_finishes_first:
+            assert state.latest_result == initial
+            assert state.pending_request_count == 1
+    finished = service.get(command.session_id)
+    assert finished.latest_result is not None
+    assert finished.latest_result.request_id == latest.request_id
+    assert finished.pending_request_count == 0

@@ -111,6 +111,7 @@ class ReviewSessionView(_ReviewModel):
     planned_points: tuple[ReviewPointView, ...] = ()
     planned_points_truncated: bool = False
     pending_request_count: int = Field(default=0, ge=0)
+    latest_request: ReviewWorkItem | None = None
     latest_result: ReviewCompilationResult | None = None
 
 

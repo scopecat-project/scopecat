@@ -8,6 +8,7 @@ const EChartRuntime = lazy(async () => {
 
 export function EChart({
   ariaLabel,
+  description,
   height,
   option,
   pointCount,
@@ -16,6 +17,7 @@ export function EChart({
   onPoint,
 }: {
   ariaLabel: string;
+  description?: string;
   height: number;
   option: EChartsCoreOption;
   pointCount: number;
@@ -33,9 +35,13 @@ export function EChart({
         </Suspense>
       </div>
       <span className="sr-only" id={descriptionId}>
-        {seriesCount.toLocaleString()} data series with {pointCount.toLocaleString()} plotted{" "}
-        {pointCount === 1 ? "point" : "points"}.
-        {seriesLabels.length > 0 ? ` Series: ${seriesLabels.join(", ")}.` : ""}
+        {description ?? (
+          <>
+            {seriesCount.toLocaleString()} data series with {pointCount.toLocaleString()} plotted{" "}
+            {pointCount === 1 ? "point" : "points"}.
+            {seriesLabels.length > 0 ? ` Series: ${seriesLabels.join(", ")}.` : ""}
+          </>
+        )}
       </span>
     </>
   );
