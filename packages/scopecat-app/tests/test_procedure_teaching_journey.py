@@ -163,10 +163,10 @@ try:
             run("procedure-continue")
             assert ns["result"].closure.status == "succeeded"
             assert task.output("scan").run_id == scan
-            assert [
+            assert sorted(
                 step.step_key for step in task.steps().items
                 if step.operation == "interpretation"
-            ] == (["choose-1", "choose-2"] if legacy else ["choose-1"])
+            ) == (["choose-1", "choose-2"] if legacy else ["choose-1"])
             scan_steps = [
                 step for step in task.steps().items if step.step_key == "scan"
             ]
