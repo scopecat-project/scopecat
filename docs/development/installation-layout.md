@@ -240,6 +240,10 @@ installer or distribution format. Its producer supplies:
   free-threaded ABI), nonempty `sources` identity from the producer, and optional
   `runtime` metadata (empty by default). Source identities are retained verbatim;
   hashes detect mismatched bytes, not publisher authenticity or source provenance.
+- Optional `AuthorRelease` context with explicit `public_version`,
+  `release_version`, `build_number`, `build_id` and `build_tools` fields. Development
+  inputs need none of these. Native inputs require all of them; portable Python
+  provenance stays under `build_tools`, separate from runtime product identities.
 
 The builder checks target compatibility, unique required wheels, symlinks and the
 producer's expected hashes before writing. It compares copied bytes with those
@@ -264,9 +268,15 @@ restart behavior and the independently owned author environments.
 The installed teaching journey consumes an explicitly selected installed runtime
 and verified format 2 resources after archive relocation, rather than invoking
 `install.py` as part of that journey. Its Windows application and Linux runtime
-fixture are still constructed from full format 1 materials. Native and release
-assembly also retain that complete build input and the path compatibility adapter;
-the legacy installer has a separate regression step and remains supported. See
+fixture are still constructed from full format 1 materials. Native packaging also
+retains that complete build input, but selects explicit `AuthorInputs` from the
+same verified staged delivery. Its build ID binds sources, target and the full
+file inventory; Python provenance must match the hashed runtime record and
+archive, and the author recipe must match the installed interpreter. Core/server
+wheels are copied from this delivery, not rebuilt. Windows installer versions and
+release assembly consume the resulting format 2 identity and wheel hashes.
+The legacy path adapter and installer remain supported; neither the runtime
+archive nor the third-party wheelhouse producer changes in this projection step. See
 [teaching acceptance limits](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits)
 for the selected commands and evidence boundaries. Neither consumer migration
 retires format 1 or turns format 2 into a complete application upgrade.

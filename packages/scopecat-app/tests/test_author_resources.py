@@ -14,6 +14,7 @@ from scripts.app_build import author_resources as resource_builder
 from scripts.app_build import installer
 from scripts.app_build.author_resources import build as build_author_resources
 
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat_app import author_python, author_resources, bundle
 from scopecat_app.application_runtime import ApplicationRuntime
 
@@ -36,6 +37,15 @@ def delivery(tmp_path: Path) -> Path:
         (root / "wheels" / f"{name}-1-py3-none-any.whl").write_text(name)
     (root / "toolchain/python.tar").write_bytes(b"runtime")
     (root / "toolchain/uv").write_bytes(b"uv")
+    portable = {
+        "python": "3.15.1",
+        "target": bundle.target_identity(),
+        "distribution": {"key": "fixture", "url": "https://example.org/python.tar"},
+        "distribution_build": "fixture",
+        "uv": "0.13.5",
+        "archive_sha256": bundle.file_hash(root / "toolchain/python.tar"),
+    }
+    (root / "toolchain/runtime.json").write_text(json.dumps(portable))
     files = bundle.inventory(root, ("gui", "wheels", "toolchain"))
     for name in ("requirements.lock", "dependencies.lock", "build.lock", "install.py"):
         (root / name).write_text("")
@@ -49,6 +59,20 @@ def delivery(tmp_path: Path) -> Path:
                 "runtime": {},
                 "files": files,
                 "public_version": "0.2.0",
+                "release_version": "0.2.0",
+                "build_id": sha256_json_hash(
+                    {
+                        "sources": {"public": "commit"},
+                        "files": files,
+                        "target": bundle.target_identity(),
+                    }
+                ),
+                "build_tools": {
+                    "python": "3.15.1",
+                    "uv": "uv 0.13.5",
+                    "pnpm": "prebuilt GUI",
+                    "portable_python": portable,
+                },
                 "build_number": 1,
             }
         )
@@ -433,3 +457,128 @@ def test_python_identity_tracks_same_path_binary_library_and_abi(
     assert second != third
     info["abi"] = "cpython-314t"
     assert author_python.identity(binary) != third
+
+
+def test_native_explicit_projection_feeds_windows_installer(
+    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from scripts.app_build import native_package
+
+    verified = bundle.verify_bundle(delivery)
+    inputs = resource_builder.native_author_inputs(delivery, verified)
+    assert isinstance(inputs, resource_builder.AuthorInputs)
+    app = tmp_path / "app"
+    output = build_author_resources(inputs, app / "resources/payload")
+    projected = json.loads((output / bundle.MANIFEST).read_text())
+    original = json.loads((delivery / bundle.MANIFEST).read_text())
+    for field in (
+        "sources",
+        "target",
+        "runtime",
+        "public_version",
+        "release_version",
+        "build_number",
+        "build_id",
+        "build_tools",
+    ):
+        assert projected[field] == original[field]
+    assert projected["build_tools"]["portable_python"][
+        "archive_sha256"
+    ] == bundle.file_hash(delivery / "toolchain/python.tar")
+    assert not (output / "toolchain/python.tar").exists()
+    for name, digest in inputs.files.items():
+        assert projected["files"][name] == verified["files"][name] == digest
+    monkeypatch.setattr(native_package.sys, "platform", "win32")
+    monkeypatch.setattr(native_package.shutil, "which", lambda _: "ISCC.exe")
+    scripts = []
+
+    def compile_installer(command):
+        script = Path(command[1])
+        scripts.append(script.read_text(encoding="utf-8-sig"))
+        (script.parent / "Scopecat-Setup.exe").write_bytes(b"installer")
+
+    monkeypatch.setattr(native_package, "_run", compile_installer)
+    assert native_package.package(app, tmp_path / "Setup.exe").is_file()
+    assert "AppVersion=0.2.0\n" in scripts[0]
+    assert "VersionInfoVersion=0.2.0.1\n" in scripts[0]
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("public_version", None),
+        ("public_version", 2),
+        ("build_number", True),
+        ("release_version", None),
+        ("build_id", "sha256:" + "0" * 64),
+        ("build_tools", {}),
+        ("sources", {"public": "wrong-batch"}),
+    ],
+)
+def test_native_inputs_reject_missing_or_wrong_identity(delivery: Path, field, value):
+    manifest = delivery / bundle.MANIFEST
+    document = json.loads(manifest.read_text())
+    document[field] = value
+    manifest.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match=r"Native|version"):
+        resource_builder.native_author_inputs(delivery, bundle.verify_bundle(delivery))
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("target", {}),
+        ("archive_sha256", "0" * 64),
+        ("distribution", None),
+        ("distribution_build", "other-build"),
+    ],
+)
+def test_native_inputs_reject_mismatched_python_provenance(
+    delivery: Path, field, value
+):
+    manifest = delivery / bundle.MANIFEST
+    document = json.loads(manifest.read_text())
+    document["build_tools"]["portable_python"][field] = value
+    manifest.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match=r"provenance"):
+        resource_builder.native_author_inputs(delivery, bundle.verify_bundle(delivery))
+
+
+def test_native_staging_identity_change_stops_before_install(
+    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from scripts.app_build import native_package
+
+    target = bundle.target_identity()
+    monkeypatch.setattr(bundle, "target_identity", lambda: target)
+    monkeypatch.setattr(native_package.sys, "platform", "win32")
+    copy = shutil.copytree
+
+    def changed_copy(source, destination, *args, **kwargs):
+        result = copy(source, destination, *args, **kwargs)
+        manifest = Path(destination) / bundle.MANIFEST
+        if manifest.is_file():
+            document = json.loads(manifest.read_text())
+            document["public_version"] = "0.9.0"
+            manifest.write_text(json.dumps(document))
+        return result
+
+    install = Mock()
+    monkeypatch.setattr(native_package.shutil, "copytree", changed_copy)
+    monkeypatch.setattr(native_package, "install_runtime", install)
+    with pytest.raises(ValueError, match="staged delivery identity"):
+        native_package.build(delivery, tmp_path / "app")
+    install.assert_not_called()
+    assert not (tmp_path / "app").exists()
+
+
+def test_native_recipe_must_match_portable_python_provenance(
+    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    inputs = resource_builder.native_author_inputs(
+        delivery, bundle.verify_bundle(delivery)
+    )
+    monkeypatch.setattr(resource_builder, "_recipe", lambda *_: {"python": "3.15.99"})
+    with pytest.raises(ValueError, match="recipe does not match provenance"):
+        build_author_resources(inputs, tmp_path / "author")
+    assert not (tmp_path / "author").exists()

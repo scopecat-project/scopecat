@@ -145,6 +145,7 @@ def test_build_replaces_console_before_signing_and_rename(
     monkeypatch.setattr(native_package, "verify_bundle", lambda _: None)
     import shutil
 
+    monkeypatch.setattr(native_package, "native_author_inputs", lambda root, _: root)
     monkeypatch.setattr(
         native_package,
         "build_author_resources",

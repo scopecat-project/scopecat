@@ -14,8 +14,10 @@ from typing import Any
 
 import pytest
 from scripts.app_build.author_resources import build as build_author_resources
+from scripts.app_build.author_resources import native_author_inputs
 
-from scopecat_app.bundle import file_hash, inventory, target_identity
+from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat_app.bundle import file_hash, inventory, target_identity, verify_bundle
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts/release_assets.py"
 spec = importlib.util.spec_from_file_location("release_assets", SCRIPT)
@@ -139,6 +141,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
         bundle = {
             "format": 1,
             "release_version": "0.3.0-rc.1",
+            "public_version": "0.3.0-rc.1",
             "build_number": 9,
             "target": target_identity(),
             "sources": {"public": SHA},
@@ -170,6 +173,21 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
             shutil.copy2(wheel, source / "wheels" / wheel.name)
         (source / "wheels/numpy-1-py3-none-any.whl").write_bytes(b"third party")
         (source / "toolchain/python.tar").write_bytes(b"build-time interpreter")
+        portable = {
+            "python": "3.15.1",
+            "target": target_identity(),
+            "distribution": {"key": "fixture", "url": "https://example.org/python.tar"},
+            "distribution_build": "fixture",
+            "uv": "0.13.5",
+            "archive_sha256": file_hash(source / "toolchain/python.tar"),
+        }
+        write_json(source / "toolchain/runtime.json", portable)
+        bundle["build_tools"] = {
+            "python": "3.15.1",
+            "uv": "uv 0.13.5",
+            "pnpm": "prebuilt GUI",
+            "portable_python": portable,
+        }
         bundle["files"] = inventory(source, ("gui", "wheels", "toolchain"))
         for name in (
             "requirements.lock",
@@ -179,10 +197,15 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
         ):
             (source / name).write_text("", encoding="utf-8")
             bundle["files"][name] = file_hash(source / name)
+        bundle["build_id"] = sha256_json_hash(
+            {key: bundle[key] for key in ("sources", "files", "target")}
+        )
         write_json(source / "bundle.json", bundle)
         resources = tmp_path / platform / "resources"
         resources.mkdir()
-        payload = build_author_resources(source, resources / "payload")
+        payload = build_author_resources(
+            native_author_inputs(source, verify_bundle(source)), resources / "payload"
+        )
         projected = json.loads((payload / "bundle.json").read_bytes())
         # Platform declarations are simulated; projection and report writing are real.
         projected["target"]["platform"] = target
@@ -299,6 +322,11 @@ def test_release_manifest_tampering_fails(release: tuple[Path, Path]) -> None:
         ("release_version", "0.4.0"),
         ("build_number", 10),
         ("sources", {"public": "b" * 40}),
+        ("public_version", None),
+        ("build_number", "9"),
+        ("build_id", None),
+        ("build_id", "sha256:" + "0" * 64),
+        ("runtime", {}),
     ],
 )
 def test_native_wrong_identity_fails(

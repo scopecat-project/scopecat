@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from scripts.app_build.release_identity import ReleaseIdentity
+
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat_app.author_resources import PACKAGES, verify_resources
 from scopecat_app.bundle import (
     MANIFEST,
@@ -20,6 +24,75 @@ from scopecat_app.bundle import (
     target_identity,
     verify_bundle,
 )
+
+
+@dataclass(frozen=True)
+class AuthorRelease:
+    """Only the release identity and build provenance consumed by native outputs."""
+
+    public_version: str
+    release_version: str
+    build_number: int
+    build_id: str
+    build_tools: dict[str, object]
+
+    def metadata(self, target: dict[str, str]) -> dict[str, object]:
+        if not isinstance(cast("object", self.public_version), str):
+            raise ValueError("Native author inputs require public_version")
+        ReleaseIdentity(self.public_version, self.build_number)
+        if (
+            not isinstance(cast("object", self.release_version), str)
+            or not self.release_version
+            or not isinstance(cast("object", self.build_id), str)
+            or not re.fullmatch(r"sha256:[a-f0-9]{64}", self.build_id)
+        ):
+            raise ValueError(
+                "Native author inputs require release_version and build_id"
+            )
+        tools = self.build_tools
+        if (
+            not isinstance(cast("object", tools), dict)
+            or set(tools) != {"python", "uv", "pnpm", "portable_python"}
+            or any(
+                not isinstance(tools[k], str) or not tools[k]
+                for k in ("python", "uv", "pnpm")
+            )
+        ):
+            raise ValueError("Native author inputs require build_tools provenance")
+        portable = tools["portable_python"]
+        if not isinstance(portable, dict):
+            raise ValueError("Native author inputs require portable Python provenance")
+        portable = cast("dict[str, object]", portable)
+        if (
+            set(portable)
+            != {
+                "python",
+                "target",
+                "distribution",
+                "distribution_build",
+                "archive_sha256",
+                "uv",
+            }
+            or portable["target"] != target
+            or any(
+                not isinstance(portable[k], str) or not portable[k]
+                for k in ("python", "distribution_build", "uv")
+            )
+            or not isinstance(portable["distribution"], dict)
+            or not portable["distribution"]
+            or not isinstance(portable["archive_sha256"], str)
+            or not re.fullmatch(r"[a-f0-9]{64}", portable["archive_sha256"])
+        ):
+            raise ValueError(
+                "Native author inputs require matching portable Python provenance"
+            )
+        return {
+            "public_version": self.public_version,
+            "release_version": self.release_version,
+            "build_number": self.build_number,
+            "build_id": self.build_id,
+            "build_tools": tools,
+        }
 
 
 @dataclass(frozen=True)
@@ -36,6 +109,7 @@ class AuthorInputs:
     sources: dict[str, str]
     files: dict[str, str]
     runtime: dict[str, object] = field(default_factory=dict)
+    release: AuthorRelease | None = None
 
 
 def _materials(root: Path) -> dict[str, str]:
@@ -71,6 +145,46 @@ def _materials(root: Path) -> dict[str, str]:
     return files
 
 
+def native_author_inputs(root: Path, verified: Bundle) -> AuthorInputs:
+    """Select materials and provenance from the native builder's verified delivery.
+
+    The full runtime stays with that producer; only its identity is projected.
+    Compare provenance with the hashed runtime record, never with product modules.
+    """
+    document = cast("dict[str, object]", cast("object", verified))
+    release = AuthorRelease(
+        public_version=cast("str", document.get("public_version")),
+        release_version=cast("str", document.get("release_version")),
+        build_number=cast("int", document.get("build_number")),
+        build_id=cast("str", document.get("build_id")),
+        build_tools=cast("dict[str, object]", document.get("build_tools")),
+    )
+    release.metadata(verified["target"])
+    if release.build_id != sha256_json_hash(
+        {key: verified[key] for key in ("sources", "files", "target")}
+    ):
+        raise ValueError("Native author inputs do not match the delivery build_id")
+    provenance = root / "toolchain/runtime.json"
+    portable = cast("dict[str, object]", release.build_tools["portable_python"])
+    if (
+        not provenance.is_file()
+        or file_hash(provenance) != verified["files"].get("toolchain/runtime.json")
+        or json.loads(provenance.read_text(encoding="utf-8")) != portable
+        or portable["archive_sha256"] != verified["files"].get("toolchain/python.tar")
+    ):
+        raise ValueError(
+            "Native author inputs do not match the delivery Python provenance"
+        )
+    return AuthorInputs(
+        root=root,
+        target=verified["target"],
+        sources=verified["sources"],
+        files={name: verified["files"][name] for name in _materials(root)},
+        runtime=verified["runtime"],
+        release=release,
+    )
+
+
 def build(
     source: Path | AuthorInputs, destination: Path, *, python: Path | None = None
 ) -> Path:
@@ -100,12 +214,23 @@ def build(
             "runtime": inputs.runtime,
             "files": inputs.files,
         }
+        if inputs.release is not None:
+            document = cast(
+                "Bundle",
+                cast("object", {**document, **inputs.release.metadata(inputs.target)}),
+            )
     if inputs.target != target_identity():
         raise ValueError("作者输入 target 与当前环境不一致")
     materials = _materials(inputs.root)
     if materials != inputs.files:
         raise ValueError("作者输入缺失、被修改或哈希清单不匹配")
     recipe = _recipe(python or Path(sys.executable), inputs.target)
+    if inputs.release is not None:
+        portable = cast(
+            "dict[str, object]", inputs.release.build_tools["portable_python"]
+        )
+        if recipe["python"] != portable["python"]:
+            raise ValueError("Native author Python recipe does not match provenance")
     destination.mkdir(parents=True, exist_ok=False)
     for folder in ("gui", "wheels", "toolchain"):
         (destination / folder).mkdir()
