@@ -215,6 +215,38 @@ Older development application records without resources can still serve data;
 reopen the native application or explicitly update its installation to register
 resources before preparing new environments. No scientific data migration is added.
 
+## Author resource build inputs
+
+`scripts.app_build.author_resources.build` accepts either a legacy delivery path
+or an `AuthorInputs` value. The latter is an in-process build contract, not another
+installer or distribution format. Its producer supplies:
+
+- A material root with `gui/index.html` and all GUI assets, exactly one
+  `scopecat` wheel and one `scopecat_server` wheel under `wheels/`, and
+  `requirements.lock` for the author's shared dependency constraints.
+- An expected SHA-256 `files` map covering exactly those materials, plus the
+  optional host `toolchain/uv` (Windows: `uv.exe`) and optional uv licenses
+  (`LICENSE-APACHE`, `LICENSE-MIT`). The toolchain directory may be absent.
+- The full `target` identity (OS, CPU, Python minor, implementation and
+  free-threaded ABI), nonempty `sources` identity from the producer, and optional
+  `runtime` metadata (empty by default). Source identities are retained verbatim;
+  hashes detect mismatched bytes, not publisher authenticity or source provenance.
+
+The builder checks target compatibility, unique required wheels, symlinks and the
+producer's expected hashes before writing. It compares copied bytes with those
+same hashes before recording the generated `author.json`, then verifies the
+format 2 output. Producer files outside this selected material set are not copied
+or needed: no `bundle.json`, `dependencies.lock`, `build.lock`, `install.py`,
+Python archive or third-party wheelhouse is required for `AuthorInputs`.
+The producer owns preparation, source identity and expected hashes; the builder
+must not derive expected hashes from potentially changed materials at consumption.
+The recipe interpreter is independently probed against the declared target.
+
+For existing path callers, the compatibility adapter still verifies the complete
+format 1 delivery before selecting these materials, and retains its metadata.
+Development resource preparation, teaching, native and release consumers are not
+migrated by this contract. The legacy installer and offline delivery remain in use.
+
 ## Distribution boundary
 
 `python -m scripts.app_build.toolchain DELIVERY OUTPUT` builds a new platform delivery

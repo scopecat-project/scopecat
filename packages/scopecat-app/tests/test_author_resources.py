@@ -1,6 +1,9 @@
 """Author resource projection retains identity but never the offline runtime payload."""
 
 import json
+import os
+import shutil
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -60,6 +63,9 @@ def test_projection_has_own_identity_and_keeps_full_delivery(
     document = author_resources.verify_resources(resource)
     assert document["format"] == 2
     assert document["sources"] == {"public": "commit"}
+    metadata = json.loads((resource / bundle.MANIFEST).read_text())
+    assert metadata["public_version"] == "0.2.0"
+    assert metadata["build_number"] == 1
     assert {p.name for p in (resource / "wheels").iterdir()} == {
         "scopecat-1-py3-none-any.whl",
         "scopecat_server-1-py3-none-any.whl",
@@ -84,6 +90,162 @@ def test_extra_delivery_files_are_rejected(delivery: Path, tmp_path: Path, extra
     (resource / extra).write_text("unexpected")
     with pytest.raises(ValueError, match="多余"):
         author_resources.verify_resources(resource)
+
+
+@pytest.fixture
+def materials(tmp_path: Path) -> resource_builder.AuthorInputs:
+    root = tmp_path / "materials"
+    (root / "gui/assets").mkdir(parents=True)
+    (root / "wheels").mkdir()
+    (root / "gui/index.html").write_text("GUI")
+    (root / "gui/assets/main.js").write_text("asset")
+    for package in author_resources.PACKAGES:
+        (root / "wheels" / f"{package}-1-py3-none-any.whl").write_text(package)
+    (root / "requirements.lock").write_text("dependency==1 --hash=sha256:example")
+    files = bundle.inventory(root, ("gui", "wheels"))
+    files["requirements.lock"] = bundle.file_hash(root / "requirements.lock")
+    return resource_builder.AuthorInputs(
+        root, bundle.target_identity(), {"public": "commit+dirty"}, files
+    )
+
+
+@pytest.mark.parametrize("with_tool", [False, True])
+def test_explicit_inputs_need_no_legacy_delivery(
+    materials: resource_builder.AuthorInputs, tmp_path: Path, with_tool: bool
+):
+    if with_tool:
+        (materials.root / "toolchain").mkdir()
+        for name in ("uv.exe" if os.name == "nt" else "uv", "LICENSE-MIT"):
+            path = materials.root / "toolchain" / name
+            path.write_text(name)
+            materials.files[f"toolchain/{name}"] = bundle.file_hash(path)
+    before = dict(materials.files)
+    resource = build_author_resources(materials, tmp_path / "author")
+    document = author_resources.verify_resources(resource)
+    assert document["sources"] == materials.sources
+    assert document["target"] == materials.target
+    assert document["runtime"] == {}
+    assert document["format"] == 2
+    assert {k: v for k, v in document["files"].items() if k != "author.json"} == before
+    assert materials.files == before
+    assert not (materials.root / bundle.MANIFEST).exists()
+    assert not (resource / "install.py").exists()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "gui/index.html",
+        "gui/assets/main.js",
+        "requirements.lock",
+        "wheels/scopecat-1-py3-none-any.whl",
+        "wheels/scopecat_server-1-py3-none-any.whl",
+    ],
+)
+@pytest.mark.parametrize("damage", ["missing", "modified", "symlink"])
+def test_explicit_inputs_reject_bad_materials_before_output(
+    materials: resource_builder.AuthorInputs, tmp_path: Path, name: str, damage: str
+):
+    path = materials.root / name
+    if damage == "modified":
+        path.write_text("tampered")
+    else:
+        path.unlink()
+        if damage == "symlink":
+            replacement = tmp_path / "replacement"
+            replacement.write_text("tampered")
+            path.symlink_to(replacement)
+    destination = tmp_path / "author"
+    with pytest.raises(ValueError, match=r"作者|符号链接"):
+        build_author_resources(materials, destination)
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("folder", ["gui", "wheels", "toolchain"])
+def test_explicit_inputs_reject_redirected_directories(
+    materials: resource_builder.AuthorInputs, tmp_path: Path, folder: str
+):
+    path = materials.root / folder
+    relocated = tmp_path / "relocated"
+    if path.exists():
+        path.rename(relocated)
+    else:
+        relocated.mkdir()
+    path.symlink_to(relocated, target_is_directory=True)
+    with pytest.raises(ValueError, match="符号链接"):
+        build_author_resources(materials, tmp_path / "author")
+
+
+@pytest.mark.parametrize(
+    "field", ["platform", "machine", "python", "implementation", "free_threaded"]
+)
+def test_explicit_inputs_reject_target_mismatch(
+    materials: resource_builder.AuthorInputs, tmp_path: Path, field: str
+):
+    inputs = replace(materials, target={**materials.target, field: "different"})
+    with pytest.raises(ValueError, match="target"):
+        build_author_resources(inputs, tmp_path / "author")
+    assert not (tmp_path / "author").exists()
+
+
+@pytest.mark.parametrize("damage", ["source", "hash", "extra-hash", "duplicate"])
+def test_explicit_inputs_require_identity_and_exact_material_inventory(
+    materials: resource_builder.AuthorInputs, tmp_path: Path, damage: str
+):
+    if damage == "source":
+        materials = replace(materials, sources={})
+    elif damage == "hash":
+        materials.files["requirements.lock"] = "0" * 64
+    elif damage == "extra-hash":
+        materials.files["../outside"] = "0" * 64
+    else:
+        (materials.root / "wheels/scopecat-2-py3-none-any.whl").write_text("duplicate")
+    with pytest.raises(ValueError, match=r"作者|符号链接"):
+        build_author_resources(materials, tmp_path / "author")
+    assert not (tmp_path / "author").exists()
+
+
+@pytest.mark.parametrize("damage", ["missing", "modified"])
+def test_optional_tool_is_verified_when_recorded(
+    materials: resource_builder.AuthorInputs, tmp_path: Path, damage: str
+):
+    (materials.root / "toolchain").mkdir()
+    name = "toolchain/uv.exe" if os.name == "nt" else "toolchain/uv"
+    path = materials.root / name
+    path.write_text("verified uv")
+    materials.files[name] = bundle.file_hash(path)
+    if damage == "missing":
+        path.unlink()
+    else:
+        path.write_text("modified uv")
+    with pytest.raises(ValueError, match="哈希清单"):
+        build_author_resources(materials, tmp_path / "author")
+    assert not (tmp_path / "author").exists()
+
+
+def test_copy_does_not_launder_changed_material_hashes(
+    materials: resource_builder.AuthorInputs,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    copy = shutil.copy2
+
+    def changed_copy(source: Path, destination: Path) -> Path | str:
+        result = copy(source, destination)
+        Path(destination).write_text("changed during copy")
+        return result
+
+    monkeypatch.setattr(shutil, "copy2", changed_copy)
+    with pytest.raises(ValueError, match="预期哈希"):
+        build_author_resources(materials, tmp_path / "author")
+    assert not (tmp_path / "author" / bundle.MANIFEST).exists()
+
+
+def test_legacy_adapter_still_checks_unconsumed_files(delivery: Path, tmp_path: Path):
+    (delivery / "install.py").write_text("tampered")
+    with pytest.raises(ValueError, match="被修改"):
+        build_author_resources(delivery, tmp_path / "author")
+    assert not (tmp_path / "author").exists()
 
 
 @pytest.fixture
