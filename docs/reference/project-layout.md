@@ -313,6 +313,7 @@ are not rebound automatically.
 
 `Project.connect()` and `LabClient.procedures.start/resume` retain their explicit
 local Python execution semantics, including internal worker use. They are not
-aliases for this managed API. The task-calibration lesson still requires a separate
-migration of source-bound stage and finalization admission. The two client classes
-retain their distinct execution responsibilities.
+aliases for this managed API. The task-calibration lesson uses prepare_task, submit
+and start with stages and finalization bound to the prepared command’s frozen source;
+its journey checks both source references against that command. The two client
+classes retain their distinct execution responsibilities.
