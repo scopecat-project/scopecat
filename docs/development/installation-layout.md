@@ -195,6 +195,15 @@ work. See the canonical
 
 ## Runtime assets and author-environment resources
 
+Two resource formats serve different purposes. Format 1 is the complete locked
+build/offline material set, including the dependency wheelhouse and installer;
+delivery preparation also retains the portable Python archive and uv. Format 2 is
+a smaller GUI and author-preparation resource set: GUI assets, the core/server wheels,
+dependency constraints, `author.json`, a checksum manifest and optional uv tools.
+It does not contain the complete application runtime or an offline dependency
+wheelhouse, and is not a complete application upgrade. Native application updates
+still replace the installed application after work has stopped.
+
 The existing application installation record stores `static_dir` independently of
 optional `delivery_root` and `delivery_manifest_sha256`. These reference the
 existing `bundle.json` identity; they do not define another installation format.
@@ -245,27 +254,56 @@ The recipe interpreter is independently probed against the declared target.
 For existing path callers, the compatibility adapter still verifies the complete
 format 1 delivery before selecting these materials, and retains its metadata
 (including empty source metadata accepted by the legacy verifier).
-Development resource preparation, teaching, native and release consumers are not
-migrated by this contract. The legacy installer and offline delivery remain in use.
+Development resource preparation now produces `AuthorInputs` directly: it exports
+locked constraints, builds the two core/server wheels and supplies the Vite handoff
+GUI and source-byte identity. Mac/Windows host pywebview material is prepared and
+verified in a separate cache, outside the author payload. See
+[daily source development](public-preview.md#daily-source-desktop) for cache repair,
+restart behavior and the independently owned author environments.
+
+The installed teaching journey consumes an explicitly selected installed runtime
+and verified format 2 resources after archive relocation, rather than invoking
+`install.py` as part of that journey. Its Windows application and Linux runtime
+fixture are still constructed from full format 1 materials. Native and release
+assembly also retain that complete build input and the path compatibility adapter;
+the legacy installer has a separate regression step and remains supported. See
+[teaching acceptance limits](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits)
+for the selected commands and evidence boundaries. Neither consumer migration
+retires format 1 or turns format 2 into a complete application upgrade.
 
 ## Distribution boundary
 
-`python -m scripts.app_build.toolchain DELIVERY OUTPUT` builds a new platform delivery
-containing Python and uv. Run it on the target OS/architecture after the ordinary
-locked delivery build. It downloads the builder's exact Python patch version into
-a temporary managed directory, checks relocation, and records the Python archive,
-uv executable and uv licenses in the delivery checksum inventory. It does not
-modify the input delivery or register Python with the operating system.
+The locked delivery build prepares a clean uv-managed Python at the repository's
+exact pinned patch/variant, checks relocation, and records the pristine Python
+archive, uv executable and uv licenses in the delivery checksum inventory.
+Build on the target OS/architecture. The retained
+`python -m scripts.app_build.toolchain DELIVERY OUTPUT` command verifies and copies
+that already-prepared delivery; it does not acquire a different Python at packaging
+time. A delivery missing its prepared archive must be rebuilt. Neither path
+registers Python with the operating system. See the
+[exact build runtime](architecture/desktop-packaging.md#exact-build-runtime) contract.
 
 Native packaging extracts Python and installs locked wheels at build time.
-Explicit author-environment creation extracts an independently owned base Python;
-it does not reference a removable application interpreter. The low-level standalone
-`install.py DESTINATION` creates an offline environment for teaching/build checks
-only. It does not install a desktop app or generate launchers. Toolchain construction
-needs network access; installing locked wheels is offline.
+Author-environment preparation follows `scopecat_app.author_python`: it accepts an
+explicit interpreter (`--python` or `UV_PYTHON`), or finds a separately uv-managed
+Python using the workspace's `.python-version` when present, otherwise the
+`author.json` recipe's version (falling back to the running interpreter's version
+if no recipe exists).
+The version fallback selects a version request, not the application executable.
+When the required managed Python is missing, online preparation may download it;
+offline preparation fails explicitly. The resolver checks version compatibility
+and rejects the application's internal interpreter, including virtual environments
+based on it. It does not extract the application's bundled Python for authors or
+silently substitute another Python version after a failed download.
+
+The low-level standalone `install.py DESTINATION` remains a separate offline
+installation path for complete format 1 materials and legacy regression checks.
+It does not install a desktop app or generate launchers. Toolchain construction
+needs network access; installing the locked format 1 wheels is offline. Format 2
+alone does not promise offline author dependency preparation.
 
 `python -m scripts.app_build.native_package DELIVERY APP --installer INSTALLER` packages
-the delivery into a relocatable native application, adding the toolchain if needed.
+the delivery and its prepared toolchain into a relocatable native application.
 Build on the target platform: macOS requires the command-line developer tools and
 produces an `.app` and `.dmg`; Windows requires the MSVC developer command prompt
 and Inno Setup 6 and produces `Scopecat.exe` with an optional Setup executable.

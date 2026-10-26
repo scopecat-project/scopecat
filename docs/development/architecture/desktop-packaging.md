@@ -52,7 +52,7 @@ Mac packaging/libpython checks; author import smoke alone is insufficient.
 | --- | --- |
 | Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-app` owns the environment's `scopecat` console. Application launch uses the packaged runtime. |
 | Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
-| Teaching/offline verification | Help and CLI-created ordinary author source share application preparation; standalone `install.py` and `bundle.py` retain manifest/hash checks and offline environment installation. |
+| Installed teaching verification | Help and CLI-created ordinary author source run through the selected installed runtime and verified format-2 resources; author preparation remains online. The separate format-1 `install.py` regression retains manifest/hash checks and offline environment installation. |
 
 The application-tools wheel owns the `scopecat` console. Server-only consumers use
 the module entry; see [CLI ownership](../../reference/cli.md#entry-ownership-and-migration).
@@ -68,7 +68,8 @@ not additional desktop products.
 | --- | --- | --- |
 | Source and browser | Regular CI; Linux browser shards in `full` / `local-application` / `browser` | API, UI interactions and source regressions; not installed-package evidence |
 | Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or scopecat-app; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
-| Offline installer and teaching consumers | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained Notebooks and ordinary CLI author preparation, application reopen |
+| Installed teaching consumer | Linux/Windows `installed-artifacts` in `full`, `local-application` or manual `teaching`; installed runtime and format-2 resources are archived and relocated | Windows uses the existing native builder; Linux uses an explicitly marked homologous runtime fixture, not a native application. Product import origins, retained Notebooks, ordinary CLI author preparation, application reopen and recovery are checked after the original runtime path is made unavailable. |
+| Legacy offline installer | Separate step in the same installed-artifacts job; complete format-1 materials remain build inputs | `install.py` offline regression is retained independently of the installed-runtime teaching journey. |
 | Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
 | Public artifact consumer | Immutable `preview.json`, wheels and GUI; downstream consumer pins | Source commit and package/hash identity; a downstream pin is not evidence for a newer framework candidate |
 | Release assembly | `release-publish` builds standard artifacts once, reuses them for platform delivery/native packaging | Matching release identity and qualified installer inventory; not invoked by ordinary CI |
@@ -77,9 +78,12 @@ not additional desktop products.
 `full` and `native-distribution` are mutually exclusive profiles. The shared
 standard artifact is built once within `full` / `local-application`; browser and
 installed checks consume its GUI, and platform delivery reuses its wheels.
-The offline archive is an internal validation carrier, not an additional desktop
-product commitment. Calling course code a fixture describes its current maintenance
-form; it does not retire the teaching requirement. Narrowing installed teaching
+The manual `teaching` profile selects only the UI artifact producer and the two
+installed-artifacts jobs; it does not enable continuous full acceptance.
+The archived installed runtime is an internal validation carrier, not an additional
+desktop product commitment. Format 1 remains the build intermediate and separate
+offline-installer regression input. Calling course code a fixture describes its
+current maintenance form; it does not retire the teaching requirement. Narrowing installed teaching
 coverage requires an explicit consumer replacement and supported-platform decision.
 
 The standard artifact carries framework wheels and a separate GUI ZIP. The old
@@ -144,19 +148,28 @@ Source/browser/kernel owners are listed in
 [test feedback](../test-feedback.md#teaching-and-author-entry). Installed coverage
 has two additional boundaries:
 
-- `verify_teaching_delivery.py` checks offline application installation, the installed
-  console and CLI-created editable author source. It invokes the default installed
-  Help checks below, then prepares the CLI source through the same application's
-  ordinary author operations. It generates no separate service or editor tasks.
-  Application installation is offline; author and recovery preparation use
-  independent empty caches and may access the network.
+- `verify_teaching_delivery.py APP EVIDENCE --application-layout` checks an existing
+  `resources/python` runtime and `resources/payload` format-2 resources. Alternatively,
+  pass the payload with `--runtime-python PYTHON`. The verifier invokes the installed
+  Help checks below, then uses the interpreter recorded in that same Help receipt
+  to run `scopecat_app.public_cli` and prepare ordinary editable author source.
+  It does not reinstall the application or generate separate service/editor tasks.
+  Practice, author and recovery preparation may access the network; format 2 is
+  not an offline dependency cache. A bare format-1 input retains the legacy installer
+  adapter, whose offline installation evidence is recorded separately.
 - `verify_installed_help_kernels.py` prepares independent author Python environments
   from minimal format-2 resources and executes `parameters` and `groups` by default.
   These checks retain restart, repair, wrong-kernel rejection and snapshot recovery;
   after application restart they read exact retained results without acquisition.
-  Run `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
+  Run `python scripts/verify_installed_help_kernels.py PAYLOAD EVIDENCE --runtime-python PYTHON`
+  for the installed-runtime path. The target interpreter runs the checks with `-I`,
+  verifies format 2 and records the import locations of core/server/app/tutorials.
+  Receipts identify the actual interpreter, payload format/hash and runtime/source
+  metadata; they do not claim this already-installed runtime was installed offline
+  by the verifier. The format-1 `build_id` is optional compatibility metadata.
+  Omitting `--runtime-python` retains the legacy format-1 installation adapter.
   Add `--all-topics` to also execute the remaining generator-declared topics in
-  real kernels. The ordinary delivery invocation does not pass that flag; its
+  real kernels. The default teaching invocation does not pass that flag; its
   success is not evidence that every topic ran. Inspect the receipt's
   `installed_help_topics` for the actual selection.
 
