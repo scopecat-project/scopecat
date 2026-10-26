@@ -5,7 +5,7 @@
 测量和图形保留在 run／analysis 记录中；问题通过 `inputs` 引用这些证据，
 答复记录结构化值、操作人、来源和备注。
 
-## 分清三层检查
+## 分清三层检查 {#validation-layers}
 
 | 层次 | 检查内容 | 不通过时 |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 它不是通用 schema 或单位换算系统，也不会判断所选频率是不是正确的峰。
 服务端在正式写入前执行检查；GUI 和 Python 的前馈不能替代这个边界。
 
-## 声明一个带契约的问题
+## 声明一个带契约的问题 {#declare-an-answer-contract}
 
 下面可保存为作者模块 `src/my_experiment/peak_decision.py`。`choose_peak` 从已有的 procedure 中调用，
 传入已保留的 `scan`；它不采集数据。首次执行会进入 `waiting_for_input` 并释放 worker
@@ -96,7 +96,7 @@ def choose_peak(
 旧 `metadata.field_constraints` 只是已有的 GUI 提示，不能当作跨入口契约。
 不要为了“升级”正在等待的问题而替换规则、hash 或保留的源码。
 
-## 在应用中回答
+## 在应用中回答 {#answer-in-the-application}
 
 打开**人工判断**，先核对问题和证据，再填写支持的表单及**判断操作人**，选择
 **提交判断并继续**。GUI 答复记录为 `human`；API 可显式声明 `human`、`ai` 或 `service`。
@@ -109,7 +109,7 @@ def choose_peak(
 应用显示**判断已保存**后，仍应查看继续执行状态。出现**核实判断提交**时，使用
 **重试继续执行**核实同一条命令，不要重新创建采集任务。
 
-## 在普通作者会话中回答已查看的问题
+## 在普通作者会话中回答已查看的问题 {#_1}
 
 先取得待答对象并检查证据，再填写答案。下面沿用上面的作者模块；`session` 是已连接的
 普通作者会话，`procedure_run_id` 是原任务 ID。
@@ -140,7 +140,7 @@ hash/revision 重发。`pending` 不预留执行权，也不是可以跨进程�
 旧 `lab.procedures.get(...).respond(...)` 在调用时读取当前问题；普通作者流程应优先使用
 这里的 `pending_input`，明确绑定已经看过的问题。
 
-## 答复保存与继续执行分别确认
+## 答复保存与继续执行分别确认 {#answer-and-continuation}
 
 `respond_and_continue` 返回的 `receipt.answer` 表示答复已经保存；
 `continuation` 和 `dispatch_error` 描述后续调度，不能把调度失败当成答复未保存。
