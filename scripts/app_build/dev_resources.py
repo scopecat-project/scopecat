@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import platform
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +16,7 @@ from pathlib import Path
 import psutil
 from filelock import FileLock
 from platformdirs import user_data_path
+from scripts.app_build.author_materials import prepare as prepare_materials
 from scripts.app_build.author_resources import build as build_author_resources
 
 from scopecat_app.author_resources import verify_resources
@@ -55,7 +55,10 @@ def development_home(source: Path) -> Path:
 
 def source_files(source: Path) -> list[Path]:
     """Actual package inputs; GUI and interpreter bytecode are not payload inputs."""
-    paths = {source / name for name in ("uv.lock", "pyproject.toml", "release.toml")}
+    paths = {
+        source / name
+        for name in ("uv.lock", "pyproject.toml", "release.toml", ".python-version")
+    }
     for package in (source / "packages").iterdir():
         paths.update(package / name for name in ("pyproject.toml", "README.md"))
         paths.update(
@@ -124,13 +127,13 @@ def resource_identity(source: Path) -> str:
 
 def prepare_resources(source: Path, cache: Path) -> Path:
     """Publish only verified complete payloads. Old identities remain untouched."""
-    from scripts.app_build.delivery import build_delivery
-
     cache.mkdir(parents=True, exist_ok=True)
     key = resource_identity(source)
+    digest = source_identity(source)
     payload = cache / key
     with FileLock(cache / "resources.lock"):
-        if not payload.exists() or not _native_ready(cache, key):
+        payload_ready = _payload_ready(payload, digest)
+        if not payload_ready or not _native_ready(cache, key):
             print(
                 "Preparing locked author resources; "
                 "this first build may take a few minutes.",
@@ -149,26 +152,34 @@ def prepare_resources(source: Path, cache: Path) -> Path:
                     encoding="utf-8",
                 )
                 (gui / "development-ui.marker").touch()
-                delivery = build_delivery(staging / "delivery", source=source, gui=gui)
-                # Keep repaired desktop wheels in their own host-only cache.
+                staged_native = staging / "native-wheels"
+                inputs = prepare_materials(
+                    source,
+                    staging / "materials",
+                    gui,
+                    source_digest=digest,
+                    native_wheels=staged_native,
+                )
+                complete = build_author_resources(inputs, staging / "complete")
+                verify_resources(complete)
+                # Check after all work, before replacing either cache component.
+                if (
+                    resource_identity(source) != key
+                    or source_identity(source) != digest
+                ):
+                    raise ValueError(
+                        "Source changed while preparing resources; retry startup."
+                    )
                 native = cache / "native-wheels" / key
                 if sys.platform in {"darwin", "win32"}:
-                    staged_native = staging / "native-wheels"
-                    staged_native.mkdir()
-                    (wheel,) = (delivery / "wheels").glob("pywebview-*.whl")
-                    shutil.copy2(wheel, staged_native / wheel.name)
                     _verify_native_wheel(staged_native)
                     native.parent.mkdir(parents=True, exist_ok=True)
                     if native.exists():
                         native.rename(staging / "previous-native")
                     staged_native.rename(native)
-                if resource_identity(source) != key:
-                    raise ValueError(
-                        "Source changed while preparing resources; retry startup."
-                    )
-                if not payload.exists():
-                    complete = build_author_resources(delivery, staging / "complete")
-                    verify_resources(complete)
+                if not payload_ready:
+                    if payload.exists() or payload.is_symlink():
+                        payload.rename(staging / "previous-payload")
                     complete.rename(payload)
         verify_resources(payload)
     return payload
@@ -261,6 +272,16 @@ def _verify_native_wheel(wheels: Path) -> None:
     else:
         from scripts.app_build.windows_dependency import verify_wheel
     verify_wheel(wheels)
+
+
+def _payload_ready(payload: Path, source_digest: str) -> bool:
+    if not payload.is_dir() or payload.is_symlink():
+        return False
+    try:
+        document = verify_resources(payload)
+    except OSError, ValueError:
+        return False
+    return document["sources"] == {"public": source_digest}
 
 
 def _native_ready(cache: Path, key: str) -> bool:

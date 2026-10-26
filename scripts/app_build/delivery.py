@@ -314,7 +314,7 @@ def _check_public_artifacts(
         raise ValueError("Public artifacts do not match source release identity")
 
 
-def _package_version(
+def package_version(
     public: Path | None, artifacts: Path | None, *, release: bool
 ) -> str | None:
     if public is None or artifacts is not None:
@@ -331,6 +331,68 @@ def _package_version(
         text=True,
     ).strip()
     return identity.python_package_version(commit, timestamp, release=release)
+
+
+def export_dependencies(
+    plan: DeliveryRecipe, destination: Path, local_names: set[str]
+) -> None:
+    """Export reviewed constraints without downloading dependency distributions."""
+    run(
+        [
+            find_uv_bin(),
+            "export",
+            "--locked",
+            *(
+                ["--no-default-groups", "--group"]
+                if plan.include_project
+                else ["--only-group"]
+            ),
+            plan.dependency_group,
+            "--no-emit-local",
+            *[
+                argument
+                for name in sorted(local_names)
+                for argument in ("--no-emit-package", name)
+            ],
+            "--format",
+            "requirements-txt",
+            "--output-file",
+            str(destination),
+        ],
+        cwd=plan.lock_project,
+    )
+
+
+def build_local_wheels(
+    packages: tuple[Path, ...],
+    wheels: Path,
+    *,
+    repository: Path,
+    python: Path,
+    constraints: Path,
+    version: str | None,
+) -> None:
+    """Build only selected source packages with the shared stamping/lock contract."""
+    for package in packages:
+        first_party = bool(_package_names((package,)) & FIRST_PARTY)
+        with staged_project(package, version if first_party else None) as staged:
+            run(
+                [
+                    find_uv_bin(),
+                    "build",
+                    "--wheel",
+                    "--python",
+                    str(python),
+                    "--no-python-downloads",
+                    "--no-sources",
+                    "--build-constraints",
+                    constraints.as_uri(),
+                    "--out-dir",
+                    str(wheels),
+                    str(staged),
+                ],
+                cwd=repository,
+            )
 
 
 def build_delivery(
@@ -388,53 +450,17 @@ def build_delivery(
         # Export the reviewed repository lock, excluding locally built distributions.
         # Download exact third-party artifacts without another dependency resolution.
         dependency_lock = destination / "dependencies.lock"
-        run(
-            [
-                find_uv_bin(),
-                "export",
-                "--locked",
-                *(
-                    ["--no-default-groups", "--group"]
-                    if plan.include_project
-                    else ["--only-group"]
-                ),
-                plan.dependency_group,
-                "--no-emit-local",
-                *[
-                    argument
-                    for name in sorted(local_names)
-                    for argument in ("--no-emit-package", name)
-                ],
-                "--format",
-                "requirements-txt",
-                "--output-file",
-                str(dependency_lock),
-            ],
-            cwd=repository,
-        )
-        package_version = _package_version(public, public_artifacts, release=release)
-        for package in () if public_artifacts is not None else plan.packages:
-            first_party = bool(_package_names((package,)) & FIRST_PARTY)
-            with staged_project(
-                package, package_version if first_party else None
-            ) as staged:
-                run(
-                    [
-                        find_uv_bin(),
-                        "build",
-                        "--wheel",
-                        "--python",
-                        str(python),
-                        "--no-python-downloads",
-                        "--no-sources",
-                        "--build-constraints",
-                        dependency_lock.as_uri(),
-                        "--out-dir",
-                        str(wheels),
-                        str(staged),
-                    ],
-                    cwd=repository,
-                )
+        export_dependencies(plan, dependency_lock, local_names)
+        version = package_version(public, public_artifacts, release=release)
+        if public_artifacts is None:
+            build_local_wheels(
+                plan.packages,
+                wheels,
+                repository=repository,
+                python=python,
+                constraints=dependency_lock,
+                version=version,
+            )
         run(
             [
                 find_uv_bin(),
