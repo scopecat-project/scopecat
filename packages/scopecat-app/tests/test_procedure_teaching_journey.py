@@ -5,16 +5,32 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from scopecat_app.notebook_journey import create_lesson_source
 
 
-def test_generated_procedure_lesson_answers_and_recovers(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "legacy", [False, True], ids=["new-contract", "retained-legacy"]
+)
+def test_generated_procedure_lesson_answers_and_recovers(
+    tmp_path: Path, legacy: bool
+) -> None:
     root = tmp_path / "procedure-author"
     create_lesson_source(root, "procedure")
+    if legacy:
+        source = root / "src/my_experiment/procedure.py"
+        current = source.read_text()
+        (root / "replacement-procedure.py.txt").write_text(current)
+        helpers = (
+            Path(__file__).parent / "fixtures/legacy_peak_choice.py.txt"
+        ).read_text()
+        start, end = current.index("def choose_peak"), current.index("@sc.procedure")
+        source.write_text(current[:start] + helpers + current[end:])
     env = dict(os.environ)
     env.pop("SCOPECAT_DAEMON_URL", None)
     result = subprocess.run(  # noqa: S603 - fixed script and isolated generated source
-        [sys.executable, "-c", _JOURNEY, str(root)],
+        [sys.executable, "-c", _JOURNEY, str(root), "legacy" if legacy else "new"],
         env=env,
         capture_output=True,
         text=True,
@@ -32,6 +48,7 @@ import scopecat as sc
 from scopecat_server.lifecycle import start_project, stop_project
 
 root = Path(sys.argv[1])
+legacy = len(sys.argv) > 2 and sys.argv[2] == "legacy"
 sys.path.insert(0, str(root / "src"))
 project = sc.open_project(root)
 cells = {
@@ -44,29 +61,15 @@ try:
     with ExitStack() as sessions:
         session = sessions.enter_context(project.authoring())
         session.refresh()
-        from my_experiment.procedure import PeakChoice, peak_choice_problem
-
-        # Editable input rules accept both endpoints, reject missing/out-of-range
-        # selections, and require empty frequencies for either non-selection.
-        for outcome, frequency, valid in [
-            ("Peak selected", 6490.0, True),
-            ("Peak selected", 6510.0, True),
-            ("Peak selected", 6489.0, False),
-            ("Peak selected", 6511.0, False),
-            ("Peak selected", None, False),
-            ("Unsure", None, True),
-            ("Unsure", 6500.0, False),
-            ("No clear peak", None, True),
-            ("No clear peak", 6500.0, False),
-        ]:
-            assert (not peak_choice_problem(PeakChoice(outcome, frequency))) == valid
         ns = {"sc": sc, "session": session}
 
         def run(name):
             exec(cells[name], ns)
 
         run("procedure-history")
-        for outcome in ["Peak selected", "Unsure", "No clear peak"]:
+        outcomes = (["Peak selected"] if legacy
+                    else ["Peak selected", "Unsure", "No clear peak"])
+        for outcome in outcomes:
             run("procedure-prepare")
             run("procedure-submit")
             task = ns["task"]
@@ -77,21 +80,53 @@ try:
             assert (
                 pending.request.structure["fields"]["frequency_mhz"]["type"] == "union"
             )
-            limits = pending.request.answer_contract.fields["frequency_mhz"]
-            assert limits.minimum == 6490 and limits.maximum == 6510
-            if outcome == "Peak selected":
-                # Invalid input never leaves the original waiting question.
-                for frequency in [6600, None]:
+            if not legacy:
+                limits = pending.request.answer_contract.fields["frequency_mhz"]
+                assert limits.minimum == 6490 and limits.maximum == 6510
+                for frequency, valid in [
+                    (6490, True), (6510, True), (6489, False),
+                    (6511, False), (None, False),
+                ]:
+                    value = {"outcome": "Peak selected", "frequency_mhz": frequency}
                     try:
-                        pending.respond_and_continue(
-                            ns["PeakChoice"](outcome, frequency), actor="learner"
-                        )
+                        assert pending.request.normalize_answer(value) == value
                     except ValueError:
-                        pass
+                        assert not valid
                     else:
-                        raise AssertionError("invalid answer accepted")
-                assert task.snapshot.state == "waiting_for_input"
-                # Restart while the original question is pending. Reconnect
+                        assert valid
+            if outcome == "Peak selected":
+                if legacy:
+                    assert pending.request.answer_contract is None
+                    retained_source = task.snapshot.source
+                    assert retained_source is not None
+                    assert "answer_contract" not in pending.request.model_dump()
+                    # Replace the working source before continuing: the worker must
+                    # restore its original revision, including the old re-ask loop.
+                    (root / "src/my_experiment/procedure.py").write_text(
+                        (root / "replacement-procedure.py.txt").read_text()
+                    )
+                    receipt = pending.respond_and_continue(
+                        ns["PeakChoice"](outcome, 6600), actor="learner"
+                    )
+                    assert receipt.answer.output.response.value["frequency_mhz"] == 6600
+                    assert task.wait(timeout=60).state == "waiting_for_input"
+                    run("procedure-inspect")
+                    assert ns["pending"].request.answer_contract is None
+                    assert "between 6490 and 6510" in ns["pending"].request.instructions
+                    assert task.snapshot.source == retained_source
+                else:
+                    # Invalid input never leaves the original waiting question.
+                    for frequency in [6600, None]:
+                        try:
+                            pending.respond_and_continue(
+                                ns["PeakChoice"](outcome, frequency), actor="learner"
+                            )
+                        except ValueError:
+                            pass
+                        else:
+                            raise AssertionError("invalid answer accepted")
+                    assert task.snapshot.state == "waiting_for_input"
+                # Restart while the question is pending. Reconnect
                 # by the retained ID, without preparing/submitting another scan.
                 identity = task.id
                 question = ns["pending"].request
@@ -114,7 +149,7 @@ try:
                 assert [
                     step.step_key for step in task.steps().items
                     if step.state == "waiting_for_input"
-                ] == ["choose-1"]
+                ] == ["choose-2" if legacy else "choose-1"]
                 run("procedure-answer")
             else:
                 ns["receipt"] = pending.respond_and_continue(
@@ -128,6 +163,10 @@ try:
             run("procedure-continue")
             assert ns["result"].closure.status == "succeeded"
             assert task.output("scan").run_id == scan
+            assert [
+                step.step_key for step in task.steps().items
+                if step.operation == "interpretation"
+            ] == (["choose-1", "choose-2"] if legacy else ["choose-1"])
             scan_steps = [
                 step for step in task.steps().items if step.step_key == "scan"
             ]
