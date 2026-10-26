@@ -1,5 +1,6 @@
 """Reject stale GUI and invalid deliveries before touching a user environment."""
 
+import errno
 import io
 import json
 import os
@@ -198,7 +199,6 @@ def test_public_install_bundle_still_refuses_existing_destination(
         installer.install_bundle(delivery, destination)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Windows symlink creation needs privileges")
 def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
     from scopecat_app.application_runtime import ApplicationRuntime
 
@@ -206,10 +206,65 @@ def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
     home.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    (home / "runtime").symlink_to(outside, target_is_directory=True)
+    # Probe the actual directory-link capability before calling the product.
+    try:
+        (home / "runtime").symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        if (
+            error.errno not in {errno.EACCES, errno.EPERM, errno.ENOSYS, errno.ENOTSUP}
+            and getattr(error, "winerror", None) != 1314
+        ):
+            raise
+        pytest.skip(f"symlink capability unavailable: {error}")
     with pytest.raises(ValueError, match="符号链接"):
         ApplicationRuntime(home)
     assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("code", "phase", "skipped"),
+    [
+        (errno.EACCES, "link", True),
+        (errno.EPERM, "link", True),
+        (errno.ENOSYS, "link", True),
+        (errno.ENOTSUP, "link", True),
+        (1314, "link", True),
+        (errno.ENOENT, "link", False),
+        (errno.EEXIST, "link", False),
+        (errno.EIO, "link", False),
+        (errno.EACCES, "product", False),
+    ],
+)
+def test_runtime_directory_symlink_skip_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: int,
+    phase: str,
+    skipped: bool,
+) -> None:
+    error = OSError(code, "injected symlink boundary failure")
+    if code == 1314:
+        monkeypatch.setattr(error, "winerror", 1314, raising=False)
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise error
+
+    if phase == "link":
+        monkeypatch.setattr(Path, "symlink_to", fail)
+    else:
+        # No link capability is needed to verify the product exception boundary.
+        def no_link(*_args: object, **_kwargs: object) -> None:
+            pass
+
+        monkeypatch.setattr(Path, "symlink_to", no_link)
+        from scopecat_app import application_runtime
+
+        monkeypatch.setattr(application_runtime, "ApplicationRuntime", fail)
+
+    with pytest.raises(pytest.skip.Exception if skipped else OSError) as caught:
+        test_application_paths_reject_redirected_runtime_directory(tmp_path)
+    if not skipped:
+        assert caught.value is error
 
 
 @pytest.mark.parametrize("problem", ["relative", "missing", "changed"])
