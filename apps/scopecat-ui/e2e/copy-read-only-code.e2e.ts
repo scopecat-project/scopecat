@@ -29,7 +29,11 @@ from ui_signal.signal import signal, FREQUENCY, AMPLITUDE
 from ui_signal.application import save_inputs
 with project.connect() as lab:
     run = lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(4.8, "GHz")])).with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(.1, "V")])), config=save_inputs(lab))
+    # A second run with the same experiment/display identity must not replace
+    # the explicitly selected first run when reopening from Data.
+    other = lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(4.8, "GHz")])).with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(.2, "V")])), config=save_inputs(lab))
     publications = {}
+    run_hashes = {}
     for kind, owner in (("run", run), ("project", lab)):
         publications[kind] = []
         for version in (1, 2):
@@ -37,7 +41,9 @@ with project.connect() as lab:
             context.measurements(run, id="source")
             publication = context.result().fact("version", version).save()
             publications[kind].append(publication.id)
-    print(json.dumps({"runId": run.id, **publications}))
+            if kind == "run":
+                run_hashes[publication.id] = publication.publication_hash
+    print(json.dumps({"runId": run.id, "otherRunId": other.id, "runHashes": run_hashes, **publications}))
 `;
 
 const KERNEL = `
@@ -48,6 +54,9 @@ from nbformat import v4, write
 from scopecat_app.notebook import kernel_command
 root = Path(sys.argv[1])
 snippets = json.loads((root / "copied.json").read_text())
+guide = Path(sys.argv[2]).read_text()
+bookmark_blocks = guide.split("## 退出、重开与可选书签", 1)[1].split("\`\`\`python\\n")[1:]
+bookmark_save, bookmark_read = [block.split("\`\`\`", 1)[0] for block in bookmark_blocks]
 _, environment = kernel_command(root, source_path=False)
 os.environ["JUPYTER_PATH"] = environment["JUPYTER_PATH"]
 connection = "import scopecat as sc\\nsession = sc.notebook(" + repr(str(root)) + ", live=False)\\nbefore = session.list_runs(limit=100).model_dump(mode='json')"
@@ -59,7 +68,19 @@ for item in snippets:
         assertion += "\\nassert publication.id == " + repr(item["publicationId"])
         assertion += "\\nassert publication.fact('version').value == 1"
         assertion += "\\nassert len(publication.outputs) == 1"
+    if item["kind"] == "run" and "publicationId" in item:
+        assertion += "\\nfrom scopecat.records.plan_ref import PlanAnalysisSource"
+        assertion += "\\nsource_ref = PlanAnalysisSource(run_id=run.id, analysis_id=publication.id, publication_hash=publication.publication_hash)"
+        assertion += "\\nassert source_ref.publication_hash == " + repr(item["publicationHash"])
+        assertion += "\\nassert source_ref.run_id == " + repr(item["runId"])
+        assertion += "\\nassert source_ref.analysis_id == " + repr(item["publicationId"])
     cells.append(v4.new_code_cell(assertion))
+    if item["kind"] == "run" and "publicationId" in item:
+        # Execute the actual optional guide cell with the starter's author name,
+        # and no project variable. The readonly session supplies the source path.
+        cells.append(v4.new_code_cell("author = session\\nassert 'project' not in globals()\\n" + bookmark_save))
+        cells.append(v4.new_code_cell("del source_ref, PlanAnalysisSource, json, bookmark_path\\n" + bookmark_read))
+        cells.append(v4.new_code_cell("assert conclusion.id == " + repr(item["publicationId"]) + "\\nassert conclusion.publication_hash == " + repr(item["publicationHash"])))
 cells.append(v4.new_code_cell("assert session.list_runs(limit=100).model_dump(mode='json') == before\\nassert not any(name.startswith('ui_signal') for name in __import__('sys').modules)\\nsession.close()"))
 document = v4.new_notebook(cells=cells)
 try:
@@ -80,12 +101,24 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
     const saved = JSON.parse(uv(["python", "-c", SEED, project])) as {
       runId: string;
+      otherRunId: string;
+      runHashes: Record<string, string>;
       run: string[];
       project: string[];
     };
@@ -119,8 +152,18 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       code: string;
       runId?: string;
       publicationId?: string;
+      publicationHash?: string;
     }[] = [];
-    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(saved.runId)}#runs`);
+    await page.goto(`${endpoint.base_url}/#history`);
+    const record = page.getByRole("listitem").filter({
+      has: page
+        .getByTestId("run-address")
+        .and(page.getByTitle(new RegExp(`Run ID: ${saved.runId}$`))),
+    });
+    await expect(record).toHaveCount(1);
+    await record.getByRole("button").first().click();
+    await expect(page).toHaveURL((url) => url.searchParams.get("run") === saved.runId);
+    expect(saved.otherRunId).not.toBe(saved.runId);
     const header = page.getByTestId("run-detail-header");
     await header.getByRole("button", { name: "复制只读代码" }).click();
     await expect(header.getByRole("status")).toHaveText("只读代码已复制。");
@@ -149,6 +192,7 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       kind: "run",
       runId: saved.runId,
       publicationId: saved.run[0],
+      publicationHash: saved.runHashes[saved.run[0]],
       code: analysisCode!,
     });
 
@@ -193,21 +237,27 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     }
     await page.screenshot({ path: testInfo.outputPath("manual-copy.png"), fullPage: true });
     await writeFile(join(project, "copied.json"), JSON.stringify(snippets));
-    const evidence = uv(["python", "-c", KERNEL, project]);
+    const evidence = uv([
+      "python",
+      "-c",
+      KERNEL,
+      project,
+      join(ROOT, "docs/how-to/continue-experiment.md"),
+    ]);
     await testInfo.attach("kernel evidence", { body: evidence, contentType: "text/plain" });
     await testInfo.attach("executed copied cells", {
       path: join(project, "copied-code-executed.ipynb"),
       contentType: "application/x-ipynb+json",
     });
     const history = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
-    expect((await history.json()).items).toHaveLength(1);
+    expect((await history.json()).items).toHaveLength(2);
     expect(await publicationHistory()).toEqual(publicationsBefore);
     passed = true;
   } catch (error) {
     await testInfo.attach("original failure", { body: String(error), contentType: "text/plain" });
     throw error;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (passed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("preserved test project", { body: project, contentType: "text/plain" });
