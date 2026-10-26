@@ -21,6 +21,20 @@ from scopecat_app.application_runtime import ApplicationRuntime
 type Selection = tuple[Mock, Path, Path]
 
 
+@pytest.mark.parametrize("raw", ["[]", "null", '"invalid"', "1", "true"])
+def test_non_object_resource_manifest_is_rejected_without_repair(
+    tmp_path: Path, raw: str
+):
+    manifest = tmp_path / bundle.MANIFEST
+    manifest.write_text(raw)
+    with pytest.raises(ValueError, match="无法识别作者资源清单"):
+        author_resources.read_resources(tmp_path)
+    with pytest.raises(ValueError, match="无法识别作者资源清单"):
+        author_resources.verify_resources(tmp_path)
+    assert manifest.read_text() == raw
+    assert list(tmp_path.iterdir()) == [manifest]
+
+
 @pytest.fixture
 def delivery(tmp_path: Path) -> Path:
     root = tmp_path / "full"
@@ -84,6 +98,7 @@ def test_projection_has_own_identity_and_keeps_full_delivery(
     delivery: Path, tmp_path: Path
 ):
     before = (delivery / bundle.MANIFEST).read_bytes()
+    assert author_resources.verify_resources(delivery)["format"] == 1
     resource = build_author_resources(delivery, tmp_path / "author")
     document = author_resources.verify_resources(resource)
     assert document["format"] == 2
@@ -114,6 +129,16 @@ def test_extra_delivery_files_are_rejected(delivery: Path, tmp_path: Path, extra
     resource = build_author_resources(delivery, tmp_path / "author")
     (resource / extra).write_text("unexpected")
     with pytest.raises(ValueError, match="多余"):
+        author_resources.verify_resources(resource)
+
+
+def test_resource_platform_mismatch_is_still_rejected(delivery: Path, tmp_path: Path):
+    resource = build_author_resources(delivery, tmp_path / "author")
+    manifest = resource / bundle.MANIFEST
+    document = json.loads(manifest.read_text())
+    document["target"]["platform"] = "different"
+    manifest.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="作者资源平台或清单不匹配"):
         author_resources.verify_resources(resource)
 
 

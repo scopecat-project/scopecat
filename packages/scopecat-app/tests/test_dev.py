@@ -523,6 +523,25 @@ def test_source_resources_first_reuse_damage_and_byte_changes(
     assert "development-ui.marker" in {p.name for p in (second / "gui").iterdir()}
 
 
+@pytest.mark.parametrize("raw", ["[]", "null"])
+def test_non_object_cache_manifest_rebuilds_verified_resources_then_reuses(
+    prepared_source: tuple[Path, Path, list[str]], tmp_path: Path, raw: str
+):
+    source, _, calls = prepared_source
+    cache = tmp_path / "cache"
+    payload = dev_resources.prepare_resources(source, cache)
+    manifest = payload / "bundle.json"
+    manifest.write_text(raw)
+    replacement = dev_resources.prepare_resources(source, cache)
+    assert replacement == payload
+    assert len(calls) == 2
+    verified = dev_resources.verify_resources(replacement)
+    assert verified["format"] == 2
+    assert verified["sources"] == {"public": dev_resources.source_identity(source)}
+    assert dev_resources.prepare_resources(source, cache) == replacement
+    assert len(calls) == 2
+
+
 def test_source_change_during_projection_never_publishes(
     prepared_source: tuple[Path, Path, list[str]],
     tmp_path: Path,
