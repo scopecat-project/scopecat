@@ -501,7 +501,7 @@ jobs:
           path: dist/framework
 
       - name: Install and verify virtual measurement and restart
-        run: uv run --locked python scripts/verify_installed_framework.py dist/framework
+        run: uv run --locked python -m scripts.verify_installed_framework dist/framework
 
       - name: Build target-platform offline tutorial delivery
         run: >-
@@ -531,6 +531,7 @@ jobs:
 
       - name: Verify relocated runtime, Help, notebooks and recovery
         run: |
+          python -c "from pathlib import Path; Path('dist/teaching-runtime').rename('dist/teaching-runtime-unavailable')"
           python -m tarfile -e dist/tutorial.tar.gz dist/delivery-check
           uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/teaching-runtime dist/tutorial-evidence --application-layout
 
