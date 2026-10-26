@@ -129,18 +129,33 @@ def test_derived_dataset_maps_native_names_to_stable_field_ids() -> None:
     assert restored["bias"].attrs == {"units": "V", "long_name": "DC bias"}
 
 
-def test_derived_dataset_accepts_familiar_dataframe_and_xarray_results() -> None:
+def test_derived_dataset_accepts_pandas_results() -> None:
     pd = pytest.importorskip("pandas")
-    pl = pytest.importorskip("polars")
-
-    pandas_dataset = sc.derived_dataset(
+    dataset = sc.derived_dataset(
         pd.DataFrame({"x": [1, 2], "y": [3.0, 4.0]}),
         fields={"x": sc.AnalysisField(role="coordinate")},
     )
-    polars_dataset = sc.derived_dataset(
+    assert dataset.table.to_pylist() == [
+        {"x": 1, "y": 3.0},
+        {"x": 2, "y": 4.0},
+    ]
+    assert isinstance(dataset.to_pandas(), pd.DataFrame)
+
+
+def test_derived_dataset_accepts_polars_results() -> None:
+    pl = pytest.importorskip("polars")
+    dataset = sc.derived_dataset(
         pl.DataFrame({"x": [1, 2], "y": [3.0, 4.0]}),
         fields={"x": sc.AnalysisField(role="coordinate")},
     )
+    assert dataset.table.to_pylist() == [
+        {"x": 1, "y": 3.0},
+        {"x": 2, "y": 4.0},
+    ]
+    assert isinstance(dataset.to_polars(), pl.DataFrame)
+
+
+def test_derived_dataset_accepts_xarray_results() -> None:
     xarray_dataset = sc.derived_dataset(
         xr.Dataset(
             data_vars={"y": (("x",), [3.0, 4.0], {"quality": "fit"})},
@@ -150,12 +165,10 @@ def test_derived_dataset_accepts_familiar_dataframe_and_xarray_results() -> None
         fields={"y": sc.AnalysisField(unit="ratio")},
     )
 
-    assert pandas_dataset.table.to_pylist() == [
+    assert xarray_dataset.table.to_pylist() == [
         {"x": 1, "y": 3.0},
         {"x": 2, "y": 4.0},
     ]
-    assert polars_dataset.table.to_pylist() == pandas_dataset.table.to_pylist()
-    assert xarray_dataset.table.to_pylist() == pandas_dataset.table.to_pylist()
     restored_xarray = xarray_dataset.to_xarray()
     assert restored_xarray.sizes == {"x": 2}
     assert restored_xarray.attrs == {"model": "linear"}
@@ -177,8 +190,6 @@ def test_derived_dataset_accepts_familiar_dataframe_and_xarray_results() -> None
             attrs={"model": "linear"},
         )
     )
-    assert isinstance(pandas_dataset.to_pandas(), pd.DataFrame)
-    assert isinstance(polars_dataset.to_polars(), pl.DataFrame)
 
 
 def test_derived_dataset_projects_annotated_rows_with_table_semantics() -> None:
