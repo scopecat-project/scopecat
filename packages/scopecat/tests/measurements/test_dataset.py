@@ -1043,14 +1043,16 @@ def _entity_source_dataset(
     )
 
 
-def test_measurement_projection_controls_names_units_and_native_adapters() -> None:
-    pd = pytest.importorskip("pandas")
-    projection = _dataset().project(
+def _native_projection():
+    return _dataset().project(
         {"voltage": "bias", "temp": "temperature", "response": "signal"},
         units={"voltage": "mV", "temp": "mK", "response": "ratio"},
         diagnostics="full",
     )
 
+
+def test_measurement_projection_controls_names_units_and_arrow_batches() -> None:
+    projection = _native_projection()
     assert tuple(field.name for field in projection.schema.fields) == (
         "voltage",
         "temp",
@@ -1099,6 +1101,14 @@ def test_measurement_projection_controls_names_units_and_native_adapters() -> No
     )
     assert encoded_projection["fields"][1]["name"] == "temp"
 
+    batches = list(projection.to_record_batch_reader(batch_size=2))
+    assert [batch.num_rows for batch in batches] == [2, 1]
+    assert all(batch.schema == table.schema for batch in batches)
+
+
+def test_measurement_projection_to_pandas() -> None:
+    pd = pytest.importorskip("pandas")
+    projection = _native_projection()
     frame = projection.to_pandas()
     assert isinstance(frame, pd.DataFrame)
     assert list(frame["voltage"]) == [0.0, 1000.0, 2000.0]
@@ -1114,12 +1124,18 @@ def test_measurement_projection_controls_names_units_and_native_adapters() -> No
     arrow_frame = projection.to_pandas(dtype_backend="pyarrow")
     assert "pyarrow" in str(arrow_frame["temp"].dtype)
 
+
+def test_measurement_projection_to_polars() -> None:
+    projection = _native_projection()
     pl = pytest.importorskip("polars")
     polars_frame = projection.to_polars()
     assert isinstance(polars_frame, pl.DataFrame)
-    assert polars_frame.columns == table.column_names
+    assert polars_frame.columns == projection.to_arrow().column_names
     assert polars_frame["voltage"].to_list() == [0.0, 1000.0, 2000.0]
 
+
+def test_measurement_projection_to_xarray() -> None:
+    projection = _native_projection()
     labeled = projection.to_xarray()
     assert isinstance(labeled, xr.Dataset)
     assert tuple(labeled["voltage"].dims) == ("point",)
@@ -1129,10 +1145,6 @@ def test_measurement_projection_controls_names_units_and_native_adapters() -> No
     assert labeled["temp__unavailable_reason"].values[1] == "invalid"
     assert "bias" not in labeled.variables
     assert "temperature" not in labeled.variables
-
-    batches = list(projection.to_record_batch_reader(batch_size=2))
-    assert [batch.num_rows for batch in batches] == [2, 1]
-    assert all(batch.schema == table.schema for batch in batches)
 
 
 def test_pandas_projection_reports_units_inherited_as_plain_magnitudes() -> None:
@@ -1207,8 +1219,7 @@ def test_projection_diagnostics_have_one_schema_across_availability_slices() -> 
     assert unavailable["temp__unavailable_reason"].to_pylist() == ["invalid"]
 
 
-def test_observations_projection_aligns_ragged_arrays_and_broadcasts_scalars() -> None:
-    pd = pytest.importorskip("pandas")
+def _ragged_observations_projection():
     dataset = _ragged_dataset()
     unavailable = MeasurementUnavailable.create(
         reason="missing",
@@ -1229,7 +1240,7 @@ def test_observations_projection_aligns_ragged_arrays_and_broadcasts_scalars() -
             )
         }
     )
-    projection = Dataset(raw, dataset.entry).project(
+    return Dataset(raw, dataset.entry).project(
         {
             "voltage": "bias",
             "frequency": "frequency",
@@ -1239,6 +1250,9 @@ def test_observations_projection_aligns_ragged_arrays_and_broadcasts_scalars() -
         diagnostics="full",
     )
 
+
+def test_observations_projection_aligns_ragged_arrays_and_broadcasts_scalars() -> None:
+    projection = _ragged_observations_projection()
     table = projection.to_arrow()
     assert table.num_rows == 6
     assert table.column_names == [
@@ -1268,6 +1282,10 @@ def test_observations_projection_aligns_ragged_arrays_and_broadcasts_scalars() -
         None,
     ]
 
+
+def test_observations_projection_to_pandas() -> None:
+    pd = pytest.importorskip("pandas")
+    projection = _ragged_observations_projection()
     frame = projection.with_units(
         voltage="V",
         frequency="Hz",
