@@ -1,8 +1,8 @@
-"""Editable synthetic procedure: acquire, ask a person, validate and finish.
+"""Editable synthetic procedure: acquire, ask a person and finish.
 
-The notebook uses task.pending_input(schema=PEAK_CHOICE) to read the current
-question, including a later correction round. The choose-N keys below still
-identify separate retained judgments; reading a question never starts a scan.
+The notebook uses task.pending_input(schema=PEAK_CHOICE) to read the retained
+question. Its explicit answer contract checks input legality before recording;
+scientific acceptance or rejection remains the author's separate responsibility.
 """
 
 from dataclasses import dataclass
@@ -12,7 +12,10 @@ from pydantic import BaseModel, ConfigDict
 
 import scopecat as sc
 from scopecat.api.procedures import InterpretationResult, LabProcedureContext
-from scopecat.automation import AnalysisPublicationOutputRef, RunOutputRef
+from scopecat.automation import (
+    AnalysisPublicationOutputRef, AnswerCondition, AnswerContract, RunOutputRef,
+    ScalarAnswerRule,
+)
 from scopecat.daemon.views import ParameterResolution
 from scopecat.records.setup import SetupRevisionRef
 
@@ -73,75 +76,53 @@ MAX_FREQUENCY_MHZ = 6510
 PEAK_CHOICE = sc.AnalysisFactSchema("teaching.procedure.peak-choice.v1", PeakChoice)
 
 
-def peak_choice_problem(value: PeakChoice) -> str:
-    """Check the answer's range and combination, not whether it is the right peak."""
-    if value.outcome == "Peak selected":
-        if value.frequency_mhz is None:
-            return "Enter a peak frequency when choosing Peak selected."
-        if not MIN_FREQUENCY_MHZ <= value.frequency_mhz <= MAX_FREQUENCY_MHZ:
-            return (
-                f"Peak frequency must be between {MIN_FREQUENCY_MHZ} "
-                f"and {MAX_FREQUENCY_MHZ} MHz."
-            )
-    elif value.frequency_mhz is not None:
-        return "Leave the frequency empty for No clear peak or Unsure."
-    return ""
-
-
 def choose_peak(
     context: LabProcedureContext,
     scan: RunOutputRef,
     plotted: AnalysisPublicationOutputRef,
 ) -> InterpretationResult[PeakChoice]:
-    """Ask about these retained results until the answer satisfies our rules.
+    """Return the recorded judgment and its evidence reference.
 
-    Called once by survey. Each choose-N is a new judgment round, not a retry
-    attempt of an existing step. Replay reads the same answers and never scans.
-    Return the whole judgment so later author steps can retain choice.ref.
+    The contract checks range/required fields, not whether this is the right peak.
+    An author can evaluate choice.value and ask a separate question if scientific
+    review requires it. Replay reads the retained answer without another scan.
     """
-    round_index = 1
-    problem = ""
-    while True:
-        choice = context.interpret(
-            f"choose-{round_index}",
-            title="Choose a peak frequency",
-            instructions=(
-                "Find the highest point of the upward peak (not a dip). "
-                "Choose Peak selected, then click one plotted point to fill the frequency. "
-                "You can adjust the value before submitting. "
-                "Enter a frequency in MHz between "
-                f"{MIN_FREQUENCY_MHZ} and {MAX_FREQUENCY_MHZ}, "
-                "or choose No clear peak / Unsure and leave it empty. "
-                "Submit your answer and continue the procedure to finish. "
-                "Completion records your judgment, "
-                "not its correctness or a published calibration. " + problem
+    return context.interpret(
+        "choose-1",
+        title="Choose a peak frequency",
+        instructions=(
+            "Find the highest point of the upward peak (not a dip). "
+            "Choose Peak selected, then click one plotted point to fill the frequency. "
+            "You can adjust the value before submitting. "
+            "Enter a frequency in MHz between "
+            f"{MIN_FREQUENCY_MHZ} and {MAX_FREQUENCY_MHZ}, "
+            "or choose No clear peak / Unsure and leave it empty. "
+            "Submit your answer and continue the procedure to finish. "
+            "Completion records your judgment, "
+            "not its correctness or a published calibration."
+        ),
+        schema=PEAK_CHOICE,
+        inputs=(scan, plotted),
+        response_template=PeakChoice("Unsure", None),
+        answer_contract=AnswerContract(fields={
+            "frequency_mhz": ScalarAnswerRule(
+                minimum=MIN_FREQUENCY_MHZ,
+                maximum=MAX_FREQUENCY_MHZ,
+                required_when=AnswerCondition(field="outcome", value="Peak selected"),
+                empty_otherwise=True,
             ),
-            schema=PEAK_CHOICE,
-            inputs=(scan, plotted),
-            response_template=PeakChoice("Unsure", None),
-            metadata={
-                "point_binding": {
-                    "input": 1, "output": "trace", "layer": "data",
-                    "column": "frequency", "field": "frequency_mhz", "unit": "MHz",
-                },
-                "field_labels": {
-                    "outcome": "Your judgment",
-                    "frequency_mhz": "Peak frequency (MHz)",
-                },
-                "field_constraints": {
-                    "frequency_mhz": {
-                        "minimum": MIN_FREQUENCY_MHZ,
-                        "maximum": MAX_FREQUENCY_MHZ,
-                        "required_when": {"field": "outcome", "value": "Peak selected"},
-                        "empty_otherwise": True,
-                    }
-                },
+        }),
+        metadata={
+            "point_binding": {
+                "input": 1, "output": "trace", "layer": "data",
+                "column": "frequency", "field": "frequency_mhz", "unit": "MHz",
             },
-        )
-        problem = peak_choice_problem(choice.value)
-        if not problem:
-            return choice
-        round_index += 1
+            "field_labels": {
+                "outcome": "Your judgment",
+                "frequency_mhz": "Peak frequency (MHz)",
+            },
+        },
+    )
 
 
 @sc.procedure(id="teaching.procedure.manual-peaks", version="1", intent=SurveyIntent)

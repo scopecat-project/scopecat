@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from scopecat.analysis.facts import validate_analysis_fact_json
 from scopecat.application.experiment_plans import plan_launch_request
 from scopecat.automation import (
     InterpretationOutputRef,
@@ -1378,13 +1377,20 @@ class AutomationService:
                 command.procedure_run_id,
             )
             if current.state == "succeeded":
+                request = current.interpretation_request
+                if request is None or request.request_hash != command.request_hash:
+                    raise AutomationConflict("procedure interpretation request changed")
+                try:
+                    value = request.normalize_answer(command.value)
+                except (TypeError, ValueError) as error:
+                    raise AutomationConflict(str(error)) from error
                 output = current.output
                 if (
                     isinstance(output, InterpretationOutputRef)
                     and output.request_hash == command.request_hash
                     and output.response.actor == command.actor
                     and output.response.actor_kind == command.actor_kind
-                    and output.response.value == command.value
+                    and output.response.value == value
                     and output.response.note == command.note
                 ):
                     return ProcedureStepTransition(run=run, attempt=current)
@@ -1418,11 +1424,13 @@ class AutomationService:
             if request is None or request.request_hash != command.request_hash:
                 raise AutomationConflict("procedure interpretation request changed")
             try:
-                validate_analysis_fact_json(command.value, request.structure)
+                value = request.normalize_answer(command.value)
             except TypeError as error:
                 raise AutomationConflict(
                     "procedure interpretation response does not match its schema"
                 ) from error
+            except ValueError as error:
+                raise AutomationConflict(str(error)) from error
             if request.manual_line is not None and command.actor_kind != "human":
                 raise AutomationConflict(
                     "physical line wiring requires a human confirmation"
@@ -1434,7 +1442,7 @@ class AutomationService:
             response = InterpretationResponse(
                 actor=command.actor,
                 actor_kind=command.actor_kind,
-                value=command.value,
+                value=value,
                 note=command.note,
                 submitted_at=now,
                 confirmed_runtime_id=(

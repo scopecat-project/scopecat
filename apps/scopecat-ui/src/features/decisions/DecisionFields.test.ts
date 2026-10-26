@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decisionFields,
+  decisionMetadata,
   decisionFormValue,
   decisionValueError,
   decisionConstraintError,
@@ -104,3 +105,63 @@ describe("numeric conditional controls", () => {
     },
   );
 });
+
+it("uses opt-in rules over presentation hints with the same answer boundary matrix", () => {
+  const fields = decisionFields(structure)!;
+  const rules = decisionMetadata(
+    { field_constraints: {} },
+    { version: 1, fields: metadata.field_constraints },
+  );
+  for (const [frequency, valid] of [
+    [6490, true],
+    [6510, true],
+    [6489, false],
+    [6511, false],
+    [null, false],
+  ] as const) {
+    const selected = decisionFormValue(
+      fields,
+      { outcome: "Peak selected", frequency_mhz: frequency },
+      rules,
+    );
+    expect(!decisionValueError(fields, selected) && !decisionConstraintError(selected, rules)).toBe(
+      valid,
+    );
+    expect(
+      decisionFormValue(fields, { outcome: "Unsure", frequency_mhz: frequency }, rules),
+    ).toEqual({ outcome: "Unsure", frequency_mhz: null });
+  }
+  const omitted = decisionFormValue(fields, { outcome: "Unsure" }, rules);
+  expect(decisionValueError(fields, omitted)).toBeDefined();
+  expect(decisionMetadata(metadata, undefined)).toEqual(metadata);
+});
+
+it.each(["", "   "])(
+  "normalizes schema-valid blank controllers only for explicit contracts: %j",
+  (mode) => {
+    for (const controller of [
+      { type: "string" },
+      { type: "literal", values: ["enabled", "", "   "] },
+    ]) {
+      const fields = decisionFields({
+        type: "object",
+        fields: {
+          mode: controller,
+          frequency: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+        },
+      })!;
+      const rules = {
+        frequency: { required_when: { field: "mode", value: "enabled" }, empty_otherwise: true },
+      };
+      const value = { mode, frequency: 6500 };
+      const explicit = decisionMetadata({}, { version: 1, fields: rules });
+      const normalized = decisionFormValue(fields, value, explicit);
+      expect(normalized).toEqual({ mode, frequency: null });
+      expect(decisionValueError(fields, normalized)).toBeUndefined();
+      expect(decisionConstraintError(normalized, explicit)).toBeUndefined();
+      const legacy = decisionMetadata({ field_constraints: rules }, undefined);
+      expect(decisionFormValue(fields, value, legacy)).toEqual(value);
+      expect(decisionConstraintError(value, legacy)).toBeDefined();
+    }
+  },
+);

@@ -1,0 +1,72 @@
+# Pre-contract tutorial helpers from 4a8ef517, retained for replay regression.
+def peak_choice_problem(value: PeakChoice) -> str:
+    """Check the answer's range and combination, not whether it is the right peak."""
+    if value.outcome == "Peak selected":
+        if value.frequency_mhz is None:
+            return "Enter a peak frequency when choosing Peak selected."
+        if not MIN_FREQUENCY_MHZ <= value.frequency_mhz <= MAX_FREQUENCY_MHZ:
+            return (
+                f"Peak frequency must be between {MIN_FREQUENCY_MHZ} "
+                f"and {MAX_FREQUENCY_MHZ} MHz."
+            )
+    elif value.frequency_mhz is not None:
+        return "Leave the frequency empty for No clear peak or Unsure."
+    return ""
+
+
+def choose_peak(
+    context: LabProcedureContext,
+    scan: RunOutputRef,
+    plotted: AnalysisPublicationOutputRef,
+) -> InterpretationResult[PeakChoice]:
+    """Ask about these retained results until the answer satisfies our rules.
+
+    Called once by survey. Each choose-N is a new judgment round, not a retry
+    attempt of an existing step. Replay reads the same answers and never scans.
+    Return the whole judgment so later author steps can retain choice.ref.
+    """
+    round_index = 1
+    problem = ""
+    while True:
+        choice = context.interpret(
+            f"choose-{round_index}",
+            title="Choose a peak frequency",
+            instructions=(
+                "Find the highest point of the upward peak (not a dip). "
+                "Choose Peak selected, then click one plotted point to fill the frequency. "
+                "You can adjust the value before submitting. "
+                "Enter a frequency in MHz between "
+                f"{MIN_FREQUENCY_MHZ} and {MAX_FREQUENCY_MHZ}, "
+                "or choose No clear peak / Unsure and leave it empty. "
+                "Submit your answer and continue the procedure to finish. "
+                "Completion records your judgment, "
+                "not its correctness or a published calibration. " + problem
+            ),
+            schema=PEAK_CHOICE,
+            inputs=(scan, plotted),
+            response_template=PeakChoice("Unsure", None),
+            metadata={
+                "point_binding": {
+                    "input": 1, "output": "trace", "layer": "data",
+                    "column": "frequency", "field": "frequency_mhz", "unit": "MHz",
+                },
+                "field_labels": {
+                    "outcome": "Your judgment",
+                    "frequency_mhz": "Peak frequency (MHz)",
+                },
+                "field_constraints": {
+                    "frequency_mhz": {
+                        "minimum": MIN_FREQUENCY_MHZ,
+                        "maximum": MAX_FREQUENCY_MHZ,
+                        "required_when": {"field": "outcome", "value": "Peak selected"},
+                        "empty_otherwise": True,
+                    }
+                },
+            },
+        )
+        problem = peak_choice_problem(choice.value)
+        if not problem:
+            return choice
+        round_index += 1
+
+

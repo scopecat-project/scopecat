@@ -7,6 +7,17 @@ type ScalarField = (
 ) & { nullable?: boolean };
 type DecisionField = ScalarField | { type: "array"; items: ScalarField };
 
+// This local marker cannot collide with persisted presentation metadata.
+const explicitContractRules = Symbol("explicit answer contract");
+
+// Explicit contracts own legality. Older requests keep their presentation hints.
+export function decisionMetadata(metadata: unknown, contract: unknown): Record<string, unknown> {
+  const base = isRecord(metadata) ? metadata : {};
+  return isRecord(contract) && contract.version === 1 && isRecord(contract.fields)
+    ? { ...base, field_constraints: contract.fields, [explicitContractRules]: true }
+    : base;
+}
+
 function scalarField(value: unknown): ScalarField | undefined {
   if (!isRecord(value)) return;
   if (value.type === "union" && Array.isArray(value.variants) && value.variants.length === 2) {
@@ -109,7 +120,7 @@ export function inactiveField(
   if (
     selected === null ||
     selected === undefined ||
-    (typeof selected === "string" && !selected.trim()) ||
+    (!(explicitContractRules in metadata) && typeof selected === "string" && !selected.trim()) ||
     !validScalar(controller, selected) ||
     !validScalar(controller, condition.value)
   )

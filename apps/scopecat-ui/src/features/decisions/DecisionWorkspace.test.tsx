@@ -349,67 +349,84 @@ describe("DecisionWorkspace", () => {
     expect(screen.getByRole("link", { name: "打开测量数据" })).toBeInTheDocument();
   });
 
-  it("renders the shipped nullable peak schema and blocks invalid combinations before recording", async () => {
-    const step = waitingStep();
-    step.interpretation_request!.structure = {
-      type: "object",
-      fields: {
-        outcome: { type: "literal", values: ["Peak selected", "No clear peak", "Unsure"] },
-        frequency_mhz: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
-      },
-    };
-    step.interpretation_request!.response_template = { outcome: "Unsure", frequency_mhz: null };
-    step.interpretation_request!.metadata = {
-      reviewer: "learner",
-      field_labels: { frequency_mhz: "Peak frequency (MHz)" },
-      field_constraints: {
-        frequency_mhz: {
-          minimum: 6490,
-          maximum: 6510,
-          required_when: { field: "outcome", value: "Peak selected" },
-          empty_otherwise: true,
+  it.each([false, true])(
+    "blocks invalid peak answers before recording (explicit contract: %s)",
+    async (explicit) => {
+      const step = waitingStep();
+      step.interpretation_request!.structure = {
+        type: "object",
+        fields: {
+          outcome: { type: "literal", values: ["Peak selected", "No clear peak", "Unsure"] },
+          frequency_mhz: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
         },
-      },
-    };
-    vi.mocked(getProcedureSteps).mockResolvedValue({
-      procedure_run_id: "procedure-1",
-      items: [step],
-    });
-    renderWorkspace();
-    await screen.findByLabelText("outcome");
-    expect(screen.queryByLabelText("Peak frequency (MHz)")).not.toBeInTheDocument();
-    expect(screen.queryByText("Structured judgment (JSON)")).toBeNull();
-    fireEvent.change(screen.getByLabelText("outcome"), {
-      target: { value: JSON.stringify("Peak selected") },
-    });
-    const frequency = screen.getByLabelText("Peak frequency (MHz)");
-    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("请填写 Peak frequency");
-    fireEvent.change(frequency, { target: { value: "6600" } });
-    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("6490 至 6510 之间");
-    expect(submitProcedureInput).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("outcome"), {
-      target: { value: JSON.stringify("No clear peak") },
-    });
-    expect(screen.queryByLabelText("Peak frequency (MHz)")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("outcome"), {
-      target: { value: JSON.stringify("Peak selected") },
-    });
-    expect(screen.getByLabelText("Peak frequency (MHz)")).toHaveValue("6600");
-    fireEvent.change(screen.getByLabelText("outcome"), {
-      target: { value: JSON.stringify("No clear peak") },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
-    await waitFor(() =>
-      expect(submitProcedureInput).toHaveBeenCalledWith(
-        expect.objectContaining({
-          value: { outcome: "No clear peak", frequency_mhz: null },
-        }),
-        expect.anything(),
-      ),
-    );
-  });
+      };
+      step.interpretation_request!.response_template = { outcome: "Unsure", frequency_mhz: null };
+      step.interpretation_request!.metadata = {
+        reviewer: "learner",
+        field_labels: { frequency_mhz: "Peak frequency (MHz)" },
+        field_constraints: {
+          frequency_mhz: {
+            minimum: 6490,
+            maximum: 6510,
+            required_when: { field: "outcome", value: "Peak selected" },
+            empty_otherwise: true,
+          },
+        },
+      };
+      if (explicit) {
+        step.interpretation_request!.answer_contract = {
+          version: 1,
+          fields: {
+            frequency_mhz: {
+              minimum: 6490,
+              maximum: 6510,
+              required_when: { field: "outcome", value: "Peak selected" },
+              empty_otherwise: true,
+            },
+          },
+        };
+        step.interpretation_request!.metadata.field_constraints = {};
+      }
+      vi.mocked(getProcedureSteps).mockResolvedValue({
+        procedure_run_id: "procedure-1",
+        items: [step],
+      });
+      renderWorkspace();
+      await screen.findByLabelText("outcome");
+      expect(screen.queryByLabelText("Peak frequency (MHz)")).not.toBeInTheDocument();
+      expect(screen.queryByText("Structured judgment (JSON)")).toBeNull();
+      fireEvent.change(screen.getByLabelText("outcome"), {
+        target: { value: JSON.stringify("Peak selected") },
+      });
+      const frequency = screen.getByLabelText("Peak frequency (MHz)");
+      fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("请填写 Peak frequency");
+      fireEvent.change(frequency, { target: { value: "6600" } });
+      fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("6490 至 6510 之间");
+      expect(submitProcedureInput).not.toHaveBeenCalled();
+      fireEvent.change(screen.getByLabelText("outcome"), {
+        target: { value: JSON.stringify("No clear peak") },
+      });
+      expect(screen.queryByLabelText("Peak frequency (MHz)")).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("outcome"), {
+        target: { value: JSON.stringify("Peak selected") },
+      });
+      expect(screen.getByLabelText("Peak frequency (MHz)")).toHaveValue("6600");
+      fireEvent.change(screen.getByLabelText("outcome"), {
+        target: { value: JSON.stringify("No clear peak") },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
+      await waitFor(() =>
+        expect(submitProcedureInput).toHaveBeenCalledWith(
+          expect.objectContaining({
+            value: { outcome: "No clear peak", frequency_mhz: null },
+          }),
+          expect.anything(),
+        ),
+      );
+    },
+  );
 
   it("shows the retained parameter branch receipt as decision evidence", async () => {
     const step = waitingStep();
