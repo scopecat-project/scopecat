@@ -29,24 +29,38 @@ test("registered devices share ownership across pages without setup selection", 
       await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareReferenceContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Device ownership tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     const second = await context.newPage();
     await page.goto(`${endpoint.base_url}/#instruments`);
     await second.goto(`${endpoint.base_url}/#instruments`);
     await expect(page.getByLabel("实验配置", { exact: true })).toHaveCount(0);
-    await page.getByTitle("Inspect instrument drive-lo-a").click();
-    await second.getByTitle("Inspect instrument drive-lo-a").click();
+    await page.getByTitle("查看仪器 drive-lo-a").click();
+    await second.getByTitle("查看仪器 drive-lo-a").click();
     const opening = page.waitForRequest((request) =>
       request.url().endsWith("/instrument-sessions"),
     );
-    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await page.getByRole("button", { name: "连接", exact: true }).click();
     const deviceSetup = (await opening).postDataJSON().setup;
     expect(deviceSetup.revision_id).toMatch(/^resolved:/);
-    await expect(page.getByText("Interactive session connected")).toBeVisible();
+    await expect(page.getByText("交互会话已连接")).toBeVisible();
     const inventory = await (
       await second.request.get(`${endpoint.base_url}/api/v1/devices`)
     ).json();
@@ -65,25 +79,23 @@ test("registered devices share ownership across pages without setup selection", 
     );
     expect(blocked.status()).toBe(409);
     expect(await blocked.text()).toContain("resources are busy");
-    await second.getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(second.getByRole("button", { name: "Connect", exact: true })).not.toBeVisible();
-    await page.getByRole("button", { name: "Disconnect", exact: true }).click();
-    await second.getByRole("button", { name: "Refresh", exact: true }).click();
+    await second.getByRole("button", { name: "刷新", exact: true }).click();
+    await expect(second.getByRole("button", { name: "连接", exact: true })).not.toBeVisible();
+    await page.getByRole("button", { name: "断开连接", exact: true }).click();
+    await second.getByRole("button", { name: "刷新", exact: true }).click();
     const nextOpening = second.waitForRequest((request) =>
       request.url().endsWith("/instrument-sessions"),
     );
-    await second.getByRole("button", { name: "Connect", exact: true }).click();
+    await second.getByRole("button", { name: "连接", exact: true }).click();
     expect((await nextOpening).postDataJSON().setup).toEqual(deviceSetup);
-    await expect(second.getByText("Interactive session connected")).toBeVisible();
-    await second.getByRole("button", { name: "Disconnect", exact: true }).click();
-    await second.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(
-      second.getByText(/Connection test passed; the test session was released/),
-    ).toBeVisible();
+    await expect(second.getByText("交互会话已连接")).toBeVisible();
+    await second.getByRole("button", { name: "断开连接", exact: true }).click();
+    await second.getByRole("button", { name: "测试连接", exact: true }).click();
+    await expect(second.getByText(/连接测试通过，测试会话已释放/)).toBeVisible();
     await second.close();
     completed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved device context project", {
@@ -103,11 +115,26 @@ test("manual changes invalidate a retained preview before a fresh acquisition", 
       await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareReferenceContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Device preview tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
+    await page.reload();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("ramsey");
     await chooseReferenceContext(page);
@@ -144,7 +171,7 @@ with LabApplication().connect(sys.argv[1]) as lab:
     await expect(page.getByTestId("run-status")).toHaveText("已完成");
     completed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved manual project", {

@@ -36,38 +36,31 @@ export function NotebookCleanup({
       await cache.invalidateQueries({ queryKey: ["notebook-journey", topic] });
     },
   });
-  if (journey.cleared)
-    return <Notice>Course data cleared. Prepare again to start a fresh course folder.</Notice>;
+  if (journey.cleared) return <Notice>课程数据已清理。重新准备即可创建新的课程目录。</Notice>;
   if (!journey.scope_id)
-    return (
-      <Notice>
-        Older course: no reliable ownership record. Review its records individually in Data; cleanup
-        will not infer ownership from names.
-      </Notice>
-    );
+    return <Notice>旧课程没有可靠的归属记录。请在数据页逐项核对；清理不会按名称推断归属。</Notice>;
   if (!api?.preview_notebook_cleanup || !api.clear_notebook_course) return null;
   const result = preview.data;
   return (
     <details className="grid gap-2">
-      <summary>Clear this course</summary>
+      <summary>清理此课程</summary>
       <p>
-        Preview all owned data first. Finish or cancel unfinished tasks using their normal controls.
-        Edited code is kept unless you explicitly choose to delete it.
+        请先预览所有归属数据。使用常规控件完成或取消未完成任务。除非明确选择删除，否则保留已编辑代码。
       </p>
       <Button
         disabled={disabled || preview.isPending || clear.isPending}
         onClick={() => preview.mutate()}
       >
-        Preview course cleanup
+        预览课程清理
       </Button>
       {(preview.error || clear.error) && (
         <Notice role="alert">{errorMessage(preview.error ?? clear.error)}</Notice>
       )}
       {result && (
         <div className="grid gap-3 mt-3">
-          <p>{result.preview.record_count} owned records selected.</p>
+          <p>{result.preview.record_count} 条归属记录已选中。</p>
           <details>
-            <summary>Review every selected record</summary>
+            <summary>核对每条选中记录</summary>
             {Object.entries(result.preview.selection)
               .filter(([, ids]) => ids.length > 0)
               .map(([kind, ids]) => (
@@ -95,9 +88,9 @@ export function NotebookCleanup({
               disabled={!!fixedFiles || !!result.files_error || clear.isPending}
               onChange={(event) => setDiscard(event.target.checked)}
             />
-            Also delete this course’s edited code and local Python folder: {journey.directory}
+            同时删除此课程的已编辑代码和本地 Python 目录： {journey.directory}
           </label>
-          {result.files_error && <Notice>{result.files_error} Code can still be kept.</Notice>}
+          {result.files_error && <Notice>{result.files_error} 仍可选择保留代码。</Notice>}
           <Button
             variant="danger"
             disabled={
@@ -108,7 +101,7 @@ export function NotebookCleanup({
             }
             onClick={() => clear.mutate()}
           >
-            {clear.isPending ? "Clearing…" : "Confirm course cleanup"}
+            {clear.isPending ? "正在清理…" : "确认课程清理"}
           </Button>
         </div>
       )}

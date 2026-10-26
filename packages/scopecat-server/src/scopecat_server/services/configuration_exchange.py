@@ -98,25 +98,17 @@ class ConfigurationExchangeService:
             if document.source
             else ()
         )
-        notices = ["Imported values are initial inputs, not verified calibration."]
+        notices = ["导入数值仅作为初始输入。不代表已验证的校准。"]
         if document.setup:
-            notices.append(
-                "Map every device role explicitly; sender device IDs are not "
-                "local bindings."
-            )
+            notices.append("请明确映射每个设备角色。发送方设备 ID 不作为本地绑定。")
         if document.source:
+            notices.append("源码尚未接受、登记或执行。执行环境和依赖尚未检查。")
             notices.append(
-                "Source has not been accepted, registered or executed. Execution "
-                "environment and dependencies have not been checked."
-            )
-            notices.append(
-                "Method descriptions and dynamic controls require later trusted "
-                "loading; inspection does not infer arbitrary Python behavior."
+                "方法描述与动态控件需要后续可信加载。检查不会推断任意 Python 行为。"
             )
         else:
             notices.append(
-                "No source is attached. Select existing local author code in "
-                "Application settings before preparing an experiment."
+                "未附带源码。准备实验前请在应用设置中选择已有的本地作者代码。"
             )
         return ConfigurationInspection(
             content_hash=document.content_hash,

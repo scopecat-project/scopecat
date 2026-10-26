@@ -17,7 +17,17 @@ function uv(args: string[]) {
     throw new Error(result.error?.message ?? result.stdout + result.stderr);
 }
 async function start(project: string) {
-  uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+  uv([
+    "python",
+    "-m",
+    "scopecat_server.cli",
+    "start",
+    project,
+    "--port",
+    "0",
+    "--static-dir",
+    resolve("dist"),
+  ]);
   return (
     JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
@@ -60,22 +70,27 @@ with sc.open_project(root).connect() as lab:
     started.push(receiver);
     await page.goto(`${senderUrl}/#config`);
     await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
-    await page.getByRole("button", { name: "Export configuration…", exact: true }).click();
+    await page.getByRole("button", { name: "导出配置…", exact: true }).click();
     await page
-      .getByRole("combobox", { name: "Parameter version", exact: true })
+      .getByRole("combobox", { name: "参数版本", exact: true })
       .selectOption("starter-initial");
-    await page.getByLabel("File label", { exact: true }).fill("Colleague inputs");
-    await page.getByRole("button", { name: "Review export", exact: true }).click();
+    await page.getByLabel("文件标签", { exact: true }).fill("Colleague inputs");
+    await page.getByRole("button", { name: "核对导出内容", exact: true }).click();
     const downloading = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Save configuration file", exact: true }).click();
+    await page.getByRole("button", { name: "保存配置文件", exact: true }).click();
     const file = await (await downloading).path();
     expect(file).toBeTruthy();
-    await page.goto(receiverUrl);
+    await page.goto(`${receiverUrl}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Configuration regression tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
-    const upload = page.getByLabel("Import configuration file");
+    // The mounted form keeps its original attribution; explicitly set this operation.
+    await page.getByLabel("操作者", { exact: true }).fill("Configuration regression tester");
+    const upload = page.getByLabel("导入配置文件");
     await upload.setInputFiles(file);
-    await expect(page.getByText("Initial values included", { exact: false })).toBeVisible();
-    await page.getByRole("button", { name: "Cancel inspection", exact: true }).click();
+    await expect(page.getByText("包含初始值", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "取消检查", exact: true }).click();
     expect(
       await (await page.request.get(`${receiverUrl}/api/v1/configuration-exchange/imports`)).json(),
     ).toEqual([]);
@@ -83,36 +98,37 @@ with sc.open_project(root).connect() as lab:
       (await (await page.request.get(`${receiverUrl}/api/v1/parameters/revisions`)).json()).items,
     ).toEqual([]);
     await upload.setInputFiles(file);
-    await page.getByLabel("Name for my new parameter branch").fill("My inputs");
-    await page.getByRole("button", { name: "Create my copy", exact: true }).click();
-    await expect(page.getByText(/Created parameter branch “My inputs”/)).toBeVisible();
-    await expect(
-      page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
-    ).toHaveValue("My inputs");
-    await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+    await page.getByLabel("新参数分支名称").fill("My inputs");
+    await page.getByRole("button", { name: "创建我的副本", exact: true }).click();
+    await expect(page.getByText(/已创建参数分支“My inputs”/)).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "已保存的参数版本", exact: true })).toHaveValue(
+      "My inputs",
+    );
+    await page.getByRole("button", { name: "编辑副本", exact: true }).click();
     await page.getByRole("textbox", { name: "response[1].scale", exact: true }).fill("2");
-    await page.getByText("Save a parameter checkpoint", { exact: true }).click();
-    await page.getByLabel("New version name", { exact: true }).fill("My adjusted inputs");
-    await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
-    await expect(
-      page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
-    ).toHaveValue("My adjusted inputs");
+    await page.getByText("保存参数检查点", { exact: true }).click();
+    await page.getByLabel("新版本名称", { exact: true }).fill("My adjusted inputs");
+    await page.getByRole("button", { name: "保存参数版本", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "已保存的参数版本", exact: true })).toHaveValue(
+      "My adjusted inputs",
+    );
     await page.reload();
-    await page.getByText("Previously imported originals (latest 100)", { exact: true }).click();
+    await page.getByText("已导入的原件（最近 100 条）", { exact: true }).click();
     await page.getByRole("button", { name: "Colleague inputs", exact: true }).click();
-    await page.getByLabel("Name for my new parameter branch").fill("My inputs");
-    await page.getByRole("button", { name: "Create my copy", exact: true }).click();
+    await page.getByLabel("新参数分支名称").fill("My inputs");
+    await page.getByRole("button", { name: "创建我的副本", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("already uses this name");
-    await page.getByLabel("Name for my new parameter branch").fill("My second copy");
-    await page.getByRole("button", { name: "Create my copy", exact: true }).click();
-    await expect(page.getByText(/Created parameter branch “My second copy”/)).toBeVisible();
+    await page.getByLabel("新参数分支名称").fill("My second copy");
+    await page.getByRole("button", { name: "创建我的副本", exact: true }).click();
+    await expect(page.getByText(/已创建参数分支“My second copy”/)).toBeVisible();
     const originals = await (
       await page.request.get(`${receiverUrl}/api/v1/configuration-exchange/imports`)
     ).json();
     expect(originals).toHaveLength(1);
     expect(originals[0].derivations).toHaveLength(2);
   } finally {
-    for (const project of started.toReversed()) uv(["scopecat", "stop", project]);
+    for (const project of started.toReversed())
+      uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     await Promise.all(
       [sender, receiver].map((project) => rm(project, { recursive: true, force: true })),
     );

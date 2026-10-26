@@ -34,16 +34,16 @@ it("uses the editing revision, rejects conflicting windows and reloads explicitl
       <OperatorSettings />
     </QueryClientProvider>,
   );
-  expect(await screen.findByLabelText("Operator name")).toHaveValue("Alice");
-  fireEvent.change(screen.getByLabelText("Operator name"), { target: { value: "Carol" } });
+  expect(await screen.findByLabelText("操作者名称")).toHaveValue("Alice");
+  fireEvent.change(screen.getByLabelText("操作者名称"), { target: { value: "Carol" } });
   saved = { operator: "Bob", revision: 2 };
-  fireEvent.click(screen.getByRole("button", { name: "Save operator" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存操作者" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Operator setting changed");
   expect(writes).toEqual([{ operator: "Carol", revision: 1 }]);
-  fireEvent.click(screen.getByRole("button", { name: "Reload operator" }));
-  await waitFor(() => expect(screen.getByLabelText("Operator name")).toHaveValue("Bob"));
-  fireEvent.change(screen.getByLabelText("Operator name"), { target: { value: "Carol" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save operator" }));
-  expect(await screen.findByRole("status")).toHaveTextContent("Operator saved");
+  fireEvent.click(screen.getByRole("button", { name: "重新加载操作者" }));
+  await waitFor(() => expect(screen.getByLabelText("操作者名称")).toHaveValue("Bob"));
+  fireEvent.change(screen.getByLabelText("操作者名称"), { target: { value: "Carol" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存操作者" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("操作者已保存");
   expect(saved).toEqual({ operator: "Carol", revision: 3 });
 });

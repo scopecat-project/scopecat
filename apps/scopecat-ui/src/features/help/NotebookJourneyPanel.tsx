@@ -7,65 +7,60 @@ import { NotebookCleanup } from "./NotebookCleanup";
 
 const lessons: Record<LessonTopic, { title: string; goal: string; description: string }> = {
   parameters: {
-    title: "Parameters and scans",
-    goal: "Run, view a result, edit Python and run again.",
-    description:
-      "Start here: run a seven-point synthetic scan, view it in this application, then edit Python and compare a new run with the original.",
+    title: "参数与扫描",
+    goal: "运行、查看结果、编辑 Python，再次运行。",
+    description: "从这里开始：运行七点合成扫描，在应用中查看结果，再编辑 Python 并比较新旧运行。",
   },
   refresh: {
-    title: "Edit and refresh experiments",
-    goal: "Compare source edits and add an experiment.",
-    description:
-      "After parameters and scans: save source edits, compare old and new requests, and add an experiment while keeping earlier runs available.",
+    title: "编辑与刷新实验",
+    goal: "比较源码修改并添加实验。",
+    description: "完成参数与扫描后：保存源码修改，比较新旧请求，并在保留早期运行的同时添加实验。",
   },
   compute: {
-    title: "Mean IQ and typed results",
-    goal: "Calculate mean IQ and read typed results.",
+    title: "平均 IQ 与类型化结果",
+    goal: "计算平均 IQ 并读取类型化结果。",
     description:
-      "Optional after basic scans; basic NumPy helps. Compare per-shot IQ with its mean and reopen the exact saved run with typed readers.",
+      "基础扫描后的可选课程，建议具备 NumPy 基础。比较逐次 IQ 与平均值，并用类型化 reader 重新打开精确保存的运行。",
   },
   groups: {
-    title: "Grouped analysis and history",
-    goal: "Analyze curves by group and reopen saved analysis.",
+    title: "分组分析与历史",
+    goal: "按组分析曲线并重新打开保存的分析。",
     description:
-      "Optional after basic scans: analyze two synthetic curves by group, add a third, and reopen the saved analysis without collecting again.",
+      "基础扫描后的可选课程：分组分析两条合成曲线，加入第三条，无需重新采集即可打开保存的分析。",
   },
   procedure: {
-    title: "Procedures and human decisions",
-    goal: "Scan, inspect evidence, answer a typed question and explicitly continue.",
-    description:
-      "After the basics: edit a small synthetic procedure, capture its pending question and record an answer without calibration or task scheduling.",
+    title: "流程与人工决策",
+    goal: "扫描、检查证据、回答类型化问题，再明确继续。",
+    description: "基础课程之后：编辑小型合成流程，捕获待回答问题并记录答案，不涉及校准或任务调度。",
   },
   calibration: {
-    title: "Parameter calibration and recovery",
-    goal: "Verify a proposed correction before adopting it.",
+    title: "参数校准与恢复",
+    goal: "采用修正建议前先验证。",
     description:
-      "Advanced; first understand saved parameters and analysis. Compare a verified correction that is published with a rejected correction that leaves its branch unchanged.",
+      "高级课程，需先理解保存的参数与分析。比较通过验证并发布的修正，以及被拒绝、保持分支不变的修正。",
   },
   "joint-calibration": {
-    title: "Joint calibration and coupled checks",
-    goal: "Check whether combined corrections work together.",
-    description:
-      "After parameter calibration: explain why individual corrections can pass while their combination fails, and inspect the coupled decision.",
+    title: "联合校准与耦合检查",
+    goal: "检查组合修正是否协同生效。",
+    description: "参数校准之后：理解单独修正通过但组合失败的原因，并检查耦合决策。",
   },
   "task-calibration": {
-    title: "Background calibration and publication",
-    goal: "Distinguish task progress from verified publication.",
-    description:
-      "After joint calibration: compare accepted, rejected and branch-conflict tasks; distinguish finished stages from verified publication.",
+    title: "后台校准与发布",
+    goal: "区分任务进度与验证后的发布。",
+    description: "联合校准之后：比较接受、拒绝和分支冲突任务；区分阶段完成与验证后的发布。",
   },
 };
 
 const courseGroups: { title: string; hint: string; topics: LessonTopic[] }[] = [
-  { title: "Basics", hint: "Start here, then keep authoring.", topics: ["parameters", "refresh"] },
+  { title: "基础", hint: "从这里开始，继续编写实验。", topics: ["parameters", "refresh"] },
   {
-    title: "Optional",
-    hint: "Choose the skill you need next.",
+    title: "可选",
+    hint: "选择下一步需要的技能。",
     topics: ["compute", "groups", "procedure"],
   },
   {
-    title: "Advanced",
-    hint: "Combine verified corrections.",
+    title: "高级",
+    hint: "组合已验证的修正。",
     topics: ["calibration", "joint-calibration", "task-calibration"],
   },
 ];
@@ -84,9 +79,9 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
       className="grid gap-3 rounded-lg border border-line bg-panel p-4"
     >
       <h3 id="notebook-journey-heading" className="font-semibold">
-        Learn with Notebooks
+        通过 Notebook 学习
       </h3>
-      <p>Start with Parameters and scans, or continue a course you have already prepared.</p>
+      <p>从“参数与扫描”开始，或继续已准备的课程。</p>
       <CourseBrowser topic={topic} busy={busy} />
       <NotebookJourneyCourse
         key={topic}
@@ -102,7 +97,7 @@ function CourseBrowser({ topic, busy }: { topic: LessonTopic; busy: boolean }) {
   const courseId = useId();
   return (
     <label className="grid gap-1.5">
-      <span id={`${courseId}-label`}>Course</span>
+      <span id={`${courseId}-label`}>课程</span>
       <Select
         aria-labelledby={`${courseId}-label`}
         disabled={busy}
@@ -202,30 +197,30 @@ function NotebookJourneyCourse({
   }, [busy, onBusyChange]);
   const error = prepare.error ?? open.error ?? choose.error ?? status.error;
   return (
-    <section className="grid gap-3 border-t border-line pt-4" aria-label="Selected course">
+    <section className="grid gap-3 border-t border-line pt-4" aria-label="选中课程">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="font-semibold">{lessons[topic].title}</h4>
         <span className="rounded border border-line px-2 py-1 text-text-soft">
           {!native
-            ? "Desktop required"
+            ? "需要桌面应用"
             : preparing
-              ? "Preparing"
+              ? "正在准备"
               : status.isError
-                ? "Status unavailable"
+                ? "状态不可用"
                 : status.isPending
-                  ? "Checking preparation…"
+                  ? "正在检查准备状态…"
                   : journey?.cleared
-                    ? "Course cleared"
+                    ? "课程已清理"
                     : journey?.ready
-                      ? "Ready to continue"
+                      ? "可以继续"
                       : journey
-                        ? "Preparation unfinished"
-                        : "Not prepared"}
+                        ? "准备未完成"
+                        : "尚未准备"}
         </span>
       </div>
-      <p>{lessons[topic].description} Uses synthetic data; no devices are needed.</p>
+      <p>{lessons[topic].description} 使用合成数据，无需设备。</p>
       {!native ? (
-        <p>Open Help in the Scopecat desktop application to prepare this Notebook.</p>
+        <p>请在 Scopecat 桌面应用中打开帮助，以准备此 Notebook。</p>
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
@@ -238,43 +233,39 @@ function NotebookJourneyCourse({
               }}
             >
               {preparing
-                ? "Preparing Notebook…"
+                ? "正在准备 Notebook…"
                 : journey?.cleared
-                  ? "Start a new course"
+                  ? "开始新课程"
                   : journey?.ready
-                    ? `Continue ${topic} Notebook`
+                    ? `继续${lessons[topic].title} Notebook`
                     : journey
-                      ? "Retry preparation"
-                      : `Start ${topic} Notebook`}
+                      ? "重试准备"
+                      : `开始${lessons[topic].title} Notebook`}
             </Button>
             {!journey && status.isSuccess && !preparing && (
               <Button disabled={busy} onClick={() => choose.mutate()}>
-                Choose another save location…
+                选择其他保存位置…
               </Button>
             )}
           </div>
           {!journey && status.isSuccess && !preparing && (
-            <p>
-              {parent
-                ? `Save in: ${parent}`
-                : "A new folder in your application home is used by default."}
-            </p>
+            <p>{parent ? `保存位置：${parent}` : "默认使用应用主目录下的新目录。"}</p>
           )}
         </>
       )}
       {busy && (
         <Notice role="status">
           {preparing
-            ? "Preparing code and Python; this may take a few minutes. "
+            ? "正在准备代码与 Python，可能需要几分钟。"
             : choose.isPending
-              ? "Choosing save location…"
-              : "Opening editor…"}
+              ? "正在选择保存位置…"
+              : "正在打开编辑器…"}
         </Notice>
       )}
       {open.isSuccess && !busy && (
         <Notice role="status">
-          Editor open requested. Select the Python kernel below. After a kernel restart, use the
-          connection and history cells to resume; Run All starts new work.
+          已请求打开编辑器。请选择下方 Python kernel。kernel 重启后，请用连接和历史单元格恢复；Run
+          All 会发起新任务。
         </Notice>
       )}
       {journey && (
@@ -282,25 +273,25 @@ function NotebookJourneyCourse({
           {(preparing || !journey.ready) && (
             <p>
               {preparing
-                ? "Preparation is running. This folder will be available when it finishes."
+                ? "正在准备，完成后此目录即可使用。"
                 : journey.cleared
-                  ? "Course cleared. Preparing again creates a new folder."
-                  : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
+                  ? "课程已清理。重新准备会创建新目录。"
+                  : "准备未完成。重试会使用同一目录并保留修改。"}
             </p>
           )}
           {(open.isError || !journey.ready) && (
             <>
               <p>
-                Code folder: <code className="break-all">{journey.directory}</code>
+                代码目录： <code className="break-all">{journey.directory}</code>
               </p>
               <p>
-                Notebook: <code className="break-all">{journey.notebook}</code>
+                Notebook： <code className="break-all">{journey.notebook}</code>
               </p>
             </>
           )}
           {(open.isSuccess || open.isError) && (
             <p>
-              Python kernel: <code className="break-all">{journey.python}</code>
+              Python kernel： <code className="break-all">{journey.python}</code>
             </p>
           )}
           <a
@@ -312,7 +303,7 @@ function NotebookJourneyCourse({
             }
             onClick={navigateLink}
           >
-            {journey.scope_id ? "View this course in Data" : "Find saved results in Data"}
+            {journey.scope_id ? "在数据页查看此课程" : "在数据页查找已保存结果"}
           </a>
           <NotebookCleanup
             topic={topic}
@@ -321,13 +312,11 @@ function NotebookJourneyCourse({
             onBusyChange={setClearing}
           />
           <details>
-            <summary>Repair Notebook environments</summary>
+            <summary>修复 Notebook 环境</summary>
             <p>
-              If imports fail or the Python environment is incomplete, close this folder’s notebooks
-              and Python terminals, then repair. Repair keeps your edited files and saved results,
-              retains the previous local environment, and prepares matching dependencies for the
-              notebook and future background work. Existing tasks keep their original execution
-              environment. Reinstall any packages you added locally afterwards.
+              如导入失败或 Python 环境不完整，请先关闭此目录的 Notebook 和 Python
+              终端，再修复。修复保留已编辑文件、保存结果及原本地环境，并为 Notebook
+              和后续后台任务准备匹配依赖。已有任务保留原执行环境。完成后请重新安装自行添加的包。
             </p>
             <Button
               disabled={!reachable || busy || status.isError}
@@ -336,13 +325,13 @@ function NotebookJourneyCourse({
                 prepare.mutate({ topic, repair: true });
               }}
             >
-              Repair environments and open Notebook
+              修复环境并打开 Notebook
             </Button>
           </details>
           {journey.ready && (
             <>
               <p>
-                Continue editing <code>src/my_experiment</code> in this course’s code folder.
+                继续编辑 <code>src/my_experiment</code> ，位于此课程代码目录中。
               </p>
               <p>
                 <a
@@ -350,7 +339,7 @@ function NotebookJourneyCourse({
                   href={`?lesson=${topic}&source=${encodeURIComponent(journey.directory)}#settings`}
                   onClick={navigateLink}
                 >
-                  Manage this code folder in Settings
+                  在设置中管理此代码目录
                 </a>
               </p>
             </>

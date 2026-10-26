@@ -54,7 +54,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   const accessQuery = useQuery({
     queryKey: ["device-access", selectedId, selectedDevice?.device.head.revision_id],
     queryFn: () => {
-      if (!selectedId) throw new Error("Choose a device.");
+      if (!selectedId) throw new Error("请选择设备。");
       return prepareDeviceAccess(selectedId);
     },
     enabled: !daemonUnavailable && selectedDevice?.device.state === "available",
@@ -63,7 +63,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   const instrumentsQuery = useQuery({
     queryKey: ["instruments", revision?.id, revision?.content_hash],
     queryFn: ({ signal }) => {
-      if (!revision) throw new Error("Prepare the device connection first.");
+      if (!revision) throw new Error("请先准备设备连接。");
       return getInstruments(
         { revision_id: revision.id, content_hash: revision.content_hash },
         signal,
@@ -132,7 +132,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       : null;
   const retire = useMutation({
     mutationFn: () => {
-      if (!selectedDevice) throw new Error("Choose a device.");
+      if (!selectedDevice) throw new Error("请选择设备。");
       return retireDevice(selectedDevice);
     },
     onSuccess: refresh,
@@ -173,9 +173,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
             },
             () => {
               if (!cancelled && sessionRef.current?.session_id === lease.session_id)
-                loseSession(
-                  "The device session was interrupted. Its lease will release ownership; inspect the device before reconnecting.",
-                );
+                loseSession("设备会话已中断，其 lease 将释放占用。重新连接前请检查设备。");
             },
           );
         },
@@ -196,9 +194,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       selected.availability === "quarantined" ||
       (selected.availability === "active" && selected.owner_id !== session.session_id)
     )
-      loseSession(
-        "Device ownership changed. Inspect its current owner or resolve the reported attention before reconnecting.",
-      );
+      loseSession("设备占用方已改变。重新连接前请检查当前占用方或处理报告的问题。");
     // Reconcile only after a fresh server response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instrumentsQuery.dataUpdatedAt, session?.session_id]);
@@ -232,33 +228,31 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       <header className="flex flex-wrap items-center justify-between rounded-lg border border-line bg-panel p-4">
         <div>
           <h2 className="text-lg font-semibold leading-7" id="instruments-heading">
-            Devices and drivers
+            设备与驱动
           </h2>
-          <p className="text-sm text-text-dim">
-            Manage connections once, then use the same devices in your experiments.
-          </p>
+          <p className="text-sm text-text-dim">统一管理连接，在各实验中复用同一设备。</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Controls.Button
             disabled={daemonUnavailable || !catalog.data || busy}
             onClick={() => setConfigTarget({ kind: "add" })}
           >
-            Add device
+            添加设备
           </Controls.Button>
-          <Controls.Button onClick={refresh}>Refresh</Controls.Button>
+          <Controls.Button onClick={refresh}>刷新</Controls.Button>
         </div>
       </header>
       <details className="rounded-lg border border-line bg-panel p-4">
-        <summary>Installed drivers</summary>
+        <summary>已安装驱动</summary>
         <p className="my-2 text-sm text-text-dim">
-          Update drivers in{" "}
+          更新驱动请前往{" "}
           <a className="underline" href="#settings">
-            Application settings
+            应用设置
           </a>
           .
         </p>
         {catalog.error && <p role="alert">{errorMessage(catalog.error)}</p>}
-        {catalog.data?.drivers.length === 0 && <p>No optional drivers are installed.</p>}
+        {catalog.data?.drivers.length === 0 && <p>未安装可选驱动。</p>}
         <ul>
           {catalog.data?.drivers.map((driver) => (
             <li key={driver.driver_id}>
@@ -270,21 +264,16 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       </details>
       {devicesQuery.error && <p role="alert">{errorMessage(devicesQuery.error)}</p>}
       <div className="grid min-h-[640px] grid-cols-[300px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1">
-        <aside
-          aria-label="Registered devices"
-          className="rounded-lg border border-line bg-panel p-3"
-        >
-          {devicesQuery.isPending && <p>Loading devices…</p>}
+        <aside aria-label="已登记设备" className="rounded-lg border border-line bg-panel p-3">
+          {devicesQuery.isPending && <p>正在加载设备…</p>}
           {devicesQuery.isSuccess && devices.length === 0 && (
-            <p>No devices yet. Add a device to start; no experiment setup is required.</p>
+            <p>尚无设备。添加设备即可开始，无需先创建实验 setup。</p>
           )}
-          {session && (
-            <p className="mb-3 text-sm">Selecting another device releases this manual session.</p>
-          )}
+          {session && <p className="mb-3 text-sm">选择其他设备会释放当前手动会话。</p>}
           {devices.map((item) => (
             <button
               key={item.device.id}
-              title={`Inspect instrument ${item.device.id}`}
+              title={`查看仪器 ${item.device.id}`}
               aria-pressed={item.device.id === selectedId}
               disabled={busy}
               className="mb-2 grid w-full gap-1 rounded-md border border-line p-3 text-left hover:bg-panel-strong aria-pressed:border-accent aria-pressed:bg-accent-soft disabled:opacity-60"
@@ -303,14 +292,14 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               <span className="text-sm">{connectionSummary(item.revision.content.connection)}</span>
               <span>
                 {item.device.state === "retired"
-                  ? "Retired"
+                  ? "已退役"
                   : item.availability === "quarantined"
-                    ? "Needs attention"
+                    ? "需要处理"
                     : item.availability === "active"
                       ? item.owner_kind === "run"
-                        ? "Run in progress"
-                        : "Manual session in use"
-                      : "Idle"}
+                        ? "运行中"
+                        : "手动会话占用中"
+                      : "空闲"}
               </span>
             </button>
           ))}
@@ -324,7 +313,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                   disabled={selectedDevice.device.state === "retired" || !!session || busy || owned}
                   onClick={() => probe.mutate(selectedDevice)}
                 >
-                  Test connection
+                  测试连接
                 </Controls.Button>
                 <Controls.Button
                   disabled={
@@ -338,7 +327,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                     setConfigTarget({ kind: "edit", deviceId: selectedDevice.device.id })
                   }
                 >
-                  Edit device
+                  编辑设备
                 </Controls.Button>
                 <Controls.Button
                   variant="danger"
@@ -351,33 +340,31 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                   }
                   onClick={() => retire.mutate()}
                 >
-                  Retire device
+                  退役设备
                 </Controls.Button>
               </div>
               {selectedDevice.last_connection_test ? (
                 <p role="status">
                   {selectedDevice.last_connection_test.error
-                    ? `Last connection test failed: ${selectedDevice.last_connection_test.error}`
-                    : "Connection test passed; the test session was released."}
+                    ? `上次连接测试失败： ${selectedDevice.last_connection_test.error}`
+                    : "连接测试通过，测试会话已释放。"}
                   {selectedDevice.last_connection_test.recorded_at &&
                     ` ${new Date(selectedDevice.last_connection_test.recorded_at).toLocaleString()}`}
                 </p>
               ) : (
-                <p>This connection version has not been tested.</p>
+                <p>此连接版本尚未测试。</p>
               )}
               {(probeError || retire.error) && (
                 <p role="alert">{errorMessage(probeError ?? retire.error)}</p>
               )}
-              {selectedDevice.device.state === "retired" && (
-                <p>This device is retired. Its execution records are retained.</p>
-              )}
+              {selectedDevice.device.state === "retired" && <p>此设备已退役，执行记录仍保留。</p>}
             </header>
           )}
           {instrumentsQuery.error && <p role="alert">{errorMessage(instrumentsQuery.error)}</p>}
           {accessQuery.error && <p role="alert">{errorMessage(accessQuery.error)}</p>}
           {!!instrumentsQuery.data?.problems.length && (
-            <section aria-label="Instrument provider issues">
-              <h3 className="text-base font-semibold leading-6">Instrument provider issues</h3>
+            <section aria-label="仪器 provider 问题">
+              <h3 className="text-base font-semibold leading-6">仪器 provider 问题</h3>
               {instrumentsQuery.data.problems.map((problem, index) => (
                 <p role="alert" key={index}>
                   {problem.message}
@@ -402,9 +389,9 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               }}
             />
           ) : !selectedDevice ? (
-            <p>Select a device to inspect its controls.</p>
+            <p>选择设备以查看控制项。</p>
           ) : instrumentsQuery.isFetching ? (
-            <p>Reading device capabilities…</p>
+            <p>正在读取设备能力…</p>
           ) : null}
         </div>
       </div>

@@ -26,8 +26,8 @@ function uv(args: string[]) {
 }
 async function openTable(page: Page, url: string) {
   await page.goto(`${url}/#configuration`);
-  await page.getByLabel("Working parameter branch", { exact: true }).fill("browser");
-  await page.getByRole("button", { name: "Open working table", exact: true }).click();
+  await page.getByLabel("工作参数分支", { exact: true }).fill("browser");
+  await page.getByRole("button", { name: "打开工作参数表", exact: true }).click();
   await expect(page.getByLabel("signals[1].center", { exact: true })).toBeVisible();
 }
 async function preview(page: Page) {
@@ -86,22 +86,18 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const b = await context.newPage();
     const c = await context.newPage();
     await b.goto(`${firstUrl}/#settings`);
-    await b.getByLabel("Operator name", { exact: true }).fill("Working input tester");
-    await b.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(b.getByText("Operator saved", { exact: true })).toBeVisible();
+    await b.getByLabel("操作者名称", { exact: true }).fill("Working input tester");
+    await b.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(b.getByText("操作者已保存", { exact: true })).toBeVisible();
     await openTable(b, firstUrl);
     await openTable(c, firstUrl);
     const field = b.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
-    await b.getByLabel("Source or reason for changes").fill("B unfinished raw input");
-    await expect(b.getByText("Draft saved in application data", { exact: true })).toBeVisible();
-    await c
-      .getByLabel("Source or reason for changes")
-      .fill("separate window's retained conflicting input");
-    await expect(c.getByText(/Your conflicting copy is retained/)).toBeVisible();
-    await b
-      .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-      .click();
+    await b.getByLabel("修改来源或原因").fill("B unfinished raw input");
+    await expect(b.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
+    await c.getByLabel("修改来源或原因").fill("separate window's retained conflicting input");
+    await expect(c.getByText(/存在冲突，你的副本已保留/)).toBeVisible();
+    await b.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
     await expect(b.getByRole("alert")).toContainText("Complete working input");
     await b.goto(`${firstUrl}/#runs`);
     await openTable(b, firstUrl);
@@ -129,14 +125,10 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const work = await fresh.newPage();
     await openTable(work, url);
     await expect(work.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
-    await expect(work.getByLabel("Source or reason for changes")).toHaveValue(
-      "B unfinished raw input",
-    );
+    await expect(work.getByLabel("修改来源或原因")).toHaveValue("B unfinished raw input");
     await work.getByLabel("signals[1].center", { exact: true }).fill("5.2");
-    await work.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
-    await work
-      .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-      .click();
+    await work.getByLabel("signals[1].center 单位", { exact: true }).fill("GHz");
+    await work.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
     await work.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await work.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
     await work.getByRole("button", { name: "准备", exact: true }).click();
@@ -146,9 +138,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const editor = await fresh.newPage();
     await openTable(editor, url);
     await editor.getByLabel("signals[1].center", { exact: true }).fill("5.3");
-    await expect(
-      editor.getByText("Draft saved in application data", { exact: true }),
-    ).toBeVisible();
+    await expect(editor.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(work.getByText(/工作输入已变化或无法核实/)).toBeVisible();
     await work.getByLabel("Gain", { exact: true }).fill("2");
@@ -163,9 +153,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const runB = await retainedRun(work);
     // Later working edits must not replace the submitted capture.
     await editor.getByLabel("signals[1].center", { exact: true }).fill("5.4");
-    await expect(
-      editor.getByText("Draft saved in application data", { exact: true }),
-    ).toBeVisible();
+    await expect(editor.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     const evidence = uv([
       "python",
       "-c",
@@ -188,9 +176,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     // Keep the original result selected while another window submits a newer run.
     await work.getByRole("link", { name: /^查看已保存结果:/ }).click();
     await expectRunIdentity(work, runB);
-    await editor
-      .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-      .click();
+    await editor.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
     await editor.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await editor.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
     await reviewRetainedExperiment(editor);
@@ -223,11 +209,11 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     const continuedField = work.getByLabel("signals[1].center", { exact: true });
     // Explicitly reopen the latest shared draft before making a new edit.
-    await work.getByRole("button", { name: "Close editor", exact: true }).click();
-    await work.getByRole("button", { name: "Open working table", exact: true }).click();
+    await work.getByRole("button", { name: "关闭编辑器", exact: true }).click();
+    await work.getByRole("button", { name: "打开工作参数表", exact: true }).click();
     await expect(continuedField).toHaveValue("5.4");
     await continuedField.fill("5.5");
-    await expect(work.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(work.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     await work.getByRole("button", { name: /Runs$/, exact: true }).click();
     await expectRunIdentity(work, runB);
     expect(new URL(work.url()).searchParams.get("run")).toBe(runB);
@@ -292,7 +278,7 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     await page.route("**/parameter-drafts/*/save", (route) => route.abort("connectionfailed"));
     const field = page.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
-    await expect(page.getByRole("button", { name: "Retry draft save", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "重试保存草稿", exact: true })).toBeVisible();
     const prompt = page.waitForEvent("dialog").then(async (dialog) => {
       expect(dialog.type()).toBe("beforeunload");
       await dialog.dismiss();
@@ -302,13 +288,13 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     expect(page.isClosed()).toBe(false);
     await expect(field).toHaveValue("1e");
     await page.unroute("**/parameter-drafts/*/save");
-    await page.getByRole("button", { name: "Retry draft save", exact: true }).click();
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close editor", exact: true }).click();
+    await page.getByRole("button", { name: "重试保存草稿", exact: true }).click();
+    await expect(page.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "关闭编辑器", exact: true }).click();
     await expect(field).not.toBeVisible();
-    await page.getByRole("button", { name: "Open working table", exact: true }).click();
+    await page.getByRole("button", { name: "打开工作参数表", exact: true }).click();
     await expect(field).toHaveValue("1e");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     await context.close();
   } finally {
     uv(["python", "-m", "scopecat_server.cli", "stop", home]);

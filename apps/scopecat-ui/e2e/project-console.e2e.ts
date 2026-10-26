@@ -55,92 +55,6 @@ const REPOSITORY_ROOT = resolve(UI_ROOT, "../..");
 const UI_DIST = resolve(UI_ROOT, "dist");
 const LIVE_DISPLAY_NAME = "Live state browser E2E";
 const LIVE_EXPERIMENT_ID = "ui_e2e_live_scan";
-const CONTROLLED_EXPERIMENT_SOURCE = `\
-"""Exercise durable run states while a browser observes the daemon."""
-
-from __future__ import annotations
-
-import time
-from pathlib import Path
-
-import scopecat as sc
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-CONTROL_ROOT = PROJECT_ROOT / ".scopecat"
-ACCEPTED_READY = CONTROL_ROOT / "e2e-accepted-ready"
-RELEASE_ACCEPTED = CONTROL_ROOT / "e2e-release-accepted"
-RUNNING_READY = CONTROL_ROOT / "e2e-running-ready"
-RELEASE_RUNNING = CONTROL_ROOT / "e2e-release-running"
-MEASUREMENT_READY = CONTROL_ROOT / "e2e-measurement-ready"
-RELEASE_MEASUREMENT = CONTROL_ROOT / "e2e-release-measurement"
-
-
-def wait_for_release(path: Path) -> None:
-    deadline = time.monotonic() + 45
-    while not path.exists():
-        if time.monotonic() >= deadline:
-            raise TimeoutError(f"timed out waiting for {path.name}")
-        time.sleep(0.02)
-
-
-@sc.experiment(id="ui_e2e_live_scan")
-def live_scan(experiment: sc.ExperimentContext) -> sc.CoordinateRef[int]:
-    return experiment.scan("value", tuple(range(15)))
-
-
-project = sc.open_project(PROJECT_ROOT)
-with project.connect() as lab:
-    client = lab._client
-    original_submit = client.submit_run
-    original_start = client.start_executor
-    original_ingest = client.ingest_measurements
-    prepared = lab.prepare(
-        live_scan.build(),
-        config=lab.parameters.resolve(
-            lab.parameters.get("starter-initial"), setup=lab.setup.get("starter-bench"),
-        ),
-    )
-
-    def gated_submit(submission):
-        admission = original_submit(submission)
-        ACCEPTED_READY.write_text(admission.run_id, encoding="utf-8")
-        wait_for_release(RELEASE_ACCEPTED)
-        return admission
-
-    def gated_start(run_id, request):
-        lease = original_start(run_id, request)
-        RUNNING_READY.write_text(run_id, encoding="utf-8")
-        wait_for_release(RELEASE_RUNNING)
-        return lease
-
-    ingest_count = [0]
-
-    def gated_ingest(run_id, *, lease_id, append, dataset_schema):
-        receipt = original_ingest(
-            run_id,
-            lease_id=lease_id,
-            append=append,
-            dataset_schema=dataset_schema,
-        )
-        ingest_count[0] += 1
-        if ingest_count[0] == 1:
-            MEASUREMENT_READY.write_text(run_id, encoding="utf-8")
-            wait_for_release(RELEASE_MEASUREMENT)
-        return receipt
-
-    client.submit_run = gated_submit
-    client.start_executor = gated_start
-    client.ingest_measurements = gated_ingest
-    try:
-        run = prepared.run(name="Live state browser E2E")
-    finally:
-        client.submit_run = original_submit
-        client.start_executor = original_start
-        client.ingest_measurements = original_ingest
-    summary = {"run_id": run.id, "status": run.status}
-
-print(summary)
-`;
 
 const ADAPTIVE_EXPERIMENT_SOURCE = `\
 """Pause an adaptive run so the browser can queue a free physical point."""
@@ -316,7 +230,17 @@ const test = base.extend<{}, { daemon: ProjectDaemon }>({
         runUv(["scopecat", "init", projectRoot], REPOSITORY_ROOT);
         initialized = true;
         runUv(
-          ["scopecat", "start", projectRoot, "--port", "0", "--static-dir", UI_DIST],
+          [
+            "python",
+            "-m",
+            "scopecat_server.cli",
+            "start",
+            projectRoot,
+            "--port",
+            "0",
+            "--static-dir",
+            UI_DIST,
+          ],
           projectRoot,
         );
         const endpoint = await readEndpoint(projectRoot);
@@ -364,23 +288,20 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   await expect(page.getByRole("heading", { name: "first_run", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Configuration$/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Experiment configuration", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "实验配置", exact: true })).toBeVisible();
   await page
-    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .getByRole("combobox", { name: "已保存的参数版本", exact: true })
     .selectOption("starter-initial");
-  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await page.getByRole("button", { name: "编辑副本", exact: true }).click();
   await page.getByRole("textbox", { name: "response[1].scale", exact: true }).fill("2");
-  await page.getByText("Save a parameter checkpoint", { exact: true }).click();
-  await page.getByLabel("New version name", { exact: true }).fill("browser-adjusted");
-  await page.getByLabel("Named branch (optional)", { exact: true }).fill("starter");
-  await page.getByRole("button", { name: "Review latest branch head", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Keep my table after branch review", exact: true })
-    .click();
+  await page.getByText("保存参数检查点", { exact: true }).click();
+  await page.getByLabel("新版本名称", { exact: true }).fill("browser-adjusted");
+  await page.getByLabel("草稿操作者", { exact: true }).fill("browser-operator");
+  await page.getByLabel("命名分支（可选）", { exact: true }).fill("starter");
+  await page.getByRole("button", { name: "核对分支最新版本", exact: true }).click();
+  await page.getByRole("button", { name: "核对分支后保留我的表格", exact: true }).click();
   const committed = page.waitForResponse((response) => response.url().endsWith("/commit"));
-  await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
+  await page.getByRole("button", { name: "保存参数版本", exact: true }).click();
   await expectResponseOk(await committed, "POST");
   const branch = await (
     await page.request.get(`${daemon.baseUrl}/api/v1/parameters/branches/starter`)
@@ -393,9 +314,9 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   expect(original.parameters.values[0].rows[0].scale).toBe(1);
   await page.reload();
   await page
-    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .getByRole("combobox", { name: "已保存的参数版本", exact: true })
     .selectOption("browser-adjusted");
-  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await page.getByRole("button", { name: "编辑副本", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "response[1].scale", exact: true })).toHaveValue(
     "2.0",
   );
@@ -577,6 +498,7 @@ test("exact run opens independently in two browser pages while acquisition conti
     await page.getByTitle(`Inspect run ${runId}`, { exact: true }).click();
     await expect(page.getByTestId("measurement-preview")).not.toBeVisible();
     await expect(resultData.getByTestId("measurement-preview")).toBeVisible();
+    await result.getByRole("button", { name: "显示主导航 / Navigation", exact: true }).click();
     await result.getByRole("button", { name: /Help$/, exact: true }).click();
     await result.goBack();
     await expect(result.getByTestId("run-detail-header")).toContainText(runId);
@@ -740,19 +662,18 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await assertObservers();
     phase = "open working table";
     await b.goto(`${daemon.baseUrl}/#configuration`);
-    await b.getByLabel("Working parameter branch", { exact: true }).fill("starter");
-    await b.getByRole("button", { name: "Open working table", exact: true }).click();
+    await b.getByLabel("工作参数分支", { exact: true }).fill("starter");
+    await b.getByRole("button", { name: "打开工作参数表", exact: true }).click();
     await expect(scale).toBeVisible();
     const previewHashes: string[] = [];
     for (const value of ["7.25", "8.5"]) {
       phase = `edit working input ${value}`;
       await b.getByRole("button", { name: /Configuration$/, exact: true }).click();
       await scale.fill(value);
-      await b
-        .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-        .click();
+      await b.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
       await b.getByLabel("实验类型", { exact: true }).selectOption("signal");
       await b.getByLabel("实验配置", { exact: true }).selectOption("starter-bench");
+      await b.getByLabel("操作人", { exact: true }).fill("browser-operator");
       // Start may prepare internally; merely editing or previewing must not acquire.
       await expect(b.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
       expect(submissions).toEqual([]);
@@ -988,7 +909,11 @@ async function startControlledExperiment(projectRoot: string): Promise<Controlle
       releaseMeasurement,
     ].map((path) => rm(path, { force: true })),
   );
-  await writeFile(script, CONTROLLED_EXPERIMENT_SOURCE, "utf8");
+  await writeFile(
+    script,
+    await readFile(join(UI_ROOT, "e2e/fixtures/controlled_experiment.py"), "utf8"),
+    "utf8",
+  );
 
   const environment = { ...process.env };
   delete environment.SCOPECAT_DAEMON_URL;
@@ -1146,7 +1071,11 @@ async function processResultWithin(
 }
 
 async function stopAndRemoveProject(projectRoot: string): Promise<void> {
-  const stopped = runUv(["scopecat", "stop", projectRoot], projectRoot, true);
+  const stopped = runUv(
+    ["python", "-m", "scopecat_server.cli", "stop", projectRoot],
+    projectRoot,
+    true,
+  );
   if (stopped.error || stopped.status !== 0) {
     const daemonLog = await readFile(join(projectRoot, ".scopecat/daemon.log"), "utf8").catch(
       () => "",

@@ -741,8 +741,9 @@ def _pandas_columns(
 ) -> tuple[pd.DataFrame, tuple[str, ...]]:
     if policy not in {"auto", "columns", "drop"}:
         raise ValueError("pandas index policy must be auto, columns, or drop")
+    frame_columns = cast("Sequence[object]", cast("object", frame.columns))
     non_text_columns = tuple(
-        column for column in frame.columns if not isinstance(column, str)
+        column for column in frame_columns if not isinstance(column, str)
     )
     if non_text_columns:
         raise TypeError("derived dataset pandas columns must be strings")
@@ -766,7 +767,6 @@ def _pandas_columns(
         else ("index" if index.nlevels == 1 else f"level_{i}")
         for i, name in enumerate(index_names)
     )
-    frame_columns = cast("Sequence[object]", cast("object", frame.columns))
     conflicts = set(names) & {str(column) for column in frame_columns}
     if conflicts:
         raise ValueError(
@@ -787,7 +787,8 @@ def _pandas_semantics(frame: pd.DataFrame) -> _InheritedSemantics:
     coordinates: list[str] = []
     units: dict[str, str] = {}
     labels: dict[str, str] = {}
-    available = {str(column) for column in frame.columns}
+    frame_columns = cast("Sequence[object]", cast("object", frame.columns))
+    available = {str(column) for column in frame_columns}
     for raw_field in raw_fields:
         if not isinstance(raw_field, Mapping):
             continue

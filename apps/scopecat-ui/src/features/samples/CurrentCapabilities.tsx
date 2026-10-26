@@ -71,7 +71,7 @@ export function CurrentCapabilities({
     setError("");
     setResolution(undefined);
     try {
-      if (!selectedSetup) throw new Error("Choose an experiment setup.");
+      if (!selectedSetup) throw new Error("请选择实验 setup。");
       const setup = await resolveSetupDefinition(selectedSetup.id);
       const parameters =
         source === "revision"
@@ -112,12 +112,11 @@ export function CurrentCapabilities({
       className="border border-line rounded-lg p-3 space-y-3 min-w-0 break-words"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary>Working parameters and capability context</summary>
+      <summary>工作参数与能力上下文</summary>
       <p>
-        Choose a parameter branch or saved revision and setup for this exact sample revision.
-        Resolving captures their current versions without running an experiment or changing
-        defaults. This entry selects one inline sample in the subject role or a registered
-        single-member target. Connected targets are not supported by the current target projection.
+        为此精确样品版本选择参数分支或已保存版本及
+        setup。解析会捕获当前版本，不运行实验或修改默认值。此入口选择 subject
+        角色中的一个内联样品，或已登记的单成员目标。当前目标投影不支持连接目标。
       </p>
       <form
         onSubmit={(event) => {
@@ -127,7 +126,7 @@ export function CurrentCapabilities({
       >
         <fieldset disabled={pending} className="grid gap-3">
           <Controls.Field>
-            Measurement subject
+            测量对象
             <Controls.Select
               value={targetId}
               onChange={(event) => {
@@ -136,7 +135,7 @@ export function CurrentCapabilities({
                 setError("");
               }}
             >
-              <option value="">Inline sample · subject role</option>
+              <option value="">内联样品 · subject 角色</option>
               {choices.map((item) => (
                 <option
                   key={`${item.ref.target_id}:${item.ref.revision}`}
@@ -155,11 +154,11 @@ export function CurrentCapabilities({
                 void targets.fetchNextPage();
               }}
             >
-              Load more target choices
+              加载更多目标选项
             </Controls.Button>
           )}
           <Controls.Field>
-            Parameter source
+            参数来源
             <Controls.Select
               value={source}
               onChange={(event) => {
@@ -168,12 +167,12 @@ export function CurrentCapabilities({
                 setError("");
               }}
             >
-              <option value="branch">Parameter branch</option>
-              <option value="revision">Exact saved revision</option>
+              <option value="branch">参数分支</option>
+              <option value="revision">精确保存版本</option>
             </Controls.Select>
           </Controls.Field>
           <Controls.Field>
-            {source === "branch" ? "Parameter branch" : "Saved parameter revision"}
+            {source === "branch" ? "参数分支" : "已保存的参数版本"}
             <Controls.Input
               required
               value={source === "branch" ? branch : parameterId}
@@ -186,7 +185,7 @@ export function CurrentCapabilities({
             />
           </Controls.Field>
           <Controls.Field>
-            Setup for capability context
+            能力上下文的 setup
             <Controls.Select
               value={setupId}
               onChange={(event) => {
@@ -195,7 +194,7 @@ export function CurrentCapabilities({
                 setError("");
               }}
             >
-              <option value="">Choose experiment roles and devices</option>
+              <option value="">选择实验角色与设备</option>
               {setups.data?.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id}
@@ -212,40 +211,32 @@ export function CurrentCapabilities({
               Boolean(targetId && !selectedTarget)
             }
           >
-            Resolve capability context
+            解析能力上下文
           </Controls.Button>
         </fieldset>
       </form>
-      {setups.error && <p role="alert">Could not load saved setups: {setups.error.message}.</p>}
-      {targets.error && (
-        <p role="alert">Could not load registered targets: {targets.error.message}.</p>
-      )}
-      {pending && <p role="status">Resolving measurement context…</p>}
+      {setups.error && <p role="alert">无法加载已保存的 setup： {setups.error.message}.</p>}
+      {targets.error && <p role="alert">无法加载已登记目标： {targets.error.message}.</p>}
+      {pending && <p role="status">正在解析测量上下文…</p>}
       {error && <p role="alert">{error}</p>}
       {resolution && (
-        <section key={attempt} aria-label="Resolved current capability context">
+        <section key={attempt} aria-label="已解析的当前能力上下文">
           <p>
             {resolution.branch
-              ? `Branch ${resolution.branch.name} · generation ${resolution.branch.generation} · `
-              : "Exact saved "}
-            parameters {contextParameterLabel(resolution.context.parameters)} · setup{" "}
+              ? `分支 ${resolution.branch.name} · generation ${resolution.branch.generation} · `
+              : "精确保存的"}
+            参数 {contextParameterLabel(resolution.context.parameters)} · setup{" "}
             {resolution.setup?.revision_id ?? resolution.context.setup_content_hash}
           </p>
-          <p>
-            These versions are now frozen for this report. Resolve again to capture changes to a
-            selected branch or its device connections.
-          </p>
-          <p>Scenario: {resolution.context.scenario?.id ?? "physical"}</p>
+          <p>这些版本已固定用于此报告。需捕获所选分支或设备连接变化时，请重新解析。</p>
+          <p>场景： {resolution.context.scenario?.id ?? "physical"}</p>
           <details>
-            <summary>Resolved measurement subject</summary>
+            <summary>已解析的测量对象</summary>
             <pre>{JSON.stringify(resolution.context.subject, null, 2)}</pre>
           </details>
           {sample && onEditParameters && (
             <div className="grid gap-2 rounded border border-line p-3">
-              <p>
-                Edit this branch's working parameters beside the sample map. This does not adopt
-                inputs for an experiment.
-              </p>
+              <p>在样品地图旁编辑此分支的工作参数。此操作不会将输入用于实验。</p>
               {objectContextError({ sample, resolution }) ? (
                 <p>{objectContextError({ sample, resolution })}</p>
               ) : (
@@ -263,14 +254,14 @@ export function CurrentCapabilities({
                     }
                   }}
                 >
-                  Edit working parameters beside map
+                  在地图旁编辑工作参数
                 </Controls.Button>
               )}
             </div>
           )}
           <CalibrationProfiles
             context={resolution.context}
-            contextDescription="Uses the explicitly resolved parameter, setup and sample versions."
+            contextDescription="使用明确解析出的参数、setup 和样品版本。"
           />
         </section>
       )}

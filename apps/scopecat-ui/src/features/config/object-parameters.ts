@@ -26,16 +26,15 @@ export function objectContextError({
   resolution,
 }: ObjectParameterContext): string | undefined {
   const { subject, target_binding: binding, parameters } = resolution.context;
-  if (!resolution.branch || !("revision_id" in parameters))
-    return "Choose a working parameter branch for object editing.";
+  if (!resolution.branch || !("revision_id" in parameters)) return "请选择工作参数分支以编辑对象。";
   if (subject.kind !== "registered_target" || !binding || !resolution.setup)
-    return "Choose a registered single-member target and resolve its setup mapping for object editing.";
+    return "请选择已登记的单成员目标，并解析其 setup 映射以编辑对象。";
   if (
     subject.sample.sample_id !== sample.sample_id ||
     subject.sample.revision !== sample.revision ||
     subject.sample.content_hash !== sample.content_hash
   )
-    return "The resolved target belongs to another sample revision. Resolve this sample's context.";
+    return "已解析目标属于其他样品版本。请解析此样品的上下文。";
   return undefined;
 }
 

@@ -10,7 +10,7 @@ type Report = MethodResponse<typeof apiClient, "post", "/api/v1/calibration-chec
 export function CalibrationProfiles({
   context,
   onProcedure,
-  contextDescription = "Uses this stage's frozen measurement context.",
+  contextDescription = "使用此阶段固定的测量上下文。",
 }: {
   context: Report["context"];
   onProcedure?: (id: string) => void;
@@ -72,11 +72,8 @@ export function CalibrationProfiles({
   }
   return (
     <details className="space-y-2 border-t pt-2">
-      <summary>Inspect a saved capability profile</summary>
-      <p>
-        {contextDescription} Choose a profile whose targets and conditions apply here. Task ordering
-        is not used as capability policy.
-      </p>
+      <summary>检查已保存的能力 profile</summary>
+      <p>{contextDescription} 请选择目标和条件适用于此处的 profile。任务顺序不作为能力策略。</p>
       {cursor !== null && (
         <Controls.Button
           type="button"
@@ -85,7 +82,7 @@ export function CalibrationProfiles({
             void load();
           }}
         >
-          {cursor === undefined ? "Load saved profiles" : "Load earlier profiles"}
+          {cursor === undefined ? "加载已保存的 profile" : "加载更早的 profile"}
         </Controls.Button>
       )}
       {cursor !== undefined && (
@@ -96,18 +93,17 @@ export function CalibrationProfiles({
             void load(true);
           }}
         >
-          Reload profiles
+          重新加载 profile
         </Controls.Button>
       )}
       {cursor === null && profiles.length === 0 && (
         <p>
-          No saved profiles. Save requirements with lab.calibration_checks.save_profile() in your
-          author code.
+          没有已保存的 profile。请在作者代码中用 lab.calibration_checks.save_profile() 保存要求。
         </p>
       )}
       {profiles.length > 0 && (
         <Controls.Field>
-          Capability profile
+          能力 profile
           <Controls.Select
             value={selected}
             disabled={pending}
@@ -118,7 +114,7 @@ export function CalibrationProfiles({
               setError("");
             }}
           >
-            <option value="">Choose a profile</option>
+            <option value="">选择 profile</option>
             {profiles.map(({ profile: item }) => (
               <option key={item.id} value={item.id}>
                 {item.id}
@@ -131,15 +127,15 @@ export function CalibrationProfiles({
         <>
           <p>{profile.description}</p>
           <p>
-            Check capabilities to focus the report; leave all unchecked for the whole profile.
-            Prerequisites are included automatically. A report can include at most 32 capabilities.
+            勾选能力可聚焦报告；全部不选时检查完整 profile。自动包含前置条件，每份报告最多包含 32
+            项能力。
           </p>
           <ul>
             {profile.requirements.map((item) => (
               <li key={item.id}>
                 <input
                   type="checkbox"
-                  aria-label={`Include ${item.id}`}
+                  aria-label={`包含 ${item.id}`}
                   disabled={pending}
                   checked={requirementIds.includes(item.id)}
                   onChange={(event) => {
@@ -152,11 +148,11 @@ export function CalibrationProfiles({
                     setError("");
                   }}
                 />
-                {item.id}: {item.scope.capability} · {item.scope.targets.join(", ")} · conditions{" "}
+                {item.id}: {item.scope.capability} · {item.scope.targets.join(", ")} · 条件{" "}
                 {item.scope.conditions}
-                {" · policy "}
-                {item.scope.policy_version} · max age {item.max_age}
-                {" · requires "}
+                {" · 策略"}
+                {item.scope.policy_version} · 最大有效时长 {item.max_age}
+                {" · 依赖"}
                 {item.depends_on.join(", ") || "none"}
               </li>
             ))}
@@ -168,28 +164,27 @@ export function CalibrationProfiles({
               void inspect();
             }}
           >
-            Check saved profile
+            检查已保存的 profile
           </Controls.Button>
         </>
       )}
-      {pending && <p role="status">Reading saved capability policy…</p>}
+      {pending && <p role="status">正在读取保存的能力策略…</p>}
       {error && <p role="alert">{error}</p>}
       {report && (
-        <section aria-label="Saved capability report" className="space-y-2">
+        <section aria-label="已保存的能力报告" className="space-y-2">
           <p>
-            {report.profile_id} · evaluated at {report.observed_at}. Snapshot only; check again to
-            refresh. Inspects at most 50 checks per requirement. This does not establish overall
-            sample readiness.
+            {report.profile_id} · 评估时间 {report.observed_at}
+            。仅为快照，重新检查可刷新。每项要求最多检查 50 条记录，不代表样品整体就绪。
           </p>
           {report.items.map((item) => (
             <article key={item.requirement.id} className="border rounded p-2">
               <h4>{item.requirement.id}</h4>
               <p>
-                Own check: {item.selection.status} · Availability: {item.availability.status}
+                自身检查： {item.selection.status} · 可用性： {item.availability.status}
               </p>
-              <p>Blocked by: {item.availability.blocked_by.join(", ") || "none"}</p>
+              <p>阻塞项： {item.availability.blocked_by.join(", ") || "none"}</p>
               <p>
-                Inspected {item.scanned} checks.{" "}
+                已检查 {item.scanned} 条记录。{" "}
                 {[
                   item.selection.reason,
                   ...(item.selection.assessment?.reasons ?? []),
@@ -202,7 +197,7 @@ export function CalibrationProfiles({
                   className="underline"
                   href={`?run=${encodeURIComponent(item.selection.evidence.measurement.run_id)}#runs`}
                 >
-                  Open measurement for {item.requirement.id}
+                  打开测量： {item.requirement.id}
                 </a>
               )}
               {item.selection.evidence?.analysis_record_id && (
@@ -210,7 +205,7 @@ export function CalibrationProfiles({
                   className="underline block"
                   href={`?run=${encodeURIComponent(item.selection.evidence.measurement.run_id)}&run-analysis=${encodeURIComponent(item.selection.evidence.analysis_record_id)}#runs`}
                 >
-                  Open analysis for {item.requirement.id}
+                  打开分析： {item.requirement.id}
                 </a>
               )}
               {item.unresolved_procedures.map((id) =>
@@ -221,7 +216,7 @@ export function CalibrationProfiles({
                     className="underline block"
                     onClick={() => onProcedure(id)}
                   >
-                    Inspect unresolved execution {id}
+                    检查未解决的执行： {id}
                   </button>
                 ) : (
                   <a
@@ -229,7 +224,7 @@ export function CalibrationProfiles({
                     className="underline block"
                     href={`?procedure=${encodeURIComponent(id)}#launch`}
                   >
-                    Inspect unresolved execution {id}
+                    检查未解决的执行： {id}
                   </a>
                 ),
               )}

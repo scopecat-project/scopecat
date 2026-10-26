@@ -43,7 +43,7 @@ test("prepared courses lead to the exact Notebook kernel and saved data", async 
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${baseUrl}/#help`);
       const resume = page.getByRole("button", {
-        name: "Continue parameters Notebook",
+        name: "继续参数与扫描 Notebook",
         exact: true,
       });
       await expect(resume).toBeEnabled();
@@ -59,9 +59,9 @@ test("prepared courses lead to the exact Notebook kernel and saved data", async 
           path: `${process.env.SCOPECAT_SCREENSHOTS}/help-ready-${width}.png`,
           fullPage: true,
         });
-      await page.getByRole("link", { name: "Find saved results in Data" }).click();
+      await page.getByRole("link", { name: "在数据页查找已保存结果" }).click();
       await expect(page).toHaveURL(/#history$/);
-      await expect(page.getByRole("heading", { name: "Data", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "数据", exact: true })).toBeVisible();
     }
   } finally {
     stopProject(project);

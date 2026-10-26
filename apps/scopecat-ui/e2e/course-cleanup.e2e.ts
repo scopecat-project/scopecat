@@ -95,7 +95,7 @@ test("course Data and explicit cleanup remain readable and keyboard accessible",
     for (const width of [1280, 768, 390]) {
       await page.setViewportSize({ width, height: 950 });
       await page.goto(`${baseUrl}/#help`);
-      await page.getByRole("link", { name: "View this course in Data" }).click();
+      await page.getByRole("link", { name: "在数据页查看此课程" }).click();
       await expect(page.getByRole("heading", { name: "Course: parameters" })).toBeVisible();
       await expect(page).toHaveURL(/course=course-ui#history/);
       if (process.env.SCOPECAT_SCREENSHOTS)
@@ -104,10 +104,10 @@ test("course Data and explicit cleanup remain readable and keyboard accessible",
           fullPage: true,
         });
       await page.goto(`${baseUrl}/#help`);
-      await page.getByText("Clear this course", { exact: true }).click();
-      const preview = page.getByRole("button", { name: "Preview course cleanup" });
+      await page.getByText("清理此课程", { exact: true }).click();
+      const preview = page.getByRole("button", { name: "预览课程清理" });
       await preview.click();
-      const confirm = page.getByRole("button", { name: "Confirm course cleanup" });
+      const confirm = page.getByRole("button", { name: "确认课程清理" });
       await expect(confirm).toBeDisabled();
       await preview.click();
       await expect(confirm).toBeEnabled();
@@ -134,9 +134,7 @@ test("course Data and explicit cleanup remain readable and keyboard accessible",
           fullPage: true,
         });
       await page.keyboard.press("Enter");
-      await expect(
-        page.getByText("Course data cleared. Prepare again to start a fresh course folder."),
-      ).toBeVisible();
+      await expect(page.getByText("课程数据已清理。重新准备即可创建新的课程目录。")).toBeVisible();
     }
   } finally {
     stopProject(project);

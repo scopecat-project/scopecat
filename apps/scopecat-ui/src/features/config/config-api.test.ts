@@ -49,7 +49,7 @@ describe("config snapshot import boundary", () => {
         }),
       ),
     ).toEqual(config);
-    expect(() => parseConfigProfileJson("{")).toThrow("not valid JSON");
+    expect(() => parseConfigProfileJson("{")).toThrow("不是有效 JSON");
     expect(() =>
       parseConfigProfileJson(
         JSON.stringify({

@@ -57,7 +57,7 @@ function mount() {
       />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Capability evidence for this sample revision"));
+  fireEvent.click(screen.getByText("此样品版本的能力证据"));
 }
 afterEach(() => {
   cleanup();
@@ -70,7 +70,7 @@ it("requires an explicit measurement and retains the whole joint subject", async
   mount();
   expect(fetcher).not.toHaveBeenCalled();
   expect(screen.queryByRole("option", { name: /old revision/ })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Measurement context"), { target: { value: "r1" } });
+  fireEvent.change(screen.getByLabelText("测量上下文"), { target: { value: "r1" } });
   const rendered = await screen.findByTestId("context");
   expect(JSON.parse(rendered.textContent)).toEqual({
     parameters: source.parameters,
@@ -79,7 +79,7 @@ it("requires an explicit measurement and retains the whole joint subject", async
     setup_content_hash: "sha256:s",
     scenario: null,
   });
-  expect(screen.getByText(/historical context/)).toBeInTheDocument();
+  expect(screen.getByText(/历史上下文/)).toBeInTheDocument();
 });
 
 it("retains candidate identity instead of treating its values as a saved revision", async () => {
@@ -96,7 +96,7 @@ it("retains candidate identity instead of treating its values as a saved revisio
     vi.fn(async () => Response.json({ snapshot: { ...snapshot, config_source: candidate } })),
   );
   mount();
-  fireEvent.change(screen.getByLabelText("Measurement context"), { target: { value: "r1" } });
+  fireEvent.change(screen.getByLabelText("测量上下文"), { target: { value: "r1" } });
   const rendered = await screen.findByTestId("context");
   expect(JSON.parse(rendered.textContent).parameters).toEqual(candidate);
   expect(screen.getByText(/refined \(candidate from baseline\)/)).toBeInTheDocument();
@@ -112,7 +112,7 @@ it.each([
     vi.fn(async () => Response.json({ snapshot: value })),
   );
   mount();
-  fireEvent.change(screen.getByLabelText("Measurement context"), { target: { value: "r1" } });
+  fireEvent.change(screen.getByLabelText("测量上下文"), { target: { value: "r1" } });
   await screen.findByRole("alert");
   expect(screen.queryByTestId("context")).not.toBeInTheDocument();
 });
@@ -126,7 +126,7 @@ it("clears the old context immediately when another measurement is selected and 
     }),
   );
   mount();
-  const select = screen.getByLabelText("Measurement context");
+  const select = screen.getByLabelText("测量上下文");
   fireEvent.change(select, { target: { value: "r1" } });
   await screen.findByTestId("context");
   fireEvent.change(select, { target: { value: "r2" } });

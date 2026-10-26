@@ -97,28 +97,26 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     });
     await page.setViewportSize({ width: 1680, height: 1100 });
     await page.goto(`${url}/?sample=object-chip#samples`);
-    await page.getByRole("button", { name: "Choose working parameter context" }).click();
-    await page.getByLabel("Parameter branch", { exact: true }).fill("browser");
-    await page.getByLabel("Setup for capability context").selectOption("browser-bench-a");
+    await page.getByRole("button", { name: "选择工作参数上下文" }).click();
+    await page.getByLabel("参数分支", { exact: true }).fill("browser");
+    await page.getByLabel("能力上下文的 setup").selectOption("browser-bench-a");
     await page
-      .getByRole("combobox", { name: "Measurement subject", exact: true })
+      .getByRole("combobox", { name: "测量对象", exact: true })
       .selectOption("object-target:1");
-    await page.getByRole("button", { name: "Resolve capability context", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Edit working parameters beside map", exact: true })
-      .click();
-    await page.getByRole("button", { name: "Select object a", exact: true }).click();
-    const form = page.getByRole("region", { name: "Object parameter values", exact: true });
+    await page.getByRole("button", { name: "解析能力上下文", exact: true }).click();
+    await page.getByRole("button", { name: "在地图旁编辑工作参数", exact: true }).click();
+    await page.getByRole("button", { name: "选择对象 a", exact: true }).click();
+    const form = page.getByRole("region", { name: "对象参数值", exact: true });
     const field = form.getByLabel("signals[1].center", { exact: true });
     await expect(field).toBeVisible();
     await field.fill("1e");
-    await page.getByRole("button", { name: "Select object b", exact: true }).click();
+    await page.getByRole("button", { name: "选择对象 b", exact: true }).click();
     await expect(form.getByLabel("signals[2].center", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Select object a", exact: true }).click();
+    await page.getByRole("button", { name: "选择对象 a", exact: true }).click();
     await expect(field).toHaveValue("1e");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     await page.evaluate(`window.scrollTo(0, 0);
-      document.querySelector('[aria-label="Edit parameter version"]').scrollTop = 0;`);
+      document.querySelector('[aria-label="编辑参数版本"]').scrollTop = 0;`);
     const screenshot = testInfo.outputPath("object-parameter-panel.png");
     await page.screenshot({ path: screenshot });
     await testInfo.attach("Object parameter editor", {
@@ -137,9 +135,9 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await expect(page.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
     await page.getByRole("button", { name: /Samples$/, exact: true }).click();
     await page
-      .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
+      .getByRole("button", { name: /Object editor reference chip 可用 object-chip/ })
       .click();
-    await page.getByRole("button", { name: "Select object a", exact: true }).click();
+    await page.getByRole("button", { name: "选择对象 a", exact: true }).click();
     await expect(form.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
     expect(forbidden).toEqual([]);
     const branch = await (
@@ -149,10 +147,10 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
 
     // Only this explicit action carries the resolved target/setup to Experiments.
     await field.fill("5.2");
-    await form.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
+    await form.getByLabel("signals[1].center 单位", { exact: true }).fill("GHz");
     await page
       .getByRole("button", {
-        name: "Use working inputs, target and setup for next experiment",
+        name: "将工作输入、目标和 setup 用于下次实验",
         exact: true,
       })
       .click();
@@ -189,12 +187,12 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await expect(page).toHaveURL(/#runs$/);
     await page.getByRole("button", { name: /Samples$/, exact: true }).click();
     await page
-      .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
+      .getByRole("button", { name: /Object editor reference chip 可用 object-chip/ })
       .click();
-    await page.getByRole("button", { name: "Select object a", exact: true }).click();
+    await page.getByRole("button", { name: "选择对象 a", exact: true }).click();
     await expect(field).toHaveValue("5.2");
     await field.fill("5.3");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     // The next editing round cannot rewrite the completed run's inputs.
     const evidence = uv([
       "python",

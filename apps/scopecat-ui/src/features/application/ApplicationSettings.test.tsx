@@ -63,29 +63,25 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
       <ApplicationSettings />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Back up application data…" }));
+  fireEvent.click(screen.getByRole("button", { name: "备份应用数据…" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("后台仍有工作");
   expect(backup).toHaveBeenCalledTimes(1);
   expect(restart).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Back up application data…" }));
+  fireEvent.click(screen.getByRole("button", { name: "备份应用数据…" }));
   await waitFor(() => expect(backup).toHaveBeenCalledTimes(2));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Back up application data…" })).toBeEnabled(),
-  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "备份应用数据…" })).toBeEnabled());
   expect(status).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "New code folder" }));
-  const submit = screen.getByRole("button", { name: "Create folder and prepare Python" });
-  fireEvent.click(screen.getByRole("button", { name: "Choose save location…" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建代码目录" }));
+  const submit = screen.getByRole("button", { name: "创建目录并准备 Python" });
+  fireEvent.click(screen.getByRole("button", { name: "选择保存位置…" }));
   await waitFor(() => expect(choose).toHaveBeenCalledTimes(1));
   expect(submit).toBeDisabled();
   expect(create).not.toHaveBeenCalled();
   expect(register).not.toHaveBeenCalled();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Choose save location…" })).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Choose save location…" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "选择保存位置…" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "选择保存位置…" }));
   expect(await screen.findByText("/Users/test/Science")).toBeVisible();
-  fireEvent.change(screen.getByLabelText("New folder name"), {
+  fireEvent.change(screen.getByLabelText("新目录名称"), {
     target: { value: "first experiment" },
   });
   fireEvent.click(submit);
@@ -155,27 +151,25 @@ it("keeps author dependencies independent and uses native application updates", 
     </QueryClientProvider>,
   );
   expect(await screen.findByText("/current/python")).not.toBeVisible();
-  fireEvent.click(screen.getByText("Technical diagnostics"));
+  fireEvent.click(screen.getByText("技术诊断"));
   expect(screen.getByText("/current/python")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Stop and apply prepared update" })).toBeNull();
-  fireEvent.change(screen.getByLabelText("Author directory"), { target: { value: "/authors" } });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Prepare execution environment from pyproject.toml" }),
-  );
+  fireEvent.change(screen.getByLabelText("作者目录"), { target: { value: "/authors" } });
+  fireEvent.click(screen.getByRole("button", { name: "按 pyproject.toml 准备执行环境" }));
   expect(await screen.findByText("Dependencies ready")).toBeVisible();
   expect(dependencies).toHaveBeenCalledWith("/authors");
   expect(restart).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText("Inspect or change Python environments"));
-  fireEvent.change(screen.getByLabelText("Execution Python"), {
+  fireEvent.click(screen.getByText("查看或修改 Python 环境"));
+  fireEvent.change(screen.getByLabelText("执行 Python"), {
     target: { value: "/custom/python" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Use this execution Python" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用此执行 Python" }));
   await waitFor(() => expect(selectEnvironment).toHaveBeenCalledWith("/authors", "/custom/python"));
   expect(dependencies).toHaveBeenCalledTimes(1);
   expect(restart).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Rebuild local Python environment" }));
+  fireEvent.click(screen.getByRole("button", { name: "重建本地 Python 环境" }));
   expect(await screen.findByText("/authors/.venv/bin/python")).toBeVisible();
   expect(client).toHaveBeenCalledWith("/authors", true);
   expect(screen.queryByLabelText("Delivery directory")).toBeNull();
-  expect(screen.getByText(/install the new version/)).toBeVisible();
+  expect(screen.getByText(/安装新版本/)).toBeVisible();
 });

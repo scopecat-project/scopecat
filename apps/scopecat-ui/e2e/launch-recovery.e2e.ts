@@ -75,15 +75,13 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
 
     let url = prepared.url;
     await page.goto(`${url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Recovery tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Recovery tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${url}/?workspace=${prepared.workspace}#configuration`);
-    await page.getByLabel("Working parameter branch", { exact: true }).fill("starter");
-    await page.getByRole("button", { name: "Open working table", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-      .click();
+    await page.getByLabel("工作参数分支", { exact: true }).fill("starter");
+    await page.getByRole("button", { name: "打开工作参数表", exact: true }).click();
+    await page.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
     await page.getByLabel("实验配置", { exact: true }).selectOption("loop-bench");
     await page.getByLabel("Position source", { exact: true }).selectOption("values");
     await page.getByLabel("Position scan values", { exact: true }).fill("-1, nope, 1");

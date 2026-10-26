@@ -55,7 +55,7 @@ vi.mock("./features/config/ConfigWorkspace", () => ({
     }) => void;
   }) => (
     <div>
-      <p>Experiment configuration</p>
+      <p>实验配置</p>
       <button
         onClick={() =>
           onSelectConfiguration?.({
@@ -65,7 +65,7 @@ vi.mock("./features/config/ConfigWorkspace", () => ({
           })
         }
       >
-        Use for next experiment
+        用于下次实验
       </button>
     </div>
   ),
@@ -213,7 +213,7 @@ it("replaces the exact-run opening link without leaving a stale run action", asy
 it("opens Help through navigation and a direct hash without leaving the workbench", async () => {
   renderApp();
   fireEvent.click(screen.getByRole("button", { name: /Help$/ }));
-  expect(await screen.findByRole("heading", { name: "Help" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "帮助" })).toBeVisible();
   expect(window.location.hash).toBe("#help");
   expect(screen.getByRole("button", { name: /Help$/ })).toHaveAttribute("aria-current", "page");
   fireEvent.click(screen.getByRole("button", { name: /Experiments$/ }));
@@ -222,7 +222,7 @@ it("opens Help through navigation and a direct hash without leaving the workbenc
     window.history.replaceState(null, "", "#help");
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   });
-  expect(await screen.findByRole("heading", { name: "Help" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "帮助" })).toBeVisible();
 });
 
 describe("config provenance navigation", () => {
@@ -309,7 +309,7 @@ describe("config provenance navigation", () => {
     expect(back).not.toHaveBeenCalled();
     back.mockRestore();
     fireEvent.click(screen.getByRole("button", { name: /Help$/ }));
-    await screen.findByRole("heading", { name: "Help" });
+    await screen.findByRole("heading", { name: "帮助" });
     act(() => {
       window.dispatchEvent(new Event("scopecat:back"));
     });
@@ -320,7 +320,7 @@ describe("config provenance navigation", () => {
     act(() => {
       window.dispatchEvent(new Event("scopecat:forward"));
     });
-    await screen.findByRole("heading", { name: "Help" });
+    await screen.findByRole("heading", { name: "帮助" });
   });
 
   it("restores a sample deep link and opens its run", async () => {
@@ -438,7 +438,7 @@ describe("config provenance navigation", () => {
   it("does not mount the run browser while configuration is active", async () => {
     renderApp();
 
-    await screen.findByText("Experiment configuration");
+    await screen.findByText("实验配置");
     expect(getRuns).not.toHaveBeenCalled();
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#configuration");
@@ -452,12 +452,12 @@ describe("config provenance navigation", () => {
     renderApp();
     // Establish project identity before checking navigation within that project.
     await screen.findByText("Ok", { exact: true });
-    const editor = await screen.findByText("Experiment configuration");
+    const editor = await screen.findByText("实验配置");
     fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
     expect(editor).toBeInTheDocument();
     expect(editor).not.toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
-    expect(screen.getByText("Experiment configuration")).toBe(editor);
+    expect(screen.getByText("实验配置")).toBe(editor);
     expect(editor).toBeVisible();
   });
 
@@ -1316,7 +1316,7 @@ it("opens preparation when adopting parameters while preserving the fixed monito
   renderApp();
   // Health replaces the project-keyed provider; click the current window, not its detached loading node.
   await screen.findByTitle("Test lab");
-  fireEvent.click(screen.getByRole("button", { name: "Use for next experiment" }));
+  fireEvent.click(screen.getByRole("button", { name: "用于下次实验" }));
   await waitFor(() => expect(screen.getByText("Calibration launcher")).toBeVisible());
   const url = new URL(window.location.href);
   expect(url.hash).toBe("#launch");

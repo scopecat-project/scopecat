@@ -13,12 +13,11 @@ export function SampleArtifacts({ sampleId, revision }: { sampleId: string; revi
       ),
   });
   return (
-    <div className="mt-3 grid gap-2 border-t border-line pt-3" aria-label="Sample attachments">
-      {query.isPending && <p role="status">Checking attachment delivery…</p>}
+    <div className="mt-3 grid gap-2 border-t border-line pt-3" aria-label="样品附件">
+      {query.isPending && <p role="status">正在检查附件可用性…</p>}
       {query.error && (
         <p role="alert">
-          Attachments could not be checked: {query.error.message}. Refresh after reconnecting; a
-          maintainer can verify this sample revision's stored references.
+          无法检查附件： {query.error.message}。重新连接后请刷新；维护者可核对此样品版本保存的引用。
         </p>
       )}
       {query.data?.items.map((item) => (
@@ -34,14 +33,14 @@ export function SampleArtifacts({ sampleId, revision }: { sampleId: string; revi
           {item.status !== "unavailable" && item.url ? (
             <a href={item.url} target="_blank" rel="noopener noreferrer" className="underline">
               {item.status === "external"
-                ? "Open external website"
+                ? "打开外部网站"
                 : item.artifact.media_type === "application/pdf"
-                  ? "Download document"
-                  : "Open attachment"}
+                  ? "下载文档"
+                  : "打开附件"}
             </a>
           ) : (
             <>
-              <p className="font-semibold">Attachment unavailable</p>
+              <p className="font-semibold">附件不可用</p>
               <p>{item.repair}</p>
               <code className="break-all">{item.artifact.uri}</code>
             </>

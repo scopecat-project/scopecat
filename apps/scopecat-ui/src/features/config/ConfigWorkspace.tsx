@@ -86,15 +86,13 @@ export function ConfigWorkspace({
     openObject: async (context) => {
       const error = objectContextError(context);
       if (error) throw new Error(error);
-      if (openingObject.current) throw new Error("A working table is already opening.");
+      if (openingObject.current) throw new Error("已有工作参数表正在打开。");
       openingObject.current = true;
       const selection = editorSelection.current;
       const owner = editor.current?.draftId;
       const requireSameEditor = () => {
         if (selection !== editorSelection.current || owner !== editor.current?.draftId)
-          throw new Error(
-            "The working editor changed while opening object parameters. Keep the current editor and try again from its context.",
-          );
+          throw new Error("打开对象参数时工作编辑器已改变。请保留当前编辑器，从其上下文重试。");
       };
       try {
         const head = context.resolution.branch!;
@@ -109,24 +107,18 @@ export function ConfigWorkspace({
           currentHead.revision.revision_id !== head.revision.revision_id ||
           currentHead.revision.content_hash !== head.revision.content_hash
         )
-          throw new Error(
-            "The branch changed after this context was resolved. Resolve the context again; your working input is preserved.",
-          );
+          throw new Error("解析上下文后分支已改变。请重新解析；工作输入已保留。");
         const matchesBase = (view: ParameterDraftView) =>
           view.draft.base.revision_id === head.revision.revision_id &&
           view.draft.base.content_hash === head.revision.content_hash;
         if (editing?.view.draft.working_branch === head.name) {
           if (!matchesBase(editing.view) || editor.current?.branchGeneration() !== head.generation)
-            throw new Error(
-              "The open working table has another baseline. Review it in Configuration before resolving an object context.",
-            );
+            throw new Error("已打开的工作表使用其他基线。请先在配置页核对，再解析对象上下文。");
           setObjectContext(context);
           return;
         }
         if (editor.current && !(await editor.current.leave()))
-          throw new Error(
-            "Save the open working table before replacing it. Its input has been kept in Configuration.",
-          );
+          throw new Error("替换前请先保存已打开的工作表。输入已保留在配置页。");
         requireSameEditor();
         const view = await startParameterDraft({
           draft_id: crypto.randomUUID(),
@@ -137,15 +129,11 @@ export function ConfigWorkspace({
         });
         requireSameEditor();
         if (!matchesBase(view) || view.branch_changed)
-          throw new Error(
-            "The recovered working table has an older baseline. Open and review it in Configuration; its input has been preserved.",
-          );
+          throw new Error("恢复的工作表使用较旧基线。请在配置页打开核对；输入已保留。");
         const next = { base: await loadBase(view), view };
         requireSameEditor();
         if (!(await replaceEditor(next)))
-          throw new Error(
-            "Save the open working table before replacing it. Its input has been kept in Configuration.",
-          );
+          throw new Error("替换前请先保存已打开的工作表。输入已保留在配置页。");
         setObjectContext(context);
       } finally {
         openingObject.current = false;
@@ -214,14 +202,12 @@ export function ConfigWorkspace({
   return (
     <section className="grid gap-4">
       {daemonUnavailable && (
-        <p role="alert">
-          Reconnect to save parameter edits. Keep this editor open until its draft is saved.
-        </p>
+        <p role="alert">重新连接后才能保存参数修改。草稿保存完成前请保持此编辑器打开。</p>
       )}
       <header>
-        <h2 className="text-lg font-semibold leading-7">Experiment configuration</h2>
+        <h2 className="text-lg font-semibold leading-7">实验配置</h2>
         <Controls.Field>
-          Operator
+          操作者
           <Controls.Input value={operator} onChange={(event) => setOperator(event.target.value)} />
         </Controls.Field>
       </header>
@@ -243,11 +229,11 @@ export function ConfigWorkspace({
       />
       <section
         className="grid gap-3 rounded-lg border border-line bg-panel p-4"
-        aria-label="Parameter versions"
+        aria-label="参数版本"
       >
-        <h3 className="text-base font-semibold leading-6">Working parameters and saved versions</h3>
+        <h3 className="text-base font-semibold leading-6">工作参数与已保存版本</h3>
         <Controls.Field>
-          Working parameter branch
+          工作参数分支
           <Controls.Input
             list="working-parameter-branches"
             value={workingBranch}
@@ -265,11 +251,11 @@ export function ConfigWorkspace({
           disabled={!workingBranch.trim() || openWorking.isPending}
           onClick={() => openWorking.mutate()}
         >
-          Open working table
+          打开工作参数表
         </Controls.Button>
         {openWorking.error && <p role="alert">{errorMessage(openWorking.error)}</p>}
         <Controls.Field>
-          Saved parameter version
+          已保存的参数版本
           <Controls.Select
             value={selected}
             onChange={async (event) => {
@@ -277,7 +263,7 @@ export function ConfigWorkspace({
               if (await replaceEditor()) setSelected(next);
             }}
           >
-            <option value="">Choose a version</option>
+            <option value="">选择版本</option>
             {versions.data?.items.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.id}
@@ -294,7 +280,7 @@ export function ConfigWorkspace({
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <Controls.Button disabled={open.isPending} onClick={() => open.mutate(current)}>
-                Edit a copy
+                编辑副本
               </Controls.Button>
               <Controls.Button
                 onClick={() =>
@@ -305,7 +291,7 @@ export function ConfigWorkspace({
                   })
                 }
               >
-                Use for next experiment
+                用于下次实验
               </Controls.Button>
             </div>
           </>
@@ -490,7 +476,7 @@ function ParameterVersionEditor({
       : undefined;
   const content = (
     <section
-      aria-label="Edit parameter version"
+      aria-label="编辑参数版本"
       className={
         destination
           ? "grid gap-3 rounded-lg border border-line bg-panel p-4 text-sm max-h-[760px] overflow-y-auto [scrollbar-width:thin]"
@@ -499,52 +485,51 @@ function ParameterVersionEditor({
     >
       {destination && objectContext && (
         <header className="rounded-lg border border-line bg-panel-soft p-3">
-          <h2 className="font-semibold">Working parameters · {initial.draft.working_branch}</h2>
+          <h2 className="font-semibold">工作参数 · {initial.draft.working_branch}</h2>
           <p className="text-sm">
-            {objectContext.sample.content.display_name} · sample revision{" "}
-            {objectContext.sample.revision}
+            {objectContext.sample.content.display_name} · 样品版本 {objectContext.sample.revision}
           </p>
           <p className="text-xs text-text-dim break-all">
-            Baseline {base.id} · setup{" "}
+            基线 {base.id} · setup{" "}
             {objectContext.setupName ?? objectContext.resolution.setup?.revision_id}
           </p>
           {adoptionContext && (
             <p>
-              Experiment target: {adoptionContext.subject.ref.target_id} · revision{" "}
+              实验目标： {adoptionContext.subject.ref.target_id} · 版本{" "}
               {adoptionContext.subject.ref.revision}
             </p>
           )}
-          <p className="text-sm">Working inputs</p>
+          <p className="text-sm">工作输入</p>
         </header>
       )}
       <p role="status">
         {draft.status === "saved" || (draft.status === "failed" && !draft.hasUnsavedChanges)
-          ? "Draft saved in application data"
+          ? "草稿已保存到应用数据"
           : draft.status === "saving"
-            ? "Saving draft…"
+            ? "正在保存草稿…"
             : draft.status === "conflict"
-              ? "Your conflicting copy is retained. Review before continuing."
-              : "Draft has unsaved changes"}
+              ? "存在冲突，你的副本已保留。请核对后继续。"
+              : "草稿有未保存的修改"}
       </p>
       {draft.error && <p role="alert">{draft.error}</p>}
       {actionError && <p role="alert">{actionError}</p>}
       {draft.status === "failed" && draft.hasUnsavedChanges && (
-        <Controls.Button onClick={() => void draft.flush()}>Retry draft save</Controls.Button>
+        <Controls.Button onClick={() => void draft.flush()}>重试保存草稿</Controls.Button>
       )}
       {draft.conflict && (
         <>
           <Controls.Button
             onClick={async () => setReview(await readParameterDraft(initial.draft.draft_id))}
           >
-            Review current draft
+            核对当前草稿
           </Controls.Button>
           {review && (
             <>
               <pre>{JSON.stringify(review.draft.input, null, 2)}</pre>
-              <p>Current draft: {review.draft.state}</p>
+              <p>当前草稿： {review.draft.state}</p>
               {review.draft.state === "saved" && (
                 <Controls.Button onClick={() => void draft.resolve(review)}>
-                  Keep my input after review
+                  核对后保留我的输入
                 </Controls.Button>
               )}
             </>
@@ -552,18 +537,15 @@ function ParameterVersionEditor({
         </>
       )}
       {closed && (
-        <p>
-          This draft is {completed?.draft.state ?? initial.draft.state}. Its inputs remain in
-          history.
-        </p>
+        <p>此草稿状态为 {completed?.draft.state ?? initial.draft.state}，输入仍保留在历史中。</p>
       )}
       {completed && (
         <Controls.Button onClick={() => void openCompleted(completed)}>
-          Open saved parameter checkpoint
+          打开已保存的参数检查点
         </Controls.Button>
       )}
-      {closed && <Controls.Button onClick={onCancel}>Close editor</Controls.Button>}
-      {closed && <Controls.Button onClick={() => void fork()}>Edit another copy</Controls.Button>}
+      {closed && <Controls.Button onClick={onCancel}>关闭编辑器</Controls.Button>}
+      {closed && <Controls.Button onClick={() => void fork()}>编辑另一份副本</Controls.Button>}
       <fieldset disabled={draft.busy || copying || closed} className="contents">
         {destination && (
           <ObjectParameterFields
@@ -574,7 +556,7 @@ function ParameterVersionEditor({
           />
         )}
         <details open={destination ? undefined : true}>
-          <summary>All parameters · advanced</summary>
+          <summary>全部参数 · 高级</summary>
           {(base.catalog.definitions ?? []).map((definition) => {
             const value = values.find((item) => item.id === definition.id);
             if (definition.value_type.shape === "scalar")
@@ -596,17 +578,13 @@ function ParameterVersionEditor({
                 />
               );
             if (definition.value_type.shape !== "table")
-              return (
-                <p key={definition.id}>
-                  {definition.id}: edit this parameter shape through Python.
-                </p>
-              );
+              return <p key={definition.id}>{definition.id}：请通过 Python 编辑此参数结构。</p>;
             const table = definition.value_type;
             const rows = value?.shape === "table" ? (value.rows ?? []) : [];
             return (
               <fieldset key={definition.id} className="grid gap-2 rounded border border-line p-3">
                 <legend>{definition.id}</legend>
-                {value === undefined && <p>Unknown table</p>}
+                {value === undefined && <p>未知表格</p>}
                 {rows.map((row, index) => (
                   <div key={index} className="grid gap-2 border-t border-line py-2">
                     {table.columns.map((column) => (
@@ -637,7 +615,7 @@ function ParameterVersionEditor({
                         })
                       }
                     >
-                      Remove row {index + 1}
+                      移除行 {index + 1}
                     </Controls.Button>
                   </div>
                 ))}
@@ -651,10 +629,10 @@ function ParameterVersionEditor({
                       })
                     }
                   >
-                    Add row
+                    添加行
                   </Controls.Button>
                   <Controls.Button onClick={() => setValue(definition.id)}>
-                    Mark table unknown
+                    将表格标记为未知
                   </Controls.Button>
                 </div>
               </fieldset>
@@ -662,7 +640,7 @@ function ParameterVersionEditor({
           })}
         </details>
         <Controls.Field>
-          Draft operator
+          草稿操作者
           <Controls.Input
             value={operator}
             onChange={(event) => patch({ actor: event.target.value })}
@@ -684,22 +662,20 @@ function ParameterVersionEditor({
               );
           }}
         >
-          {adoptionContext
-            ? "Use working inputs, target and setup for next experiment"
-            : "Use working inputs for next experiment"}
+          {adoptionContext ? "将工作输入、目标和 setup 用于下次实验" : "将工作输入用于下次实验"}
         </Controls.Button>
         <p>
           {adoptionContext &&
-            "This also selects the resolved target and setup shown above. The selected map object only filters the editor; it does not narrow the experiment target. "}
-          Uses the inputs shown here for the next preparation.
+            "同时选择上方已解析的目标和 setup。地图中的选中对象仅筛选编辑内容，不会缩小实验目标范围。"}
+          下次准备将使用此处显示的输入。
         </p>
         <ParameterDraftHistory base={base} onResume={onFork} />
         <Controls.Field>
-          Source or reason for changes
+          修改来源或原因
           <Controls.Input value={note} onChange={(event) => setNote(event.target.value)} />
         </Controls.Field>
         <Controls.Field>
-          Named branch (optional)
+          命名分支（可选）
           <Controls.Input
             list="parameter-branch-names"
             value={branch}
@@ -717,12 +693,12 @@ function ParameterVersionEditor({
         {branch && (
           <p>
             {reviewedGeneration != null
-              ? `Update ${branch} from reviewed generation ${reviewedGeneration}.`
+              ? `基于已核对的 generation ${reviewedGeneration} 更新分支 ${branch}。`
               : newBranch
-                ? `Create branch ${branch}.`
-                : "Reading branch head…"}{" "}
-            A concurrent update requires review before retrying.{" "}
-            {head && <span> Latest read generation: {head.generation}. </span>}
+                ? `创建分支 ${branch}。`
+                : "正在读取分支最新版本…"}{" "}
+            发生并发更新，请先核对再重试。{" "}
+            {head && <span> 最近读取的 generation： {head.generation}. </span>}
             <Controls.Button
               onClick={async () => {
                 const requestedBranch = branch;
@@ -743,18 +719,15 @@ function ParameterVersionEditor({
                   patch({ branch_generation: 0 });
               }}
             >
-              Review latest branch head
+              核对分支最新版本
             </Controls.Button>
           </p>
         )}
         {branchReview && branchReview.branch === branch && (
           <details open>
-            <summary>Latest branch version: {branchReview.version.id}</summary>
+            <summary>分支最新版本： {branchReview.version.id}</summary>
             <pre>{JSON.stringify(branchReview.version.parameters, null, 2)}</pre>
-            <p>
-              Keep the entire working table against the reviewed branch head. Values are not merged
-              automatically.
-            </p>
+            <p>以核对过的分支最新版本为基线保留整个工作表。数值不会自动合并。</p>
             <Controls.Button
               onClick={() => {
                 if (branchRef.current === branchReview.branch)
@@ -762,7 +735,7 @@ function ParameterVersionEditor({
                 setBranchReview(undefined);
               }}
             >
-              Keep my table after branch review
+              核对分支后保留我的表格
             </Controls.Button>
           </details>
         )}
@@ -770,9 +743,9 @@ function ParameterVersionEditor({
           <p role="alert">{errorMessage(heads.error ?? reviewedHead.error)}</p>
         )}
         <details>
-          <summary>Save a parameter checkpoint</summary>
+          <summary>保存参数检查点</summary>
           <Controls.Field>
-            New version name
+            新版本名称
             <Controls.Input value={name} onChange={(event) => setName(event.target.value)} />
           </Controls.Field>
           <Controls.Button
@@ -785,14 +758,14 @@ function ParameterVersionEditor({
             }
             onClick={() => void finish(false)}
           >
-            Save parameter version
+            保存参数版本
           </Controls.Button>
         </details>
         <div className="flex flex-wrap items-end gap-3">
-          <Controls.Button onClick={onCancel}>Close editor</Controls.Button>
-          <Controls.Button onClick={() => void finish(true)}>Discard draft</Controls.Button>
+          <Controls.Button onClick={onCancel}>关闭编辑器</Controls.Button>
+          <Controls.Button onClick={() => void finish(true)}>丢弃草稿</Controls.Button>
           <Controls.Button disabled={draft.conflict} onClick={() => void fork()}>
-            Edit another copy
+            编辑另一份副本
           </Controls.Button>
         </div>
       </fieldset>
@@ -823,16 +796,16 @@ function ParameterDraftHistory({
         if (event.currentTarget.open) void history.refetch();
       }}
     >
-      <summary>Recover parameter drafts and history</summary>
+      <summary>恢复参数草稿与历史</summary>
       {history.error && <p role="alert">{errorMessage(history.error)}</p>}
       {history.data?.items.map((item) => (
         <details key={item.revision}>
           <summary>
-            {item.input.name} · {item.state} · revision {item.revision}
+            {item.input.name} · {item.state} · 版本 {item.revision}
           </summary>
           <pre>{JSON.stringify(item.input, null, 2)}</pre>
           <Controls.Button onClick={async () => onResume(await readParameterDraft(item.draft_id))}>
-            Open current draft
+            打开当前草稿
           </Controls.Button>
           <Controls.Button
             onClick={async () =>
@@ -848,13 +821,13 @@ function ParameterDraftHistory({
               )
             }
           >
-            Edit a copy of these inputs
+            编辑这些输入的副本
           </Controls.Button>
         </details>
       ))}
       {history.data?.next_cursor && (
         <Controls.Button onClick={() => setBefore(history.data?.next_cursor ?? undefined)}>
-          Older drafts
+          更早的草稿
         </Controls.Button>
       )}
     </details>

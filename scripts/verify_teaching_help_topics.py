@@ -31,6 +31,14 @@ from scopecat_tutorials.lessons import LessonTopic
 if TYPE_CHECKING:
     import webview
 
+LESSON_TITLES = {
+    "refresh": "编辑与刷新实验",
+    "compute": "平均 IQ 与类型化结果",
+    "calibration": "参数校准与恢复",
+    "joint-calibration": "联合校准与耦合检查",
+    "task-calibration": "后台校准与发布",
+}
+
 TOPICS: tuple[LessonTopic, ...] = (
     "refresh",
     "compute",
@@ -134,11 +142,13 @@ def verify(work: Path, static: Path) -> None:
             for topic in TOPICS:
                 page.locator(f'input[type="radio"][value="{topic}"]').press("Space")
                 page.get_by_role(
-                    "button", name=f"Start {topic} Notebook", exact=True
+                    "button", name=f"开始{LESSON_TITLES[topic]} Notebook", exact=True
                 ).click()
                 expect(
                     page.get_by_role(
-                        "button", name=f"Continue {topic} Notebook", exact=True
+                        "button",
+                        name=f"继续{LESSON_TITLES[topic]} Notebook",
+                        exact=True,
                     )
                 ).to_be_enabled()
                 journey = current(runtime, topic)
@@ -187,11 +197,13 @@ def verify(work: Path, static: Path) -> None:
             for topic in TOPICS:
                 page.locator(f'input[type="radio"][value="{topic}"]').press("Space")
                 page.get_by_role(
-                    "button", name=f"Continue {topic} Notebook", exact=True
+                    "button", name=f"继续{LESSON_TITLES[topic]} Notebook", exact=True
                 ).click()
                 expect(
                     page.get_by_role(
-                        "button", name=f"Continue {topic} Notebook", exact=True
+                        "button",
+                        name=f"继续{LESSON_TITLES[topic]} Notebook",
+                        exact=True,
                     )
                 ).to_be_enabled()
                 journey, notebook, code, receipt = retained[topic]
@@ -205,7 +217,7 @@ def verify(work: Path, static: Path) -> None:
                 page.screenshot(
                     path=str(work / f"{topic}-continue.png"), full_page=True
                 )
-            page.get_by_text("Repair Notebook environments", exact=True).click()
+            page.get_by_text("修复 Notebook 环境", exact=True).click()
             page.evaluate("window.scrollTo(0, 0)")
             page.screenshot(
                 path=str(work / "course-browser-repair.png"), full_page=True

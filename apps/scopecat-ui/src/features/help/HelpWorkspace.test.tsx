@@ -36,12 +36,9 @@ it("prioritizes learning and links to setup and maintenance", () => {
     { wrapper: Wrapper },
   );
   expect(screen.queryByText("/lab/scientific-data")).toBeNull();
-  expect(screen.getByRole("link", { name: "Application settings" })).toHaveAttribute(
-    "href",
-    "#settings",
-  );
+  expect(screen.getByRole("link", { name: "应用设置" })).toHaveAttribute("href", "#settings");
   expect(screen.queryByText("never-display")).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Experiments" })).toHaveAttribute("href", "#launch");
+  expect(screen.getByRole("link", { name: "实验" })).toHaveAttribute("href", "#launch");
   for (const link of screen
     .getAllByRole("link")
     .filter((candidate) => candidate.getAttribute("href")?.startsWith("https:"))) {
@@ -52,6 +49,6 @@ it("prioritizes learning and links to setup and maintenance", () => {
 });
 it("keeps recovery guidance available while service information is unavailable", () => {
   render(<HelpWorkspace reachable={false} />, { wrapper: Wrapper });
-  expect(screen.getByRole("status")).toHaveTextContent("cannot currently be reached");
-  expect(screen.getByText(/Reopen Scopecat/)).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("当前无法连接应用");
+  expect(screen.getByText(/重新打开 Scopecat/)).toBeVisible();
 });
