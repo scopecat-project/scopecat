@@ -411,16 +411,19 @@ def verify_groups(
     )
     page.get_by_role("button", name="运行详情 / Runs", exact=True).click()
     page.get_by_title(f"Inspect run {bookmark['run_id']}", exact=True).click()
+    page.get_by_text("run 详情", exact=True).click()
     run_label = page.get_by_text(bookmark["run_id"], exact=True)
     expect(run_label).to_be_visible()
     selected_run = run_label.inner_text()
-    summaries = page.get_by_test_id("resource-card").locator("details > summary")
+    analyses = page.get_by_role("region", name="Analyses", exact=True)
+    summaries = analyses.locator(":scope > details > summary")
     expect(summaries.first).to_be_visible()
     for summary in summaries.all():
         summary.click()
-    publication = page.get_by_test_id("publication-id").filter(
+    publication = analyses.get_by_test_id("publication-id").filter(
         has_text=bookmark["publication_id"]
     )
+    expect(publication).to_be_visible()
     expect(publication).to_have_text(bookmark["publication_id"])
     selected_publication = publication.inner_text()
     # Use the shipped learner's read-only example, with identities taken from UI.
@@ -456,12 +459,16 @@ def verify_groups(
     )
     run_notebook(ui_reopen)
     nbformat.write(ui_reopen, work / "groups-ui-reopened.ipynb")
+    assert journey.notebook.read_bytes() == retained
+    assert "shots: int = 32" in code.read_text()
     page.screenshot(path=str(work / "groups-same-run.png"), full_page=True)
     (work / "groups-acceptance.json").write_text(
         json.dumps(
             {
                 "result": "passed",
                 "shipped_notebook_sha256": material_hash,
+                "run_id": selected_run,
+                "publication_id": selected_publication,
                 "retained_application_runs": len(before),
                 "points": [42, 63],
                 "groups": [2, 3],
