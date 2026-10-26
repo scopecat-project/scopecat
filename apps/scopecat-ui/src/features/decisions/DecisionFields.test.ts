@@ -135,3 +135,33 @@ it("uses opt-in rules over presentation hints with the same answer boundary matr
   expect(decisionValueError(fields, omitted)).toBeDefined();
   expect(decisionMetadata(metadata, undefined)).toEqual(metadata);
 });
+
+it.each(["", "   "])(
+  "normalizes schema-valid blank controllers only for explicit contracts: %j",
+  (mode) => {
+    for (const controller of [
+      { type: "string" },
+      { type: "literal", values: ["enabled", "", "   "] },
+    ]) {
+      const fields = decisionFields({
+        type: "object",
+        fields: {
+          mode: controller,
+          frequency: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+        },
+      })!;
+      const rules = {
+        frequency: { required_when: { field: "mode", value: "enabled" }, empty_otherwise: true },
+      };
+      const value = { mode, frequency: 6500 };
+      const explicit = decisionMetadata({}, { version: 1, fields: rules });
+      const normalized = decisionFormValue(fields, value, explicit);
+      expect(normalized).toEqual({ mode, frequency: null });
+      expect(decisionValueError(fields, normalized)).toBeUndefined();
+      expect(decisionConstraintError(normalized, explicit)).toBeUndefined();
+      const legacy = decisionMetadata({ field_constraints: rules }, undefined);
+      expect(decisionFormValue(fields, value, legacy)).toEqual(value);
+      expect(decisionConstraintError(value, legacy)).toBeDefined();
+    }
+  },
+);

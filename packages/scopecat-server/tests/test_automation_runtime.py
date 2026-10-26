@@ -92,9 +92,18 @@ class _ResonatorSelection:
     resonator: str
 
 
+type _PeakOutcome = Literal["Peak selected", "Unsure", "No clear peak", "", "   "]
+
+
 @dataclass(frozen=True)
 class _PeakChoice:
-    outcome: Literal["Peak selected", "Unsure", "No clear peak"]
+    outcome: _PeakOutcome
+    frequency_mhz: float | None
+
+
+@dataclass(frozen=True)
+class _StringChoice:
+    outcome: str
     frequency_mhz: float | None
 
 
@@ -643,12 +652,17 @@ def test_procedure_http_round_trip_persists_pages_and_fences(
         "contract-high",
         "contract-unsure",
         "contract-no-peak",
+        "contract-empty-literal",
+        "contract-space-literal",
+        "contract-empty-string",
+        "contract-space-string",
     ],
 )
 def test_procedure_http_round_trips_interpretation_input(
     tmp_path: Path,
     mode: str,
 ) -> None:
+    choice_type = _StringChoice if mode.endswith("-string") else _PeakChoice
     with (
         LocalDaemonRuntime(tmp_path) as runtime,
         TestClient(runtime.app()) as transport,
@@ -675,7 +689,7 @@ def test_procedure_http_round_trips_interpretation_input(
             response_template={"resonator": "replace after reviewing the trace"},
         )
         if mode.startswith("contract-"):
-            peak_schema = AnalysisFactSchema("tests.peak.v1", _PeakChoice)
+            peak_schema = AnalysisFactSchema("tests.peak.v1", choice_type)
             request = InterpretationRequest(
                 title="Choose peak",
                 instructions="Review retained data",
@@ -779,14 +793,14 @@ def test_procedure_http_round_trips_interpretation_input(
             value=schema.encode(_ResonatorSelection(resonator="r2")),
         )
         if mode.startswith("contract-"):
-            peak_schema = AnalysisFactSchema("tests.peak.v1", _PeakChoice)
+            peak_schema = AnalysisFactSchema("tests.peak.v1", choice_type)
             pending_input = PendingProcedureInput(
                 client, waiting.run, waiting.step, peak_schema
             )
             for frequency in (6489.0, 6511.0, None):
                 with pytest.raises(ValueError, match="frequency"):
                     pending_input.respond_and_continue(
-                        _PeakChoice("Peak selected", frequency), actor="learner"
+                        choice_type("Peak selected", frequency), actor="learner"
                     )
                 invalid = answer_command.model_copy(
                     update={
@@ -812,6 +826,10 @@ def test_procedure_http_round_trips_interpretation_input(
                 "contract-high": ("Peak selected", 6510),
                 "contract-unsure": ("Unsure", 6500),
                 "contract-no-peak": ("No clear peak", None),
+                "contract-empty-literal": ("", 6500),
+                "contract-space-literal": ("   ", 6500),
+                "contract-empty-string": ("", 6500),
+                "contract-space-string": ("   ", 6500),
             }[mode]
             value = {"outcome": outcome, "frequency_mhz": frequency}
             normalized = {
@@ -845,9 +863,9 @@ def test_procedure_http_round_trips_interpretation_input(
             assert client.submit_and_continue_procedure_input(canonical) == result
             assert (
                 pending_input.respond(
-                    _PeakChoice(
+                    choice_type(
                         cast(
-                            "Literal['Peak selected', 'Unsure', 'No clear peak']",
+                            "_PeakOutcome",
                             outcome,
                         ),
                         frequency,
