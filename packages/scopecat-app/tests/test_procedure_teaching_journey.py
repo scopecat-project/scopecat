@@ -29,7 +29,6 @@ import sys
 from contextlib import ExitStack
 from pathlib import Path
 import scopecat as sc
-from scopecat.daemon.client import DaemonConflictError
 from scopecat_server.lifecycle import start_project, stop_project
 
 root = Path(sys.argv[1])
@@ -78,34 +77,21 @@ try:
             assert (
                 pending.request.structure["fields"]["frequency_mhz"]["type"] == "union"
             )
-            limits = pending.request.metadata["field_constraints"]["frequency_mhz"]
-            assert limits["minimum"] == 6490 and limits["maximum"] == 6510
+            limits = pending.request.answer_contract.fields["frequency_mhz"]
+            assert limits.minimum == 6490 and limits.maximum == 6510
             if outcome == "Peak selected":
-                # Python bypasses UI hints; the procedure still checks meaning.
-                answer = ns["PeakChoice"](outcome, 6600)
-                receipt = pending.respond_and_continue(answer, actor="learner")
-                repeated = pending.respond_and_continue(answer, actor="learner")
-                assert repeated.answer.output == receipt.answer.output
-                assert task.wait(timeout=60).state == "waiting_for_input"
-                try:
-                    pending.respond_and_continue(
-                        ns["PeakChoice"](outcome, 6500), actor="learner"
-                    )
-                except DaemonConflictError:
-                    pass
-                else:
-                    raise AssertionError("old pending must not answer the new question")
-                run("procedure-inspect")
-                assert "between 6490 and 6510" in ns["pending"].request.instructions
-                assert (
-                    next(
-                        item.run_id
-                        for item in ns["pending"].inputs
-                        if item.kind == "run"
-                    )
-                    == scan
-                )
-                # Restart while the correction question is pending. Reconnect
+                # Invalid input never leaves the original waiting question.
+                for frequency in [6600, None]:
+                    try:
+                        pending.respond_and_continue(
+                            ns["PeakChoice"](outcome, frequency), actor="learner"
+                        )
+                    except ValueError:
+                        pass
+                    else:
+                        raise AssertionError("invalid answer accepted")
+                assert task.snapshot.state == "waiting_for_input"
+                # Restart while the original question is pending. Reconnect
                 # by the retained ID, without preparing/submitting another scan.
                 identity = task.id
                 question = ns["pending"].request
@@ -128,12 +114,17 @@ try:
                 assert [
                     step.step_key for step in task.steps().items
                     if step.state == "waiting_for_input"
-                ] == ["choose-2"]
+                ] == ["choose-1"]
                 run("procedure-answer")
             else:
                 ns["receipt"] = pending.respond_and_continue(
+                    ns["PeakChoice"](outcome, 6500), actor="learner"
+                )
+                repeated = pending.respond_and_continue(
                     ns["PeakChoice"](outcome, None), actor="learner"
                 )
+                assert repeated.answer.output == ns["receipt"].answer.output
+                assert repeated.answer.output.response.value["frequency_mhz"] is None
             run("procedure-continue")
             assert ns["result"].closure.status == "succeeded"
             assert task.output("scan").run_id == scan

@@ -3829,6 +3829,31 @@ export interface components {
             upper: components["schemas"]["_NonEmptyText"];
         };
         /**
+         * AnswerCondition
+         * @description Equality against one unconditional scalar field of the same answer.
+         */
+        AnswerCondition: {
+            field: components["schemas"]["_NonEmptyText"];
+            /** Value */
+            value: string | boolean | number;
+        };
+        /**
+         * AnswerContract
+         * @description Opt-in v1 rules for top-level numeric fields; not a schema language.
+         */
+        AnswerContract: {
+            /** Fields */
+            fields: {
+                [key: string]: components["schemas"]["ScalarAnswerRule"];
+            };
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+        };
+        /**
          * ApparatusAttachment
          * @description Owned bytes; the filename is a label and never a server filesystem path.
          */
@@ -7669,6 +7694,7 @@ export interface components {
          * @description One durable prompt whose response follows a stable structural schema.
          */
         InterpretationRequest: {
+            answer_contract?: components["schemas"]["AnswerContract"] | null;
             instructions: components["schemas"]["_NonEmptyText"];
             manual_line?: components["schemas"]["ManualLineIntent"] | null;
             metadata?: components["schemas"]["JsonMetadata"];
@@ -12738,6 +12764,19 @@ export interface components {
          */
         Scalar: {
             atom: components["schemas"]["AtomType"];
+        };
+        /** ScalarAnswerRule */
+        ScalarAnswerRule: {
+            /**
+             * Empty Otherwise
+             * @default false
+             */
+            empty_otherwise: boolean;
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
+            required_when?: components["schemas"]["AnswerCondition"] | null;
         };
         /**
          * ScalarParameterValue

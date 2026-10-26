@@ -12,7 +12,10 @@ from pydantic import BaseModel, ConfigDict
 
 import scopecat as sc
 from scopecat.api.procedures import InterpretationResult, LabProcedureContext
-from scopecat.automation import AnalysisPublicationOutputRef, RunOutputRef
+from scopecat.automation import (
+    AnalysisPublicationOutputRef, AnswerCondition, AnswerContract, RunOutputRef,
+    ScalarAnswerRule,
+)
 from scopecat.daemon.views import ParameterResolution
 from scopecat.records.setup import SetupRevisionRef
 
@@ -119,6 +122,14 @@ def choose_peak(
             schema=PEAK_CHOICE,
             inputs=(scan, plotted),
             response_template=PeakChoice("Unsure", None),
+            answer_contract=AnswerContract(fields={
+                "frequency_mhz": ScalarAnswerRule(
+                    minimum=MIN_FREQUENCY_MHZ,
+                    maximum=MAX_FREQUENCY_MHZ,
+                    required_when=AnswerCondition(field="outcome", value="Peak selected"),
+                    empty_otherwise=True,
+                ),
+            }),
             metadata={
                 "point_binding": {
                     "input": 1, "output": "trace", "layer": "data",
@@ -127,14 +138,6 @@ def choose_peak(
                 "field_labels": {
                     "outcome": "Your judgment",
                     "frequency_mhz": "Peak frequency (MHz)",
-                },
-                "field_constraints": {
-                    "frequency_mhz": {
-                        "minimum": MIN_FREQUENCY_MHZ,
-                        "maximum": MAX_FREQUENCY_MHZ,
-                        "required_when": {"field": "outcome", "value": "Peak selected"},
-                        "empty_otherwise": True,
-                    }
                 },
             },
         )

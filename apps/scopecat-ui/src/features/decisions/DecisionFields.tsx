@@ -7,6 +7,14 @@ type ScalarField = (
 ) & { nullable?: boolean };
 type DecisionField = ScalarField | { type: "array"; items: ScalarField };
 
+// Explicit contracts own legality. Older requests keep their presentation hints.
+export function decisionMetadata(metadata: unknown, contract: unknown): Record<string, unknown> {
+  const base = isRecord(metadata) ? metadata : {};
+  return isRecord(contract) && contract.version === 1 && isRecord(contract.fields)
+    ? { ...base, field_constraints: contract.fields }
+    : base;
+}
+
 function scalarField(value: unknown): ScalarField | undefined {
   if (!isRecord(value)) return;
   if (value.type === "union" && Array.isArray(value.variants) && value.variants.length === 2) {

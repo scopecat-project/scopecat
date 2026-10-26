@@ -17,6 +17,7 @@ import {
   decisionFields,
   decisionValueError,
   decisionConstraintError,
+  decisionMetadata,
   decisionFormValue,
   inactiveField,
 } from "./DecisionFields";
@@ -304,15 +305,15 @@ function DecisionEditor({
   const options = useContext(DecisionOptions);
   const request = step.interpretation_request;
   if (!request) throw new Error("waiting interpretation request is missing");
+  const metadata = decisionMetadata(request.metadata, request.answer_contract);
   const fields = decisionFields(request.structure);
   const analysisInputs = step.inputs
     .map((input, index) => ({ input, index }))
     .filter(({ input }) => input.kind === "analysis");
-  const binding = pointBinding(request.metadata, request.structure);
+  const binding = pointBinding(metadata, request.structure);
   const defaults = {
     actor:
-      initial.default_operator ||
-      (typeof request.metadata?.reviewer === "string" ? request.metadata.reviewer : ""),
+      initial.default_operator || (typeof metadata?.reviewer === "string" ? metadata.reviewer : ""),
     actor_kind: "human" as const,
     note: "",
     value_text: JSON.stringify(
@@ -388,7 +389,7 @@ function DecisionEditor({
     let value: unknown;
     try {
       value = JSON.parse(valueText);
-      if (fields) value = decisionFormValue(fields, value, request.metadata);
+      if (fields) value = decisionFormValue(fields, value, metadata);
     } catch (error) {
       setParseError(errorMessage(error));
       return;
@@ -400,7 +401,7 @@ function DecisionEditor({
         return;
       }
     }
-    const constraintError = decisionConstraintError(value, request.metadata);
+    const constraintError = decisionConstraintError(value, metadata);
     if (constraintError) {
       setParseError(constraintError);
       return;
@@ -489,8 +490,8 @@ function DecisionEditor({
             ))}
         </div>
       )}
-      {request.metadata &&
-        "point_binding" in request.metadata &&
+      {metadata &&
+        "point_binding" in metadata &&
         (!binding || step.inputs[binding.input]?.kind !== "analysis") && (
           <Controls.Notice role="alert">
             不支持当前图表选点声明。请手动填写表单，或请流程作者修正选点绑定。
@@ -527,7 +528,7 @@ function DecisionEditor({
                           binding.field,
                           fields[binding.field]!,
                           formValue,
-                          request.metadata,
+                          metadata,
                           fields,
                         ),
                       )
@@ -546,7 +547,7 @@ function DecisionEditor({
                           binding.field,
                           fields[binding.field]!,
                           formValue,
-                          request.metadata,
+                          metadata,
                           fields,
                         )
                       )
@@ -592,11 +593,9 @@ function DecisionEditor({
             {!formUnavailable && fields ? (
               <DecisionFields
                 fields={fields}
-                labels={
-                  isRecord(request.metadata?.field_labels) ? request.metadata.field_labels : {}
-                }
+                labels={isRecord(metadata?.field_labels) ? metadata.field_labels : {}}
                 value={isRecord(formValue) ? formValue : {}}
-                metadata={request.metadata}
+                metadata={metadata}
                 onChange={(value) => setValueText(JSON.stringify(value, null, 2))}
               />
             ) : (

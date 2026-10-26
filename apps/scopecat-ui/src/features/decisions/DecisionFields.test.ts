@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decisionFields,
+  decisionMetadata,
   decisionFormValue,
   decisionValueError,
   decisionConstraintError,
@@ -103,4 +104,34 @@ describe("numeric conditional controls", () => {
       expect(decisionValueError(fields, value)).toBeDefined();
     },
   );
+});
+
+it("uses opt-in rules over presentation hints with the same answer boundary matrix", () => {
+  const fields = decisionFields(structure)!;
+  const rules = decisionMetadata(
+    { field_constraints: {} },
+    { version: 1, fields: metadata.field_constraints },
+  );
+  for (const [frequency, valid] of [
+    [6490, true],
+    [6510, true],
+    [6489, false],
+    [6511, false],
+    [null, false],
+  ] as const) {
+    const selected = decisionFormValue(
+      fields,
+      { outcome: "Peak selected", frequency_mhz: frequency },
+      rules,
+    );
+    expect(!decisionValueError(fields, selected) && !decisionConstraintError(selected, rules)).toBe(
+      valid,
+    );
+    expect(
+      decisionFormValue(fields, { outcome: "Unsure", frequency_mhz: frequency }, rules),
+    ).toEqual({ outcome: "Unsure", frequency_mhz: null });
+  }
+  const omitted = decisionFormValue(fields, { outcome: "Unsure" }, rules);
+  expect(decisionValueError(fields, omitted)).toBeDefined();
+  expect(decisionMetadata(metadata, undefined)).toEqual(metadata);
 });

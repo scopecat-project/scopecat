@@ -10,9 +10,12 @@ from scopecat.automation.definition import (
     procedure,
 )
 from scopecat.automation.interpretations import (
+    AnswerCondition,
+    AnswerContract,
     InterpretationActorKind,
     InterpretationRequest,
     InterpretationResponse,
+    ScalarAnswerRule,
 )
 from scopecat.automation.intervals import (
     MAX_PROCEDURE_SCHEDULE_REGISTRY_SIZE,
@@ -123,6 +126,8 @@ __all__ = [
     "MAX_PROCEDURE_REGISTRY_SIZE",
     "MAX_PROCEDURE_SCHEDULE_REGISTRY_SIZE",
     "AnalysisPublicationOutputRef",
+    "AnswerCondition",
+    "AnswerContract",
     "ConfigActivationOutputRef",
     "ConfigPublishOutputRef",
     "InterpretationActorKind",
@@ -214,6 +219,7 @@ __all__ = [
     "RegisteredProcedure",
     "RegisteredProcedureSchedule",
     "RunOutputRef",
+    "ScalarAnswerRule",
     "interval_occurrence_schedule_id",
     "interval_schedule",
     "procedure",

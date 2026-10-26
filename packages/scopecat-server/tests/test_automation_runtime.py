@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
+from typing import Literal, cast
 
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.api.procedure_inputs import PendingProcedureInput
 from scopecat.automation import (
+    AnswerCondition,
+    AnswerContract,
     InterpretationRequest,
     ProcedureCancelCommand,
     ProcedureCloseCommand,
@@ -38,6 +43,7 @@ from scopecat.automation import (
     ProcedureWorkerLeaseHeartbeatCommand,
     ProcedureWorkerLeaseReleaseCommand,
     RunOutputRef,
+    ScalarAnswerRule,
     procedure,
     procedure_step_operation_id,
 )
@@ -45,7 +51,11 @@ from scopecat.automation.wire import ProcedureRunnableQuery
 from scopecat.automation.worker import ProcedureWaitResources
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
-from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.daemon.client import (
+    DaemonClient,
+    DaemonConflictError,
+    DaemonNotFoundError,
+)
 from scopecat.daemon.wire import (
     ExecutorStartRequest,
     RunSubmission,
@@ -80,6 +90,12 @@ class _TwoStepWorkerIntent(BaseModel):
 @dataclass(frozen=True)
 class _ResonatorSelection:
     resonator: str
+
+
+@dataclass(frozen=True)
+class _PeakChoice:
+    outcome: Literal["Peak selected", "Unsure", "No clear peak"]
+    frequency_mhz: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -616,7 +632,18 @@ def test_procedure_http_round_trip_persists_pages_and_fences(
 
 
 @pytest.mark.parametrize(
-    "mode", ["answer", "continue", "cancel", "cancel_continue", "cancel_publishing"]
+    "mode",
+    [
+        "answer",
+        "continue",
+        "cancel",
+        "cancel_continue",
+        "cancel_publishing",
+        "contract-low",
+        "contract-high",
+        "contract-unsure",
+        "contract-no-peak",
+    ],
 )
 def test_procedure_http_round_trips_interpretation_input(
     tmp_path: Path,
@@ -647,6 +674,27 @@ def test_procedure_http_round_trips_interpretation_input(
             structure=schema.structure,
             response_template={"resonator": "replace after reviewing the trace"},
         )
+        if mode.startswith("contract-"):
+            peak_schema = AnalysisFactSchema("tests.peak.v1", _PeakChoice)
+            request = InterpretationRequest(
+                title="Choose peak",
+                instructions="Review retained data",
+                schema_id=peak_schema.id,
+                schema_hash=peak_schema.schema_hash,
+                structure=peak_schema.structure,
+                answer_contract=AnswerContract(
+                    fields={
+                        "frequency_mhz": ScalarAnswerRule(
+                            minimum=6490,
+                            maximum=6510,
+                            required_when=AnswerCondition(
+                                field="outcome", value="Peak selected"
+                            ),
+                            empty_otherwise=True,
+                        ),
+                    }
+                ),
+            )
         begun = client.begin_procedure_step(
             ProcedureStepBeginCommand(
                 procedure_run_id=submitted.procedure_run_id,
@@ -730,6 +778,96 @@ def test_procedure_http_round_trips_interpretation_input(
             actor_kind="human",
             value=schema.encode(_ResonatorSelection(resonator="r2")),
         )
+        if mode.startswith("contract-"):
+            peak_schema = AnalysisFactSchema("tests.peak.v1", _PeakChoice)
+            pending_input = PendingProcedureInput(
+                client, waiting.run, waiting.step, peak_schema
+            )
+            for frequency in (6489.0, 6511.0, None):
+                with pytest.raises(ValueError, match="frequency"):
+                    pending_input.respond_and_continue(
+                        _PeakChoice("Peak selected", frequency), actor="learner"
+                    )
+                invalid = answer_command.model_copy(
+                    update={
+                        "value": {
+                            "outcome": "Peak selected",
+                            "frequency_mhz": frequency,
+                        }
+                    }
+                )
+                with pytest.raises(DaemonConflictError):
+                    client.submit_and_continue_procedure_input(invalid)
+            for value in ({"outcome": "Unsure"}, {"outcome": "Peak selected"}):
+                with pytest.raises(DaemonConflictError):
+                    client.submit_and_continue_procedure_input(
+                        answer_command.model_copy(update={"value": value})
+                    )
+            assert client.get_procedure(submitted.procedure_run_id) == waiting.run
+            assert client.list_procedure_step_attempts(
+                submitted.procedure_run_id, ProcedureStepAttemptListQuery()
+            ).items == (waiting.step,)
+            outcome, frequency = {
+                "contract-low": ("Peak selected", 6490),
+                "contract-high": ("Peak selected", 6510),
+                "contract-unsure": ("Unsure", 6500),
+                "contract-no-peak": ("No clear peak", None),
+            }[mode]
+            value = {"outcome": outcome, "frequency_mhz": frequency}
+            normalized = {
+                "outcome": outcome,
+                "frequency_mhz": frequency if outcome == "Peak selected" else None,
+            }
+            answer_command = answer_command.model_copy(update={"value": value})
+            canonical = answer_command.model_copy(update={"value": normalized})
+            for updates in (
+                {"expected_run_revision": waiting.run.revision - 1},
+                {"expected_step_revision": waiting.step.revision - 1},
+                {"request_hash": _FIRST_STEP_HASH},
+            ):
+                with pytest.raises(DaemonConflictError):
+                    client.submit_and_continue_procedure_input(
+                        answer_command.model_copy(update=updates)
+                    )
+            # Race the residue and canonical commands through real write transactions.
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                receipts = list(
+                    pool.map(
+                        client.submit_procedure_step_input,
+                        [answer_command, canonical],
+                    )
+                )
+            assert receipts[0] == receipts[1]
+            result = client.submit_and_continue_procedure_input(answer_command)
+            assert result.answer.output.response.value == normalized
+            assert result.continuation == "blocked" and result.dispatch_error
+            assert client.submit_and_continue_procedure_input(answer_command) == result
+            assert client.submit_and_continue_procedure_input(canonical) == result
+            assert (
+                pending_input.respond(
+                    _PeakChoice(
+                        cast(
+                            "Literal['Peak selected', 'Unsure', 'No clear peak']",
+                            outcome,
+                        ),
+                        frequency,
+                    ),
+                    actor="operator@example.test",
+                )
+                == result.answer
+            )
+            for updates in (
+                {"actor": "other"},
+                {"actor_kind": "ai"},
+                {"request_hash": _FIRST_STEP_HASH},
+                {"attempt": 2},
+                {"note": "different"},
+            ):
+                with pytest.raises((DaemonConflictError, DaemonNotFoundError)):
+                    client.submit_and_continue_procedure_input(
+                        canonical.model_copy(update=updates)
+                    )
+            return
         if mode == "continue":
             result = client.submit_and_continue_procedure_input(answer_command)
             assert result.continuation == "blocked"  # not a managed input handoff

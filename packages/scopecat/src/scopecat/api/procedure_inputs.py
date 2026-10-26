@@ -122,6 +122,6 @@ class PendingProcedureInput[ValueT]:
             request_hash=request.request_hash,
             actor=actor,
             actor_kind=actor_kind,
-            value=self._schema.encode(value),
+            value=request.normalize_answer(self._schema.encode(value)),
             note=note,
         )

@@ -336,3 +336,114 @@ def test_procedure_models_are_immutable_and_hashes_are_explicit() -> None:
             version="1",
             fingerprint="not-a-content-hash",
         )
+
+
+@pytest.mark.parametrize("frequency", [6490, 6510, 6489, 6511, None])
+def test_opt_in_answer_contract_and_legacy_identity(frequency: float | None):
+    from scopecat.automation import AnswerCondition, AnswerContract, ScalarAnswerRule
+    from scopecat.kernel.content_identity import stable_content_hash
+
+    structure: JsonValue = {
+        "type": "object",
+        "fields": {
+            "outcome": {"type": "literal", "values": ["Peak selected", "Unsure"]},
+            "frequency": {
+                "type": "union",
+                "variants": [{"type": "float"}, {"type": "null"}],
+            },
+        },
+    }
+    from scopecat.analysis.facts import analysis_fact_structure_hash
+
+    legacy = {
+        "title": "Peak",
+        "instructions": "Choose",
+        "schema_id": "peak.v1",
+        "schema_codec": "scopecat.analysis-fact-schema.v1",
+        "schema_hash": analysis_fact_structure_hash(structure),
+        "structure": structure,
+        "response_template": None,
+        "metadata": {},
+    }
+    request = InterpretationRequest.model_validate(legacy)
+    assert request.model_dump(mode="json") == legacy
+    assert request.request_hash == "sha256:" + stable_content_hash(
+        {
+            "codec": "scopecat.interpretation-request.v1",
+            "request": legacy,
+        }
+    )
+    value: JsonValue = {"outcome": "Peak selected", "frequency": frequency}
+    assert request.normalize_answer(value) == value
+    request = InterpretationRequest.model_validate(
+        {
+            **legacy,
+            "answer_contract": AnswerContract(
+                fields={
+                    "frequency": ScalarAnswerRule(
+                        minimum=6490,
+                        maximum=6510,
+                        required_when=AnswerCondition(
+                            field="outcome", value="Peak selected"
+                        ),
+                        empty_otherwise=True,
+                    ),
+                }
+            ),
+        }
+    )
+    assert (
+        InterpretationRequest.model_validate_json(request.model_dump_json()) == request
+    )
+    assert (
+        request.request_hash
+        != InterpretationRequest.model_validate(legacy).request_hash
+    )
+    if frequency in (6490, 6510):
+        assert request.normalize_answer(value) == value
+    else:
+        with pytest.raises(ValueError, match="frequency"):
+            request.normalize_answer(value)
+    assert request.normalize_answer({"outcome": "Unsure", "frequency": frequency}) == {
+        "outcome": "Unsure",
+        "frequency": None,
+    }
+    with pytest.raises(TypeError):
+        request.normalize_answer({"outcome": "Unsure"})
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        {"frequency": {"minimum": 2, "maximum": 1}},
+        {"frequency": {"empty_otherwise": True}},
+        {"missing": {"minimum": 0}},
+        {"choice": {"minimum": 0}},
+        {"frequency": {"required_when": {"field": "missing", "value": "yes"}}},
+        {"frequency": {"required_when": {"field": "choice", "value": 1}}},
+    ],
+)
+def test_answer_contract_rejects_invalid_declarations(rules: dict[str, JsonValue]):
+    from scopecat.analysis.facts import analysis_fact_structure_hash
+
+    structure: JsonValue = {
+        "type": "object",
+        "fields": {
+            "choice": {"type": "string"},
+            "frequency": {
+                "type": "union",
+                "variants": [{"type": "float"}, {"type": "null"}],
+            },
+        },
+    }
+    with pytest.raises(ValidationError):
+        InterpretationRequest.model_validate(
+            {
+                "title": "Peak",
+                "instructions": "Choose",
+                "schema_id": "peak.v1",
+                "schema_hash": analysis_fact_structure_hash(structure),
+                "structure": structure,
+                "answer_contract": {"version": 1, "fields": rules},
+            }
+        )

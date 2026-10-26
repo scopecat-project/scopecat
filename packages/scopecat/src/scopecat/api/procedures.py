@@ -70,6 +70,7 @@ from scopecat.automation import (
     RunOutputRef,
 )
 from scopecat.automation.exit_scope import ExitScope
+from scopecat.automation.interpretations import AnswerContract
 from scopecat.automation.recovery import (
     ProcedureRecoveryAdapter,
     ProcedureRecoveryAvailability,
@@ -368,6 +369,7 @@ class LabProcedureContext:
         inputs: tuple[ProcedureStepOutputRef, ...] = (),
         response_template: ValueT | None = None,
         metadata: Mapping[str, JsonValue] | None = None,
+        answer_contract: AnswerContract | None = None,
     ) -> InterpretationResult[ValueT]:
         """Wait for and replay a schema-validated human, AI, or service judgment."""
 
@@ -382,6 +384,7 @@ class LabProcedureContext:
                 None if response_template is None else schema.encode(response_template)
             ),
             metadata={} if metadata is None else dict(metadata),
+            answer_contract=answer_contract,
         )
         ref = self._durable.interpret(
             step_key,
