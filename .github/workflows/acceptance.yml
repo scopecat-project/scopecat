@@ -508,13 +508,8 @@ jobs:
           uv run --locked --group delivery python -m scripts.app_build.delivery
           dist/tutorial --public-artifacts dist/framework
 
-      - name: Add the target-platform author toolchain
-        run: >-
-          uv run --locked --group delivery python -m scripts.app_build.toolchain
-          dist/tutorial dist/tutorial-complete
-
       - name: Retain legacy installer regression
-        run: uv run --locked python dist/tutorial-complete/install.py dist/legacy-install-check
+        run: uv run --locked python dist/tutorial/install.py dist/legacy-install-check
 
       - name: Set up Windows native compiler
         if: runner.os == 'Windows'
@@ -523,7 +518,7 @@ jobs:
       - name: Prepare Windows application or Linux runtime fixture
         run: >-
           uv run --locked python -m scripts.prepare_teaching_runtime
-          dist/tutorial-complete dist/teaching-runtime
+          dist/tutorial dist/teaching-runtime
 
       - name: Archive the installed teaching runtime and format 2 resources
         working-directory: dist

@@ -9,7 +9,6 @@ import plistlib
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 from importlib.resources import files
 from pathlib import Path
@@ -18,6 +17,7 @@ from typing import Protocol, cast
 from scripts.app_build import toolchain
 from scripts.app_build.author_resources import build as build_author_resources
 from scripts.app_build.release_identity import ReleaseIdentity
+from scripts.app_build.runtime_install import install_runtime
 
 from scopecat_app import author_resources
 from scopecat_app.bundle import MANIFEST, resolve_delivery, verify_bundle
@@ -89,29 +89,7 @@ def build(source: Path, destination: Path) -> Path:
 
             verify_windows_wheel(payload / "wheels")
         python_home = resources / "python"
-        with tarfile.open(payload / "toolchain/python.tar") as archive:
-            archive.extractall(python_home, filter="data")
-        python = python_home / ("python.exe" if os.name == "nt" else "bin/python3")
-        # The installed application owns its desktop host. First launch must not
-        # install a GUI or borrow a host from a previously selected environment.
-        _run(
-            [
-                str(payload / "toolchain" / ("uv.exe" if os.name == "nt" else "uv")),
-                "pip",
-                "install",
-                "--python",
-                str(python),
-                "--break-system-packages",
-                "--offline",
-                "--no-index",
-                "--no-deps",
-                "--require-hashes",
-                "--find-links",
-                str(payload / "wheels"),
-                "-r",
-                str(payload / "requirements.lock"),
-            ]
-        )
+        python = install_runtime(payload, python_home)
         payload = build_author_resources(payload, resources / "payload", python=python)
         if sys.platform == "darwin":
             _write_macos_console(python_home)

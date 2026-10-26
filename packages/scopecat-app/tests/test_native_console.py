@@ -120,7 +120,12 @@ def test_build_replaces_console_before_signing_and_rename(
 ):
     import tarfile
 
-    from scripts.app_build import cocoa_dependency, macos_signing, native_package
+    from scripts.app_build import (
+        cocoa_dependency,
+        macos_signing,
+        native_package,
+        runtime_install,
+    )
 
     source = tmp_path / "delivery"
     (source / "toolchain").mkdir(parents=True)
@@ -153,6 +158,9 @@ def test_build_replaces_console_before_signing_and_rename(
 
     def run(command):
         if command[1:3] == ["pip", "install"]:
+            assert {"--offline", "--no-index", "--no-deps", "--require-hashes"} <= set(
+                command
+            )
             python = Path(command[command.index("--python") + 1])
             entry = python.with_name("scopecat")
             entry.write_text(f"#!{python}\n")
@@ -169,6 +177,9 @@ def test_build_replaces_console_before_signing_and_rename(
         signed.append(app)
 
     monkeypatch.setattr(native_package, "_run", run)
+    monkeypatch.setattr(
+        runtime_install.subprocess, "run", lambda command, **_kw: run(command)
+    )
     monkeypatch.setattr(macos_signing, "sign", sign)
     destination = tmp_path / "Final 中文 Scopecat.app"
     assert native_package.build(source, destination) == destination

@@ -8,12 +8,11 @@ only the installed Python and verified format 2 resources.
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
-import tarfile
 from pathlib import Path
 
 from scripts.app_build.author_resources import build as build_author_resources
+from scripts.app_build.runtime_install import install_runtime
 
 from scopecat_app.bundle import verify_bundle
 
@@ -30,29 +29,7 @@ def build(payload: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=False)
     resources = destination / "resources"
     python_home = resources / "python"
-    python_home.mkdir(parents=True)
-    with tarfile.open(payload / "toolchain/python.tar") as archive:
-        archive.extractall(python_home, filter="data")
-    python = python_home / "bin/python3"
-    subprocess.run(  # noqa: S603 - verified local tool and isolated fixture runtime
-        [
-            str(payload / "toolchain/uv"),
-            "pip",
-            "install",
-            "--python",
-            str(python),
-            "--break-system-packages",
-            "--offline",
-            "--no-index",
-            "--no-deps",
-            "--require-hashes",
-            "--find-links",
-            str(payload / "wheels"),
-            "-r",
-            str(payload / "requirements.lock"),
-        ],
-        check=True,
-    )
+    python = install_runtime(payload, python_home)
     build_author_resources(payload, resources / "payload", python=python)
     (destination / "linux-fixture.txt").write_text(
         "Installed runtime fixture only; no Linux native application qualification.\n",
