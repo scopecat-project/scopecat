@@ -80,7 +80,7 @@ export function ConfigParameters({
             )}
           >
             <GitCompareArrows size={13} aria-hidden="true" />
-            {changedCount === 0 ? "参数无差异" : `${changedCount} changed`}
+            {changedCount === 0 ? "参数无差异" : `${changedCount} 项已更改`}
           </span>
         )}
       </header>

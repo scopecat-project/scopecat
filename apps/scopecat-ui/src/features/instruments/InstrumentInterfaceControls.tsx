@@ -418,7 +418,7 @@ function OperationControl({
             receiptTone(result.status),
           )}
         >
-          Invoke 回执： {titleCase(result.status)}
+          Invoke 回执： {instrumentReceiptLabel(result.status)}
         </p>
       )}
     </section>
@@ -678,7 +678,7 @@ function PropertyEditor({
       )}
       {observation && (
         <small className={propertyDescription}>
-          观测来源 {titleCase(observation.source)}
+          观测来源 {observationSourceLabels[observation.source]}
           {observation.observed_at
             ? ` · ${new Date(observation.observed_at).toLocaleString()}`
             : ""}
@@ -705,7 +705,7 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
             (receipt.status === "not_collected" || receipt.status === "unknown") && "text-yellow",
           )}
         >
-          Collect 回执： {titleCase(receipt.status)}
+          Collect 回执： {instrumentReceiptLabel(receipt.status)}
         </strong>
         {receipt.readback && (
           <small className="text-xs text-text-dim">
@@ -718,7 +718,7 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
           <AlertTriangle size={13} aria-hidden="true" />
           <span className="text-xs font-[650]">{unavailable.count} 项结果不可用</span>
           <small className="text-inherit">
-            原因： {unavailable.reasons.map(titleCase).join(", ")}
+            原因： {unavailable.reasons.map((reason) => unavailableReasonLabels[reason]).join("、")}
           </small>
         </div>
       )}
@@ -1126,7 +1126,7 @@ function traceValues(receipt: InstrumentCollectReceipt): number[] | undefined {
 
 function unavailableResults(receipt: InstrumentCollectReceipt): {
   count: number;
-  reasons: string[];
+  reasons: ("missing" | "invalid" | "overload")[];
 } {
   const values = Object.values(receipt.readback?.values ?? {});
   const unavailable = values.filter((value) => value.kind === "unavailable");
@@ -1135,3 +1135,24 @@ function unavailableResults(receipt: InstrumentCollectReceipt): {
     reasons: [...new Set(unavailable.map((value) => value.reason))].sort(),
   };
 }
+
+const receiptLabels: Record<string, string> = {
+  applied: "已应用",
+  not_applied: "未应用",
+  unchanged: "无变化",
+  invoked: "已调用",
+  not_invoked: "未调用",
+  collected: "已采集",
+  not_collected: "未采集",
+  unknown: "结果未知",
+};
+export function instrumentReceiptLabel(status: string): string {
+  return receiptLabels[status] ?? status;
+}
+const observationSourceLabels: Record<InstrumentStateObservation["source"], string> = {
+  hardware_query: "硬件查询",
+  command_confirmed: "命令确认",
+  configured_fixed: "配置固定值",
+  derived: "推导值",
+};
+const unavailableReasonLabels = { missing: "缺失", invalid: "无效", overload: "过载" };

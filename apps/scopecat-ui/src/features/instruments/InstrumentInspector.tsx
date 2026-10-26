@@ -11,7 +11,6 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { ApiError } from "../../api-client";
-import { titleCase } from "../../lib/presentation";
 import { classes, eyebrow, primaryButton, secondaryButton } from "../../ui/styles";
 import type { InstrumentPropertyDraft } from "./InstrumentPropertyInput";
 import {
@@ -32,6 +31,7 @@ import {
   AvailabilityBadge,
   AuthorWorkflowLinks,
   configuredDefaultsReceiptMessage,
+  instrumentReceiptLabel,
   DeviceStateCard,
   filterDrafts,
   inlineError,
@@ -579,7 +579,7 @@ function InstrumentInspectorContent({
           )}
           {applyResult && (
             <p className={classes(receiptStyle, receiptTone(applyResult))}>
-              应用回执： {titleCase(applyResult)}
+              应用回执： {instrumentReceiptLabel(applyResult)}
             </p>
           )}
         </>

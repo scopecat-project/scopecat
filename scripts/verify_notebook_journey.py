@@ -94,27 +94,19 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             }};""")
             page.goto(endpoint + "/#help")
             page.get_by_role(
-                "button", name="Start parameters Notebook", exact=True
+                "button", name="开始参数与扫描 Notebook", exact=True
             ).click()
             expect(
-                page.get_by_role(
-                    "button", name="Continue parameters Notebook", exact=True
-                )
+                page.get_by_role("button", name="继续参数与扫描 Notebook", exact=True)
             ).to_be_enabled()
             journey = current(runtime)
             assert journey is not None and journey.ready
             assert editor_files == [str(journey.notebook)]
             expect(page.get_by_text(str(journey.notebook), exact=True)).to_be_visible()
             page.evaluate("window.continuationDocument = true")
-            page.get_by_role(
-                "link", name="Manage this code folder in Settings", exact=True
-            ).click()
-            expect(page.get_by_label("Your code folders")).to_have_value(
-                str(journey.directory)
-            )
-            expect(page.get_by_label("Author directory")).to_have_value(
-                str(journey.directory)
-            )
+            page.get_by_role("link", name="在设置中管理此代码目录", exact=True).click()
+            expect(page.get_by_label("代码目录")).to_have_value(str(journey.directory))
+            expect(page.get_by_label("作者目录")).to_have_value(str(journey.directory))
             assert page.evaluate("window.continuationDocument") is True
             page.get_by_role("button", name="Help", exact=True).click()
             expect(
@@ -232,12 +224,10 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             session.connected(endpoint)
             page.goto(endpoint + "/#help")
             page.get_by_role(
-                "button", name="Continue parameters Notebook", exact=True
+                "button", name="继续参数与扫描 Notebook", exact=True
             ).click()
             expect(
-                page.get_by_role(
-                    "button", name="Continue parameters Notebook", exact=True
-                )
+                page.get_by_role("button", name="继续参数与扫描 Notebook", exact=True)
             ).to_be_enabled()
             assert current(runtime) == journey
             assert journey.notebook.read_bytes() == notebook_bytes
@@ -319,9 +309,9 @@ def verify_groups(
     nbformat = notebook_io()
     page.goto(endpoint + "/#help")
     page.get_by_role("radio", name="Grouped analysis and history").press("Space")
-    page.get_by_role("button", name="Start groups Notebook", exact=True).click()
+    page.get_by_role("button", name="开始分组分析与历史 Notebook", exact=True).click()
     expect(
-        page.get_by_role("button", name="Continue groups Notebook", exact=True)
+        page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True)
     ).to_be_enabled()
     journey = current(runtime, "groups")
     parameters = current(runtime)
@@ -381,9 +371,9 @@ def verify_groups(
     desktop.connected(endpoint)
     page.goto(endpoint + "/#help")
     page.get_by_role("radio", name="Grouped analysis and history").press("Space")
-    page.get_by_role("button", name="Continue groups Notebook", exact=True).click()
+    page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True).click()
     expect(
-        page.get_by_role("button", name="Continue groups Notebook", exact=True)
+        page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True)
     ).to_be_enabled()
     assert current(runtime, "groups") == journey
     page.get_by_role("link", name="Runs", exact=True).click()
@@ -396,7 +386,7 @@ def verify_groups(
         page.get_by_role("radio", name="Grouped analysis and history")
     ).to_be_checked()
     expect(
-        page.get_by_role("button", name="Continue groups Notebook", exact=True)
+        page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True)
     ).to_be_enabled()
     page.screenshot(path=str(work / "groups-help.png"), full_page=True)
     assert journey.notebook.read_bytes() == retained

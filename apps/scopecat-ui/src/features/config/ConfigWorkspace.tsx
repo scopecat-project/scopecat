@@ -693,7 +693,7 @@ function ParameterVersionEditor({
         {branch && (
           <p>
             {reviewedGeneration != null
-              ? `Update ${branch} from reviewed generation ${reviewedGeneration}.`
+              ? `基于已核对的 generation ${reviewedGeneration} 更新分支 ${branch}。`
               : newBranch
                 ? `创建分支 ${branch}。`
                 : "正在读取分支最新版本…"}{" "}

@@ -354,11 +354,11 @@ describe("instrument workspace", () => {
     await screen.findByText("Reset fault");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "调用 Reset fault" }));
-    expect(await screen.findByText("Invoke 回执： Invoked")).toBeVisible();
+    expect(await screen.findByText("Invoke 回执： 已调用")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "应用已配置默认值" }));
     expect(await screen.findByText("已应用配置的默认值。")).toBeVisible();
-    expect(screen.queryByText("Invoke 回执： Invoked")).not.toBeInTheDocument();
+    expect(screen.queryByText("Invoke 回执： 已调用")).not.toBeInTheDocument();
   });
 
   it("hides configured defaults when the pinned session has none", async () => {
@@ -583,7 +583,7 @@ describe("instrument workspace", () => {
         expect.stringMatching(/^ui-apply-/),
       ),
     );
-    expect(await screen.findByText("应用回执： Applied")).toBeVisible();
+    expect(await screen.findByText("应用回执： 已应用")).toBeVisible();
   });
 
   it("renders every flat interface property in declaration order", async () => {
@@ -939,7 +939,7 @@ describe("instrument workspace", () => {
       ],
       expect.stringMatching(/^ui-invoke-/),
     );
-    expect(await screen.findByText("Invoke 回执： Invoked")).toBeVisible();
+    expect(await screen.findByText("Invoke 回执： 已调用")).toBeVisible();
     expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toHaveValue(7_000_000_000);
     const commandId = vi.mocked(invokeInstrumentOperation).mock.calls[0]?.[4];
     expect(commandId).toBeDefined();
@@ -991,17 +991,17 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
-    expect(await screen.findByText("Collect 回执： Collected")).toBeVisible();
+    expect(await screen.findByText("Collect 回执： 已采集")).toBeVisible();
     expect(screen.getByText("15 项返回结果")).toBeVisible();
     expect(screen.getByText("2 项结果不可用")).toBeVisible();
-    expect(screen.getByText("原因： Invalid, Missing")).toBeVisible();
+    expect(screen.getByText("原因： 无效、缺失")).toBeVisible();
     expect(screen.getByRole("img", { name: /轨迹预览/i })).toBeVisible();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([
     [1, "收集结果未知。后台服务已隔离此会话，需操作者核对。"],
-    [2, "Collect 回执： Not Collected"],
+    [2, "Collect 回执： 未采集"],
   ] as const)("handles current Python receipt status %i", async (index, message) => {
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
@@ -1049,7 +1049,7 @@ describe("instrument workspace", () => {
 
     const summary = await screen.findByRole("status");
     expect(within(summary).getByText("2 项结果不可用")).toBeVisible();
-    expect(within(summary).getByText("原因： Missing, Overload")).toBeVisible();
+    expect(within(summary).getByText("原因： 缺失、过载")).toBeVisible();
     expect(summary).not.toHaveTextContent("private-overload-result");
     expect(summary).not.toHaveTextContent("private-missing-result");
     expect(screen.queryByRole("img", { name: /轨迹预览/i })).not.toBeInTheDocument();
@@ -1106,7 +1106,7 @@ describe("instrument workspace", () => {
 
     fireEvent.change(frequency, { target: { value: "6000000000" } });
     fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
-    expect(await screen.findByText("应用回执： Applied")).toBeVisible();
+    expect(await screen.findByText("应用回执： 已应用")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
 
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2));

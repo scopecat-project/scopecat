@@ -484,3 +484,14 @@ it("cancels an object opening if the editor owner changes during its branch read
 });
 
 vi.mock("../application/OperatorSettings", () => ({ readOperatorSettings: vi.fn() }));
+
+it("describes the reviewed generation only after accepting the branch baseline", async () => {
+  mount();
+  await edit();
+  fireEvent.change(screen.getByLabelText("命名分支（可选）"), { target: { value: "daily" } });
+  await screen.findByText(/最近读取的 generation： 3/);
+  expect(screen.queryByText(/基于已核对的 generation 3/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "核对分支最新版本" }));
+  fireEvent.click(await screen.findByRole("button", { name: "核对分支后保留我的表格" }));
+  expect(await screen.findByText(/基于已核对的 generation 3 更新分支 daily/)).toBeVisible();
+});

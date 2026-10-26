@@ -15,6 +15,7 @@ describe("ConfigParameters", () => {
 
     render(<ConfigParameters config={selected} activeConfig={active} />);
 
+    expect(screen.getByText("2 项已更改")).toBeInTheDocument();
     expect(screen.getByText("5 GHz")).toBeInTheDocument();
     expect(screen.getByText("5.1 GHz")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /qubits/i }));
