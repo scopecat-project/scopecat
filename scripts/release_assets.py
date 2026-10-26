@@ -20,6 +20,7 @@ from scopecat_app.author_resources import PACKAGES as AUTHOR_PACKAGES
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.app_build.author_resources import AuthorRelease
 from scripts.app_build.package_versions import validate_dependencies
 from scripts.app_build.release_identity import installer_filename, read_release
 
@@ -231,12 +232,19 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
             or native.get("sources") != bundle.get("sources")
             or native.get("target") != bundle.get("target")
             or _object(bundle.get("target")).get("platform") != target_platform
-            or native.get("runtime") != bundle.get("runtime")
+            or _object(native.get("runtime")) != _object(bundle.get("runtime"))
+            or not isinstance(bundle.get("build_id"), str)
+            or not re.fullmatch(r"sha256:[a-f0-9]{64}", str(bundle["build_id"]))
             or native.get("build_id") != bundle.get("build_id")
+            or bundle.get("public_version") != identity.version
             or bundle.get("release_version") != identity.version
+            or type(bundle.get("build_number")) is not int
             or bundle.get("build_number") != identity.build_number
         ):
             raise ValueError(f"Native release identity mismatch: {platform}")
+        AuthorRelease.from_document(bundle).metadata(
+            cast("dict[str, str]", _object(bundle.get("target")))
+        )
         _author_files(bundle, platform, package_wheels, hashes)
         installer = native.get("installer")
         if (

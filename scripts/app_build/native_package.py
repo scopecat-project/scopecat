@@ -16,6 +16,7 @@ from typing import Protocol, cast
 
 from scripts.app_build import toolchain
 from scripts.app_build.author_resources import build as build_author_resources
+from scripts.app_build.author_resources import native_author_inputs
 from scripts.app_build.release_identity import ReleaseIdentity
 from scripts.app_build.runtime_install import install_runtime
 
@@ -52,7 +53,7 @@ def build(source: Path, destination: Path) -> Path:
     if sys.platform not in ("darwin", "win32"):
         raise ValueError("原生应用需要在 macOS 或 Windows 上构建")
     source = resolve_delivery(source)
-    _ = verify_bundle(source)
+    source_document = verify_bundle(source)
     identity = native_identity(source)
     destination = destination.absolute()
     if destination.exists():
@@ -77,7 +78,12 @@ def build(source: Path, destination: Path) -> Path:
             _ = shutil.copytree(source, payload)
         else:
             _ = toolchain.build(source, payload)
-        _ = verify_bundle(payload)
+        document = verify_bundle(payload)
+        if document != source_document:
+            raise ValueError(
+                "Native staged delivery identity changed during preparation"
+            )
+        inputs = native_author_inputs(payload, document)
         if sys.platform == "darwin":
             from scripts.app_build.cocoa_dependency import verify_wheel
 
@@ -90,7 +96,11 @@ def build(source: Path, destination: Path) -> Path:
             verify_windows_wheel(payload / "wheels")
         python_home = resources / "python"
         python = install_runtime(payload, python_home)
-        payload = build_author_resources(payload, resources / "payload", python=python)
+        if verify_bundle(payload) != document:
+            raise ValueError(
+                "Native delivery identity changed during runtime installation"
+            )
+        payload = build_author_resources(inputs, resources / "payload", python=python)
         if sys.platform == "darwin":
             _write_macos_console(python_home)
         _ = (resources / "bootstrap.py").write_text(
