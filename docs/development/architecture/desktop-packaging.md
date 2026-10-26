@@ -316,10 +316,17 @@ Python. Explicit author dependency preparation may install packages in the autho
 environment; ordinary application launch may not. Vendor runtime isolation uses
 the [SDK process protocol](sdk-process.md).
 
-Generated user environments install only `scopecat`, `ipykernel` and their
-dependency closure from the verified offline wheels, constrained to the delivery's
-versions. They do not install the server, desktop or teaching packages. Author
-revisions record import dependencies separately from execution dependencies:
+Generated author client environments request the verified `scopecat` wheel,
+`ipykernel` and any declared workspace dependencies. Shared dependencies are
+constrained by `requirements.lock`; third-party packages normally come from online
+indexes or an existing cache. The client baseline does not add server, desktop or
+teaching packages. Execution preparation separately requests both verified
+`scopecat` and `scopecat-server` wheels plus declared experiment dependencies,
+using the same shared constraints. Both paths install from a generated hashed lock;
+format 2 does not supply their complete offline dependency closure. Explicit
+offline preparation requires the needed packages to be available locally.
+
+Author revisions record import dependencies separately from execution dependencies:
 notebook refresh checks the former; backend recovery still checks the latter.
 Explicit author dependencies remain required on both sides. Workspaces without
 an explicit dependency declaration retain their full captured environment contract.
