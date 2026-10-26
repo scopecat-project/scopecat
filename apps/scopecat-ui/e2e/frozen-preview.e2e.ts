@@ -96,16 +96,16 @@ test("frozen Preview A survives code and scan edits; late B cannot reopen its cl
     await page.getByRole("button", { name: "查看检查 1" }).click();
     await expect(panel.getByText(a.code_revision.content_hash, { exact: true })).toBeVisible();
     await expect(panel.locator("pre").first()).toHaveText(baseline!);
-    // The old current-preview summary contains an unwrapped setup ID. Check the
-    // frozen-only inspection after editing preparation, without widening that scope.
-    await page.getByLabel("Gain", { exact: true }).fill("3");
-    await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
-    for (const width of [1280, 390]) {
+    // Keep the current summary visible alongside the frozen result: long setup IDs
+    // must not widen the page, including when the estimate table is expanded.
+    await page.getByText("估算与计划测量", { exact: true }).click();
+    for (const width of [1280, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await panel.scrollIntoViewIfNeeded();
       await expect
         .poll(() => page.evaluate<number>("document.documentElement.scrollWidth"))
         .toBeLessThanOrEqual(width);
+      await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`frozen-${width}.png`), fullPage: true });
     }
     expect(writes.filter((path) => path.endsWith("/experiment-launcher/preview"))).toHaveLength(2);

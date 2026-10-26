@@ -103,25 +103,25 @@ it("separates exact stage scope, target bounds, unknown time and retention", () 
       }}
     />,
   );
-  expect(screen.getByText(/2 initial points in the first experiment/)).toBeVisible();
-  expect(screen.getByText("Exact: 64 shots")).not.toBeVisible();
+  expect(screen.getByText(/首个实验初始点：2/)).toBeVisible();
+  expect(screen.getByText("精确： 64 shots")).not.toBeVisible();
   fireEvent.click(screen.getByText("估算与计划测量"));
-  expect(screen.getByText("Exact: 64 shots")).toBeVisible();
-  expect(screen.getByText("Bounded: 0–32 points")).toBeVisible();
-  expect(screen.getByText("Unknown (s)")).toBeVisible();
-  expect(screen.getByText(/Target: public-target/)).toBeVisible();
-  expect(screen.getByText("Transient (per point)")).toBeVisible();
+  expect(screen.getByText("精确： 64 shots")).toBeVisible();
+  expect(screen.getByText("有界： 0–32 points")).toBeVisible();
+  expect(screen.getByText("未知（s）")).toBeVisible();
+  expect(screen.getByText(/目标： public-target/)).toBeVisible();
+  expect(screen.getByText("临时（每点）")).toBeVisible();
   expect(screen.getByText("point: 2 × entity: 2 × shot: 64")).toBeVisible();
-  expect(screen.getByText("shot: unknown")).toBeVisible();
+  expect(screen.getByText("shot: 未知")).toBeVisible();
   expect(screen.getByText("Proposed configuration; not yet verified.")).toBeVisible();
-  expect(screen.getByText(/2\/64 displayed points; 1\/1 selected points/)).toBeVisible();
+  expect(screen.getByText(/2\/64 个展示点； 1\/1 个选中点/)).toBeVisible();
   expect(screen.queryByText("0 s")).not.toBeInTheDocument();
 });
 
 it("reports an absent project summary without inventing zero work", () => {
   render(<PreflightSummary preview={preview} />);
-  expect(screen.getByText(/Detailed preflight not provided/)).toBeVisible();
-  expect(screen.queryByText(/Exact:/)).not.toBeInTheDocument();
+  expect(screen.getByText(/未提供详细预检信息/)).toBeVisible();
+  expect(screen.queryByText(/精确：/)).not.toBeInTheDocument();
 });
 
 it("shows planned settings with unit, order and truncation without claiming readback", () => {
@@ -162,12 +162,12 @@ it("shows planned settings with unit, order and truncation without claiming read
     />,
   );
   fireEvent.click(screen.getByText("估算与计划测量"));
-  expect(screen.getByRole("region", { name: "Planned instrument settings" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "计划仪器设置" })).toBeVisible();
   expect(screen.getByText("5000000000 Hz")).toBeVisible();
-  expect(screen.getByText(/Point 3.*3.1/)).toBeVisible();
+  expect(screen.getByText(/点 3.*3.1/)).toBeVisible();
   expect(screen.getByText(/signal-source.*channels\/1.*frequency/)).toBeVisible();
-  expect(screen.getByText(/not observed or confirmed state/)).toBeVisible();
-  expect(screen.getByText(/first 64 planned settings.*omitted/)).toBeVisible();
+  expect(screen.getByText(/不是已观测或已确认的状态/)).toBeVisible();
+  expect(screen.getByText(/前 64 项计划设置；其余设置已省略/)).toBeVisible();
 });
 
 it("distinguishes an uninspected point from an inspected point with no settings", () => {
@@ -183,8 +183,8 @@ it("distinguishes an uninspected point from an inspected point with no settings"
     />,
   );
   fireEvent.click(screen.getByText("估算与计划测量"));
-  expect(screen.getByText(/No point was inspected.*settings are unknown/)).toBeVisible();
-  expect(screen.queryByText("No instrument settings in the selected point.")).toBeNull();
+  expect(screen.getByText(/未检查任何点；计划仪器设置未知/)).toBeVisible();
+  expect(screen.queryByText("选中点没有仪器设置。")).toBeNull();
   view.rerender(
     <PreflightSummary
       preview={{
@@ -196,5 +196,5 @@ it("distinguishes an uninspected point from an inspected point with no settings"
       }}
     />,
   );
-  expect(screen.getByText("No instrument settings in the selected point.")).toBeVisible();
+  expect(screen.getByText("选中点没有仪器设置。")).toBeVisible();
 });
