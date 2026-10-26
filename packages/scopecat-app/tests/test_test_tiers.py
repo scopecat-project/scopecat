@@ -13,8 +13,10 @@ def test_repository_tiers_preserve_qualification_coverage() -> None:
     journey = set(select_files(root, "journey"))
     assert core.isdisjoint(journey)
     assert core | journey == set(select_files(root, "full"))
-    assert "packages/scopecat-app/tests/test_calibration_smoke.py" in core
-    assert "packages/scopecat-app/tests/test_array_maintenance.py" in journey
+    assert "packages/scopecat-app/tests/calibration/test_calibration_smoke.py" in core
+    assert (
+        "packages/scopecat-app/tests/calibration/test_array_maintenance.py" in journey
+    )
     assert "packages/scopecat-app/tests/test_installed_adapter_journey.py" in journey
     for suite in ("core", "journey"):
         first = set(select_files(root, suite, (1, 2)))

@@ -1,4 +1,4 @@
-"""Six targets retain partial progress, recover, and publish only complete evidence."""
+"""Shared array-calibration scenario for smoke and qualification entry points."""
 
 import os
 import shutil
@@ -6,35 +6,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 from testing.app_support.project import create_project
-
-
-@pytest.mark.parametrize(
-    "case",
-    [
-        "healthy",
-        "drift",
-        "readout-failure",
-        "branch-conflict",
-        "repair",
-        "repair-budget",
-        "repair-failure",
-        "repair-drift",
-        "repair-conflict",
-        "repair-verification",
-        "repair-noop",
-    ],
-)
-def test_array_maintenance(tmp_path: Path, case: str) -> None:
-    run_array_maintenance(tmp_path, case=case, target_count=6)
 
 
 def run_array_maintenance(tmp_path: Path, *, case: str, target_count: int) -> None:
     root = tmp_path / "array"
     create_project(root, topic="task-calibration")
     shutil.copy2(
-        Path(__file__).parent / "fixtures/array_maintenance.py",
+        Path(__file__).parent.parent / "fixtures/array_maintenance.py",
         root / "src/my_experiment/array_maintenance.py",
     )
     manifest = root / "scopecat.toml"
