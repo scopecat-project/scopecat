@@ -1,5 +1,6 @@
 """Reject stale GUI and invalid deliveries before touching a user environment."""
 
+import errno
 import io
 import json
 import os
@@ -198,7 +199,6 @@ def test_public_install_bundle_still_refuses_existing_destination(
         installer.install_bundle(delivery, destination)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Windows symlink creation needs privileges")
 def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
     from scopecat_app.application_runtime import ApplicationRuntime
 
@@ -206,7 +206,16 @@ def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
     home.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    (home / "runtime").symlink_to(outside, target_is_directory=True)
+    # Probe the actual directory-link capability before calling the product.
+    try:
+        (home / "runtime").symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        if (
+            error.errno not in {errno.EACCES, errno.EPERM, errno.ENOSYS, errno.ENOTSUP}
+            and getattr(error, "winerror", None) != 1314
+        ):
+            raise
+        pytest.skip(f"symlink capability unavailable: {error}")
     with pytest.raises(ValueError, match="符号链接"):
         ApplicationRuntime(home)
     assert list(outside.iterdir()) == []

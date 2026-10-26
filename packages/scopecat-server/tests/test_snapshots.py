@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import sqlite3
@@ -257,8 +258,14 @@ def test_verify_rejects_damaged_or_unsafe_snapshot(tmp_path: Path, damage: str) 
         path.unlink()
         try:
             path.symlink_to(project.root / "application.py")
-        except OSError:
-            pytest.skip("symlinks require platform permission")
+        except OSError as error:
+            if (
+                error.errno
+                not in {errno.EACCES, errno.EPERM, errno.ENOSYS, errno.ENOTSUP}
+                and getattr(error, "winerror", None) != 1314
+            ):
+                raise
+            pytest.skip(f"symlink capability unavailable: {error}")
     result = CliRunner().invoke(
         app, ["snapshot", "restore", str(snapshot), str(tmp_path / "restored")]
     )
