@@ -49,9 +49,9 @@ it("keeps decision attention visible when compact and reports unknown without im
   };
   const { rerender } = render(<WorkspaceNavigation {...props} decisionAttention="3 待处理" />);
   fireEvent.click(screen.getByRole("button", { name: /Collapse navigation$/ }));
-  expect(screen.getByLabelText("Decision attention")).toHaveTextContent("3 待处理");
+  expect(screen.getByLabelText("待处理判断")).toHaveTextContent("3 待处理");
   rerender(<WorkspaceNavigation {...props} decisionAttention="状态未知" />);
-  expect(screen.getByLabelText("Decision attention")).toHaveTextContent("状态未知");
+  expect(screen.getByLabelText("待处理判断")).toHaveTextContent("状态未知");
 });
 it("keeps labeled destinations in compact mode and restores focus after the drawer closes", async () => {
   vi.stubGlobal("innerWidth", 520);

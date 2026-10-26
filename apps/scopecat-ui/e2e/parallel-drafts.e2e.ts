@@ -166,7 +166,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     const monitor = await context.newPage();
     monitorUrl.searchParams.set("focus", "run");
     await monitor.goto(monitorUrl.href);
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toHaveCount(0);
     await expectRunIdentity(monitor, runA);
     await expect(monitor.getByTestId("run-status")).toHaveText("执行中");
     // Identity inspection opens metadata; return to the normal collapsed monitor.
@@ -188,28 +188,28 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     }
     await monitor.setViewportSize({ width: 1266, height: 893 });
     await monitor.getByRole("link", { name: "返回准备", exact: true }).click();
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toBeVisible();
     await monitor.setViewportSize({ width: 520, height: 800 });
     await monitor.getByRole("button", { name: /Open navigation$/ }).click();
-    await expect(monitor.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
+    await expect(monitor.getByRole("dialog", { name: "工作区导航" })).toBeVisible();
     await monitor.goBack();
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toHaveCount(0);
     await expect(monitor.locator("#workspace-body")).toHaveJSProperty("inert", false);
     await expect(monitor.getByRole("button", { name: /Navigation/ })).toBeFocused();
     await monitor.screenshot({ path: testInfo.outputPath("focused-back-from-open-drawer.png") });
     await monitor.goForward();
-    await expect(monitor.getByRole("dialog", { name: "Workspace navigation" })).toHaveCount(0);
+    await expect(monitor.getByRole("dialog", { name: "工作区导航" })).toHaveCount(0);
     await expect(monitor.locator("#workspace-body")).toHaveJSProperty("inert", false);
     await monitor.setViewportSize({ width: 1266, height: 893 });
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toBeVisible();
     await monitor.reload();
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toBeVisible();
     await monitor.goBack();
     await expectRunIdentity(monitor, runA);
     await monitor.getByRole("link", { name: "比较已有 run", exact: true }).click();
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toBeVisible();
     await monitor.goBack();
-    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+    await expect(monitor.getByRole("navigation", { name: "项目页面" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "准备", exact: true }).click();
     await expect(page.getByRole("region", { name: "当前执行", exact: true })).toHaveCount(0);
@@ -261,8 +261,8 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(gain).toBeFocused();
     await page.getByRole("button", { name: /Collapse navigation$/ }).click();
     await expect(page.locator("html")).toHaveClass(/navigation-compact/);
-    await expect(page.getByLabel("Decision attention")).toBeVisible();
-    await expect(page.getByLabel("Decision attention")).toHaveText("0 待处理");
+    await expect(page.getByLabel("待处理判断")).toBeVisible();
+    await expect(page.getByLabel("待处理判断")).toHaveText("0 待处理");
     await page.screenshot({ path: testInfo.outputPath("compact-sidebar-preserved-editor.png") });
     await page.getByRole("button", { name: /Expand navigation$/ }).click();
     const switchStarted = performance.now();
@@ -404,13 +404,13 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByRole("region", { name: "独立实验草稿", exact: true }).scrollIntoViewIfNeeded();
     await expect(page.getByRole("combobox", { name: "可编辑草稿", exact: true })).toBeInViewport();
     await page.getByRole("button", { name: /Open navigation$/ }).click();
-    await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "工作区导航" })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("narrow-sidebar-drawer.png") });
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: /Open navigation$/ })).toBeFocused();
     await page.getByRole("button", { name: /Open navigation$/ }).click();
     await page.setViewportSize({ width: 1266, height: 893 });
-    await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "工作区导航" })).toHaveCount(0);
     await expect(page.locator("#workspace-body")).toHaveJSProperty("inert", false);
     await gain.focus();
     await expect(gain).toBeFocused();

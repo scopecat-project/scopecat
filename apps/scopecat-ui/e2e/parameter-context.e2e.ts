@@ -42,7 +42,7 @@ async function start(project: string) {
 
 async function editVersion(page: Page, name: string) {
   await page
-    .getByRole("navigation", { name: "Project sections" })
+    .getByRole("navigation", { name: "项目页面" })
     .getByRole("button", { name: /Configuration$/, exact: true })
     .click();
   await page.getByRole("combobox", { name: "已保存的参数版本", exact: true }).selectOption(name);
@@ -299,11 +299,11 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await frequency.pressSequentially("5200");
     await frequency.press("Tab");
     await page
-      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("navigation", { name: "项目页面" })
       .getByRole("button", { name: /Runs$/, exact: true })
       .click();
     await page
-      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("navigation", { name: "项目页面" })
       .getByRole("button", { name: /Configuration$/, exact: true })
       .click();
     await expect(frequency).toHaveValue("5200");

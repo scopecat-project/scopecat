@@ -53,15 +53,15 @@ def wait(check, label):
 def workspace_ready(window):
     state = window.evaluate_js(
         "({mounted: Boolean(window.pywebview?.api && "
-        "document.querySelector('[aria-label=\"Refresh project data\"]')), "
+        "document.querySelector('[aria-label=\"刷新项目数据\"]')), "
         "connection: document.querySelector('.workspace-top [role=status]')"
         "?.textContent.trim(), loading: Boolean("
-        "document.querySelector('[aria-label=\"Refresh project data\"] .animate-spin')"
-        " || document.body.textContent.includes('Loading experiments…'))})"
+        "document.querySelector('[aria-label=\"刷新项目数据\"] .animate-spin')"
+        " || document.body.textContent.includes('正在加载实验…'))})"
     )
     return (
         isinstance(state, dict) and state.get("mounted")
-        and state.get("connection") not in (None, "", "Connecting", "Disconnected")
+        and state.get("connection") == "已连接"
         and not state.get("loading")
     )
 

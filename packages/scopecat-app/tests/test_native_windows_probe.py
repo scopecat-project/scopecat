@@ -110,10 +110,13 @@ def reset_host_function(name: str) -> ast.FunctionDef:
     ("connection", "loading", "expected"),
     [
         (None, False, False),
-        ("Connecting", False, False),
-        ("Disconnected", False, False),
-        ("Ready", True, False),
-        ("Ready", False, True),
+        ("正在连接", False, False),
+        ("连接已断开", False, False),
+        ("已连接", True, False),
+        ("已连接", False, True),
+        ("服务受限", False, False),
+        ("状态未知", False, False),
+        ("状态未知（future_status）", False, False),
     ],
 )
 def test_reset_readiness_requires_health_completion(connection, loading, expected):
