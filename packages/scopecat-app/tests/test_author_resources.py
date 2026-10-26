@@ -6,6 +6,7 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import Mock
 
 import pytest
@@ -239,6 +240,15 @@ def test_copy_does_not_launder_changed_material_hashes(
     with pytest.raises(ValueError, match="预期哈希"):
         build_author_resources(materials, tmp_path / "author")
     assert not (tmp_path / "author" / bundle.MANIFEST).exists()
+
+
+def test_legacy_adapter_preserves_empty_source_metadata(delivery: Path, tmp_path: Path):
+    manifest = delivery / bundle.MANIFEST
+    document = cast("bundle.Bundle", json.loads(manifest.read_text()))
+    document["sources"] = {}
+    manifest.write_text(json.dumps(document))
+    resource = build_author_resources(delivery, tmp_path / "author")
+    assert author_resources.verify_resources(resource)["sources"] == {}
 
 
 def test_legacy_adapter_still_checks_unconsumed_files(delivery: Path, tmp_path: Path):

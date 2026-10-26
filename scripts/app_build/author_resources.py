@@ -88,6 +88,11 @@ def build(
         )
     else:
         inputs = source
+        if not inputs.sources or any(
+            not key or not isinstance(value, str) or not value
+            for key, value in cast("dict[str, object]", inputs.sources).items()
+        ):
+            raise ValueError("作者输入缺少源码身份")
         document: Bundle = {
             "format": 2,
             "target": inputs.target,
@@ -97,11 +102,6 @@ def build(
         }
     if inputs.target != target_identity():
         raise ValueError("作者输入 target 与当前环境不一致")
-    if not inputs.sources or any(
-        not key or not isinstance(value, str) or not value
-        for key, value in cast("dict[str, object]", inputs.sources).items()
-    ):
-        raise ValueError("作者输入缺少源码身份")
     materials = _materials(inputs.root)
     if materials != inputs.files:
         raise ValueError("作者输入缺失、被修改或哈希清单不匹配")

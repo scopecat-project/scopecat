@@ -243,7 +243,8 @@ must not derive expected hashes from potentially changed materials at consumptio
 The recipe interpreter is independently probed against the declared target.
 
 For existing path callers, the compatibility adapter still verifies the complete
-format 1 delivery before selecting these materials, and retains its metadata.
+format 1 delivery before selecting these materials, and retains its metadata
+(including empty source metadata accepted by the legacy verifier).
 Development resource preparation, teaching, native and release consumers are not
 migrated by this contract. The legacy installer and offline delivery remain in use.
 
