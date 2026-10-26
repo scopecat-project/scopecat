@@ -66,7 +66,7 @@ describe("shared reference-lab acceptance", () => {
     render(<PlannedSettings stage={fixtures.planned_settings} />);
     expect(screen.getByText("4850000000 Hz")).toBeVisible();
     expect(screen.getByText(/drive-lo-a.*frequency/)).toBeVisible();
-    expect(screen.getByText(/not observed or confirmed state/)).toBeVisible();
+    expect(screen.getByText(/不是已观测或已确认的状态/)).toBeVisible();
   });
   it("uses the ordinary author catalog in the launcher", async () => {
     vi.stubGlobal(
@@ -125,9 +125,9 @@ describe("shared reference-lab acceptance", () => {
       screen.queryByText("This task does not publish parameter changes."),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("估算与计划测量"));
-    expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
-    expect(screen.getByText("Unknown (s)")).toBeVisible();
-    expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();
+    expect(screen.getAllByText("保留（计划数据集）")).toHaveLength(2);
+    expect(screen.getByText("未知（s）")).toBeVisible();
+    expect(screen.getByText(/1\/64 个展示点； 1\/1 个选中点/)).toBeVisible();
     await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
   });
 
