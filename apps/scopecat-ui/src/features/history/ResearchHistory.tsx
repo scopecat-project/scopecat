@@ -6,19 +6,60 @@ import { ScopeCatalog } from "../context/ScopeCatalog";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
 import { RunIdLookup } from "./RunIdLookup";
 import { CollectionRunLookup } from "./CollectionRunLookup";
-import { useState } from "react";
+import { Activity, useState } from "react";
+import { ApparatusHistory } from "../apparatus/ApparatusHistory";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
 import { DataCleanupHistory } from "./DataCleanup";
 import { ImportedCaptures } from "./ImportedCaptures";
 import { CourseData } from "./CourseData";
-import { useLocationUrl } from "../../lib/navigation";
+import { navigate, useLocationUrl } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 
 type Project = components["schemas"]["ResearchProject"];
 
-export function ResearchHistory({
+export function ResearchHistory(props: {
+  onOpenRun: (runId: string) => void;
+  daemonUnavailable: boolean;
+  projectId: string;
+}) {
+  const url = useLocationUrl();
+  const apparatus = url.searchParams.get("data") === "apparatus" && !url.searchParams.has("course");
+  return (
+    <>
+      <nav aria-label="数据浏览" className="mb-4 flex gap-3">
+        {[
+          [false, "运行与记录"],
+          [true, "实验装置历史"],
+        ].map(([active, label]) => (
+          <Button
+            key={String(label)}
+            aria-pressed={apparatus === active}
+            onClick={() => {
+              const target = new URL(window.location.href);
+              target.hash = "history";
+              target.searchParams.delete("course");
+              if (active) target.searchParams.set("data", "apparatus");
+              else target.searchParams.delete("data");
+              navigate(target);
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </nav>
+      <Activity mode={apparatus ? "visible" : "hidden"}>
+        <ApparatusHistory {...props} />
+      </Activity>
+      <Activity mode={apparatus ? "hidden" : "visible"}>
+        <ResearchRecords {...props} />
+      </Activity>
+    </>
+  );
+}
+
+function ResearchRecords({
   onOpenRun,
   daemonUnavailable,
   projectId,

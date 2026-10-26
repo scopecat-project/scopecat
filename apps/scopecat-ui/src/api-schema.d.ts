@@ -89,6 +89,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apparatus-objects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Apparatus Objects */
+        get: operations["list_apparatus_objects_api_v1_apparatus_objects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apparatus-objects/{object_id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apparatus Observations */
+        get: operations["apparatus_observations_api_v1_apparatus_objects__object_id__observations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apparatus-objects/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Apparatus Object */
+        post: operations["resolve_apparatus_object_api_v1_apparatus_objects_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apparatus-observations/{observation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Apparatus Observation */
+        get: operations["get_apparatus_observation_api_v1_apparatus_observations__observation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/author-preparations": {
         parameters: {
             query?: never;
@@ -3759,6 +3827,118 @@ export interface components {
              */
             style: "band" | "bars";
             upper: components["schemas"]["_NonEmptyText"];
+        };
+        /**
+         * ApparatusAttachment
+         * @description Owned bytes; the filename is a label and never a server filesystem path.
+         */
+        ApparatusAttachment: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Filename */
+            filename: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** ApparatusObjectContent */
+        ApparatusObjectContent: {
+            /**
+             * Aliases
+             * @default []
+             */
+            aliases: string[];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /** ApparatusObjectPage */
+        ApparatusObjectPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ApparatusObjectRevision"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** ApparatusObjectRef */
+        ApparatusObjectRef: {
+            /** Catalog Id */
+            catalog_id: string;
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Object Id */
+            object_id: string;
+            /** Revision */
+            revision: number;
+        };
+        /** ApparatusObjectRevision */
+        ApparatusObjectRevision: {
+            /** Actor */
+            actor: string;
+            content: components["schemas"]["ApparatusObjectContent"];
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            ref: components["schemas"]["ApparatusObjectRef"];
+        };
+        /** ApparatusObservation */
+        ApparatusObservation: {
+            draft: components["schemas"]["ApparatusObservationDraft"];
+            /** Id */
+            id: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+        };
+        /** ApparatusObservationDraft */
+        ApparatusObservationDraft: {
+            /** Actor */
+            actor: string;
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["ApparatusAttachment"][];
+            /** Conditions */
+            conditions?: {
+                [key: string]: string;
+            };
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Observed At */
+            observed_at?: string | null;
+            /**
+             * Run Ids
+             * @default []
+             */
+            run_ids: string[];
+            subject: components["schemas"]["ApparatusObjectRef"];
+            /** Supersedes */
+            supersedes?: string | null;
+            /** Title */
+            title: string;
+        };
+        /** ApparatusObservationPage */
+        ApparatusObservationPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ApparatusObservation"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
         };
         /**
          * ApplyReceipt
@@ -13484,6 +13664,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisPublicationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_apparatus_objects_api_v1_apparatus_objects_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+                query?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApparatusObjectPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apparatus_observations_api_v1_apparatus_objects__object_id__observations_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+                run_id?: string | null;
+            };
+            header?: never;
+            path: {
+                object_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApparatusObservationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_apparatus_object_api_v1_apparatus_objects_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApparatusObjectRef"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApparatusObjectRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_apparatus_observation_api_v1_apparatus_observations__observation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApparatusObservation"];
                 };
             };
             /** @description Validation Error */

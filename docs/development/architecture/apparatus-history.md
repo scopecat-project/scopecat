@@ -33,9 +33,10 @@ the described hardware existed in that state at every point during the revision.
 
 ## Bounded descriptive catalog (#644)
 
-The first delivery exposes Python/HTTP history operations; integrated graphical
-history navigation remains follow-on work. It does not yet replace notebooks or
-slides as the everyday editing surface.
+Python/HTTP history operations own recording. Data now provides read-only
+[graphical history browsing](../../how-to/record-apparatus-history.md#browse-retained-history-in-data)
+using those existing operations. It does not replace notebooks or slides as the
+everyday editing surface.
 
 The first slice provides stable apparatus-object identities, exact immutable
 description revisions and append-only observations. Observations reference an exact
