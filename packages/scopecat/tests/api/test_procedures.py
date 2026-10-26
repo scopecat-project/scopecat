@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast, override
 
 import httpx2
 import pytest
+from pydantic import JsonValue
 from scopecat_testkit.workflow_fixtures import load_config, load_invocation
 
 import scopecat.api.procedures as procedures_module
@@ -15,6 +17,7 @@ from scopecat.api._config import LabConfigOperations
 from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import Analysis, AnalysisContext, AnalysisStep
 from scopecat.api.procedures import (
+    InterpretationResult,
     LabProcedureContext,
     ProcedureLabSession,
     _analysis_argument_identity,
@@ -165,7 +168,10 @@ class _SucceededStepProcedureContext:
 class _InterpretationProcedureContext:
     procedure_run_id = "procedure-test"
 
-    def __init__(self) -> None:
+    def __init__(self, value: JsonValue = None) -> None:
+        self.value: JsonValue = (
+            {"resonator": "r2", "confidence": 0.84} if value is None else value
+        )
         self.request: InterpretationRequest | None = None
         self.inputs: tuple[ProcedureStepOutputRef, ...] = ()
 
@@ -185,7 +191,7 @@ class _InterpretationProcedureContext:
             response=InterpretationResponse(
                 actor="analysis-agent",
                 actor_kind="ai",
-                value={"resonator": "r2", "confidence": 0.84},
+                value=self.value,
                 note="isolated dip and expected bias response",
                 submitted_at=datetime.now(UTC),
             ),
@@ -446,6 +452,53 @@ def test_analysis_transport_with_no_confirmed_r1_requires_attention() -> None:
             _TestAnalysisStep(),
             inputs=(),
         )
+
+
+def test_decision_guide_example_executes_with_the_current_interpret_api() -> None:
+    guide = (
+        Path(__file__).resolve().parents[4]
+        / "docs/how-to/record-experiment-decisions.md"
+    )
+    example = (
+        guide.read_text(encoding="utf-8").split("```python\n", 1)[1].split("```", 1)[0]
+    )
+    namespace: dict[str, object] = {"__name__": __name__}
+    exec(  # noqa: S102 - execute the repository-owned guide example
+        compile(example, str(guide), "exec", dont_inherit=True), namespace
+    )
+    choose_peak = cast(
+        "Callable[[LabProcedureContext, RunOutputRef], InterpretationResult[object]]",
+        namespace["choose_peak"],
+    )
+    value: JsonValue = {"outcome": "Peak selected", "frequency_mhz": 6500}
+    durable = _InterpretationProcedureContext(value)
+    context = LabProcedureContext(
+        cast("ProcedureContext", cast("object", durable)),
+        runner=cast("_DaemonRunner", object()),
+        config=cast("LabConfigOperations", object()),
+        session=cast("ProcedureLabSession", object()),
+    )
+    scan = RunOutputRef(run_id="retained-guide-scan")
+    decision = choose_peak(context, scan)
+    assert decision.ref.response.value == value
+    assert durable.inputs == (scan,)
+    request = durable.request
+    assert request is not None and request.answer_contract is not None
+    assert decision.ref.request_hash == request.request_hash
+    for frequency in (6490, 6510):
+        boundary: JsonValue = {"outcome": "Peak selected", "frequency_mhz": frequency}
+        assert request.normalize_answer(boundary) == boundary
+    for frequency in (6600, None):
+        with pytest.raises(ValueError, match="frequency_mhz"):
+            request.normalize_answer(
+                {"outcome": "Peak selected", "frequency_mhz": frequency}
+            )
+    assert request.normalize_answer({"outcome": "Unsure", "frequency_mhz": 6500}) == {
+        "outcome": "Unsure",
+        "frequency_mhz": None,
+    }
+    with pytest.raises(TypeError):
+        request.normalize_answer({"outcome": "Unsure"})
 
 
 def test_interpretation_decodes_typed_response_and_retains_exact_reference() -> None:
