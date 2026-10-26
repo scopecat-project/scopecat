@@ -62,4 +62,6 @@ A run wait timeout means wait on the same job, not submit again.
 
 Before updating an older build, [back up retained records](../how-to/backup-and-restore.md)
 and check the [data compatibility policy](../development/data-compatibility.md).
+若启动页明确提供 **备份并升级**，按[115→116 数据升级说明](../how-to/maintain-application.md#back-up-and-upgrade-schema-115-to-116)操作；
+未知格式保留原件和匹配的旧应用，删除并重新初始化不是升级。
 Framework contributors use the separate [source development entry](../development/public-preview.md#daily-source-desktop).
