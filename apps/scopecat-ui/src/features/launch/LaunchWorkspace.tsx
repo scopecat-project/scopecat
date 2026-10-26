@@ -1,3 +1,4 @@
+import { FrozenLaunchPreviewPanel } from "./FrozenLaunchPreview";
 import { clearDraftLocation } from "./draft-location";
 import { readDraft } from "./launch-recovery";
 import {
@@ -444,6 +445,9 @@ export function LaunchWorkspace({
           </>
         )}
       </section>
+      <div hidden={view !== "editor"}>
+        <FrozenLaunchPreviewPanel />
+      </div>
       <section
         hidden={view !== "editor" || (linked && !linkedMatches)}
         aria-labelledby="experiment-history"

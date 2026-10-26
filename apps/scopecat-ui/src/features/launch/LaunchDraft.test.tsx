@@ -12,7 +12,7 @@ import { reviewedFixture } from "../../test/scientific-fixtures";
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { LaunchCatalogEntry } from "./launch-api";
 import { LaunchDraftProvider } from "./LaunchDraft";
@@ -1101,4 +1101,112 @@ it("fences edits and revokes unsent preparation during native close preflight", 
   act(() => releaseLaunchClose("provider-close"));
   fireEvent.change(note, { target: { value: "editable again" } });
   expect(note).toHaveValue("editable again");
+});
+
+it("keeps frozen A separate from edited preparation and B, without restoring admission", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "保留并查看此次检查" }));
+  const a = screen.getByRole("region", { name: "冻结检查 1" });
+  const baseline = within(a).getByText(/"reviewed":/).textContent;
+  expect(within(a).getByText("未知／未提供")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Note"), { target: { value: "new input B" } });
+  fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "5.2" } });
+  expect(screen.queryByText("预览就绪", { exact: true })).toBeNull();
+  expect(within(a).getByRole("status")).toHaveTextContent("与当前准备不同");
+  expect(within(a).getByText(/"reviewed":/).textContent).toBe(baseline);
+  fireEvent.click(screen.getByRole("button", { name: "关闭检查视图" }));
+  fireEvent.click(screen.getByRole("button", { name: "查看检查 1" }));
+  expect(screen.queryByText("预览就绪", { exact: true })).toBeNull();
+  deferPreview = true;
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  expect(submissions).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "取消准备" }));
+  await act(async () => previewResponse?.(Response.json(preview())));
+  expect(submissions).toHaveLength(0);
+  deferPreview = false;
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "保留并查看此次检查" }));
+  expect(
+    within(screen.getByRole("region", { name: "冻结检查 2" })).getByText(/"reviewed":/),
+  ).toHaveTextContent("new input B");
+  fireEvent.click(screen.getByRole("button", { name: "查看检查 1" }));
+  expect(
+    within(screen.getByRole("region", { name: "冻结检查 1" })).getByText(/"reviewed":/).textContent,
+  ).toBe(baseline);
+  expect(submissions).toHaveLength(0);
+});
+
+it("does not reopen a closed frozen panel or rebind A when a pending preview returns", async () => {
+  const view = render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "保留并查看此次检查" }));
+  const baseline = within(screen.getByRole("region", { name: "冻结检查 1" })).getByText(
+    /"reviewed":/,
+  ).textContent;
+  deferPreview = true;
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  fireEvent.click(screen.getByRole("button", { name: "关闭检查视图" }));
+  await act(async () =>
+    previewResponse?.(
+      Response.json({ ...preview(), code_revision: { content_hash: "sha256:new-code" } }),
+    ),
+  );
+  await screen.findByText("预览就绪", { exact: true });
+  expect(screen.queryByRole("region", { name: "冻结检查 1" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "查看检查 1" }));
+  expect(
+    within(screen.getByRole("region", { name: "冻结检查 1" })).getByText(/"reviewed":/).textContent,
+  ).toBe(baseline);
+  expect(screen.queryByText("sha256:new-code")).toBeNull();
+  expect(
+    within(screen.getByRole("region", { name: "冻结检查 1" })).getByRole("status"),
+  ).toHaveTextContent("与当前准备不同");
+  expect(submissions).toHaveLength(0);
+  view.rerender(<Harness projectId="project-b" />);
+  expect(screen.queryByRole("region", { name: "保留的预览检查" })).toBeNull();
+});
+
+it("presents retained bounded target inspection and its selected-point/truncation limits", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  deferPreview = true;
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  await act(async () =>
+    previewResponse?.(
+      Response.json({
+        ...preview(),
+        inspection: {
+          total_point_count: null,
+          points: [{ point_index: 0 }],
+          points_truncated: true,
+          selected_point: { point_index: 0, coordinate: { frequency: 4.8 } },
+          truncated: ["bindings"],
+          domain_inspections: [
+            {
+              operation_id: "op-a",
+              target_id: "target-a",
+              artifact_id: "artifact-a",
+              content: { kind: "synthetic", facts: [], points: [], program: null },
+            },
+          ],
+        },
+      }),
+    ),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "保留并查看此次检查" }));
+  const panel = within(screen.getByRole("region", { name: "冻结检查 1" }));
+  expect(panel.getByText("target-a")).toBeVisible();
+  expect(panel.getByText("artifact-a")).toBeVisible();
+  expect(panel.getByText(/总点数：未知；显示点数：1/)).toBeVisible();
+  expect(panel.getByText(/截断：扫描点、bindings/)).toBeVisible();
+  fireEvent.click(panel.getByText("选中点（目标检查仅适用于此点）"));
+  expect(panel.getByText(/"point_index": 0/)).toHaveTextContent('"frequency": 4.8');
+  expect(submissions).toHaveLength(0);
 });
