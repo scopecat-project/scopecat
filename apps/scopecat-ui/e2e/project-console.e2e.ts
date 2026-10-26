@@ -385,7 +385,7 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
   // Chromium reconnects after the finite first response; transport tests cover
   // Last-Event-ID cursor precedence independently of browser routing.
   await expect.poll(() => streamRequests.length).toBeGreaterThanOrEqual(2);
-  await expect(page.getByText("Ok", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("已连接", { exact: true }).first()).toBeVisible();
 
   const experiment = await startControlledExperiment(daemon.projectRoot);
   try {

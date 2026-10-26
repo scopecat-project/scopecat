@@ -229,17 +229,13 @@ describe("config provenance navigation", () => {
   it("shows unknown decision attention when the actual query fails instead of retaining zero", async () => {
     const client = createQueryClient();
     renderApp(client);
-    await waitFor(() =>
-      expect(screen.getByLabelText("Decision attention")).toHaveTextContent("0 待处理"),
-    );
+    await waitFor(() => expect(screen.getByLabelText("待处理判断")).toHaveTextContent("0 待处理"));
     vi.mocked(getWaitingProcedures).mockRejectedValue(new Error("Decision query disconnected"));
     await act(async () => {
       await client.invalidateQueries({ queryKey: ["procedure-decisions"] });
     });
-    await waitFor(() =>
-      expect(screen.getByLabelText("Decision attention")).toHaveTextContent("状态未知"),
-    );
-    expect(screen.getByLabelText("Decision attention")).not.toHaveTextContent("0 待处理");
+    await waitFor(() => expect(screen.getByLabelText("待处理判断")).toHaveTextContent("状态未知"));
+    expect(screen.getByLabelText("待处理判断")).not.toHaveTextContent("0 待处理");
   });
   it("restores page and record selections through back and forward", async () => {
     window.history.replaceState(null, "", "/?sample=chip-a17#samples");
@@ -439,6 +435,7 @@ describe("config provenance navigation", () => {
     renderApp();
 
     await screen.findByText("实验配置");
+    expect(await screen.findByText("Test lab · 参数与绑定")).toBeVisible();
     expect(getRuns).not.toHaveBeenCalled();
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#configuration");
@@ -451,7 +448,7 @@ describe("config provenance navigation", () => {
   it("keeps the configuration editor mounted across page navigation", async () => {
     renderApp();
     // Establish project identity before checking navigation within that project.
-    await screen.findByText("Ok", { exact: true });
+    await screen.findByText("已连接", { exact: true });
     const editor = await screen.findByText("实验配置");
     fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
     expect(editor).toBeInTheDocument();
@@ -535,7 +532,7 @@ describe("config provenance navigation", () => {
     fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
     expect(await screen.findByTitle("Inspect run run-old")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh project data" }));
+    fireEvent.click(screen.getByRole("button", { name: "刷新项目数据" }));
 
     await waitFor(() => expect(screen.queryByTitle("Inspect run run-old")).not.toBeInTheDocument());
     fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
@@ -561,11 +558,11 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    expect((await screen.findAllByText("Online", { exact: true }))[0]).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh project data" }));
+    expect((await screen.findAllByText("状态未知（online）", { exact: true }))[0]).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "刷新项目数据" }));
 
-    expect(await screen.findByText("Disconnected", { exact: true })).toBeVisible();
-    expect(screen.getByText("Connection interrupted.")).toBeVisible();
+    expect(await screen.findByText("连接已断开", { exact: true })).toBeVisible();
+    expect(screen.getByText("连接已中断。")).toBeVisible();
   });
 
   it("uses durable transitions without treating a started point as complete", async () => {

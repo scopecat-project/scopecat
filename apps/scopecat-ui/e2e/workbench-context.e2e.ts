@@ -179,7 +179,7 @@ test("two workbench pages retain independent context and share collection number
     await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
     await preview(page);
     // Reload the other page's catalog without replacing its page-local selection.
-    await other.getByRole("button", { name: "Refresh project data", exact: true }).click();
+    await other.getByRole("button", { name: "刷新项目数据", exact: true }).click();
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchB);
     await expect(other.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-b");
     await expect(other.getByLabel("实验配置", { exact: true })).toHaveValue("browser-bench-b");

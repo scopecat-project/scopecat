@@ -274,7 +274,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
     );
     // Invoke the normal refresh handler as a fixture stimulus; the toolbar is inert in focus.
     const refreshState = () =>
-      page.locator('[aria-label="Refresh project data"]').evaluate((button) => button.click());
+      page.locator('[aria-label="刷新项目数据"]').evaluate((button) => button.click());
     for (const problem of ["attention_required", "failed"] as const) {
       state = "running";
       await refreshState();

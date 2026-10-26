@@ -1,4 +1,8 @@
-import { WorkspaceNavigation, type ProjectView } from "./features/application/WorkspaceNavigation";
+import {
+  WorkspaceNavigation,
+  projectViewLabel,
+  type ProjectView,
+} from "./features/application/WorkspaceNavigation";
 import { useWorkspacePosition } from "./features/application/use-workspace-position";
 import { PinnedTask } from "./features/launch/PinnedTask";
 import { getWaitingProcedures } from "./features/decisions/decision-api";
@@ -29,7 +33,6 @@ import { DesktopSession } from "./features/application/DesktopSession";
 import { DesktopFiles } from "./features/application/DesktopFiles";
 import { DesktopZoom } from "./features/application/DesktopZoom";
 import { DesktopFind } from "./features/application/DesktopFind";
-import { titleCase } from "./lib/presentation";
 import {
   navigate,
   navigateBack,
@@ -99,8 +102,7 @@ export default function App() {
   const parameterWorkspace = useRef<ParameterWorkspaceHandle>(null);
   const [objectPanel, setObjectPanel] = useState<ObjectParameterPanel | null>(null);
   const editObjectParameters = useCallback(async (context: ObjectParameterContext) => {
-    if (!parameterWorkspace.current)
-      throw new Error("The parameter workspace is still loading. Try again.");
+    if (!parameterWorkspace.current) throw new Error("参数工作区仍在加载，请稍后重试。");
     await parameterWorkspace.current.openObject(context);
   }, []);
   const [view, setView] = useState<ProjectView>(projectViewFromLocation);
@@ -330,7 +332,7 @@ export default function App() {
       <div id="workspace-body">
         <header className="workspace-top">
           <span className="workspace-top-title">
-            {healthQuery.data?.projectName ?? "Scopecat"} · {view}
+            {healthQuery.data?.projectName ?? "Scopecat"} · {projectViewLabel(view)}
           </span>
           <div className="flex items-center gap-2.5">
             <ConnectionState
@@ -342,8 +344,9 @@ export default function App() {
               className={iconButton}
               type="button"
               onClick={refresh}
-              aria-label="Refresh project data"
-              title="Refresh project data"
+              aria-label="刷新项目数据"
+              aria-busy={activeQueries > 0}
+              title={activeQueries > 0 ? "正在刷新项目数据" : "刷新项目数据"}
             >
               <RefreshCw
                 size={17}
@@ -362,11 +365,11 @@ export default function App() {
             >
               <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
               <span>
-                <strong className="text-red">Connection interrupted.</strong>{" "}
+                <strong className="text-red">连接已中断。</strong>{" "}
                 {window.pywebview
-                  ? "If Scopecat is restarting or adding a code folder, wait for it to finish. Otherwise, use Settings → Restart application to reconnect."
-                  : "Check that Scopecat is running, then refresh this page."}{" "}
-                Saved records are retained. Live project data is unavailable until reconnected.
+                  ? "若 Scopecat 正在重启或添加代码文件夹，请等待完成；否则请在“设置 → 重启应用”中重新连接。"
+                  : "请确认 Scopecat 正在运行，再刷新此页面。"}{" "}
+                已保存的记录仍保留；重新连接前无法获取实时项目数据。
               </span>
             </div>
           )}
@@ -375,7 +378,7 @@ export default function App() {
             <PinnedTask />
             {
               <RetainedView mode={view === "launch" ? "visible" : "hidden"}>
-                <Suspense fallback={<p>Loading experiments…</p>}>
+                <Suspense fallback={<p role="status">正在加载实验…</p>}>
                   <LaunchWorkspace
                     handoff={
                       handoff?.projectId === healthQuery.data?.projectId
@@ -392,8 +395,8 @@ export default function App() {
                 fallback={
                   <DetailEmpty
                     icon={<LoaderCircle className="animate-spin" />}
-                    title="Loading configuration"
-                    detail="The configuration workspace is being prepared."
+                    title="正在加载参数与绑定"
+                    detail="正在准备参数与绑定工作区。"
                   />
                 }
               >
@@ -423,7 +426,7 @@ export default function App() {
               key={healthQuery.data.projectId}
               mode={view === "history" ? "visible" : "hidden"}
             >
-              <Suspense fallback={<p>Loading research history…</p>}>
+              <Suspense fallback={<p role="status">正在加载数据…</p>}>
                 <ResearchHistory
                   projectId={healthQuery.data.projectId}
                   daemonUnavailable={daemonUnavailable}
@@ -433,11 +436,11 @@ export default function App() {
             </RetainedView>
           )}
           {view === "help" ? (
-            <Suspense fallback={<p>Loading help…</p>}>
+            <Suspense fallback={<p role="status">正在加载帮助…</p>}>
               <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />
             </Suspense>
           ) : view === "settings" ? (
-            <Suspense fallback={<p>Loading settings…</p>}>
+            <Suspense fallback={<p role="status">正在加载设置…</p>}>
               <ApplicationSettings health={healthQuery.data} />
             </Suspense>
           ) : view === "samples" ? (
@@ -445,8 +448,8 @@ export default function App() {
               fallback={
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Loading samples"
-                  detail="The physical sample registry is being prepared."
+                  title="正在加载样品"
+                  detail="正在准备样品登记信息。"
                 />
               }
             >
@@ -465,8 +468,8 @@ export default function App() {
               fallback={
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Loading analyses"
-                  detail="The cross-run analysis workspace is being prepared."
+                  title="正在加载分析比较"
+                  detail="正在准备跨运行分析工作区。"
                 />
               }
             >
@@ -511,8 +514,8 @@ export default function App() {
               fallback={
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Loading instruments"
-                  detail="The instrument workspace is being prepared."
+                  title="正在加载设备与驱动"
+                  detail="正在准备设备与驱动工作区。"
                 />
               }
             >
@@ -539,24 +542,33 @@ function ConnectionState({
   status?: string;
 }) {
   const label = pending
-    ? "Connecting"
-    : reachable
-      ? titleCase(status ?? "connected")
-      : "Disconnected";
+    ? "正在连接"
+    : !reachable
+      ? "连接已断开"
+      : status === "ok"
+        ? "已连接"
+        : status === "degraded"
+          ? "服务受限"
+          : status
+            ? `状态未知（${status}）`
+            : "状态未知";
   return (
     <span
       className={classes(
         "inline-flex min-h-7 items-center gap-2 rounded-sm border-0 bg-transparent px-2 text-xs font-bold max-[680px]:min-h-[30px] max-[680px]:px-[9px] max-[680px]:text-xs max-[460px]:max-w-[120px] max-[460px]:overflow-hidden max-[460px]:text-ellipsis max-[460px]:whitespace-nowrap",
-        reachable ? "text-text-soft" : "text-red",
+        pending || reachable ? "text-text-soft" : "text-red",
       )}
       role="status"
+      title={label}
     >
       <span
         className={classes(
           "size-[7px] flex-none rounded-full",
-          reachable
-            ? "bg-accent shadow-[0_0_0_3px_var(--color-accent-soft)]"
-            : "bg-red shadow-[0_0_0_3px_rgb(116_131_146_/_12%)]",
+          !pending && !reachable
+            ? "bg-red shadow-[0_0_0_3px_rgb(116_131_146_/_12%)]"
+            : !pending && status === "ok"
+              ? "bg-accent shadow-[0_0_0_3px_var(--color-accent-soft)]"
+              : "bg-text-dim",
         )}
         aria-hidden="true"
       />
@@ -567,7 +579,10 @@ function ConnectionState({
 
 function DetailEmpty({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
   return (
-    <div className="grid min-h-[590px] place-content-center justify-items-center text-center max-[880px]:min-h-[500px]">
+    <div
+      role="status"
+      className="grid min-h-[590px] place-content-center justify-items-center text-center max-[880px]:min-h-[500px]"
+    >
       <span
         className="mb-4 grid size-[55px] place-items-center rounded-[14px] border border-line bg-panel-soft text-text-soft [&>svg]:w-[23px]"
         aria-hidden="true"

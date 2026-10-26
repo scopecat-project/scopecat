@@ -343,11 +343,11 @@ test("retains launch inputs across workspaces and invalidates previews without s
       "运行详情 / Runs",
     ]) {
       await page
-        .getByRole("navigation", { name: "Project sections" })
+        .getByRole("navigation", { name: "项目页面" })
         .getByRole("button", { name: destination, exact: true })
         .click();
       await page
-        .getByRole("navigation", { name: "Project sections" })
+        .getByRole("navigation", { name: "项目页面" })
         .getByRole("button", { name: "实验 / Experiments", exact: true })
         .click();
       await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("ramsey");

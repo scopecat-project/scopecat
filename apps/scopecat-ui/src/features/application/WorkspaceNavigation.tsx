@@ -55,6 +55,15 @@ const groups = [
     ],
   },
 ] as const;
+export function projectViewLabel(view: ProjectView): string {
+  for (const group of groups) {
+    for (const [id, label] of group.items) {
+      if (id === view) return label;
+    }
+  }
+  return view;
+}
+
 const icons = [Activity, Boxes, Boxes, Cable, Settings2];
 
 export function WorkspaceNavigation({
@@ -174,7 +183,7 @@ export function WorkspaceNavigation({
         role={drawerActive ? "dialog" : "group"}
         tabIndex={-1}
         aria-modal={drawerActive ? true : undefined}
-        aria-label="Workspace navigation"
+        aria-label="工作区导航"
       >
         <div className="workspace-brand">
           ◈ <strong>Scopecat</strong>
@@ -186,7 +195,7 @@ export function WorkspaceNavigation({
             <X size={18} />
           </button>
         </div>
-        <nav aria-label="Project sections">
+        <nav aria-label="项目页面">
           {groups.map((group, index) => {
             const Icon = icons[index] ?? CircleHelp;
             return (
@@ -214,7 +223,7 @@ export function WorkspaceNavigation({
                       {label}
                       <small>{english}</small>
                       {id === "decisions" && decisionAttention && (
-                        <span className="workspace-attention" aria-label="Decision attention">
+                        <span className="workspace-attention" aria-label="待处理判断">
                           {decisionAttention}
                         </span>
                       )}

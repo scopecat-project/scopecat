@@ -51,7 +51,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     await expect(page.getByRole("region", { name: "原始提交" })).toBeFocused();
     await expect(page.getByRole("region", { name: "原始提交" })).toBeInViewport();
     await page
-      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("navigation", { name: "项目页面" })
       .getByRole("button", { name: /Configuration$/, exact: true })
       .click();
     await page.route("**/api/v1/experiment-launcher", async (route) => {
@@ -70,7 +70,7 @@ test("reopens a lost launch receipt after context changes without a second submi
       await route.fulfill({ response, json: changed });
     });
     await page
-      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("navigation", { name: "项目页面" })
       .getByRole("button", { name: /Experiments$/, exact: true })
       .click();
     await expect(page.getByRole("region", { name: "核实恢复的实验", exact: true })).toBeVisible();

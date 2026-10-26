@@ -144,6 +144,55 @@ it("replaces an unfinished first registry request and ignores its late 502", asy
   expect(client.getQueryState(["samples"])?.status).toBe("success");
 });
 
+it("labels pending, healthy, degraded and unknown health without implying success", async () => {
+  let resolveHealth!: (value: typeof healthy) => void;
+  vi.mocked(getHealth).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveHealth = resolve;
+      }),
+  );
+  renderApp();
+  expect(screen.getByText("正在连接", { exact: true })).toBeVisible();
+  expect(screen.queryByText("连接已中断。")).toBeNull();
+  expect(screen.getByRole("button", { name: "刷新项目数据" })).toHaveAttribute("aria-busy", "true");
+  await act(async () => resolveHealth(healthy));
+  expect(await screen.findByText("已连接", { exact: true })).toBeVisible();
+  expect(screen.getByText("Test lab · 样品")).toBeVisible();
+  for (const [status, label] of [
+    ["degraded", "服务受限"],
+    ["future_status", "状态未知（future_status）"],
+    ["", "状态未知"],
+  ] as const) {
+    await act(async () => {
+      client.setQueryData(["health"], { ...healthy, status });
+    });
+    expect(await screen.findByText(label, { exact: true })).toBeVisible();
+    expect(screen.queryByText("已连接", { exact: true })).toBeNull();
+  }
+});
+
+it.each([
+  { desktop: false, expected: /请确认 Scopecat 正在运行，再刷新此页面/, absent: /设置 → 重启应用/ },
+  { desktop: true, expected: /设置 → 重启应用/, absent: /再刷新此页面/ },
+])(
+  "keeps recovery guidance specific to desktop=$desktop and clears it after recovery",
+  async ({ desktop, expected, absent }) => {
+    if (desktop) vi.stubGlobal("pywebview", { api: {} });
+    vi.mocked(getHealth).mockRejectedValue(unavailable);
+    renderApp();
+    expect(await screen.findByText("连接已中断。")).toBeVisible();
+    expect(screen.getByText(/已保存的记录仍保留/)).toBeVisible();
+    expect(screen.getByText(expected)).toBeVisible();
+    expect(screen.queryByText(absent)).toBeNull();
+    vi.mocked(getHealth).mockResolvedValue(healthy);
+    await checkHealth();
+    expect(await screen.findByText("已连接", { exact: true })).toBeVisible();
+    expect(screen.queryByText("连接已中断。")).toBeNull();
+    expect(window.location.search).toBe("?sample=chip-a17");
+  },
+);
+
 function sampleView(): SampleView {
   const revision = {
     sample_id: "chip-a17",
