@@ -105,6 +105,38 @@ test("exact review identity and shared latest-wins across browser views", async 
     await create("b");
     await expect(page.getByRole("button", { name: /检查 b/ })).toBeVisible();
     await expect(page).toHaveURL(/#reviews\/a$/);
+    // Real daemon data with bounded transient read failures; no implicit compilation on recovery.
+    let compileRequests = 0;
+    page.on("request", (outgoing) => {
+      if (outgoing.method() === "POST" && outgoing.url().endsWith("/compile")) compileRequests++;
+    });
+    await page.getByRole("spinbutton", { name: "amplitude" }).fill("2");
+    await page.getByRole("button", { name: "自由坐标", exact: true }).click();
+    for (const endpoint of [api, `${api}/a`]) {
+      await page.route(endpoint, (route) =>
+        route.fulfill({ status: 503, json: { detail: "temporary read failure" } }),
+      );
+      await expect(page.getByRole("alert").filter({ hasText: "未提交输入已保留" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "编译波形", exact: true })).toBeDisabled();
+      await expect(page.getByRole("spinbutton", { name: "amplitude" })).toHaveValue("2");
+      await page.unroute(endpoint);
+      await expect(page.getByRole("button", { name: "编译波形", exact: true })).toBeEnabled();
+      await expect(page.getByRole("spinbutton", { name: "amplitude" })).toHaveValue("2");
+      await expect(page.getByRole("button", { name: "自由坐标", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    }
+    expect(compileRequests).toBe(0);
+    await page.getByRole("button", { name: /检查 b/ }).click();
+    await expect(page.getByText("会话：b", { exact: true })).toBeVisible();
+    await expect(page.getByRole("spinbutton", { name: "amplitude" })).toHaveValue("0");
+    await expect(page.getByRole("button", { name: "精确匹配", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await page.getByRole("button", { name: /检查 a/ }).click();
+    await expect(page.getByText("会话：a", { exact: true })).toBeVisible();
     const other = await context.newPage();
     await other.goto(`${base}/#reviews/a`);
     const claim = async () => {
