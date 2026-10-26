@@ -1,3 +1,4 @@
+import type { FrozenLaunchPreview, PreviewRequest } from "./FrozenLaunchPreview";
 import {
   historicalConfiguration,
   type HistoricalConfiguration,
@@ -81,6 +82,7 @@ export interface LaunchDraft {
   defaultActor?: string;
   revision: number;
   preview?: LaunchPreview;
+  previewRequest?: PreviewRequest;
   requestKey?: string;
   pending: false | "preview" | "prepare" | "submit";
   error: string;
@@ -93,6 +95,10 @@ export interface LaunchPreparation {
   finish: () => void;
 }
 interface DraftContext {
+  frozenPreviews: FrozenLaunchPreview[];
+  openFrozenPreview: number | undefined;
+  setOpenFrozenPreview: (id: number | undefined) => void;
+  retainPreview: () => void;
   copyHistoricalConfiguration: (
     runId: string,
     source: HistoricalConfiguration,
@@ -196,6 +202,7 @@ export function invalidateDraft(draft: LaunchDraft, notice: string): LaunchDraft
     ...draft,
     revision: draft.revision + 1,
     preview: undefined,
+    previewRequest: undefined,
     requestKey: undefined,
     pending: false,
     error: "",
@@ -225,6 +232,9 @@ function ProjectDraft({
   children: ReactNode;
 }) {
   const [draft, setDraftState] = useState<LaunchDraft>();
+  const [frozenPreviews, setFrozenPreviews] = useState<FrozenLaunchPreview[]>([]);
+  const [openFrozenPreview, setOpenFrozenPreview] = useState<number>();
+  const frozenSequence = useRef(0);
   const [operatorError, setOperatorError] = useState<string>();
   const operatorSelection = useRef(0);
   const operatorPending = useRef(false);
@@ -569,6 +579,25 @@ function ProjectDraft({
   return (
     <Context
       value={{
+        frozenPreviews,
+        openFrozenPreview,
+        setOpenFrozenPreview,
+        retainPreview: () => {
+          const current = latest.current;
+          if (!current?.preview || !current.previewRequest || current.pending) return;
+          const id = ++frozenSequence.current;
+          const frozen = structuredClone({
+            id,
+            projectId,
+            draftId: current.draftId,
+            draftRevision: current.revision,
+            definition: current.definition,
+            request: current.previewRequest,
+            preview: current.preview,
+          });
+          setFrozenPreviews((items) => [...items, frozen]);
+          setOpenFrozenPreview(id);
+        },
         projectId,
         copyHistoricalConfiguration: async (runId, source) => {
           const configuration = historicalConfiguration(source);

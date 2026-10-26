@@ -36,6 +36,7 @@ export function LaunchForm({
   const supported = fields.length === allFields.length;
   const {
     projectId,
+    retainPreview,
     selectConfiguration,
     draft: retained,
     update,
@@ -263,6 +264,7 @@ export function LaunchForm({
       update((current) => ({
         ...current,
         preview: checked,
+        previewRequest: startAfter && draft.preview === checked ? current.previewRequest : request,
         requestKey:
           current.preview?.request_hash === checked.request_hash &&
           JSON.stringify(current.preview.reviewed) === JSON.stringify(checked.reviewed) &&
@@ -667,6 +669,9 @@ export function LaunchForm({
             scenario={result.reviewed.binding.scenario}
             label="Reviewed execution scenario"
           />
+          <Button type="button" onClick={retainPreview}>
+            保留并查看此次检查
+          </Button>
           <PreflightSummary preview={result} />
           <ControlSummary fields={entry.controls} values={result.controls} />
         </>
