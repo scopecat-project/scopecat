@@ -14,7 +14,6 @@ from typing import cast
 
 from scripts.app_build.release_identity import ReleaseIdentity
 
-from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat_app.author_resources import PACKAGES, verify_resources
 from scopecat_app.bundle import (
     MANIFEST,
@@ -35,6 +34,17 @@ class AuthorRelease:
     build_number: int
     build_id: str
     build_tools: dict[str, object]
+
+    @classmethod
+    def from_document(cls, document: dict[str, object]) -> AuthorRelease:
+        """Read only the fixed context fields; metadata() validates their values."""
+        return cls(
+            public_version=cast("str", document.get("public_version")),
+            release_version=cast("str", document.get("release_version")),
+            build_number=cast("int", document.get("build_number")),
+            build_id=cast("str", document.get("build_id")),
+            build_tools=cast("dict[str, object]", document.get("build_tools")),
+        )
 
     def metadata(self, target: dict[str, str]) -> dict[str, object]:
         if not isinstance(cast("object", self.public_version), str):
@@ -151,14 +161,10 @@ def native_author_inputs(root: Path, verified: Bundle) -> AuthorInputs:
     The full runtime stays with that producer; only its identity is projected.
     Compare provenance with the hashed runtime record, never with product modules.
     """
+    from scopecat.kernel.content_identity import sha256_json_hash
+
     document = cast("dict[str, object]", cast("object", verified))
-    release = AuthorRelease(
-        public_version=cast("str", document.get("public_version")),
-        release_version=cast("str", document.get("release_version")),
-        build_number=cast("int", document.get("build_number")),
-        build_id=cast("str", document.get("build_id")),
-        build_tools=cast("dict[str, object]", document.get("build_tools")),
-    )
+    release = AuthorRelease.from_document(document)
     release.metadata(verified["target"])
     if release.build_id != sha256_json_hash(
         {key: verified[key] for key in ("sources", "files", "target")}

@@ -209,6 +209,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
         projected = json.loads((payload / "bundle.json").read_bytes())
         # Platform declarations are simulated; projection and report writing are real.
         projected["target"]["platform"] = target
+        projected["build_tools"]["portable_python"]["target"]["platform"] = target
         write_json(payload / "bundle.json", projected)
         reports = tmp_path / platform / "reports"
         reports.mkdir()
@@ -566,3 +567,26 @@ def test_release_rejects_mixed_batch_dependencies(
     write_json(path, document)
     with pytest.raises(ValueError, match="First-party dependency must select"):
         assets.assemble(root, SHA, config)
+
+
+@pytest.mark.parametrize("damage", ["missing", "invalid", "wrong-target"])
+def test_release_assembly_requires_portable_provenance_even_with_matching_report(
+    release: tuple[Path, Path], damage: str
+) -> None:
+    root, config = release
+    manifest = root / "windows-bundle.json"
+    document = json.loads(manifest.read_text())
+    if damage == "missing":
+        del document["build_tools"]
+    elif damage == "invalid":
+        document["build_tools"]["portable_python"] = []
+    else:
+        document["build_tools"]["portable_python"]["target"]["platform"] = "linux"
+    write_json(manifest, document)
+    report = root / "windows-native-release.json"
+    native = json.loads(report.read_text())
+    native["bundle_sha256"] = file_hash(manifest)
+    write_json(report, native)
+    with pytest.raises(ValueError, match="provenance"):
+        assets.assemble(root, SHA, config)
+    assert not (root / "release.json").exists()

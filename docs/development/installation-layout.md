@@ -275,6 +275,8 @@ file inventory; Python provenance must match the hashed runtime record and
 archive, and the author recipe must match the installed interpreter. Core/server
 wheels are copied from this delivery, not rebuilt. Windows installer versions and
 release assembly consume the resulting format 2 identity and wheel hashes.
+Assembly also requires complete build provenance with the same target as the
+author bundle; a matching report checksum alone does not satisfy that contract.
 The legacy path adapter and installer remain supported; neither the runtime
 archive nor the third-party wheelhouse producer changes in this projection step. See
 [teaching acceptance limits](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits)
