@@ -6,10 +6,39 @@ complete connection graph. These are descriptive historical records: recording a
 connection note does not assert that it is the current wiring, and attaching a
 room-temperature measurement does not qualify it as a cryogenic calibration.
 
-The first delivery provides Python and HTTP APIs. Workbench browsing and selecting
-an apparatus object as an executable experiment subject are separate follow-ups.
+Python and HTTP APIs record this history. In the workbench, **Data → 实验装置历史**
+provides read-only browsing. Selecting an apparatus object as an executable
+experiment subject remains separate work.
 Existing sample identities, launch selections and active configuration are unchanged.
 Do not register an artificial sample just to store a line's notes.
+
+## Browse retained history in Data
+
+Open **Data → 实验装置历史** and search by name, alias or object ID. Search is
+limited to the current data space's catalog. Matching names do not establish
+identity: each result shows its object ID and catalog. Select a result, then an
+observation. The description in the observation is resolved from its exact
+`catalog_id`, `object_id`, `revision` and `content_hash`, independently of the
+search result's description.
+
+The history pages use recording order. Observation time (`observed_at`) and
+recording time (`recorded_at`) remain separate; an unknown observation time stays
+unknown. A correction links to its original record, including across pages. Both
+remain readable. Absence of a correction on the current page does not establish
+that an observation has no successor or is currently valid.
+
+Click **下载原文件** to download an attachment's original bytes. Photos and slides
+are not rendered inline. Linked runs open only the observation's exact run IDs.
+Use Back/Forward or return to Data to keep the selected object, observation,
+search and page. The retained Data view also preserves the run-return reading
+position. A missing object, description or observation produces an explicit error;
+it does not select a first or latest replacement. Switching data spaces requires
+an explicit new selection.
+
+The browser journey is covered with synthetic same-name lines, description
+revisions, cross-page corrections, same-name attachments with distinct bytes,
+exact run navigation and a read-only request audit. Native desktop host download
+save/cancel behavior has not been exercised by that browser test.
 
 ## Register and find a line
 
