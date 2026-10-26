@@ -1,6 +1,6 @@
 [project]
 site_name = "Scopecat"
-site_description = "User and contributor documentation for Scopecat."
+site_description = "Scopecat 用户与贡献者文档。"
 site_author = "Scopecat contributors"
 site_url = "https://scopecat-project.github.io/scopecat/"
 repo_url = "https://github.com/scopecat-project/scopecat"
@@ -9,60 +9,60 @@ edit_uri = "edit/main/docs/"
 copyright = "Copyright &copy; 2026 Scopecat contributors"
 
 nav = [
-  { "Home" = "index.md" },
-  { "Getting started" = [
+  { "首页" = "index.md" },
+  { "入门" = [
     "getting-started/index.md",
-    { "Download and install" = "getting-started/install.md" },
-    { "Learning paths" = "getting-started/learning-path.md" },
-    { "First experiment" = "getting-started/quickstart.md" },
+    { "下载与安装" = "getting-started/install.md" },
+    { "学习路径" = "getting-started/learning-path.md" },
+    { "第一个实验" = "getting-started/quickstart.md" },
   ] },
-  { "Tutorials" = [
+  { "教程" = [
     "tutorials/index.md",
-    { "Practice and Notebook lessons" = "tutorials/teaching-sandboxes.md" },
-    { "Edit a starter experiment" = "tutorials/starter-authoring.md" },
+    { "练习与 Notebook 课程" = "tutorials/teaching-sandboxes.md" },
+    { "修改入门实验" = "tutorials/starter-authoring.md" },
   ] },
-  { "How-to guides" = [
+  { "操作指南" = [
     "how-to/index.md",
-    { "Compute and typed reads" = "how-to/compute-and-read.md" },
-    { "Write an experiment" = "how-to/write-an-experiment.md" },
-    { "Refresh author code" = "how-to/refresh-author-code.md" },
-    { "Scans and grouped analysis" = "how-to/grouped-analysis.md" },
-    { "Register measurement targets" = "how-to/register-measurement-targets.md" },
-    { "Record apparatus history" = "how-to/record-apparatus-history.md" },
-    { "Keep experimental batches distinct" = "how-to/experimental-batches.md" },
-    { "Select session context" = "how-to/select-session-context.md" },
-    { "Collect diagnostics" = "how-to/collect-diagnostics.md" },
-    { "Number runs in collections" = "how-to/record-collections.md" },
-    { "Organize research history" = "how-to/research-history.md" },
-    { "Control instruments" = "how-to/control-instruments.md" },
-    { "Use measurement data" = "how-to/use-measurement-data.md" },
-    { "Open and share data files" = "how-to/open-and-share-data.md" },
-    { "Compare retained runs" = "how-to/retained-run-comparison.md" },
-    { "Edit experiment parameters" = "how-to/manage-configuration.md" },
-    { "Automate parameter calibration" = "how-to/automate-parameter-calibration.md" },
-    { "Maintain local application" = "how-to/maintain-application.md" },
-    { "Maintain executable setup" = "how-to/maintain-executable-setup.md" },
-    { "Start with dynamic parameters" = "how-to/declare-dynamic-parameters.md" },
-    { "Declare parameter models" = "how-to/declare-parameter-models.md" },
-    { "Share saved configuration" = "how-to/share-configuration.md" },
-    { "Exchange parameter tables" = "how-to/exchange-parameter-tables.md" },
-    { "Back up and restore" = "how-to/backup-and-restore.md" },
+    { "计算与类型化读取" = "how-to/compute-and-read.md" },
+    { "编写实验" = "how-to/write-an-experiment.md" },
+    { "刷新作者代码" = "how-to/refresh-author-code.md" },
+    { "扫描与分组分析" = "how-to/grouped-analysis.md" },
+    { "注册测量目标" = "how-to/register-measurement-targets.md" },
+    { "记录装置历史" = "how-to/record-apparatus-history.md" },
+    { "区分实验批次" = "how-to/experimental-batches.md" },
+    { "选择会话上下文" = "how-to/select-session-context.md" },
+    { "收集诊断信息" = "how-to/collect-diagnostics.md" },
+    { "为集合中的运行编号" = "how-to/record-collections.md" },
+    { "整理研究历史" = "how-to/research-history.md" },
+    { "控制仪器" = "how-to/control-instruments.md" },
+    { "使用测量数据" = "how-to/use-measurement-data.md" },
+    { "打开与共享数据文件" = "how-to/open-and-share-data.md" },
+    { "比较保留的运行" = "how-to/retained-run-comparison.md" },
+    { "编辑实验参数" = "how-to/manage-configuration.md" },
+    { "自动化参数校准" = "how-to/automate-parameter-calibration.md" },
+    { "维护本地应用" = "how-to/maintain-application.md" },
+    { "维护可执行配置" = "how-to/maintain-executable-setup.md" },
+    { "从动态参数开始" = "how-to/declare-dynamic-parameters.md" },
+    { "声明参数模型" = "how-to/declare-parameter-models.md" },
+    { "共享已保存的配置" = "how-to/share-configuration.md" },
+    { "交换参数表" = "how-to/exchange-parameter-tables.md" },
+    { "备份与恢复" = "how-to/backup-and-restore.md" },
   ] },
-  { "Concepts" = [
+  { "概念" = [
     "concepts/index.md",
-    { "Glossary" = "concepts/glossary.md" },
-    { "Chips and physical samples" = "concepts/samples.md" },
-    { "Experiment authoring dataflow" = "concepts/experiment-dataflow.md" },
-    { "Ordinary Python analysis" = "guides/ordinary-analysis.md" },
-    { "Verify fitted candidates" = "how-to/verify-parameter-candidates.md" },
-    { "Publish working-point calibration" = "how-to/publish-working-point-calibration.md" },
-    { "Automate working-point calibration" = "how-to/automate-working-point-calibration.md" },
-    { "Analysis publication" = "concepts/analysis-publication.md" },
+    { "术语表" = "concepts/glossary.md" },
+    { "芯片与物理样品" = "concepts/samples.md" },
+    { "实验编写数据流" = "concepts/experiment-dataflow.md" },
+    { "常规 Python 分析" = "guides/ordinary-analysis.md" },
+    { "验证拟合候选" = "how-to/verify-parameter-candidates.md" },
+    { "发布工作点校准" = "how-to/publish-working-point-calibration.md" },
+    { "自动化工作点校准" = "how-to/automate-working-point-calibration.md" },
+    { "分析结果发布" = "concepts/analysis-publication.md" },
   ] },
-  { "Reference" = [
+  { "参考" = [
     "reference/index.md",
-    { "Command-line interface" = "reference/cli.md" },
-    { "Author folders and project layout" = "reference/project-layout.md" },
+    { "命令行接口" = "reference/cli.md" },
+    { "作者目录与项目布局" = "reference/project-layout.md" },
     { "Python API" = [
       "reference/python/index.md",
       { "scopecat" = "reference/python/scopecat.md" },
@@ -70,39 +70,39 @@ nav = [
       { "scopecat_quantum.authoring" = "reference/python/quantum.md" },
     ] },
   ] },
-  { "Extensions" = [
+  { "扩展" = [
     "extensions/index.md",
-    { "Instruments" = "extensions/instruments.md" },
-    { "Payload codecs" = "extensions/payload-codecs.md" },
-    { "Quantum" = "extensions/quantum.md" },
-    { "Connection residency" = "extensions/connection-residency.md" },
+    { "仪器" = "extensions/instruments.md" },
+    { "载荷编解码器" = "extensions/payload-codecs.md" },
+    { "量子" = "extensions/quantum.md" },
+    { "连接驻留" = "extensions/connection-residency.md" },
   ] },
-  { "Development" = [
+  { "开发" = [
     "development/index.md",
-    { "Current platform status" = "development/platform-status.md" },
-    { "Repository map" = "development/repository-map.md" },
-    { "Reference gallery retirement" = "development/reference-gallery-retirement.md" },
-    { "Data compatibility policy" = "development/data-compatibility.md" },
-    { "Installation layout" = "development/installation-layout.md" },
-    { "Core workflow evaluations" = "development/workflow-evaluations.md" },
-    { "Architecture" = [
+    { "当前平台状态" = "development/platform-status.md" },
+    { "仓库结构" = "development/repository-map.md" },
+    { "参考示例库退役" = "development/reference-gallery-retirement.md" },
+    { "数据兼容性策略" = "development/data-compatibility.md" },
+    { "安装布局" = "development/installation-layout.md" },
+    { "核心工作流评估" = "development/workflow-evaluations.md" },
+    { "架构" = [
       "development/architecture/index.md",
-      { "Recoverable editing and native storage" = "development/architecture/draft-recovery.md" },
-      { "Experiment workbench contexts" = "development/architecture/experiment-contexts.md" },
-      { "Apparatus history and configuration ownership" = "development/architecture/apparatus-history.md" },
-      { "Configuration ownership and fences" = "development/architecture/configuration-ownership.md" },
-      { "Workspace and data binding contract" = "development/architecture/workspace-bindings.md" },
-      { "Structured authoring direction" = "development/architecture/structured-authoring.md" },
-      { "Experiment execution" = "development/architecture/execution.md" },
-      { "Lab daemon" = "development/architecture/daemon.md" },
+      { "可恢复编辑与原生存储" = "development/architecture/draft-recovery.md" },
+      { "实验工作台上下文" = "development/architecture/experiment-contexts.md" },
+      { "装置历史与配置归属" = "development/architecture/apparatus-history.md" },
+      { "配置归属与边界" = "development/architecture/configuration-ownership.md" },
+      { "工作区与数据绑定契约" = "development/architecture/workspace-bindings.md" },
+      { "结构化编写方向" = "development/architecture/structured-authoring.md" },
+      { "实验执行" = "development/architecture/execution.md" },
+      { "实验室守护进程" = "development/architecture/daemon.md" },
     ] },
-    { "Scalability benchmarks" = "development/scalability.md" },
-    { "Project charter" = "development/project-charter.md" },
+    { "可扩展性基准" = "development/scalability.md" },
+    { "项目章程" = "development/project-charter.md" },
   ] },
 ]
 
 [project.theme]
-language = "en"
+language = "zh"
 features = [
   "content.action.edit",
   "content.action.view",
@@ -118,12 +118,12 @@ features = [
 [[project.theme.palette]]
 scheme = "default"
 toggle.icon = "lucide/sun"
-toggle.name = "Switch to dark mode"
+toggle.name = "切换到深色模式"
 
 [[project.theme.palette]]
 scheme = "slate"
 toggle.icon = "lucide/moon"
-toggle.name = "Switch to light mode"
+toggle.name = "切换到浅色模式"
 
 [project.markdown_extensions.admonition]
 
