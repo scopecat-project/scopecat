@@ -159,6 +159,18 @@ it("labels pending, healthy, degraded and unknown health without implying succes
   await act(async () => resolveHealth(healthy));
   expect(await screen.findByText("已连接", { exact: true })).toBeVisible();
   expect(screen.getByText("Test lab · 样品")).toBeVisible();
+  await act(async () => {
+    await client.cancelQueries({ queryKey: ["procedure-decisions"] });
+    client
+      .getQueryCache()
+      .find({ queryKey: ["procedure-decisions"] })!
+      .setState({
+        status: "error",
+        error: unavailable,
+      });
+  });
+  expect(await screen.findByLabelText("待处理判断")).toHaveTextContent("状态未知");
+  const connection = within(screen.getByText("Test lab · 样品").closest("header")!);
   for (const [status, label] of [
     ["degraded", "服务受限"],
     ["future_status", "状态未知（future_status）"],
@@ -167,8 +179,8 @@ it("labels pending, healthy, degraded and unknown health without implying succes
     await act(async () => {
       client.setQueryData(["health"], { ...healthy, status });
     });
-    expect(await screen.findByText(label, { exact: true })).toBeVisible();
-    expect(screen.queryByText("已连接", { exact: true })).toBeNull();
+    expect(await connection.findByText(label, { exact: true })).toBeVisible();
+    expect(connection.queryByText("已连接", { exact: true })).toBeNull();
   }
 });
 
