@@ -3,16 +3,21 @@
 import json
 import queue
 import subprocess
+import sys
 import threading
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import psutil
 import pytest
 from filelock import FileLock
 from scripts import dev
-from scripts.app_build import dev_resources
+from scripts.app_build import author_materials, delivery, dev_resources
+from scripts.app_build.author_resources import AuthorInputs
 
+from scopecat_app.bundle import file_hash, inventory, target_identity
 from scopecat_app.desktop_session import DesktopSession
 
 
@@ -272,9 +277,10 @@ def test_source_reminder_reads_metadata_but_cache_still_hashes_bytes(
     assert dev_resources.source_stamp(tmp_path) != stamp
 
 
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
 @pytest.mark.parametrize("damage", ["missing", "corrupt"])
 def test_cached_payload_repairs_native_wheel_and_extraction(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str, platform: str
 ):
     import hashlib
     import io
@@ -287,27 +293,39 @@ def test_cached_payload_repairs_native_wheel_and_extraction(
         archive.writestr("webview/__init__.py", "reviewed native host")
     wheel_bytes = content.getvalue()
     builds: list[Path] = []
-    monkeypatch.setattr(dev_resources.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        dev_resources, "sys", SimpleNamespace(platform=platform, path=list(sys.path))
+    )
+    monkeypatch.setattr(dev_resources, "source_identity", lambda _: "bytes")
     monkeypatch.setattr(dev_resources, "resource_identity", lambda _: "identity")
-    monkeypatch.setattr(dev_resources, "verify_resources", lambda _: None)
+    monkeypatch.setattr(
+        dev_resources, "verify_resources", lambda _: {"sources": {"public": "bytes"}}
+    )
 
     def verify(wheels: Path) -> None:
         if (wheels / "pywebview-1.whl").read_bytes() != wheel_bytes:
             raise ValueError("corrupt wheel")
 
-    def build_delivery(destination: Path, **_kwargs: object) -> Path:
+    def materials(
+        _source: Path,
+        destination: Path,
+        _gui: Path,
+        *,
+        native_wheels: Path,
+        source_digest: str,
+    ) -> AuthorInputs:
         builds.append(destination)
-        (destination / "wheels").mkdir(parents=True)
-        (destination / "wheels/pywebview-1.whl").write_bytes(wheel_bytes)
-        return destination
+        native_wheels.mkdir()
+        (native_wheels / "pywebview-1.whl").write_bytes(wheel_bytes)
+        return AuthorInputs(destination, {}, {"public": source_digest}, {})
 
-    def project(_delivery: Path, destination: Path) -> Path:
+    def project(_inputs: AuthorInputs, destination: Path) -> Path:
         destination.mkdir()
         (destination / "identity").write_text("immutable author resources")
         return destination
 
     monkeypatch.setattr(dev_resources, "_verify_native_wheel", verify)
-    monkeypatch.setattr("scripts.app_build.delivery.build_delivery", build_delivery)
+    monkeypatch.setattr(dev_resources, "prepare_materials", materials)
     monkeypatch.setattr(dev_resources, "build_author_resources", project)
     payload = dev_resources.prepare_resources(source, cache)
     wheel = cache / "native-wheels/identity/pywebview-1.whl"
@@ -352,3 +370,192 @@ def test_ui_handoff_tracks_backend_restart(tmp_path: Path):
     assert after.backend == "http://127.0.0.1:8101"
     assert after.ui == before.ui
     assert after.owner_created == before.owner_created
+
+
+def test_material_preparation_runs_only_export_and_two_source_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "uv.lock").write_text('[[package]]\nname="uv"\nversion="locked"\n')
+    for name in ("scopecat", "scopecat-server"):
+        package = source / "packages" / name
+        package.mkdir(parents=True)
+        (package / "pyproject.toml").write_text(
+            f'[project]\nname="{name}"\nversion="0.1.0"\n'
+        )
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("Vite handoff")
+    calls: list[list[str]] = []
+
+    def run(command: list[str], *, cwd: Path) -> None:
+        assert cwd == source
+        calls.append(command)
+        if command[1] == "export":
+            Path(command[-1]).write_text("dependency==1 --hash=sha256:locked\n")
+        else:
+            assert command[1] == "build"
+            package = Path(command[-1]).name.replace("-", "_")
+            wheels = Path(command[command.index("--out-dir") + 1])
+            (wheels / ".gitignore").write_text("*")
+            with zipfile.ZipFile(
+                wheels / f"{package}-1-py3-none-any.whl", "w"
+            ) as wheel:
+                wheel.writestr(
+                    f"{package}-1.dist-info/METADATA", f"Name: {package}\nVersion: 1\n"
+                )
+
+    monkeypatch.setattr(
+        author_materials,
+        "sys",
+        SimpleNamespace(platform="linux", executable=sys.executable),
+    )
+    monkeypatch.setattr(author_materials, "version", lambda _: "locked")
+    monkeypatch.setattr(author_materials.toolchain, "baseline", lambda _: "3.15.1")
+    monkeypatch.setattr(delivery, "package_version", lambda *_a, **_k: None)
+    monkeypatch.setattr(delivery, "run", run)
+    inputs = author_materials.prepare(
+        source,
+        tmp_path / "materials",
+        gui,
+        source_digest="source-bytes",
+        native_wheels=tmp_path / "native",
+    )
+    assert [c[1] for c in calls] == ["export", "build", "build"]
+    assert "--locked" in calls[0] and "--no-emit-local" in calls[0]
+    assert all(
+        "--no-python-downloads" in c and "--build-constraints" in c for c in calls[1:]
+    )
+    assert inputs.sources == {"public": "source-bytes"}
+    assert {p.name for p in inputs.root.iterdir()} == {
+        "gui",
+        "wheels",
+        "requirements.lock",
+    }
+    constraints = (inputs.root / "requirements.lock").read_text()
+    assert "dependency==1 --hash=sha256:locked" in constraints
+    assert "scopecat==1 --hash=sha256:" in constraints
+    assert "scopecat_server==1 --hash=sha256:" in constraints
+    assert not (tmp_path / "native").exists()
+    dev_resources.build_author_resources(inputs, tmp_path / "projected")
+    assert "wheels/.gitignore" not in inputs.files
+
+
+@pytest.fixture
+def prepared_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, list[str]]:
+    source = tmp_path / "source"
+    module = source / "packages/scopecat/src/scopecat/example.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("one")
+    calls: list[str] = []
+
+    def materials(
+        _source: Path,
+        destination: Path,
+        gui: Path,
+        *,
+        source_digest: str,
+        native_wheels: Path,
+    ) -> AuthorInputs:
+        import shutil
+
+        calls.append(source_digest)
+        shutil.copytree(gui, destination / "gui")
+        (destination / "wheels").mkdir()
+        for package in ("scopecat", "scopecat_server"):
+            (destination / "wheels" / f"{package}-1-py3-none-any.whl").write_text(
+                module.read_text()
+            )
+        (destination / "requirements.lock").write_text("locked")
+        files = inventory(destination, ("gui", "wheels"))
+        files["requirements.lock"] = file_hash(destination / "requirements.lock")
+        return AuthorInputs(
+            destination, target_identity(), {"public": source_digest}, files
+        )
+
+    monkeypatch.setattr(dev_resources, "prepare_materials", materials)
+    monkeypatch.setattr(dev_resources, "_native_ready", lambda *_: True)
+    monkeypatch.setattr(
+        dev_resources, "sys", SimpleNamespace(platform="linux", version=sys.version)
+    )
+    monkeypatch.setattr(
+        dev_resources, "resource_identity", dev_resources.source_identity
+    )
+    return source, module, calls
+
+
+def test_source_resources_first_reuse_damage_and_byte_changes(
+    prepared_source: tuple[Path, Path, list[str]], tmp_path: Path
+):
+    import os
+
+    source, module, calls = prepared_source
+    cache = tmp_path / "cache"
+    first = dev_resources.prepare_resources(source, cache)
+    assert dev_resources.prepare_resources(source, cache) == first
+    assert len(calls) == 1
+    ui = source / "apps/scopecat-ui/src/App.tsx"
+    ui.parent.mkdir(parents=True)
+    ui.write_text("HMR edit")
+    assert dev_resources.prepare_resources(source, cache) == first
+    assert len(calls) == 1
+    (first / "requirements.lock").unlink()
+    assert dev_resources.prepare_resources(source, cache) == first
+    assert len(calls) == 2
+    (first / "gui/index.html").write_text("corrupt")
+    assert dev_resources.prepare_resources(source, cache) == first
+    assert len(calls) == 3
+    manifest = first / "bundle.json"
+    document = json.loads(manifest.read_text())
+    document["sources"] = {"public": "wrong source"}
+    manifest.write_text(json.dumps(document))
+    assert dev_resources.prepare_resources(source, cache) == first
+    assert len(calls) == 4
+    stat = module.stat()
+    module.write_text("two")
+    os.utime(module, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    second = dev_resources.prepare_resources(source, cache)
+    assert second != first and first.is_dir()
+    assert len(calls) == 5
+    assert "development-ui.marker" in {p.name for p in (second / "gui").iterdir()}
+
+
+def test_source_change_during_projection_never_publishes(
+    prepared_source: tuple[Path, Path, list[str]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source, module, _ = prepared_source
+    cache = tmp_path / "cache"
+    key = dev_resources.resource_identity(source)
+    project = dev_resources.build_author_resources
+
+    def changed(inputs: AuthorInputs, destination: Path) -> Path:
+        result = project(inputs, destination)
+        module.write_text("changed during projection")
+        return result
+
+    monkeypatch.setattr(dev_resources, "build_author_resources", changed)
+    with pytest.raises(ValueError, match="Source changed"):
+        dev_resources.prepare_resources(source, cache)
+    assert not (cache / key).exists()
+
+
+@pytest.mark.parametrize("damage", ["version", "hash"])
+def test_native_materials_reject_lock_drift_before_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str
+):
+    patch = author_materials.cocoa_dependency
+    version = "other" if damage == "version" else patch.UPSTREAM_VERSION
+    digest = "0" * 64 if damage == "hash" else patch.UPSTREAM_SHA256
+    (tmp_path / "uv.lock").write_text(
+        f'[[package]]\nname="pywebview"\nversion="{version}"\n'
+        f'wheels=[{{url="https://files.pythonhosted.org/pywebview-{patch.UPSTREAM_VERSION}-py3-none-any.whl",hash="sha256:{digest}"}}]\n'
+    )
+    monkeypatch.setattr(author_materials, "sys", SimpleNamespace(platform="darwin"))
+    with pytest.raises(ValueError, match="differs from the reviewed repair"):
+        author_materials.prepare_native_wheel(tmp_path, tmp_path / "native")
+    assert not (tmp_path / "native").exists()
