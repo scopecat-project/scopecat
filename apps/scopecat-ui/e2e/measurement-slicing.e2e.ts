@@ -129,7 +129,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
     await expect(page.getByTestId("measurement-slice-summary")).toContainText("Mode = low");
     await expect(page.getByTestId("measurement-charts")).toBeVisible();
     await expectSlice({ repeat: 0, mode: 0 }, 12);
-    const chart = page.getByLabel("Measurement chart", { exact: true });
+    const chart = page.getByLabel("测量图表", { exact: true });
     const phase = (await chart
       .locator("option")
       .filter({ hasText: "phase" })
@@ -179,7 +179,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
           "Bias slice",
           "Repeat slice",
           "Mode slice",
-          "Measurement chart",
+          "测量图表",
         ]) {
           await expect(page.getByLabel(label, { exact: true })).toBeInViewport({ ratio: 1 });
         }
@@ -211,7 +211,9 @@ test("browses independent dimensions and keeps a compatible signal across slices
         })
         .toBe(true);
       const plotBounds = (await plot.boundingBox())!;
-      const sourceBounds = (await page.getByTestId("plot-position").boundingBox())!;
+      const sourceBounds = (await page
+        .getByText("图表数据来源与点索引", { exact: true })
+        .boundingBox())!;
       expect(sourceBounds.y).toBeGreaterThanOrEqual(plotBounds.y + plotBounds.height);
       await testInfo.attach(`chart-focus-${viewport.width}`, {
         body: await page.screenshot({
@@ -414,14 +416,77 @@ test("contains large-axis controls and multi-series plots in normal and focused 
     await page.keyboard.press("Escape");
 
     const traceRunId = JSON.parse(uv(["python", "-c", TRACE_SEED, project])) as string;
+    // Keep the native connection and exercise App's actual project-event invalidation.
+    await page.addInitScript(() => {
+      const streams: EventSource[] = [];
+      Object.assign(globalThis, { measurementStreams: streams });
+      const NativeEventSource = globalThis.EventSource;
+      globalThis.EventSource = class extends NativeEventSource {
+        constructor(url: string | URL, options?: EventSourceInit) {
+          super(url, options);
+          streams.push(this);
+        }
+      };
+    });
     await page.goto(`${baseUrl}/?run=${encodeURIComponent(traceRunId)}#runs`);
+    await expectContainedPlots(page, 1);
+    const runtime = page.locator("figure [role=img] [_echarts_instance_]");
+    const instance = await runtime.getAttribute("_echarts_instance_");
+    expect(instance).toBeTruthy();
+    const plotBounds = (await runtime.boundingBox())!;
+    await page.mouse.move(
+      plotBounds.x + plotBounds.width / 2,
+      plotBounds.y + plotBounds.height / 2,
+    );
+    await page.keyboard.down("Shift");
+    await page.mouse.wheel(0, -300);
+    await page.keyboard.up("Shift");
+    let finishRefresh: (() => void) | undefined;
+    const traceRoute = "**/measurements/traces/query";
+    await page.route(traceRoute, async (route) => {
+      const response = await route.fetch();
+      await new Promise<void>((resolve) => {
+        finishRefresh = resolve;
+      });
+      await route.fulfill({ response });
+    });
+    try {
+      await page.evaluate((eventRunId) => {
+        const streams = (globalThis as unknown as { measurementStreams: EventSource[] })
+          .measurementStreams;
+        const stream = streams.find((source) => source.readyState !== EventSource.CLOSED)!;
+        stream.dispatchEvent(
+          new MessageEvent("project", {
+            data: JSON.stringify({
+              event_id: 999999,
+              kind: "measurements_sealed",
+              run_id: eventRunId,
+              payload: {},
+            }),
+          }),
+        );
+      }, traceRunId);
+      await expect(
+        page.getByText("正在刷新有界波形；图表显示上次成功读取的数据。", { exact: true }),
+      ).toBeVisible();
+      await expect(runtime).toHaveAttribute("_echarts_instance_", instance!);
+      await expect.poll(() => Boolean(finishRefresh)).toBe(true);
+      finishRefresh!();
+      await expect(
+        page.getByText("正在刷新有界波形；图表显示上次成功读取的数据。", { exact: true }),
+      ).toHaveCount(0);
+      await expect(runtime).toHaveAttribute("_echarts_instance_", instance!);
+    } finally {
+      finishRefresh?.();
+      await page.unroute(traceRoute);
+    }
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 844 });
       for (const focused of [false, true]) {
         if (focused) await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
         await expectContainedPlots(page, 1);
         await expect(page.locator("figure").getByRole("img")).toHaveAccessibleDescription(
-          /2 data series/,
+          /2 个数据系列/,
         );
         await testInfo.attach(`overlay-${width}-${focused}`, {
           body: await page
