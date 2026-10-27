@@ -51,6 +51,7 @@ uv run --locked --package reference-lab --group test pytest testing/reference_la
 
 ## Find the relevant documentation
 
+- [作者单位入口评估](author-interface-assessment.md)：静态签名、归一化与一个输出 cast 的有限结论。
 - [Platform status](platform-status.md): 当前能力与证据边界。
 - [Architecture](architecture/index.md): product contracts and design decisions.
 - [Repository map](repository-map.md): package ownership and generated code.
