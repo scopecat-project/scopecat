@@ -82,15 +82,13 @@ test("repeats a retained ordinary analysis with its original source after author
     const data = page.getByRole("region", { name: "数据", exact: true });
     await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
     await data.getByLabel("起始时间（本地）").fill("2020-01-01T00:00");
-    const importedResults = data.getByRole("region", { name: "Imported results" });
-    await expect(importedResults.getByText(`Runs: ${seed.run}`, { exact: true })).toBeVisible();
-    await expect(
-      importedResults.getByRole("button", { name: "Review data cleanup…" }),
-    ).toBeHidden();
-    await importedResults.getByRole("button", { name: "View data", exact: true }).click();
-    await expect(data.getByRole("region", { name: "Captured run" })).toBeVisible();
+    const importedResults = data.getByRole("region", { name: "导入的结果" });
+    await expect(importedResults.getByText(`入口运行：${seed.run}`, { exact: true })).toBeVisible();
+    await expect(importedResults.getByRole("button", { name: "预览数据清理…" })).toBeHidden();
+    await importedResults.getByRole("button", { name: "查看数据", exact: true }).click();
+    await expect(data.getByRole("region", { name: "文件中的运行" })).toBeVisible();
     await page.goBack();
-    await expect(data.getByRole("region", { name: "Captured run" })).toBeHidden();
+    await expect(data.getByRole("region", { name: "文件中的运行" })).toBeHidden();
     await expect(data.getByLabel("起始时间（本地）")).toHaveValue("2020-01-01T00:00");
     await data.getByText("研究项目管理", { exact: true }).click();
     await data.getByLabel("项目名称", { exact: true }).fill("Retained comparison");

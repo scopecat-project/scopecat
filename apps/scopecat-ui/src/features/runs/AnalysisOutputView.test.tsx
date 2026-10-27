@@ -42,7 +42,7 @@ describe("AnalysisOutputView", () => {
     expect(within(table).getByText("5.1")).toBeVisible();
     expect(within(table).getByText("是")).toBeVisible();
     expect(within(table).getByText("—")).toBeVisible();
-    expect(screen.getByText("Metadata")).toBeVisible();
+    expect(screen.getByText("元数据")).toBeVisible();
     expect(screen.getByText(/"source": "notebook"/)).toBeInTheDocument();
   });
 
@@ -127,7 +127,7 @@ describe("AnalysisOutputView", () => {
     expect(screen.getByText("analysis-fit-r1-fit-report")).toBeVisible();
     expect(screen.getByText("fit-report.md")).toBeVisible();
     expect(screen.getByText("text/markdown")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Download file" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "下载文件" })).toBeVisible();
   });
 
   it.each([true, false])(

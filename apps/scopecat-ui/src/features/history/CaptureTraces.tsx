@@ -64,24 +64,24 @@ export function CaptureTraces({
   });
   if (plans.length === 0 || records.length === 0) return null;
   return (
-    <section className="space-y-3" aria-label="Captured waveforms">
-      <p>Waveforms for one record on this page. Long traces use bounded min/max sampling.</p>
+    <section className="space-y-3" aria-label="文件中的波形">
+      <p>显示本页一条记录的波形。长波形使用有界最小值/最大值抽样。</p>
       <Field>
-        Waveform record{" "}
+        波形记录{" "}
         <Select
           value={recordIndex}
           onChange={(event) => setRecordIndex(Number(event.target.value))}
         >
           {records.map((record, index) => (
             <option key={index} value={index}>
-              {selection === "acquired" ? "Acquisition" : "Selected record"} {offset + index + 1} ·
-              Point {record.point_index}
+              {selection === "acquired" ? "采集" : "选定记录"} {offset + index + 1} · 点{" "}
+              {record.point_index}
             </option>
           ))}
         </Select>
       </Field>
       <Field>
-        Waveform{" "}
+        波形{" "}
         <Select
           value={plan?.id}
           onChange={(event) => {
@@ -98,14 +98,14 @@ export function CaptureTraces({
       </Field>
       {entityAxis && (
         <Field>
-          Waveform entity{" "}
+          波形对象{" "}
           <Select
             value={entityIndex ?? "all"}
             onChange={(event) =>
               setEntityIndex(event.target.value === "all" ? undefined : Number(event.target.value))
             }
           >
-            <option value="all">All entities (bounded preview)</option>
+            <option value="all">全部对象（有界预览）</option>
             {entityAxis.members.map((member) => (
               <option key={member.identity} value={member.index}>
                 {member.label}

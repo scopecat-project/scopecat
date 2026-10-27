@@ -32,7 +32,7 @@ it("opens from another page and preserves history through cancel, failure, and s
   expect((await screen.findByRole("alert")).textContent).toBe("Invalid capture");
   expect(window.location.hash).toBe("#runs");
   fireEvent.keyDown(window, { key: "o", metaKey: true });
-  await screen.findByText("File imported.");
+  await screen.findByText("文件已导入。");
   expect(new URLSearchParams(window.location.search).get("capture")).toBe(hash);
   expect(window.location.hash).toBe("#history");
   expect(screen.queryByRole("alert")).toBeNull();

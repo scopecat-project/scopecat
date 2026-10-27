@@ -1254,7 +1254,7 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   });
   fireEvent.change(screen.getByLabelText("工作点"), { target: { value: "bias-a" } });
   await waitFor(() => expect(cache.isFetching({ queryKey: ["research"] })).toBe(0));
-  await screen.findByText("Source: space-a");
+  await screen.findByText("来源：space-a");
   fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
   await waitFor(() => {
     expect(
@@ -1303,8 +1303,8 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   fireEvent.click(screen.getByText("研究项目管理"));
   expect(screen.getByLabelText("项目名称")).toHaveValue("");
   expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
-  await screen.findByText("Source: space-b");
-  expect(screen.queryByText("Source: space-a")).toBeNull();
+  await screen.findByText("来源：space-b");
+  expect(screen.queryByText("来源：space-a")).toBeNull();
   expect(requests.every((request) => request.method === "GET")).toBe(true);
 });
 

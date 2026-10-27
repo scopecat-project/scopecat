@@ -37,12 +37,12 @@ export function ImportedCaptures({
   const pending = save.isPending;
   const error = save.error ?? captures.error;
   return (
-    <section className={detailCard} aria-label="Imported results">
+    <section className={detailCard} aria-label="导入的结果">
       <div className="flex items-center gap-3">
-        <h3 className="font-semibold">Imported results</h3>
+        <h3 className="font-semibold">导入的结果</h3>
         {desktop && (
           <details>
-            <summary className="cursor-pointer text-sm">Import data</summary>
+            <summary className="cursor-pointer text-sm">导入数据</summary>
             <button
               className={secondaryButton}
               disabled={unavailable || pending}
@@ -51,27 +51,27 @@ export function ImportedCaptures({
                 requestOpenFile();
               }}
             >
-              Open Scopecat file…
+              打开 Scopecat 文件…
             </button>
           </details>
         )}
       </div>
-      {pending && <p role="status">Saving file…</p>}
-      {save.data && !pending && <p role="status">Saved to {save.data}</p>}
+      {pending && <p role="status">正在保存文件…</p>}
+      {save.data && !pending && <p role="status">已保存到 {save.data}</p>}
       {error && <p role="alert">{error.message}</p>}
-      {captures.isLoading && <p>Loading imported data…</p>}
-      {captures.data?.pages[0]?.length === 0 && <p>No imported data yet.</p>}
+      {captures.isLoading && <p>正在加载导入数据…</p>}
+      {captures.data?.pages[0]?.length === 0 && <p>暂无导入数据。</p>}
       <ul className="space-y-3">
         {captures.data?.pages.flat().map((capture) => (
           <li key={capture.content_hash} className="min-w-0 break-words border-b border-line py-3">
-            <p>Runs: {capture.roots.join(", ")}</p>
-            <p className="text-sm text-text-dim">Source: {capture.source_project_id}</p>
+            <p>入口运行：{capture.roots.join(", ")}</p>
+            <p className="text-sm text-text-dim">来源：{capture.source_project_id}</p>
             <button
               className={secondaryButton}
               disabled={unavailable}
               onClick={() => selectCapture(capture.content_hash)}
             >
-              View data
+              查看数据
             </button>
             {desktop && (
               <button
@@ -81,11 +81,11 @@ export function ImportedCaptures({
                   save.mutate(capture.content_hash);
                 }}
               >
-                Save a copy…
+                另存副本…
               </button>
             )}
             <details className="mt-2">
-              <summary className="cursor-pointer text-sm">Manage imported result</summary>
+              <summary className="cursor-pointer text-sm">管理导入的结果</summary>
               <ClearData
                 captures={[capture.content_hash]}
                 onCleared={() => {
@@ -103,7 +103,7 @@ export function ImportedCaptures({
           disabled={captures.isFetchingNextPage}
           onClick={() => void captures.fetchNextPage()}
         >
-          More imported data
+          加载更多导入数据
         </button>
       )}
     </section>

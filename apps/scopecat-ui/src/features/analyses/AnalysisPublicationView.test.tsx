@@ -100,9 +100,9 @@ it("keeps saved output and units visible while exact input evidence is collapsed
   expect(screen.getByRole("table", { name: "Saved fit" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Frequency (GHz)" })).toBeVisible();
   expect(screen.getByText("显示 1 / 2 行")).toBeVisible();
-  expect(screen.getByText("Inputs")).not.toBeVisible();
+  expect(screen.getByText("输入")).not.toBeVisible();
   fireEvent.click(screen.getByText("来源与执行证据"));
-  expect(screen.getByText("Inputs")).toBeVisible();
+  expect(screen.getByText("输入")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "input-not-owner" }));
   expect(openRun).toHaveBeenCalledWith("input-not-owner");
   fireEvent.click(screen.getByText("来源与执行证据"));

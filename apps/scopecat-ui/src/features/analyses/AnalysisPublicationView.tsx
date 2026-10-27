@@ -34,17 +34,26 @@ export function AnalysisPublicationView({
                 <strong className="text-xs">{output.title}</strong>
                 {output.producedBy ? (
                   <small className="text-xs text-text-dim">
-                    Produced by {formatExecutionOutput(output.producedBy)}
+                    生成自 {formatExecutionOutput(output.producedBy)}
                   </small>
                 ) : output.derivedFrom ? (
                   <small className="text-xs text-text-dim">
-                    Derived from {formatExecutionOutput(output.derivedFrom.source)} via{" "}
+                    派生自 {formatExecutionOutput(output.derivedFrom.source)}，适配器：{" "}
                     {output.derivedFrom.adapter}
                   </small>
                 ) : null}
               </span>
               <span className="text-xs font-[750] text-text-dim uppercase">
-                {titleCase(output.kind)}
+                {
+                  {
+                    table: "表格",
+                    figure: "图形",
+                    dataset: "数据集",
+                    fact: "事实",
+                    artifact: "附件",
+                    parameter_change_proposal: "参数提议",
+                  }[output.kind]
+                }
               </span>
             </header>
             <AnalysisOutputView output={output} getArtifactDownload={getArtifactDownload} />
@@ -68,7 +77,7 @@ export function AnalysisPublicationView({
           {analysis.inputs.length > 0 ? (
             <section className="rounded-[7px] border border-line bg-panel p-[9px]">
               <h4 className="mt-0 mb-2 text-xs font-extrabold tracking-[0.06em] text-text-dim uppercase">
-                Inputs
+                输入
               </h4>
               <ul className="m-0 grid list-none gap-2 p-0">
                 {analysis.inputs.map((input) => {
@@ -137,7 +146,7 @@ export function AnalysisPublicationView({
           {analysis.executions.length > 0 ? (
             <section className="rounded-[7px] border border-line bg-panel p-[9px]">
               <h4 className="mt-0 mb-2 text-xs font-extrabold tracking-[0.06em] text-text-dim uppercase">
-                Execution evidence
+                执行证据
               </h4>
               <ul className="m-0 grid list-none gap-2 p-0">
                 {analysis.executions.map((execution) => (
@@ -145,8 +154,7 @@ export function AnalysisPublicationView({
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <strong>{execution.id}</strong>
                       <span className="text-text-dim">
-                        {titleCase(execution.access)} · {execution.outputs.length} result
-                        {execution.outputs.length === 1 ? "" : "s"}
+                        {titleCase(execution.access)} · {execution.outputs.length} 项结果
                       </span>
                     </div>
                     <code

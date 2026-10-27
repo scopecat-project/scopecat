@@ -429,19 +429,19 @@ export function measurementTraceChart(
 }
 
 export function measurementTraceStatus(preview: MeasurementTracePreview): string {
-  const series = `${preview.returned_series_count.toLocaleString()} plotted`;
+  const series = `${preview.returned_series_count.toLocaleString()} 条已绘制`;
   const failures =
     preview.failures.length > 0
-      ? `${preview.failures.length.toLocaleString()} unavailable`
+      ? `${preview.failures.length.toLocaleString()} 条不可用`
       : undefined;
   const pending =
     preview.inspected_series_count - preview.returned_series_count - preview.failures.length;
-  const pendingStatus = pending > 0 ? `${pending.toLocaleString()} not durable` : undefined;
-  const selection = `${preview.inspected_series_count.toLocaleString()} of ${preview.selected_series_count.toLocaleString()} selected examined`;
-  const truncation = preview.truncated_series ? "series limit applied" : undefined;
+  const pendingStatus = pending > 0 ? `${pending.toLocaleString()} 条尚未持久保存` : undefined;
+  const selection = `已检查 ${preview.inspected_series_count.toLocaleString()}/${preview.selected_series_count.toLocaleString()} 条选定序列`;
+  const truncation = preview.truncated_series ? "已应用序列数量上限" : undefined;
   const samples = preview.samples_reduced
-    ? `${preview.returned_sample_count.toLocaleString()} of ${preview.source_sample_count.toLocaleString()} source samples plotted · unavailable samples omitted or min/max downsampling applied`
-    : `${preview.returned_sample_count.toLocaleString()} source samples plotted`;
+    ? `已绘制 ${preview.returned_sample_count.toLocaleString()}/${preview.source_sample_count.toLocaleString()} 个原始采样点 · 已略去不可用采样点或采用最小值/最大值降采样`
+    : `${preview.returned_sample_count.toLocaleString()} 个原始采样点已绘制`;
   return [series, failures, pendingStatus, selection, truncation, samples]
     .filter((item) => item !== undefined)
     .join(" · ");

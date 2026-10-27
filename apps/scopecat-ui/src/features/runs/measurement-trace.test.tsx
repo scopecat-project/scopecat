@@ -253,7 +253,7 @@ describe("measurement trace visualization", () => {
     ).toBeVisible();
     expect(
       screen.getByText(
-        "2 plotted · 2 of 8 selected examined · series limit applied · 5 of 100 source samples plotted · unavailable samples omitted or min/max downsampling applied",
+        "2 条已绘制 · 已检查 2/8 条选定序列 · 已应用序列数量上限 · 已绘制 5/100 个原始采样点 · 已略去不可用采样点或采用最小值/最大值降采样",
       ),
     ).toBeVisible();
   });
@@ -303,9 +303,9 @@ describe("measurement trace visualization", () => {
       />,
     );
 
-    expect(screen.getByText("Reading bounded trace preview…")).toBeVisible();
+    expect(screen.getByText("正在读取有界波形预览…")).toBeVisible();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(screen.queryByText("Unavailable · overload")).not.toBeInTheDocument();
+    expect(screen.queryByText("不可用 · overload")).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-cohort/)).not.toBeInTheDocument();
 
     view.rerender(
@@ -316,15 +316,15 @@ describe("measurement trace visualization", () => {
         traceError={new Error("offline")}
       />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("Trace unavailable: offline");
+    expect(screen.getByRole("alert")).toHaveTextContent("波形不可用： offline");
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(screen.queryByText("Unavailable · overload")).not.toBeInTheDocument();
+    expect(screen.queryByText("不可用 · overload")).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-cohort/)).not.toBeInTheDocument();
   });
 
   it("formats trace status without claiming an absent reduction", () => {
     expect(measurementTraceStatus(tracePreview())).toBe(
-      "1 plotted · 1 of 1 selected examined · 3 source samples plotted",
+      "1 条已绘制 · 已检查 1/1 条选定序列 · 3 个原始采样点已绘制",
     );
   });
 
@@ -391,8 +391,8 @@ describe("measurement trace visualization", () => {
 
     expect(screen.getByText("all or nothing · cohort readout-cohort")).toBeVisible();
     expect(screen.getByText("small multiples")).toBeVisible();
-    expect(screen.getByText("Unavailable · overload")).toBeVisible();
-    expect(screen.getByText("2/3 samples available · overload")).toBeVisible();
+    expect(screen.getByText("不可用 · overload")).toBeVisible();
+    expect(screen.getByText("2/3 个采样点可用 · overload")).toBeVisible();
     fireEvent.click(screen.getByText("Delay 88 ns · Q1"));
     expect(screen.getByText("readout · sample → q1-response")).toBeVisible();
     expect(screen.getByText("channel-b")).toBeVisible();
