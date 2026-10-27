@@ -283,7 +283,7 @@ test("compares retained signals, saves independent results and starts edited sug
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
     const followups = page.getByRole("region", {
-      name: "Experiments started from this conclusion",
+      name: "以此结论为来源的后续实验",
     });
     await followups.getByRole("button").filter({ hasText: "#3" }).click();
     await expect(page).toHaveURL(new RegExp(`run=${nextRun}`));
@@ -374,7 +374,7 @@ with ScientificExchange(sys.argv[1]) as capture:
     await page.getByRole("link", { name: "打开精确来源结论", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     await page
-      .getByRole("region", { name: "Experiments started from this conclusion" })
+      .getByRole("region", { name: "以此结论为来源的后续实验" })
       .getByRole("button")
       .filter({ hasText: "#3" })
       .click();

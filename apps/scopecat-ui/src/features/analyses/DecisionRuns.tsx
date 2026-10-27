@@ -37,16 +37,14 @@ export function DecisionRuns({
   const ids = [...new Set(query.data?.pages.flatMap((page) => page.run_ids))];
   return (
     <section
-      aria-label="Experiments started from this conclusion"
+      aria-label="以此结论为来源的后续实验"
       className="min-w-0 rounded border border-line p-3 text-sm"
     >
-      <h4>Experiments started from this conclusion</h4>
-      <p className="text-xs text-text-dim">
-        Decision source only; these runs are not inputs to this analysis.
-      </p>
-      {query.isPending && <p>Reading follow-up experiments…</p>}
-      {query.error && <p role="alert">Follow-up experiments unavailable: {query.error.message}</p>}
-      {query.isSuccess && !ids.length && <p>No admitted runs yet.</p>}
+      <h4>以此结论为来源的后续实验</h4>
+      <p className="text-xs text-text-dim">这里只记录决策来源；这些后续运行不是本分析的输入。</p>
+      {query.isPending && <p>正在读取后续实验…</p>}
+      {query.error && <p role="alert">后续实验不可用： {query.error.message}</p>}
+      {query.isSuccess && !ids.length && <p>暂无已接纳的运行。</p>}
       <div className="flex flex-wrap gap-2">
         {ids.map((id) => (
           <DecisionRun key={id} id={id} projectId={projectId!} onOpenRun={onOpenRun} />
@@ -58,7 +56,7 @@ export function DecisionRuns({
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
         >
-          Load older follow-up experiments
+          加载更早的后续实验
         </button>
       )}
     </section>

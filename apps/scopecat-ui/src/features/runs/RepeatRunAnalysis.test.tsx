@@ -84,8 +84,8 @@ it("executes only an explicit repeat with the saved source and settings, then li
   vi.stubGlobal("fetch", fetch);
   show();
   expect(fetch).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Repeat with saved settings" }));
-  expect(await screen.findByRole("link", { name: "View saved result" })).toHaveAttribute(
+  fireEvent.click(screen.getByRole("button", { name: "按已保存设置重新分析" }));
+  expect(await screen.findByRole("link", { name: "查看已保存的结果" })).toHaveAttribute(
     "href",
     "?run=retained-run&run-analysis=new-analysis#runs",
   );
@@ -105,7 +105,7 @@ it.each([
 ])("rejects settings outside this saved whole-run publication: %j", (change) => {
   expect(() =>
     repeatRequest(JSON.stringify({ ...request, ...change }), "retained-run", analysis),
-  ).toThrow("matching settings");
+  ).toThrow("匹配的整次运行分析设置");
 });
 it("does not submit changed artifact content or automatically retry a lost response", async () => {
   const fetch = vi.fn(async () =>
@@ -113,12 +113,12 @@ it("does not submit changed artifact content or automatically retry a lost respo
   );
   vi.stubGlobal("fetch", fetch);
   show();
-  fireEvent.click(screen.getByRole("button", { name: "Repeat with saved settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "按已保存设置重新分析" }));
   await screen.findByRole("alert");
   expect(fetch).toHaveBeenCalledTimes(1);
   fetch.mockRejectedValue(new TypeError("lost response"));
-  fireEvent.click(screen.getByRole("button", { name: "Repeat with saved settings" }));
-  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("No automatic retry"));
+  fireEvent.click(screen.getByRole("button", { name: "按已保存设置重新分析" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("未自动提交重试"));
   expect(fetch).toHaveBeenCalledTimes(2);
 });
 
@@ -133,9 +133,9 @@ it("keeps an uncertain execution explicit and never retries its POST", async () 
   });
   vi.stubGlobal("fetch", fetch);
   show();
-  fireEvent.click(screen.getByRole("button", { name: "Repeat with saved settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "按已保存设置重新分析" }));
   await screen.findByRole("alert");
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(screen.getByRole("alert")).toHaveTextContent("Check analysis history");
-  expect(screen.queryByRole("link", { name: "View saved result" })).toBeNull();
+  expect(screen.getByRole("alert")).toHaveTextContent("请先检查分析历史");
+  expect(screen.queryByRole("link", { name: "查看已保存的结果" })).toBeNull();
 });

@@ -188,10 +188,10 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         `?procedure=${analyzed.procedure}&run-analysis=${analyzed.analysis}&run=${runId}#runs`,
       );
       await analysisLink.click();
-      const linkedAnalysis = page.getByRole("region", { name: "Linked analysis", exact: true });
+      const linkedAnalysis = page.getByRole("region", { name: "链接的分析结果", exact: true });
       await expect(
         linkedAnalysis.getByRole("heading", {
-          name: /^Retained temperature summary · revision [1-9]\d*$/,
+          name: /^Retained temperature summary · 修订 [1-9]\d*$/,
         }),
       ).toBeVisible();
       await expect(linkedAnalysis.getByTestId("publication-id")).toHaveText(analyzed.analysis);

@@ -59,11 +59,11 @@ it("requires explicit input and execution, keeps units/source, and opens the ret
   expect(fetch).not.toHaveBeenCalled();
   expect(screen.getByLabelText("Expected Frequency")).toBeRequired();
   expect(screen.getByLabelText("Tolerance")).toHaveValue(50);
-  expect(screen.getByLabelText("Tolerance unit")).toHaveValue("MHz");
+  expect(screen.getByLabelText("Tolerance 单位")).toHaveValue("MHz");
   fireEvent.change(screen.getByLabelText("Expected Frequency"), { target: { value: "4.8" } });
-  fireEvent.change(screen.getByLabelText("Expected Frequency unit"), { target: { value: "GHz" } });
-  fireEvent.click(screen.getByRole("button", { name: "Run Check expected peak" }));
-  expect(await screen.findByRole("link", { name: "View saved result" })).toHaveAttribute(
+  fireEvent.change(screen.getByLabelText("Expected Frequency 单位"), { target: { value: "GHz" } });
+  fireEvent.click(screen.getByRole("button", { name: "执行 Check expected peak" }));
+  expect(await screen.findByRole("link", { name: "查看已保存的结果" })).toHaveAttribute(
     "href",
     "?run=original-run&run-analysis=verification-result#runs",
   );
@@ -80,7 +80,7 @@ it("requires explicit input and execution, keeps units/source, and opens the ret
     },
   ]);
   fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "25" } });
-  expect(screen.queryByRole("link", { name: "View saved result" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "查看已保存的结果" })).toBeNull();
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 it("does not offer a guessed action when the retained declaration has none", () => {
@@ -101,10 +101,10 @@ it("does not automatically retry a lost analysis response", async () => {
   });
   vi.stubGlobal("fetch", fetch);
   show({ ...catalog, actions: [{ ...catalog.actions[0]!, inputs: [] }] });
-  fireEvent.click(screen.getByRole("button", { name: "Run Check expected peak" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Check analysis history");
+  fireEvent.click(screen.getByRole("button", { name: "执行 Check expected peak" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("请先检查分析历史");
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(screen.queryByRole("link", { name: "View saved result" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "查看已保存的结果" })).toBeNull();
 });
 it("preserves an explicitly empty string instead of silently restoring its default", async () => {
   const bodies: unknown[] = [];
@@ -127,8 +127,8 @@ it("preserves an explicitly empty string instead of silently restoring its defau
     ],
   });
   fireEvent.change(screen.getByLabelText("Label"), { target: { value: "" } });
-  fireEvent.click(screen.getByRole("button", { name: "Run Check expected peak" }));
-  await screen.findByRole("link", { name: "View saved result" });
+  fireEvent.click(screen.getByRole("button", { name: "执行 Check expected peak" }));
+  await screen.findByRole("link", { name: "查看已保存的结果" });
   expect(bodies[0]).toMatchObject({ arguments: { label: "" } });
 });
 
@@ -141,11 +141,11 @@ it("loads the author directory only after expansion and explains old declaration
     </QueryClientProvider>,
   );
   expect(fetch).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText("Analyze this result"));
-  expect(await screen.findByText(/No analyses were declared/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("分析此结果"));
+  expect(await screen.findByText(/保存的源码未声明分析/)).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByText("Analyze this result"));
-  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("分析此结果"));
+  fireEvent.click(screen.getByText("分析此结果"));
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 it("keeps edited inputs when the optional section is collapsed and reopened", async () => {
@@ -156,11 +156,11 @@ it("keeps edited inputs when the optional section is collapsed and reopened", as
       <RunAnalysisActionsCard runId="original-run" />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("分析此结果"));
   const tolerance = await screen.findByLabelText("Tolerance");
   fireEvent.change(tolerance, { target: { value: "25" } });
-  fireEvent.click(screen.getByText("Analyze this result"));
-  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("分析此结果"));
+  fireEvent.click(screen.getByText("分析此结果"));
   expect(screen.getByLabelText("Tolerance")).toHaveValue(25);
   expect(fetch).toHaveBeenCalledTimes(1);
 });
@@ -184,21 +184,19 @@ it("reloads a failed directory explicitly without executing or retrying on reope
       <RunAnalysisActionsCard runId={catalog.run_id} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("分析此结果"));
   expect(await screen.findByRole("status")).toHaveTextContent(
     "Retained execution environment is unavailable",
   );
-  expect(screen.getByText(/If the application connection was interrupted/)).toHaveTextContent(
-    "or ask its author for help",
-  );
+  expect(screen.getByText(/若应用连接中断/)).toHaveTextContent("或联系作者");
   expect(
     screen.queryByText(/daemon connection|Restore the original author environment/),
   ).toBeNull();
-  fireEvent.click(screen.getByText("Analyze this result"));
-  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("分析此结果"));
+  fireEvent.click(screen.getByText("分析此结果"));
   expect(fetch).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Reload declared analyses" }));
-  fireEvent.click(screen.getByRole("button", { name: /Reload/ }));
+  fireEvent.click(screen.getByRole("button", { name: "重新加载分析声明" }));
+  fireEvent.click(screen.getByRole("button", { name: /重新加载/ }));
   expect(fetch).toHaveBeenCalledTimes(2);
   finish(Response.json(catalog));
   expect(await screen.findByLabelText("Tolerance")).toHaveValue(50);
@@ -215,9 +213,9 @@ it("does not confuse missing retained identity with an empty declaration", async
       <RunAnalysisActionsCard runId={catalog.run_id} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Analyze this result"));
-  expect(await screen.findByText(/no saved author source identity/)).toBeInTheDocument();
-  expect(screen.queryByText(/No analyses were declared/)).toBeNull();
+  fireEvent.click(screen.getByText("分析此结果"));
+  expect(await screen.findByText(/未保存作者源码身份/)).toBeInTheDocument();
+  expect(screen.queryByText(/保存的源码未声明分析/)).toBeNull();
 });
 
 it("resets expansion on run change and ignores the preceding run's pending directory", async () => {
@@ -239,14 +237,14 @@ it("resets expansion on run change and ignores the preceding run's pending direc
     </QueryClientProvider>
   );
   const view = render(card(catalog.run_id));
-  fireEvent.click(screen.getByText("Analyze this result"));
-  await screen.findByText("Loading declared analyses…");
+  fireEvent.click(screen.getByText("分析此结果"));
+  await screen.findByText("正在加载已声明的分析…");
   view.rerender(card("second-run"));
   finish(Response.json(catalog));
-  expect(screen.getByText("Analyze this result").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("分析此结果").closest("details")).not.toHaveAttribute("open");
   expect(screen.queryByLabelText("Tolerance")).toBeNull();
   expect(fetch).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("分析此结果"));
   await screen.findByLabelText("Tolerance");
   expect(fetch).toHaveBeenCalledTimes(2);
 });
@@ -324,7 +322,7 @@ it("does not show a preceding run's edits or late analysis receipt on the next r
   finish(Response.json({ code_revision: catalog.code_revision, analysis_id: "first-result" }));
   await vi.waitFor(() => expect(client.isMutating()).toBe(0));
   expect(screen.getByLabelText("Label")).toHaveValue("original");
-  expect(screen.queryByRole("link", { name: "View saved result" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "查看已保存的结果" })).toBeNull();
 });
 
 it("keeps an in-flight action locked when navigating away and back", async () => {
@@ -349,7 +347,7 @@ it("keeps an in-flight action locked when navigating away and back", async () =>
   view.rerender(form("second-run"));
   expect(screen.getByRole("button")).toBeEnabled();
   view.rerender(form(catalog.run_id));
-  expect(screen.getByRole("button", { name: "Analyzing…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在分析…" })).toBeDisabled();
   fireEvent.submit(screen.getByRole("form"));
   expect(fetch).toHaveBeenCalledTimes(1);
   finish(Response.json({ code_revision: catalog.code_revision, analysis_id: "first-result" }));

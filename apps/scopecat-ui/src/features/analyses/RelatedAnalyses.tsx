@@ -183,26 +183,25 @@ function RunResults({
     <section
       ref={region}
       className="grid min-w-0 gap-2 rounded-lg border border-line p-4"
-      aria-label="Analyses"
+      aria-label="分析结果"
     >
-      <h3 className="m-0 text-sm font-semibold">Analyses</h3>
+      <h3 className="m-0 text-sm font-semibold">分析结果</h3>
       <p className="m-0 text-xs text-text-dim">
-        Results saved on this run or directly using its measurements or configuration, wherever
-        saved. Each publication appears once.
+        显示保存在本次运行上的结果，以及直接使用其测量或配置的结果（无论保存在哪）。每个发布只显示一次。
       </p>
       {linked && (
-        <section className="min-w-0 rounded border border-line p-3" aria-label="Linked analysis">
+        <section className="min-w-0 rounded border border-line p-3" aria-label="链接的分析结果">
           {linkedDetail.isPending ? (
-            <p>Reading linked analysis…</p>
+            <p>正在读取链接的分析结果…</p>
           ) : linkedDetail.isError ? (
-            <p role="alert">Linked analysis unavailable: {errorMessage(linkedDetail.error)}</p>
+            <p role="alert">链接的分析结果不可用： {errorMessage(linkedDetail.error)}</p>
           ) : (
             <>
               <h4>
-                {linkedDetail.data.title} · revision {linkedDetail.data.revision}
+                {linkedDetail.data.title} · 修订 {linkedDetail.data.revision}
               </h4>
               <p className="text-xs text-text-soft">
-                Saved on this run · {linkedDetail.data.inputs.length} declared inputs
+                保存于本次运行 · {linkedDetail.data.inputs.length} 个声明输入
               </p>
               <PublicationBody
                 analysis={linkedDetail.data}
@@ -217,10 +216,10 @@ function RunResults({
           )}
         </section>
       )}
-      {query.isPending && <p>Reading analyses…</p>}
+      {query.isPending && <p>正在读取分析结果…</p>}
       {query.isError && <p role="alert">{errorMessage(query.error)}</p>}
       {query.isSuccess && !items.length && !linked && (
-        <p className="text-xs text-text-dim">No analyses saved or directly linked yet.</p>
+        <p className="text-xs text-text-dim">暂无已保存或直接关联的分析结果。</p>
       )}
       {items
         .filter((item) => item.record.id !== linkedId)
@@ -249,7 +248,7 @@ function RunResults({
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
         >
-          加载更早 analysis
+          加载更早的分析结果
         </button>
       )}
     </section>
@@ -289,18 +288,18 @@ function RelatedAnalysis({
       <summary className="cursor-pointer text-sm break-words">
         <strong>{summary.title}</strong>
         <span className="block text-xs text-text-dim">
-          Saved on{" "}
+          保存于{" "}
           <PublicationSource
             subject={subject}
             projectId={context.projectId}
             collectionNames={context.collectionNames}
           />{" "}
-          · revision {summary.revision} · {summary.input_count} declared inputs
+          · 修订 {summary.revision} · {summary.input_count} 个声明输入
         </span>
       </summary>
       {expanded &&
         (detail.isPending ? (
-          <p>Reading analysis…</p>
+          <p>正在读取分析结果…</p>
         ) : detail.isError ? (
           <p role="alert">{errorMessage(detail.error)}</p>
         ) : (
@@ -367,11 +366,11 @@ function PublicationBody({
       />
       <div
         className="flex flex-wrap items-center gap-2 text-xs text-text-soft"
-        aria-label="Direct run inputs"
+        aria-label="直接运行输入"
       >
-        <span>Direct run inputs:</span>
+        <span>直接运行输入：</span>
         {direct.length === 0 ? (
-          <span>None declared</span>
+          <span>未声明</span>
         ) : (
           direct.map((id) => (
             <button
@@ -399,7 +398,7 @@ function PublicationBody({
         />
       )}
       <a href={exact} onClick={navigateLink} className="text-sm text-accent underline">
-        Open saved version
+        打开已保存的版本
       </a>
       {subject.kind === "run" && analysis.subject === "run" && (
         <RepeatRunAnalysis runId={subject.run_id} analysis={{ ...analysis, subject: "run" }} />
@@ -419,7 +418,7 @@ function PublicationSource({
     );
   if (subject.kind === "sample")
     return <SampleSource sampleId={subject.sample_id} projectId={projectId} />;
-  return <>Data space</>;
+  return <>数据空间</>;
 }
 
 function RunSource({
@@ -435,10 +434,10 @@ function RunSource({
   const collection = useRunCollectionName(projectId, address?.collection_id, collectionNames);
   const name = run.data?.displayName ?? run.data?.experimentId;
   return (
-    <span title={`Run ${runId}`}>
+    <span title={`运行 ${runId}`}>
       {address
-        ? `${collection.name ?? "Collection name unavailable"} #${address.number}`
-        : (name ?? "Run name unavailable")}
+        ? `${collection.name ?? "记录集合名称不可用"} #${address.number}`
+        : (name ?? "运行名称不可用")}
       {address && name ? ` · ${name}` : ""}
     </span>
   );
@@ -450,8 +449,8 @@ function SampleSource({ sampleId, projectId }: { sampleId: string; projectId: st
     queryFn: ({ signal }) => getSample(sampleId, signal),
   });
   return (
-    <span title={`Sample ${sampleId}`}>
-      Sample {sample.data?.revision.content.display_name ?? "name unavailable"}
+    <span title={`样品 ${sampleId}`}>
+      样品 {sample.data?.revision.content.display_name ?? "名称不可用"}
     </span>
   );
 }

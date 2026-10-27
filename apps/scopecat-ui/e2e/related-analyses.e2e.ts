@@ -117,13 +117,13 @@ test("finds the same run, sample and space publications from either direct input
       await page.getByLabel("起始时间（本地）", { exact: true }).fill("2099-01-01T00:00");
       await page.getByRole("button", { name: "查找精确 run", exact: true }).click();
       await page.getByRole("button", { name: "打开找到的 run", exact: true }).click();
-      const related = page.getByRole("region", { name: "Analyses", exact: true });
+      const related = page.getByRole("region", { name: "分析结果", exact: true });
       await expect(related.locator(":scope > details > summary")).toHaveCount(2);
       while (
-        await related.getByRole("button", { name: "加载更早 analysis", exact: true }).count()
+        await related.getByRole("button", { name: "加载更早的分析结果", exact: true }).count()
       ) {
         const previous = await related.locator(":scope > details > summary").count();
-        await related.getByRole("button", { name: "加载更早 analysis", exact: true }).click();
+        await related.getByRole("button", { name: "加载更早的分析结果", exact: true }).click();
         await expect
           .poll(() => related.locator(":scope > details > summary").count())
           .toBeGreaterThan(previous);
@@ -138,7 +138,7 @@ test("finds the same run, sample and space publications from either direct input
         [...expected].sort(),
       );
       if (run === seed.runs[0])
-        await expect(related.getByText("None declared", { exact: true })).toBeVisible();
+        await expect(related.getByText("未声明", { exact: true })).toBeVisible();
       await page.screenshot({
         path: testInfo.outputPath(
           run === seed.runs[0] ? "results-from-owner.png" : "results-from-input.png",
@@ -146,14 +146,14 @@ test("finds the same run, sample and space publications from either direct input
         fullPage: true,
       });
     }
-    const related = page.getByRole("region", { name: "Analyses", exact: true });
+    const related = page.getByRole("region", { name: "分析结果", exact: true });
     const row = related
       .locator(":scope > details")
       .filter({ has: page.getByTestId("publication-id").filter({ hasText: seed.ids[0] }) });
     const source = row
-      .locator('[aria-label="Direct run inputs"]')
+      .locator('[aria-label="直接运行输入"]')
       .getByRole("button")
-      .filter({ has: page.locator(`[title="Run ${seed.runs[0]}"]`) });
+      .filter({ has: page.locator(`[title="运行 ${seed.runs[0]}"]`) });
     await row.getByText("来源与执行证据", { exact: true }).click();
     await source.scrollIntoViewIfNeeded();
     const originalScroll = await page
@@ -164,7 +164,7 @@ test("finds the same run, sample and space publications from either direct input
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
     await expect(
-      page.getByRole("region", { name: "Analyses", exact: true }).getByTestId("publication-id"),
+      page.getByRole("region", { name: "分析结果", exact: true }).getByTestId("publication-id"),
     ).toHaveCount(seed.ids.length);
     await expect
       .poll(async () =>
@@ -182,7 +182,7 @@ test("finds the same run, sample and space publications from either direct input
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
     await page.goBack();
-    const savedVersion = row.getByRole("link", { name: "Open saved version", exact: true });
+    const savedVersion = row.getByRole("link", { name: "打开已保存的版本", exact: true });
     await savedVersion.scrollIntoViewIfNeeded();
     const savedVersionScroll = await page
       .locator("html")
@@ -192,13 +192,13 @@ test("finds the same run, sample and space publications from either direct input
     const popup = await popupPromise;
     await expect(
       popup
-        .getByRole("region", { name: "Linked analysis", exact: true })
+        .getByRole("region", { name: "链接的分析结果", exact: true })
         .getByTestId("publication-id"),
     ).toHaveText(seed.ids[0]);
     await popup.close();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
     await savedVersion.click();
-    const exactResult = page.getByRole("region", { name: "Linked analysis", exact: true });
+    const exactResult = page.getByRole("region", { name: "链接的分析结果", exact: true });
     await expect(exactResult.getByTestId("publication-id")).toHaveText(seed.ids[0]);
     const exactSources = exactResult.getByText("来源与执行证据", { exact: true });
     // Leave in the same native toggle dispatch, without another page click or a 200ms wait.
@@ -250,7 +250,7 @@ test("finds the same run, sample and space publications from either direct input
     await page.goto(
       `${endpoint.base_url}/?run=${encodeURIComponent(seed.runs[0])}&run-analysis=${encodeURIComponent(seed.ids[0])}#runs`,
     );
-    const pinned = page.getByRole("region", { name: "Analyses", exact: true });
+    const pinned = page.getByRole("region", { name: "分析结果", exact: true });
     await expect(pinned.getByTestId("publication-id")).toHaveText(seed.ids[0]);
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
@@ -311,7 +311,7 @@ test("finds the same run, sample and space publications from either direct input
       )
       .toBeGreaterThan(projectScroll - 100);
     await page.goForward();
-    await expect(page.getByRole("heading", { name: "Data", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "数据", exact: true })).toBeVisible();
     await page.goBack();
     await page.reload();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);

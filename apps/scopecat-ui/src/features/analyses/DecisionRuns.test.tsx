@@ -46,12 +46,12 @@ it("pages exact decision references separately and isolates identical IDs across
   const mounted = render(view());
   fireEvent.click(await screen.findByTitle("child-a"));
   expect(open).toHaveBeenCalledWith("child-a");
-  fireEvent.click(screen.getByRole("button", { name: "Load older follow-up experiments" }));
+  fireEvent.click(screen.getByRole("button", { name: "加载更早的后续实验" }));
   await screen.findByTitle("older");
   expect(screen.getAllByTitle("child-a")).toHaveLength(1);
   space = "b";
   mounted.rerender(view());
-  await screen.findByText("No admitted runs yet.");
+  await screen.findByText("暂无已接纳的运行。");
   await waitFor(() => expect(screen.queryByTitle("child-a")).not.toBeInTheDocument());
-  expect(screen.getByText(/not inputs to this analysis/)).toBeVisible();
+  expect(screen.getByText(/不是本分析的输入/)).toBeVisible();
 });

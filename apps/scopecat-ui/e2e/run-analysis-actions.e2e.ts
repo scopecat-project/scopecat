@@ -66,7 +66,17 @@ test("recovers directory loading and starts declared analyses from the retained 
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -84,36 +94,36 @@ test("recovers directory loading and starts declared analyses from the retained 
         posts++;
     });
     await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(seed.run)}#runs`);
-    await expect(page.locator("summary").filter({ hasText: "Analyze this result" })).toBeVisible();
+    await expect(page.locator("summary").filter({ hasText: "分析此结果" })).toBeVisible();
     expect(directoryReads).toBe(0);
     expect(retainedWorkers(project)).toEqual([]);
     // A real browser transport failure must not start an author worker or an analysis.
     await page.route("**/analysis-actions", (route) => route.abort("connectionfailed"), {
       times: 1,
     });
-    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await page.locator("summary").filter({ hasText: "分析此结果" }).click();
     await expect(
-      page.getByRole("status").filter({ hasText: "Could not load declared analyses" }),
+      page.getByRole("status").filter({ hasText: "无法加载已声明的分析" }),
     ).toBeVisible();
     expect(retainedWorkers(project)).toEqual([]);
     expect(posts).toBe(0);
-    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
-    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await page.locator("summary").filter({ hasText: "分析此结果" }).click();
+    await page.locator("summary").filter({ hasText: "分析此结果" }).click();
     expect(directoryReads).toBe(1);
-    await page.getByRole("button", { name: "Reload declared analyses" }).click();
-    const actions = page.getByRole("region", { name: "Analyze this result" });
-    await expect(actions.getByRole("button", { name: "Run Estimate peak" })).toBeVisible();
+    await page.getByRole("button", { name: "重新加载分析声明" }).click();
+    const actions = page.getByRole("region", { name: "分析此结果" });
+    await expect(actions.getByRole("button", { name: "执行 Estimate peak" })).toBeVisible();
     expect(posts).toBe(0);
     expect(directoryReads).toBe(2);
     const workers = retainedWorkers(project);
     expect(workers).toHaveLength(1);
     await expect(actions.getByLabel("Minimum Contrast")).toHaveValue("0.2");
     await actions.getByLabel("Minimum Contrast").fill("0.3");
-    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
-    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await page.locator("summary").filter({ hasText: "分析此结果" }).click();
+    await page.locator("summary").filter({ hasText: "分析此结果" }).click();
     await expect(actions.getByLabel("Minimum Contrast")).toHaveValue("0.3");
     expect(directoryReads).toBe(2);
-    await expect(page.getByRole("button", { name: "Run Changed peak action" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "执行 Changed peak action" })).toHaveCount(0);
     await actions.screenshot({ path: testInfo.outputPath("declared-analyses-wide.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     await actions.screenshot({ path: testInfo.outputPath("declared-analyses-narrow.png") });
@@ -125,7 +135,7 @@ test("recovers directory loading and starts declared analyses from the retained 
         response.url().endsWith("/author-revisions/analyze") &&
         response.request().method() === "POST",
     );
-    await actions.getByRole("button", { name: "Run Estimate peak" }).click();
+    await actions.getByRole("button", { name: "执行 Estimate peak" }).click();
     const fit = await fitResponse;
     expect(fit.status(), await fit.text()).toBe(200);
     expect(fit.request().postDataJSON()).toMatchObject({
@@ -136,7 +146,7 @@ test("recovers directory loading and starts declared analyses from the retained 
     });
     const fitReceipt = await fit.json();
     const estimate = actions.getByRole("form", { name: "Estimate peak" });
-    await estimate.getByRole("link", { name: "View saved result" }).click();
+    await estimate.getByRole("link", { name: "查看已保存的结果" }).click();
     await expect(page.getByTestId("publication-id").first()).toHaveText(fitReceipt.analysis_id);
     const fitSaved = await page.request.get(
       `${endpoint.base_url}/api/v1/runs/${seed.run}/analyses/${fitReceipt.analysis_id}`,
@@ -145,17 +155,17 @@ test("recovers directory loading and starts declared analyses from the retained 
       (await fitSaved.json()).analysis.outputs.find((item: { id: string }) => item.id === "result")
         .content.value.status,
     ).toBe("estimated");
-    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
-    await expect(actions.getByRole("button", { name: "Run Check expected peak" })).toBeVisible();
+    await page.locator("summary").filter({ hasText: "分析此结果" }).click();
+    await expect(actions.getByRole("button", { name: "执行 Check expected peak" })).toBeVisible();
     expect(retainedWorkers(project)).toEqual(workers);
     await actions.getByLabel("Expected Frequency", { exact: true }).fill("4.8");
-    await actions.getByLabel("Expected Frequency unit").fill("GHz");
+    await actions.getByLabel("Expected Frequency 单位").fill("GHz");
     const checkResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/author-revisions/analyze") &&
         response.request().method() === "POST",
     );
-    await actions.getByRole("button", { name: "Run Check expected peak" }).click();
+    await actions.getByRole("button", { name: "执行 Check expected peak" }).click();
     const check = await checkResponse;
     expect(check.status(), await check.text()).toBe(200);
     expect(check.request().postDataJSON()).toMatchObject({
@@ -177,7 +187,7 @@ test("recovers directory loading and starts declared analyses from the retained 
     const readsBeforeReload = directoryReads;
     await page.reload();
     await expect(page.getByTestId("publication-id").first()).toHaveText(fitReceipt.analysis_id);
-    await expect(page.locator("summary").filter({ hasText: "Analyze this result" })).toBeVisible();
+    await expect(page.locator("summary").filter({ hasText: "分析此结果" })).toBeVisible();
     expect(directoryReads).toBe(readsBeforeReload);
     expect(retainedWorkers(project)).toEqual(workers);
     expect(posts).toBe(2);
@@ -191,18 +201,18 @@ test("recovers directory loading and starts declared analyses from the retained 
       ).status(),
     ).toBe(200);
     await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(seed.old_run)}#runs`);
-    const expand = page.locator("summary").filter({ hasText: "Analyze this result" });
+    const expand = page.locator("summary").filter({ hasText: "分析此结果" });
     await expect(expand).toBeVisible();
     expect(directoryReads).toBe(readsBeforeReload);
     expect(retainedWorkers(project)).toEqual(workers);
     await expand.click();
-    await expect(page.getByText(/No analyses were declared/)).toBeVisible();
+    await expect(page.getByText(/保存的源码未声明分析/)).toBeVisible();
     expect(directoryReads).toBe(readsBeforeReload + 1);
     expect(retainedWorkers(project)).toHaveLength(2);
     expect(posts).toBe(2);
     passed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (passed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved action project", {

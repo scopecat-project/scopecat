@@ -126,11 +126,11 @@ it("keeps one analysis entry across repeated run changes and analyzes only the c
   const { rerender } = render(view("A"));
   for (const runId of ["A", "B", "C", "A", "B", "C", "A"]) {
     rerender(view(runId));
-    expect(screen.getAllByText("Analyze this result", { selector: "summary" })).toHaveLength(1);
-    const details = screen.getByText("Analyze this result", { selector: "summary" }).parentElement!;
+    expect(screen.getAllByText("分析此结果", { selector: "summary" })).toHaveLength(1);
+    const details = screen.getByText("分析此结果", { selector: "summary" }).parentElement!;
     details.setAttribute("open", "");
     fireEvent(details, new Event("toggle"));
-    fireEvent.click(await screen.findByRole("button", { name: "Run Inspect retained signal" }));
+    fireEvent.click(await screen.findByRole("button", { name: "执行 Inspect retained signal" }));
     await waitFor(() =>
       expect(submitted.at(-1)).toEqual({
         run_id: runId,
@@ -140,7 +140,7 @@ it("keeps one analysis entry across repeated run changes and analyzes only the c
         arguments: {},
       }),
     );
-    await screen.findByRole("link", { name: "View saved result" });
+    await screen.findByRole("link", { name: "查看已保存的结果" });
   }
   expect(submitted).toHaveLength(7);
   client.clear();
