@@ -53,12 +53,18 @@ jobs:
           enable-cache: true
 
       - name: Run selected tests
+        id: selected-tests
         env:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
         shell: bash
         run: |
           uv run --locked python -m scopecat_testkit.check "${{ matrix.group.suite }}" \
             --shard "${{ matrix.group.shard }}" -- --maxprocesses=2 -p scripts.pytest_diagnostics
+
+      - name: Summarize failed test diagnostics
+        if: ${{ failure() && steps.selected-tests.outcome == 'failure' }}
+        continue-on-error: true
+        run: python scripts/summarize_test_diagnostics.py test-diagnostics
 
       - name: Retain test timings and startup diagnostics
         if: always()
