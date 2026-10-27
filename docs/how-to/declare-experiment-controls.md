@@ -98,26 +98,27 @@ previewing an experiment.
 
 ## Keep a launch draft while inspecting the project
 
-Experiment inputs belong to the registered author workspace and experiment in
-application data. Confirmed saved fields, control sources and units, scientific
-selection and operator survive navigation, page reload and application restart.
-Intermediate invalid text is retained too; saving input does not validate it.
-Wait for the saved status before closing: unconfirmed or failed saves cannot be
-promised recoverable after process loss. Keep the window open and retry a failed save.
+GUI 实验输入按注册作者工作区、实验和草稿保存在应用数据中。确认已保存的字段、控制项
+取值来源和单位、科学选择、操作人及记录集合可在导航、页面刷新或应用重启后恢复。
+尚未完成的无效文本也会保留；保存输入不等于验证通过。这与 Notebook kernel 中临时的
+`session.selection` 不同，详见[选择实验上下文](select-session-context.md)。
 
-Changed declarations preserve edits for review. New fields receive current defaults;
-removed or no-longer-editable fields remain unresolved until explicitly removed.
-**Reset launch draft** saves a new revision with the declaration's defaults;
-earlier versions and conflict copies remain in input history. Restored input needs
-review and fresh preparation; restoration never restores permission to execute.
+关闭前应等待“实验输入已保存到应用数据。”。未确认或失败的保存不能承诺在进程丢失后
+恢复，请保持窗口打开并重试。跨窗口编辑冲突会保留独立副本，需要明确选择并保存；
+恢复不会静默覆盖另一窗口的已保存输入。
+
+声明变化会保留改动供核实。新字段采用当前默认值；移除或不再可编辑的字段在明确移除前
+仍需处理。重置实验草稿会保存采用声明默认值的新修订，早期版本和冲突副本仍在输入历史中。
+恢复输入始终需要核实及重新准备，不恢复执行许可。比较已提交请求 A 与当前草稿 B 仅作
+描述性展示，不预览、不执行，也不表示 B 就是最初提交的草稿；默认值和未完整输入不会判同。
 
 Input edits, changed declarations, and changed parameter/setup revisions
 invalidate the preview. A temporary failure to read configuration blocks
 submission until the context can be verified without discarding retained inputs.
 
 If a submission response is lost, its original payload and request key remain
-separate from the editable draft. **Check original submission** reads retained
-procedures by that key; **Open submitted procedure** opens the confirmed ID and
+separate from the editable draft. **核实原始提交** reads retained
+procedures by that key; **查看已提交任务** opens the confirmed ID and
 does not dispatch it. Confirmation requires one matching procedure whose public
 launch intent retains the exact `request_hash` and `config_source` binding from
 the request. Providers without this evidence, missing matches, or multiple

@@ -303,8 +303,7 @@ function ProjectDraft({
             definition: "",
             sequence: record.sequence,
             status: "unknown",
-            error:
-              "Recovered original request. Check the original task or explicitly prepare a new run.",
+            error: "已恢复原始请求。请核实原任务，或明确准备新的 run。",
           });
         setAttemptsReady(true);
       })
@@ -552,12 +551,10 @@ function ProjectDraft({
     const generation = ++attemptGeneration.current;
     setAttempt({ ...selected, checking: true, error: "" });
     try {
-      if (!selected.sequence) throw new Error("Original submission has no retained receipt.");
+      if (!selected.sequence) throw new Error("原始提交没有保留的收据。");
       const result = await resolveAttempt(selected.sequence);
       if (!result.procedure_id)
-        throw new Error(
-          "No retained procedure found yet. Original submission remains unconfirmed; recovery never resubmits.",
-        );
+        throw new Error("尚未找到保留的任务。原始提交仍未确认；恢复不会重新提交。");
       const id = result.procedure_id;
       if (alive.current && attemptGeneration.current === generation)
         setAttempt({
@@ -815,7 +812,7 @@ function ProjectDraft({
             definition: "",
             sequence: record.sequence,
             status: "unknown",
-            error: "Recovered original request. Query it without resubmitting.",
+            error: "已恢复原始请求。仅查询，不重新提交。",
           });
         },
         sourceObserved: (owner, source) =>
@@ -843,7 +840,7 @@ function ProjectDraft({
             current
               ? invalidateDraft(
                   { ...current, admittedProcedureId: undefined },
-                  "New run selected. Start checks the inputs for another acquisition. The original receipt remains in recovery history.",
+                  "已选择新的 run。开始时将为另一次采集核实输入；原收据仍保留在恢复历史中。",
                 )
               : current,
           );
@@ -989,7 +986,7 @@ function ProjectDraft({
             handoff: undefined,
             notice:
               "ref" in plan
-                ? `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${operator}. Start will prepare these saved inputs again.`
+                ? `已打开 ${plan.name}，修订 ${plan.ref.revision}。保存人：${plan.saved_by}；当前操作人：${operator}。开始时将重新准备这些已保存输入。`
                 : `Preparing ${plan.manualLine.label}. Adjust measurement settings, then Start; wiring confirmation is required before acquisition.`,
           });
           retainDraftLocation(imported);

@@ -107,10 +107,22 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await expect(other.getByRole("region", { name: "实验输入冲突" })).toBeVisible();
     await other.reload();
     await expect(other.getByLabel("Center", { exact: true })).toHaveValue("0.25");
-    await other
-      .getByText("Recover experiment input or an original submission", { exact: true })
-      .click();
-    await expect(other.getByText(/signal.*conflict/)).toBeVisible();
+    await other.getByText("恢复实验输入或原始提交", { exact: true }).click();
+    await expect(other.getByText(/signal.*冲突副本/)).toBeVisible();
+    for (const width of [1280, 390]) {
+      await other.setViewportSize({ width, height: 844 });
+      const refresh = other.getByRole("button", { name: "刷新恢复历史", exact: true });
+      await refresh.focus();
+      await other.keyboard.press("Enter");
+      await expect(refresh).toBeFocused();
+      expect(
+        await other.locator("html").evaluate((element) => element.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await other.screenshot({
+        path: testInfo.outputPath(`recovery-history-${width}.png`),
+        fullPage: true,
+      });
+    }
     await other.close();
     const source = join(
       directory,
@@ -123,7 +135,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     // The implementation/default refresh must retain the edited scan and raw input.
     const original = await readFile(source, "utf8");
     await writeFile(source, original.replace("] = 0.0,", "] = 0.5,"));
-    await page.getByRole("button", { name: /Refresh.*code/i }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     await expect(
       page.getByText("作者代码已刷新。", {
         exact: true,
@@ -161,6 +173,25 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       .toBe("closed");
     url = restart();
     await page.goto(`${url}/?workspace=${prepared.workspace}#launch`);
+    await page.getByLabel("Center", { exact: true }).fill("0.35");
+    await page.getByText("比较已提交请求与当前草稿", { exact: true }).click();
+    const comparison = page.getByRole("table", { name: "所选已提交请求与当前草稿对比" });
+    await expect(comparison.getByRole("rowheader", { name: /输入 · center/ })).toBeVisible();
+    await expect(comparison.getByText("0.35", { exact: true })).toBeVisible();
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const unchanged = page.getByRole("button", { name: "显示未变化字段", exact: true });
+      await unchanged.focus();
+      await page.keyboard.press("Enter");
+      await page.getByRole("button", { name: "隐藏未变化字段", exact: true }).click();
+      expect(
+        await page.locator("html").evaluate((element) => element.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await comparison.screenshot({
+        path: testInfo.outputPath(`submission-comparison-${width}.png`),
+      });
+    }
+    expect(submissions).toBe(1);
     await page.getByRole("button", { name: "核实原始提交", exact: true }).click();
     await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`procedure=${procedure}`));

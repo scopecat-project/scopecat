@@ -322,21 +322,19 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await reopened.screenshot({ path: testInfo.outputPath("saved-draft-c-link.png") });
     await reopened.close();
 
+    await page.getByText("恢复实验输入或原始提交", { exact: true }).click();
+    await page.getByRole("button", { name: "刷新恢复历史", exact: true }).click();
     await page
-      .getByText("Recover experiment input or an original submission", { exact: true })
+      .getByRole("button", { name: `恢复原始提交 ${frozenB.sequence}`, exact: true })
       .click();
-    await page.getByRole("button", { name: "Refresh recovery history", exact: true }).click();
-    await page
-      .getByRole("button", { name: `Recover original submission ${frozenB.sequence}`, exact: true })
-      .click();
-    await page.getByText("Compare submitted request with current draft", { exact: true }).click();
+    await page.getByText("比较已提交请求与当前草稿", { exact: true }).click();
     const comparison = page.getByRole("table", {
-      name: "Selected submitted request and current draft comparison",
+      name: "所选已提交请求与当前草稿对比",
     });
     const gainComparison = comparison
       .getByRole("row")
-      .filter({ has: page.getByRole("rowheader", { name: /Control · gain/ }) });
-    await expect(gainComparison.getByRole("cell")).toHaveText(["Fixed · 2", "Fixed · 4"]);
+      .filter({ has: page.getByRole("rowheader", { name: /控制项 · gain/ }) });
+    await expect(gainComparison.getByRole("cell")).toHaveText(["固定值 · 2", "固定值 · 4"]);
     await comparison.screenshot({ path: testInfo.outputPath("frozen-b-current-c-comparison.png") });
 
     await page.getByRole("button", { name: "已提交任务", exact: true }).click();

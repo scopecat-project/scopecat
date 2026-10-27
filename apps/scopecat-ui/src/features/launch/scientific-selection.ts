@@ -29,10 +29,10 @@ export function subjectLabel(
 ): string {
   const subject = normalizeSelection(selection).subject;
   if (subject.kind === "registered_target")
-    return `Registered target ${subject.ref.target_id}, revision ${subject.ref.revision}`;
+    return `已注册目标 ${subject.ref.target_id}，修订 ${subject.ref.revision}`;
   if (subject.kind === "sample")
-    return `Sample ${subject.sample_id}${subject.revision ? `, revision ${subject.revision}` : " (current revision)"}`;
-  return "No sample";
+    return `样品 ${subject.sample_id}${subject.revision ? `，修订 ${subject.revision}` : "（当前修订）"}`;
+  return "无样品";
 }
 
 export function subjectSample(binding?: ScientificBinding) {

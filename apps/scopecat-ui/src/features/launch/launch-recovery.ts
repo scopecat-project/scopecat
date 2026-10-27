@@ -99,7 +99,7 @@ export function restoreDraft(record: DraftRecord, revision: number): LaunchDraft
     revision,
     pending: false,
     error: "",
-    notice: "Recovered experiment input. Review the retained baseline and preview before starting.",
+    notice: "已恢复实验输入。请核实保留的基线，并在开始前重新预览。",
     needsReview: true,
   };
 }
@@ -155,7 +155,7 @@ export function useLaunchRecovery(
   const explicitInput = useRef<string | undefined>(undefined);
   const [reload, setReload] = useState(0);
   const requestedCopy = useRef<DraftRecord | undefined>(undefined);
-  const [status, setStatus] = useState("Loading saved experiment input…");
+  const [status, setStatus] = useState("正在加载已保存的实验输入…");
   const [epoch, setEpoch] = useState(0);
   const target =
     draft?.experiment && draft.workspaceId
@@ -204,10 +204,10 @@ export function useLaunchRecovery(
         if (!mounted.current || session.current !== cached) return;
         setStatus(
           cached.failed
-            ? "Input not confirmed saved. Your local copy is retained; retry saving before switching again."
+            ? "输入尚未确认保存。本地副本仍保留；请重试保存后再切换。"
             : cached.conflict
-              ? "Another window changed this experiment. Your conflict copy is retained."
-              : "Saving experiment input…",
+              ? "另一窗口已修改此实验。你的冲突副本已保留。"
+              : "正在保存实验输入…",
         );
         setEpoch((value) => value + 1);
       });
@@ -249,8 +249,7 @@ export function useLaunchRecovery(
     session.current = current;
     unfinished.set(target, current);
     queueMicrotask(() => {
-      if (mounted.current && session.current === current)
-        setStatus("Loading saved experiment input…");
+      if (mounted.current && session.current === current) setStatus("正在加载已保存的实验输入…");
     });
     let active = true;
     void readDraft(workspace, experiment, draft_id)
@@ -291,9 +290,7 @@ export function useLaunchRecovery(
         }
         if (explicitInput.current === target) explicitInput.current = undefined;
         current.ready = true;
-        setStatus(
-          head?.state === "saved" ? "实验输入已保存到应用数据。" : "Saving experiment input…",
-        );
+        setStatus(head?.state === "saved" ? "实验输入已保存到应用数据。" : "正在保存实验输入…");
         setEpoch((value) => value + 1);
       })
       .catch((error) => {
@@ -325,7 +322,7 @@ export function useLaunchRecovery(
     current.queued = input;
     if (current.failed || current.pending) return;
     current.pending = 1;
-    if (mounted.current) setStatus("Saving experiment input…");
+    if (mounted.current) setStatus("正在保存实验输入…");
     current.queue = (async () => {
       try {
         while (!current.failed) {
@@ -366,16 +363,14 @@ export function useLaunchRecovery(
             if (mounted.current && session.current === current)
               setStatus(
                 current.conflict
-                  ? "Another window changed this experiment. Your edits are retained as a separate conflict copy."
+                  ? "另一窗口已修改此实验。你的改动已作为独立冲突副本保留。"
                   : "实验输入已保存到应用数据。",
               );
             break;
           } catch (error) {
             current.failed = command;
             if (mounted.current && session.current === current)
-              setStatus(
-                `Input not confirmed saved: ${String(error)}. Keep this window open and retry saving.`,
-              );
+              setStatus(`输入尚未确认保存：${String(error)}。请保持此窗口打开并重试保存。`);
           }
         }
       } finally {
@@ -538,9 +533,7 @@ export function useLaunchRecovery(
       const selected = JSON.stringify([workspace, experiment, draftId]);
       const cached = unfinished.get(selected);
       if (cached?.failed || cached?.pending || cached?.hydrating) {
-        setStatus(
-          "Return to this experiment and finish saving its retained input before replacing it.",
-        );
+        setStatus("请返回此实验，完成保留输入的保存后再替换。");
         return false;
       }
       if (session.current?.target !== selected || !session.current.ready)
@@ -557,7 +550,7 @@ export function useLaunchRecovery(
         ]),
       );
       if (session.current?.pending || cached?.failed || cached?.pending || cached?.hydrating) {
-        setStatus("Wait for the current input save before opening a historical copy.");
+        setStatus("请等待当前输入保存完成后再打开历史副本。");
         return false;
       }
       requestedCopy.current = record;
@@ -582,14 +575,14 @@ export function useLaunchRecovery(
     async flush() {
       const activeSession = session.current;
       if (!activeSession?.ready || activeSession.hydrating || activeSession.target !== target)
-        throw new Error("Wait for input recovery before submitting.");
+        throw new Error("请等待输入恢复完成后再提交。");
       if (activeSession.pending) {
         activeSession.flushing = true;
         activeSession.wake?.();
       }
       await activeSession.queue;
       if (activeSession.failed || activeSession.conflict || activeSession.queued !== encoded)
-        throw new Error("Resolve and save the current input before submitting.");
+        throw new Error("请先解决当前输入问题并保存，再提交。");
     },
     async retry() {
       if (launchCloseBlocked()) return;
@@ -610,7 +603,7 @@ export function useLaunchRecovery(
           if (!activeSession.conflict) activeSession.revision = result.saved!.revision;
           activeSession.queued = "";
         } catch (error) {
-          if (mounted.current) setStatus(`Input not confirmed saved: ${String(error)}`);
+          if (mounted.current) setStatus(`输入尚未确认保存：${String(error)}`);
         } finally {
           activeSession.pending = 0;
           if (mounted.current) setEpoch((value) => value + 1);

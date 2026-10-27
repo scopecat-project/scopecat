@@ -166,7 +166,7 @@ it("previews a typed request and clears results after edits", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await screen.findByText("预览就绪");
-  expect(screen.getAllByRole("region", { name: "Saved experiment plans" })).toHaveLength(1);
+  expect(screen.getAllByRole("region", { name: "已保存的实验计划" })).toHaveLength(1);
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({
     workspace_id: "legacy",

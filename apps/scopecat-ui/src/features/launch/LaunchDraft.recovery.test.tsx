@@ -69,7 +69,7 @@ it("keeps unsaved input reachable when switching is attempted after a failed sav
       invalidateDraft({ ...draft, values: { raw: "invalid but valuable" } }, "edited"),
     ),
   );
-  await waitFor(() => expect(state.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("尚未确认保存"));
   await act(async () => state.select({ ...entry, id: "other" }, false, "legacy"));
   expect(state.draft?.experiment).toBe("signal");
   expect(state.draft?.values.raw).toBe("invalid but valuable");
@@ -439,7 +439,7 @@ it("refuses to copy a draft whose latest input has not been confirmed saved", as
   act(() =>
     state.update((draft) => invalidateDraft({ ...draft, values: { raw: "unsaved B" } }, "edited")),
   );
-  await waitFor(() => expect(state.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("尚未确认保存"));
   await act(async () => state.copyDraft());
   expect(state.draft?.draftId).toBe("default");
   expect(state.draft?.values.raw).toBe("unsaved B");

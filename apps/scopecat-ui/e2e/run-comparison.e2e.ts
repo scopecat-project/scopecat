@@ -270,7 +270,7 @@ test("compares retained signals, saves independent results and starts edited sug
     await page.goto(`${endpoint.base_url}/?run=${nextRun}#runs`);
     const documentIdentity = await page.evaluate(() => performance.timeOrigin);
     await page.getByText("样品与计划来源", { exact: true }).click();
-    await page.getByRole("link", { name: "Open exact source conclusion", exact: true }).click();
+    await page.getByRole("link", { name: "打开精确来源结论", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
     await page.goBack();
@@ -278,7 +278,7 @@ test("compares retained signals, saves independent results and starts edited sug
     await expect(page.getByText("样品与计划来源", { exact: true }).locator("..")).toHaveAttribute(
       "open",
     );
-    await expect(page.getByRole("region", { name: "Decision source", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "判断来源", exact: true })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
@@ -371,7 +371,7 @@ with ScientificExchange(sys.argv[1]) as capture:
     ) as { base_url: string };
     await page.goto(`${restored.base_url}/?run=${nextRun}#runs`);
     await page.getByText("样品与计划来源", { exact: true }).click();
-    await page.getByRole("link", { name: "Open exact source conclusion", exact: true }).click();
+    await page.getByRole("link", { name: "打开精确来源结论", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     await page
       .getByRole("region", { name: "Experiments started from this conclusion" })

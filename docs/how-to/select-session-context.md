@@ -65,7 +65,7 @@ one shared kernel share its session, just as they share Python variables.
 
 ## Override one preparation
 
-The workbench's **Measurement context** also offers **Choose parameter branch**
+The workbench's **本页测量上下文** also offers **选择参数分支**
 to adopt a saved parameter version from a notebook. It preserves the page's subject
 and batch and requires a new preview. Refreshing the branch list never replaces
 the selected version automatically; see [parameter branches](parameter-branches.md).
@@ -117,21 +117,28 @@ that a previous calibration applies in that cooldown.
 
 ## Select context in the workbench
 
-In **Experiments**, **Measurement context · this page** holds the sample and
-operator. Open **Browse samples, batches and collections** to choose registered
+In **实验**, **本页测量上下文** holds the sample and
+operator. Open **浏览样品、批次与记录集** to choose registered
 samples, an experimental batch and a record collection. Lists have explicit
 **Load more** controls. **New batch** and **New collection** create named catalog
 entries; use the newly created entry when ready. Creating metadata never starts a
 measurement or changes another page's selection.
 
-These selections survive switching experiments, refreshing author code and moving
-between console views. **Reset launch draft** resets experiment inputs and detaches
-a saved plan while keeping the page's sample, batch, collection and operator.
-Reloading the browser or connecting to a different project starts a new selection;
-separate tabs do not share mutable defaults. This is still one connected code
-workspace, not a multi-workspace application selector.
+GUI 实验草稿与 Notebook kernel 的临时 selection 不同。界面将科学选择、操作人和
+记录集合随实验输入保存到应用数据；确认已保存的草稿可在页面刷新或应用重启后恢复。
+切换实验、刷新作者代码或切换视图不会主动清除这些输入。重置草稿会保存采用声明默认值的
+新输入修订，并解除计划关联，保留页面的样品、批次、记录集合和操作人。
 
-Use **Configuration → Use for next experiment** to select a parameter version,
+关闭前应等待“实验输入已保存到应用数据。”。尚未确认保存或保存失败的输入不能承诺在
+进程丢失后恢复；请保持窗口打开并重试保存。多个窗口各自编辑，发生并发冲突时会保留
+独立冲突副本，需要明确选择并保存，不能把它们当作共享可变默认值。数据空间及工作区
+边界仍然有效，连接另一项目不会将原项目草稿变成新项目的选择。
+
+恢复输入会要求核实并重新准备，不恢复旧预览或执行资格；未知的原始提交保留自己的
+请求身份，恢复仅查询，不能因刷新或编辑草稿而偷偷重发。Notebook 会话的 kernel 生命周期
+仍遵循前文规则，不能由 GUI 草稿保存能力推断 kernel selection 会跨重启保存。
+
+Use **配置 → 用于下次实验** to select a parameter version,
 then choose the setup in the launch page. The subject and batch remain independent.
 Parameter values are starting estimates until supported by calibration evidence.
 
@@ -140,8 +147,8 @@ operator remain the destination page's choices. Opening a plan restores its froz
 previous sample or batch. Candidate inputs retain their source scientific scope;
 operator and collection remain separate destination choices.
 
-Every selection edit invalidates the preview. **Preview** validates it through the
-same launch contract used by Python; only **Start acquisition** admits a procedure.
+Every selection edit invalidates the preview. **预览** validates it through the
+same launch contract used by Python; only **开始采集** admits a procedure.
 The original request remains available if a submission response is lost, even after
 subsequent edits. None of these selections publishes a new shared default config.
 
