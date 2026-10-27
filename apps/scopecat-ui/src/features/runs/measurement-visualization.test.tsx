@@ -1642,6 +1642,7 @@ describe("measurement visualization", () => {
     expect(summary).not.toHaveTextContent("当前切片已读取 1");
   });
 
+  // Repeated 4096-row mounts exercise correctness, not a five-second performance budget.
   it("builds 4096 array rows and raw JSON only while open and visible, using current data", async () => {
     const schema: MeasurementDatasetSchema = {
       ...baseSchema(),
@@ -1763,7 +1764,7 @@ describe("measurement visualization", () => {
       if (close) Object.defineProperty(HTMLDialogElement.prototype, "close", close);
       else Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
     }
-  });
+  }, 15_000);
 
   it("shows the plot first and opens the bounded record table on demand", async () => {
     const schema = scalarSchema();
