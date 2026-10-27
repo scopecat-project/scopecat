@@ -194,11 +194,7 @@ describe("AnalysisOutputView", () => {
         `${showMetadata ? "不确定性带" : "误差棒"}: Authored interval （绝对下界/上界）`,
       );
       expect(screen.getByText("显示 5 / 7 个点，共 1 个图层")).toBeVisible();
-      if (showMetadata) {
-        expect(screen.getByText("保留的数据来源与投影")).toBeVisible();
-      } else {
-        expect(screen.queryByText("保留的数据来源与投影")).not.toBeInTheDocument();
-      }
+      expect(screen.queryByText("保留的数据来源与投影") !== null).toBe(showMetadata);
     },
   );
 
