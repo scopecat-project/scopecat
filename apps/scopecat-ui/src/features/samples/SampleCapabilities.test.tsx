@@ -99,7 +99,7 @@ it("retains candidate identity instead of treating its values as a saved revisio
   fireEvent.change(screen.getByLabelText("测量上下文"), { target: { value: "r1" } });
   const rendered = await screen.findByTestId("context");
   expect(JSON.parse(rendered.textContent).parameters).toEqual(candidate);
-  expect(screen.getByText(/refined \(candidate from baseline\)/)).toBeInTheDocument();
+  expect(screen.getByText(/refined （候选来源：baseline）/)).toBeInTheDocument();
 });
 
 it.each([

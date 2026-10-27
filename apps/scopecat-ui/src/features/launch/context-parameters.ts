@@ -5,5 +5,5 @@ export function contextParameterLabel(
 ): string {
   return "revision_id" in input
     ? input.revision_id
-    : `${input.proposal_id} (candidate from ${input.source_run_id})`;
+    : `${input.proposal_id} （候选来源：${input.source_run_id}）`;
 }

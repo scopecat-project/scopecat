@@ -1,3 +1,4 @@
+import { calibrationStatusLabel, calibrationReasonLabel } from "./calibration-labels";
 import type { components } from "../../api-schema";
 
 export function CalibrationAssessments({
@@ -15,18 +16,17 @@ export function CalibrationAssessments({
             {assessment.run_id}
           </a>
           <p>
-            {assessment.status}: {assessment.reasons.join(", ").replaceAll("_", " ")}
+            {calibrationStatusLabel(assessment.status)}:{" "}
+            {assessment.reasons.map(calibrationReasonLabel).join(" ")}
           </p>
           {assessment.dependencies && (
             <>
               <p>
-                依赖覆盖： {assessment.dependencies.status}.{" "}
-                {assessment.dependencies.reasons.join(", ").replaceAll("_", " ")}
+                依赖覆盖： {calibrationStatusLabel(assessment.dependencies.status)}.{" "}
+                {assessment.dependencies.reasons.map(calibrationReasonLabel).join(" ")}
               </p>
-              <p>
-                已比较参数： {assessment.dependencies.compared_parameters?.join(", ") || "none"}
-              </p>
-              <p>已改变参数： {assessment.dependencies.changed_parameters?.join(", ") || "none"}</p>
+              <p>已比较参数： {assessment.dependencies.compared_parameters?.join(", ") || "无"}</p>
+              <p>已改变参数： {assessment.dependencies.changed_parameters?.join(", ") || "无"}</p>
             </>
           )}
         </div>

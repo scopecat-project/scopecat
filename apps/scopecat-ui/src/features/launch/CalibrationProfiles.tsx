@@ -1,3 +1,4 @@
+import { calibrationStatusLabel, calibrationReasonLabel } from "./calibration-labels";
 import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
@@ -159,7 +160,7 @@ function CalibrationProfilesContext({
                 {" · 策略"}
                 {item.scope.policy_version} · 最大有效时长 {item.max_age}
                 {" · 依赖"}
-                {item.depends_on.join(", ") || "none"}
+                {item.depends_on.join(", ") || "无"}
               </li>
             ))}
           </ul>
@@ -186,16 +187,19 @@ function CalibrationProfilesContext({
             <article key={item.requirement.id} className="border rounded p-2">
               <h4>{item.requirement.id}</h4>
               <p>
-                自身检查： {item.selection.status} · 可用性： {item.availability.status}
+                自身检查： {calibrationStatusLabel(item.selection.status)} · 可用性：{" "}
+                {calibrationStatusLabel(item.availability.status)}
               </p>
-              <p>阻塞项： {item.availability.blocked_by.join(", ") || "none"}</p>
+              <p>阻塞项： {item.availability.blocked_by.join(", ") || "无"}</p>
               <p>
                 已检查 {item.scanned} 条记录。{" "}
                 {[
                   item.selection.reason,
                   ...(item.selection.assessment?.reasons ?? []),
                   ...item.incomplete_reasons,
-                ].join(", ")}
+                ]
+                  .map(calibrationReasonLabel)
+                  .join(" ")}
               </p>
               <CalibrationAssessments assessments={item.assessments} />
               {item.selection.evidence && (

@@ -1,3 +1,4 @@
+import { calibrationStatusLabel } from "./calibration-labels";
 import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import { useState } from "react";
@@ -51,17 +52,14 @@ export function CalibrationTasks({
       className="border border-line rounded p-4 space-y-3"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary className="font-semibold">Calibration tasks</summary>
+      <summary className="font-semibold">校准任务</summary>
       {expanded && (
         <>
-          <p>Inspect retained check plans and control their background progress.</p>
-          {history.isPending && <p role="status">Loading calibration tasks…</p>}
+          <p>查看已保留的检查计划，并控制其后台推进。</p>
+          {history.isPending && <p role="status">正在加载校准任务…</p>}
           {history.error && <p role="alert">{history.error.message}</p>}
           {history.data?.pages[0]?.items.length === 0 && (
-            <p>
-              No calibration tasks yet. Create a plan with lab.calibration_tasks.create() in your
-              author code.
-            </p>
+            <p>尚无校准任务。请在作者代码中用 lab.calibration_tasks.create() 创建计划。</p>
           )}
           <ul className="space-y-1">
             {history.data?.pages
@@ -74,7 +72,8 @@ export function CalibrationTasks({
                     aria-current={selected === task.specification.task_id ? "true" : undefined}
                     onClick={() => select(task.specification.task_id)}
                   >
-                    {task.specification.task_id} · {task.mode} · {task.created_at}
+                    {task.specification.task_id} · {calibrationStatusLabel(task.mode)} ·{" "}
+                    {task.created_at}
                   </button>
                 </li>
               ))}
@@ -87,7 +86,7 @@ export function CalibrationTasks({
                 void history.fetchNextPage();
               }}
             >
-              Load earlier tasks
+              加载更早的任务
             </Controls.Button>
           )}
           {selected && (
@@ -164,32 +163,29 @@ function TaskDetail({
   const terminal = view?.task.mode === "cancelled" || view?.task.mode === "finished";
   const disabled = pending || !actor.trim() || !reason.trim() || detail.isError;
   return (
-    <section className="space-y-3" aria-label="Calibration task details">
+    <section className="space-y-3" aria-label="校准任务详情">
       <h3 className="font-semibold">{taskId}</h3>
       <a className="underline" href={`?task=${encodeURIComponent(taskId)}#launch`}>
-        Reopen this task
+        重新打开此任务
       </a>
-      {detail.isPending && <p role="status">Loading task progress…</p>}
+      {detail.isPending && <p role="status">正在加载任务进度…</p>}
       {detail.error && <p role="alert">{detail.error.message}</p>}
       {error && <p role="alert">{error}</p>}
       {view && (
         <>
           <p>
-            Advancement: {view.task.mode}.{" "}
+            推进状态： {calibrationStatusLabel(view.task.mode)}.{" "}
             {view.progress.complete
               ? view.progress.successful
-                ? "All planned checks passed."
-                : "Plan ended with partial results."
-              : "Plan is not complete."}
+                ? "全部计划检查已通过。"
+                : "计划已结束，仅保留部分结果。"
+              : "计划尚未完成。"}
           </p>
-          <p>
-            Pause or cancel stops new stages. Already admitted measurements may continue; open their
-            execution to inspect or cancel them.
-          </p>
+          <p>暂停或取消会停止接纳新阶段。已接纳的测量可能继续；请打开对应执行，查看或取消。</p>
           {!terminal && (
             <fieldset disabled={pending} className="flex flex-wrap gap-3 items-end">
               <Controls.Field>
-                Task operator
+                任务操作者
                 <Controls.Input
                   className="block"
                   value={actor}
@@ -197,7 +193,7 @@ function TaskDetail({
                 />
               </Controls.Field>
               <Controls.Field>
-                Task control reason
+                任务控制原因
                 <Controls.Input
                   className="block"
                   value={reason}
@@ -216,7 +212,7 @@ function TaskDetail({
                   void control("start");
                 }}
               >
-                {view.task.mode === "manual" ? "Start task" : "Resume / retry admission"}
+                {view.task.mode === "manual" ? "开始任务" : "恢复 / 重试接纳"}
               </Controls.Button>
               <Controls.Button
                 type="button"
@@ -225,7 +221,7 @@ function TaskDetail({
                   void control("pause");
                 }}
               >
-                Pause task
+                暂停任务
               </Controls.Button>
               <Controls.Button
                 type="button"
@@ -234,57 +230,54 @@ function TaskDetail({
                   void control("cancel");
                 }}
               >
-                Cancel remaining stages
+                取消剩余阶段
               </Controls.Button>
             </fieldset>
           )}
           {view.task.last_control && (
             <p>
-              Last control: {view.task.last_control.action} by {view.task.last_control.actor} —{" "}
-              {view.task.last_control.reason}
+              上次控制： {calibrationStatusLabel(view.task.last_control.action)}，操作者{" "}
+              {view.task.last_control.actor} — {view.task.last_control.reason}
             </p>
           )}
           {view.task.specification.repair_budget && (
             <p>
-              Repair budget:{" "}
+              修复预算：{" "}
               {
                 Object.values(view.task.attempts ?? {})
                   .flat()
                   .filter((a) => a.phase === "repair").length
               }
               {" / "}
-              {view.task.specification.repair_budget.max_repairs}. One repair per stage; the
-              original check must pass on its candidate before successors run.
+              {view.task.specification.repair_budget.max_repairs}.
+              每个阶段最多修复一次；候选参数须通过原检查，才会执行后续阶段。
             </p>
           )}
           {view.admission_deadline && (
             <p>
-              New work may start until {new Date(view.admission_deadline).toLocaleString()}.
-              Admitted work may finish after this deadline.
+              新工作接纳截止时间： {new Date(view.admission_deadline).toLocaleString()}.
+              已接纳的工作可以在截止时间之后完成。
             </p>
           )}
           {view.task.stop_reason && (
             <p role="status">
-              Admission stopped: {view.task.stop_reason.replaceAll("_", " ")}. Retained work is not
-              published as a successful subset.
+              已停止接纳： {calibrationStatusLabel(view.task.stop_reason)}.
+              已保留的工作不会作为成功子集发布。
             </p>
           )}
           {view.task.specification.finalization && (
-            <section
-              aria-label="Task finalization"
-              className="border border-line rounded p-3 space-y-1"
-            >
-              <h4 className="font-semibold">Final verification and publication</h4>
+            <section aria-label="任务最终处理" className="border border-line rounded p-3 space-y-1">
+              <h4 className="font-semibold">最终验证与发布</h4>
               <p>
                 {view.finalization
-                  ? `Final procedure: ${view.finalization.closure?.status ?? view.finalization.state}.`
+                  ? `最终流程： ${calibrationStatusLabel(view.finalization.closure?.status ?? view.finalization.state)}.`
                   : view.progress.complete && !view.progress.successful
-                    ? "Not admitted: planned checks did not all pass."
-                    : "Waiting for all planned checks to pass and task advancement."}
+                    ? "未接纳：计划检查未全部通过。"
+                    : "等待全部计划检查通过，并等待任务推进。"}
               </p>
-              <p>Check success alone does not verify or publish the combined parameters.</p>
+              <p>检查通过本身并不验证或发布合并后的参数。</p>
               {view.task.finalization_error && (
-                <p role="alert">Finalization admission stopped: {view.task.finalization_error}</p>
+                <p role="alert">最终处理已停止接纳： {view.task.finalization_error}</p>
               )}
               {view.finalization && (
                 <button
@@ -292,7 +285,7 @@ function TaskDetail({
                   className="underline"
                   onClick={() => onProcedure(view.finalization!.procedure_run_id)}
                 >
-                  Open final verification and publication
+                  打开最终验证与发布
                 </button>
               )}
             </section>
@@ -310,12 +303,14 @@ function TaskDetail({
               return (
                 <li key={stage.id} className="border border-line rounded p-3 space-y-1">
                   <h4 className="font-semibold">
-                    {stage.id} · {stage.state.replaceAll("_", " ")}
+                    {stage.id} · {calibrationStatusLabel(stage.state)}
                   </h4>
-                  {attempts.length > 0 && <p>Current phase: {attempts.at(-1)!.phase}</p>}
+                  {attempts.length > 0 && (
+                    <p>当前阶段： {calibrationStatusLabel(attempts.at(-1)!.phase)}</p>
+                  )}
                   {attempts.length > 1 && (
                     <details>
-                      <summary>Retained check and repair history</summary>
+                      <summary>已保留的检查与修复历史</summary>
                       {attempts.map((attempt) => (
                         <button
                           type="button"
@@ -323,7 +318,7 @@ function TaskDetail({
                           key={attempt.procedure_run_id}
                           onClick={() => onProcedure(attempt.procedure_run_id)}
                         >
-                          Open {attempt.phase} for {stage.id}
+                          打开{calibrationStatusLabel(attempt.phase)}：{stage.id}
                         </button>
                       ))}
                     </details>
@@ -332,25 +327,18 @@ function TaskDetail({
                     {planned.check.scope.capability} · {planned.check.scope.targets.join(", ")} ·{" "}
                     {planned.check.scope.conditions}
                   </p>
-                  {!!stage.blocked_by?.length && (
-                    <p>Prerequisites: {stage.blocked_by.join(", ")}</p>
-                  )}
+                  {!!stage.blocked_by?.length && <p>前置阶段： {stage.blocked_by.join(", ")}</p>}
                   {admissionError && (
                     <p role="alert">
-                      Admission stopped: {admissionError}. Correct the cause, then resume to retry
-                      admission.
+                      已停止接纳： {admissionError}. 纠正原因后恢复任务，以重试接纳。
                     </p>
                   )}
                   {stage.state === "queued" && (
-                    <p>
-                      Waiting for execution. Open execution to inspect worker and resource status.
-                    </p>
+                    <p>等待执行。打开对应执行可查看 Worker 与资源状态。</p>
                   )}
                   {(stage.state === "attention_required" ||
                     stage.state === "waiting_for_input") && (
-                    <p>
-                      Open execution to inspect retained evidence and resolve the required action.
-                    </p>
+                    <p>打开对应执行，查看已保留证据并处理所需操作。</p>
                   )}
                   {stage.procedure_run_id && (
                     <button
@@ -358,28 +346,28 @@ function TaskDetail({
                       type="button"
                       onClick={() => onProcedure(stage.procedure_run_id!)}
                     >
-                      Open execution for {stage.id}
+                      打开执行： {stage.id}
                     </button>
                   )}
                   {pendingBinding ? (
                     <p>
-                      Waiting for candidate {specification.candidate_from!.proposal_id} from stage{" "}
-                      {specification.candidate_from!.stage_id}. Parameter input is not bound yet.
+                      等待候选 {specification.candidate_from!.proposal_id} 来自阶段{" "}
+                      {specification.candidate_from!.stage_id}. 参数输入尚未绑定。
                     </p>
                   ) : (
                     <>
                       <details>
-                        <summary>Frozen measurement context</summary>
+                        <summary>固定测量上下文</summary>
                         <dl className="text-sm space-y-1 break-all">
-                          <dt>Parameters</dt>
+                          <dt>参数</dt>
                           <dd>{contextParameterLabel(planned.check.context.parameters)}</dd>
-                          <dt>Measurement subject</dt>
+                          <dt>测量对象</dt>
                           <dd>{subjectName(planned.check.context.subject)}</dd>
-                          <dt>Execution scenario</dt>
-                          <dd>{planned.check.context.scenario?.label ?? "Physical equipment"}</dd>
-                          <dt>Setup fingerprint</dt>
+                          <dt>执行场景</dt>
+                          <dd>{planned.check.context.scenario?.label ?? "物理设备"}</dd>
+                          <dt>配置指纹</dt>
                           <dd>{planned.check.context.setup_content_hash}</dd>
-                          <dt>Parameter fingerprint</dt>
+                          <dt>参数指纹</dt>
                           <dd>{planned.check.context.parameters.content_hash}</dd>
                         </dl>
                       </details>
@@ -399,7 +387,7 @@ function TaskDetail({
 function subjectName(
   subject: TaskView["task"]["specification"]["plan"]["stages"][number]["check"]["context"]["subject"],
 ): string {
-  if (subject.kind === "unbound") return "No sample selected";
+  if (subject.kind === "unbound") return "未选择样品";
   if (subject.kind === "registered_target")
     return `${subject.ref.target_id} · ${subject.sample.display_name}`;
   return subject.samples.map((sample) => `${sample.role}: ${sample.display_name}`).join(", ");

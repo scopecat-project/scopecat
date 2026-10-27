@@ -59,14 +59,14 @@ function report(
 }
 function mount(onProcedure = vi.fn()) {
   render(<CalibrationEvidence stage={stage} onProcedure={onProcedure} />);
-  fireEvent.click(screen.getByText("Inspect applicable evidence for readout"));
+  fireEvent.click(screen.getByText("检查适用证据： readout"));
   return onProcedure;
 }
 function inspect() {
-  fireEvent.change(screen.getByLabelText("Maximum evidence age (hours)"), {
+  fireEvent.change(screen.getByLabelText("证据最大有效时长（小时）"), {
     target: { value: "2" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Check evidence for readout" }));
+  fireEvent.click(screen.getByRole("button", { name: "检查证据： readout" }));
 }
 afterEach(() => {
   cleanup();
@@ -122,7 +122,7 @@ it("selects a saved policy explicitly and shows all capability verdicts without 
   expect(bodies).toEqual([]);
   fireEvent.click(screen.getByText("检查已保存的 profile"));
   await screen.findByRole("region", { name: "已保存的能力报告" });
-  expect(screen.getByText("自身检查： usable · 可用性： blocked")).toBeInTheDocument();
+  expect(screen.getByText("自身检查： 证据可用 · 可用性： 受前置条件阻塞")).toBeInTheDocument();
   expect(screen.getByText("阻塞项： readout")).toBeInTheDocument();
   expect(bodies).toEqual([{ context: stage.check.context, history_limit: 50 }]);
   fireEvent.click(screen.getByLabelText("包含 gate"));
@@ -150,9 +150,9 @@ it("requires an explicit age and submits exactly the stage's frozen scope and co
   vi.stubGlobal("fetch", fetcher);
   mount();
   expect(fetcher).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "Check evidence for readout" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "检查证据： readout" })).toBeDisabled();
   inspect();
-  await screen.findByText("Out of specification");
+  await screen.findByText("不符合要求");
   expect(requests).toEqual([
     {
       context: stage.check.context,
@@ -168,14 +168,12 @@ it("requires an explicit age and submits exactly the stage's frozen scope and co
       ],
     },
   ]);
-  expect(screen.getByText(/does not assess the current branch head/)).toBeInTheDocument();
-  expect(screen.getByText(/The selected check did not meet/)).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Maximum evidence age (hours)"), {
+  expect(screen.getByText(/不评估当前分支头/)).toBeInTheDocument();
+  expect(screen.getByText(/所选检查未满足/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("证据最大有效时长（小时）"), {
     target: { value: "1" },
   });
-  expect(
-    screen.queryByRole("region", { name: "Evidence report for readout" }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "证据报告： readout" })).not.toBeInTheDocument();
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
@@ -195,9 +193,9 @@ it("explains an incomplete scan and opens unresolved executions", async () => {
   );
   const open = mount();
   inspect();
-  await screen.findByText("Unknown");
-  expect(screen.getByText(/More checks exist than the history limit/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Inspect unresolved execution p1" }));
+  await screen.findByText("未知");
+  expect(screen.getByText(/检查数量超过历史上限/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "查看未解决的执行： p1" }));
   expect(open).toHaveBeenCalledWith("p1");
 });
 
@@ -209,10 +207,10 @@ it("removes a previously usable result when refresh fails", async () => {
   vi.stubGlobal("fetch", fetcher);
   mount();
   inspect();
-  await screen.findByText("Usable evidence");
-  fireEvent.click(screen.getByRole("button", { name: "Check evidence for readout" }));
+  await screen.findByText("证据可用");
+  fireEvent.click(screen.getByRole("button", { name: "检查证据： readout" }));
   await screen.findByText("evidence unavailable");
-  expect(screen.queryByText("Usable evidence")).not.toBeInTheDocument();
+  expect(screen.queryByText("证据可用")).not.toBeInTheDocument();
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
@@ -250,11 +248,8 @@ for (const inspector of ["evidence", "profile"] as const) {
       const onProcedure = vi.fn();
       const view = render(<CalibrationEvidence stage={stage} onProcedure={onProcedure} />);
       async function check() {
-        const detail = screen
-          .getByText("Inspect applicable evidence for readout")
-          .closest("details")!;
-        if (!detail.open)
-          fireEvent.click(screen.getByText("Inspect applicable evidence for readout"));
+        const detail = screen.getByText("检查适用证据： readout").closest("details")!;
+        if (!detail.open) fireEvent.click(screen.getByText("检查适用证据： readout"));
         if (inspector === "evidence") inspect();
         else {
           const load = screen.queryByText("加载已保存的 profile");
@@ -265,7 +260,7 @@ for (const inspector of ["evidence", "profile"] as const) {
           fireEvent.click(screen.getByText("检查已保存的 profile"));
         }
       }
-      const name = inspector === "evidence" ? "Evidence report for readout" : "已保存的能力报告";
+      const name = inspector === "evidence" ? "证据报告： readout" : "已保存的能力报告";
       await check();
       if (late)
         await act(async () => {

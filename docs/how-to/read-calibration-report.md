@@ -5,8 +5,8 @@ task view 描述一个计划的进度；capability report 则回答哪些保留�
 
 ## 从工作台检查 {#inspect-from-the-workbench}
 
-打开 **Calibration tasks**，选择任务，在 stage 下展开 **Inspect applicable evidence**。
-填写以小时计的最大证据年龄，再点击 **Check evidence**。年龄默认留空，由实验室选择策略；历史条数默认 50，最多 200。
+打开 **校准任务**，选择任务，在 stage 下展开 **检查适用证据**。
+填写以小时计的最大证据年龄，再点击 **检查证据**。年龄默认留空，由实验室选择策略；历史条数默认 50，最多 200。
 
 查询覆盖与该 stage 固定上下文和 scope 匹配的全部保留检查，包括其他 task 的检查，不跟随参数分支当前 head。
 结果显示评估时间、状态、原因、已检查数量，以及所选测量／分析和未解决 procedure 的链接。
