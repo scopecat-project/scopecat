@@ -1,42 +1,51 @@
-# Resume an interrupted static run
+# 恢复中断的静态运行 {#resume-an-interrupted-static-run}
 
-Use resume when a notebook or executor disappeared after part of a static local
-experiment became durable. The run must be `queued` or `attention_required` and
-must not already have a terminal outcome.
+Notebook 或执行器退出后，先在原运行详情中检查状态、资源和已保留的证据。
+打开详情或重读结果不会恢复执行。可恢复的运行必须处于 `queued` 或
+`attention_required`，且尚无终态；不要用一次新的采集代替对原运行的判断。
 
-A new `lab.run(...)` is rejected when another run or
-interactive session owns its required instruments. It ends as `failed` with
-`run_resources_busy`, without starting acquisition or leaving queued work behind.
-Submit a new invocation after the owner finishes; this is not automatic waiting.
-Explicit `lab.resume(...)` retains the existing queued run on resource contention
-so a failed recovery attempt does not discard its earlier measurements.
+## 先区分等待、接线过期与未知效果
 
-A procedure's `context.run(...)` instead retains its unstarted child and returns
-the parent to `ready` with a `resource_wait` marker. The worker exits while
-resources are occupied. GUI-managed procedures wake automatically when the
-resources become available, using the same child run and step attempt. Python
-callers without a background host explicitly resume the procedure. Cancel the
-parent to atomically cancel its waiting, unstarted child as well. Quarantined
-owners still require reconciliation; waiting does not authorize replay of a
-child that has already started.
+| 看到的情况 | 下一步 |
+| --- | --- |
+| 资源被其他运行或交互式仪器会话占用 | 查看占用者，等待其结束；不要以接线确认解除资源占用。 |
+| 手动线路子运行尚未启动，提示 `manual_line_confirmation_expired` | 检查该线路当前接线和原配置，显式重新确认，再继续同一个运行。 |
+| 已有执行片段，硬件效果未知或占用者被隔离 | 先在 Scopecat 外核实并处理仪器状态，再按原运行的恢复契约继续或关闭。重新确认接线不能消除未知效果。 |
 
-Inspect a queued run with `lab.control.run_detail(run_id).resources`, or the
-Resources card in the GUI. A `blocked` resource includes `blocked_by.owner_kind`
-(`run` or `instrument_session`), `owner_id`, and `status`. A quarantined owner
-requires reconciliation; its expired execution process does not make the device
-available. These fields describe a current read snapshot, not a reservation or
-permission to execute. `required` means no competing claim was observed and does
-not imply that an automatic worker is waiting to start the run.
+资源详情可通过 `lab.control.run_detail(run_id).resources` 读取。
+`blocked` 中的 `blocked_by` 给出占用者类型 `owner_kind`（`run` 或
+`instrument_session`）、`owner_id` 和 `status`。被隔离的占用者仍需核实处理；
+执行进程已退出不表示设备可用。这些字段是当前读取快照，不是预留或执行许可。
+`required` 只表示读取时未发现竞争占用，不表示后台已有 worker 等待启动。
 
-Cancelling a queued run leaves its former owner's execution unchanged. Once the
-queued run is closed, its resources show `released` even if another run still
-owns those devices. No historical blocker is inferred from current ownership.
+### 资源等待
 
-First reconcile the physical instruments outside Scopecat. This means checking
-that it is safe to acquire and program them again; durable measurement coverage
-does not prove their current state.
+普通 `lab.run(...)` 遇到所需仪器已被占用，会以 `run_resources_busy` 失败，
+不启动采集，也不留下排队工作。占用结束后需显式提交新调用。
+显式 `lab.resume(...)` 遇到资源竞争则保留原排队运行，避免丢弃此前的测量。
 
-Then rebuild the same invocation and resume the existing run:
+procedure 的 `context.run(...)` 会保留尚未启动的子运行，使父 procedure 回到
+`ready` 并记录 `resource_wait`，占用期间 worker 退出。
+GUI 管理的 procedure 在资源可用时自动唤醒，复用原来的子运行和步骤尝试；
+没有后台宿主的 Python 调用者需显式恢复 procedure。
+取消父 procedure 会同时取消其等待中的未启动子运行。
+等待不授权重放已启动的子运行，被隔离的占用者仍需先核实处理。
+
+取消一个排队运行不会改变占用者的执行。排队运行关闭后，其资源显示 `released`，
+即使另一运行仍占用这些设备；不能从当前占用关系推断历史阻塞者。
+
+### 未启动的接线确认过期
+
+此情况没有执行片段，也不凭空产生未知设备效果。按
+[手动线路测量](measure-manual-lines.md)核对原线路、原配置并显式重新确认。
+响应丢失时重试保留的同一确认请求；历史回执不代表当前确认仍有效。
+服务再次重启后，可能需要再次检查并作出新的确认。
+若正在等待安全退出，先取消退出等待，再进行人工继续操作。
+
+### 已执行但效果未知
+
+先在 Scopecat 外核实物理仪器，确认重新采集和下发设置是安全的。
+已保留的测量覆盖范围不能证明仪器当前状态。随后重建同一调用并恢复原运行：
 
 ```python
 run = lab.get_run("01K...")
@@ -48,38 +57,30 @@ invocation = FREQUENCY_SCAN.build(
 run = lab.resume(run, invocation, executor_id="recovery-notebook")
 ```
 
-Calling `lab.resume(...)` on an attention-required run is the explicit
-authorization to leave quarantine after that external reconciliation. Scopecat
-plans the invocation again against the run's accepted configuration snapshot.
-The reconstructed durable request, run contract, and any initialized measurement
-schema must match before attention is resolved or a new executor lease is
-acquired. The run contract covers every ordered point and the complete planned
-measurement schema even when the UI only shows bounded point samples and no
-dataset header was written before the interruption.
+这里的 `lab` 是原数据空间的客户端，`FREQUENCY_SCAN` 与 `frequencies`
+是原实验定义和输入；用实际原运行 ID 替换示例值。
+对 `attention_required` 运行调用 `lab.resume(...)`，就是在外部核实处理后
+显式授权解除隔离。Scopecat 使用该运行已接纳的配置快照重新规划。
+持久请求、运行契约及已初始化的测量 schema 必须匹配，之后才能解除 attention
+或取得新执行租约。契约覆盖全部有序点和完整测量 schema；即使 UI 只展示有限点样本，
+或中断前尚未写入数据集头，也不降低检查范围。
 
-Resume does not require a clean Git worktree and does not claim that source code,
-imports, packages, or the Python environment are unchanged. Contract-compatible
-changes are accepted. This is a deliberate recovery policy: the new execution
-segment records the boundary, while the operator decides whether the current
-code is appropriate.
+## 可兼容的代码变化与恢复组
 
-For a supported static local run, execution reconstructs progress from both the
-durable contiguous point watermark and exact completed recovery groups.
-Completed effects are not replayed, and new measurements belong to a new
-segment-owned acquisition fragment. The final dataset identity covers the
-selected records from every segment in logical point order.
+恢复不要求 Git 工作区干净，也不声称源码、导入、包或 Python 环境保持不变。
+支持与运行契约兼容的代码修改；新执行片段记录这条边界，操作者仍需判断当前代码是否适合继续。
 
-If the point schedule declares a recovery group, acquired rows enter the
-physical log immediately but do not make the group resumably complete until
-every member succeeds. Interruption therefore makes resume repeat the whole
-unfinished group, even when one or more hardware batches from it had already
-completed. Those orphan acquisitions remain available for diagnostics and are
-not selected by the logical dataset. Hardware batch boundaries do not weaken
-this policy. A completed reordered group can be skipped from its exact durable
-proof even when it lies beyond the contiguous watermark.
+对于受支持的本地静态运行，进度同时依据持久连续点水位和精确完成的恢复组重建。
+已证明完成的工作不重放；新增测量写入新执行片段所属的采集分片。
+最终数据集身份按逻辑点顺序覆盖各片段中被选中的记录。
 
-Adaptive runs and domain-target runs cannot yet use this API after an execution
-segment has started, even when zero points are durable. Their safe position also
-depends on proposal or external-job state that point coverage alone cannot
-identify. Close those runs or use target-specific recovery instead of replaying
-them as static suffixes.
+若点调度声明了恢复组，采集行会立即进入物理日志，但只有组内所有成员成功，
+该组才算可恢复的完成状态。中断后会重做**整个未完成组**，即使其中部分硬件批次已经完成。
+这些先前采集仍保留用于诊断，但不选入逻辑数据集。硬件批次边界不会削弱此规则。
+乱序完成的恢复组即使位于连续水位之后，也可凭精确持久证据跳过。
+
+## 不适用的运行
+
+自适应运行与 domain-target 运行一旦启动执行片段，即使尚无持久点，也不能使用此 API 恢复。
+它们还依赖提议状态或外部作业状态，单靠点覆盖无法确定安全位置。
+应关闭原运行或使用目标专用恢复流程，不要把它们当作静态点序列的剩余部分重放。

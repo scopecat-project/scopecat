@@ -5,6 +5,9 @@ subject, target and setup identity. Ordinary acquisition parameters may vary
 between explicitly prepared acquisitions. Each child retains its original
 source, configuration, operation ID and run admission. Labels are not sample IDs.
 
+用户操作见[手动换线并逐条测量](../../how-to/measure-manual-lines.md)。
+以下接纳与恢复规则是当前协议；带提交编号的验收说明仅记录当时的测试范围。
+
 ## Shared boundary with drain and recovery
 
 This slice owns only explicitly declared manual-line acquisitions. Drain and
@@ -51,9 +54,10 @@ contract. Wiring confirmation cannot resolve their uncertainty. Ordinary runs
 without a manual-line declaration retain existing behavior. Completed evidence
 is restored without acquiring another lease.
 
-The server-side confirmation and continuation protocol is a prerequisite for the
-finite line-list UI; it is not itself delivery of the full persistent line list,
-attempt history and comparison experience in #1023. Acceptance uses fake devices.
+Historical delivery note: the initial server-side confirmation and continuation
+work alone did not deliver the full list UI in #1023. The current finite list,
+attempt history and comparison behavior is described below. The referenced
+acceptance uses fake devices; it does not qualify physical wiring or hardware.
 
 ## Finite ordered lists and retained attempts
 
