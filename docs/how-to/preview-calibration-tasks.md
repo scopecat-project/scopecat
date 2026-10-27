@@ -1,13 +1,11 @@
-# Plan and dispatch staged calibration work
+# 规划并派发分阶段校准 {#plan-and-dispatch-staged-calibration-work}
 
-Use a stage plan to inspect prerequisites and partial progress before building a
-dispatcher. Each stage represents one declared check on its exact target, setup,
-parameter revision and conditions. Stages can use different contexts. The plan
-does not change a session selection or combine single-target checks into a joint
-measurement.
+先用 stage plan 查看前置条件与部分进度，再决定派发方式。每个 stage 声明一个检查，固定目标、setup、参数 revision 和条件；不同 stage 可使用不同上下文。
+计划不会改变 session 选择，也不会把单目标检查自动合成联合测量。
+本文的 `lab` 示例使用底层 `LabClient`。普通作者课程通过 `prepare_task`、submit 和 start 固定阶段与收尾源码，见
+[作者入口](../reference/project-layout.md#submit-an-ordinary-procedure-from-an-author-session)。不要混用两类客户端的执行职责。
 
-Given three `CalibrationCheckRequest` declarations prepared for the intended
-checks (`q0_check`, `q1_check` and `joint_check`):
+给定已准备的三个 `CalibrationCheckRequest`（`q0_check`、`q1_check`、`joint_check`）：
 
 ```python
 from scopecat.automation.calibration_tasks import (
@@ -39,46 +37,34 @@ for stage in progress.stages:
     print(stage.id, stage.state, stage.blocked_by)
 ```
 
-The server rejects cycles, unknown or duplicate stage IDs, duplicate dependencies,
-unknown execution bindings and using one execution for multiple stages. Bound
-executions must have the exact check declaration specified by their stage. No
-author module is loaded to answer the preview. The HTTP equivalent is
-`POST /api/v1/calibration-tasks/preview` with `plan` and `executions` fields.
+服务端拒绝循环、未知或重复 stage ID、重复依赖、未知 execution 绑定及同一 execution 绑定多个 stage。
+已绑定 execution 必须具有 stage 所声明的精确检查。预览不加载作者模块；等价 HTTP 入口是
+`POST /api/v1/calibration-tasks/preview`，请求包含 `plan` 和 `executions`。
 
-| Stage state | Meaning |
+| Stage state | 含义 |
 |---|---|
-| `ready` | No execution is bound and all prerequisites passed |
-| `waiting` | A prerequisite has not finished |
-| `blocked` | A prerequisite was rejected, failed, cancelled, incomplete or blocked |
-| `queued`, `running` | The bound procedure is pending or executing |
-| `waiting_for_input`, `attention_required` | The bound procedure needs input or attention |
-| `passed` | The procedure succeeded and its completed measurement has a positive check result |
-| `rejected` | A completed measurement has a negative check result |
-| `failed`, `cancelled` | Execution failed or was cancelled |
-| `incomplete` | Execution reported success without complete check evidence |
+| `ready` | 尚未绑定 execution，全部前置检查已通过 |
+| `waiting` | 前置检查尚未结束 |
+| `blocked` | 前置检查被拒绝、失败、取消、不完整或受阻 |
+| `queued`, `running` | 已绑定 procedure 正在等待或执行 |
+| `waiting_for_input`, `attention_required` | 已绑定 procedure 需要输入或处理 |
+| `passed` | procedure 成功，完成的测量具有正面检查结果 |
+| `rejected` | 完成的测量具有负面检查结果 |
+| `failed`, `cancelled` | 执行失败或取消 |
+| `incomplete` | 执行报告成功，但缺少完整检查证据 |
 
-`blocked_by` names immediate unmet prerequisites for unbound stages. Failure does
-not block unrelated stages. A task becomes `complete` when every stage has a
-terminal result or is blocked; `successful` requires every stage to pass. This
-makes a terminal partial result distinguishable from a fully successful result.
-Already bound work retains its actual execution state; a preview cannot stop or
-retroactively enforce prerequisites on an independently submitted procedure.
+`blocked_by` 列出未绑定 stage 的直接未满足依赖。失败不会阻塞无关 stage。
+每个 stage 都已终止或受阻时，task 为 `complete`；只有全部通过才是 `successful`，因此终止的部分结果与完整成功不同。
+已绑定工作保留实际执行状态；预览不能停止独立提交的 procedure，也不能追溯强制其满足前置条件。
 
-The response is a read snapshot of selected executions and their evidence. It is
-not a freshness assessment, permission to dispatch, proof that the dependent
-experiment consumed predecessor outputs, or certification of combined device
-readiness. Use check applicability for age/context reuse and normal server
-admission for subsequent actions.
+响应是所选 execution 及证据的只读快照，不是新鲜度评估、派发许可、后续实验已消费前置输出的证明或设备联合就绪认证。
+时效／上下文复用使用检查适用性规则，后续动作仍经过服务端正常准入。
+预览最多支持 256 个 stage。需要保存计划并在提交时强制依赖时，使用 `lab.calibration_tasks`。
 
-Preview is read-only and supports at most 256 stages. To retain the plan and
-enforce prerequisites when submitting stages, use `lab.calibration_tasks`.
+## 保存任务并派发阶段 {#save-a-task-and-dispatch-a-stage}
 
-## Save a task and dispatch a stage
-
-Capture each procedure's exact definition and typed intent with `task_call`.
-These intents must declare precisely the checks used in the plan above. For a
-physical sample, pass its exact `SampleSelector` tuple through `samples=`, as with
-ordinary procedure submission.
+用 `task_call` 固定各 procedure 的精确定义和 typed intent。intent 必须声明与计划完全一致的检查。
+实体样品通过 `samples=` 传入精确 `SampleSelector` 元组，与普通 procedure 提交相同。
 
 ```python
 from scopecat.api.calibration_tasks import task_call
@@ -102,30 +88,22 @@ task = lab.calibration_tasks.get("cooldown-7/check-round-1")
 print(task.progress.ready)
 ```
 
-Creating a task saves intent without admitting any procedures. Definition identity,
-intent and stage dependencies cannot be edited under the same task ID. Retrying
-the same create request returns the existing task; a different specification
-conflicts. `list()` discovers retained tasks after reconnecting.
+create 只保存 intent，不接纳 procedure。同一 task ID 下不能修改 definition 身份、intent 或阶段依赖。
+完全相同的 create 重试返回已有任务，规格不同则冲突。重连后可通过有界 `list()` 查找保留任务。
 
-`dispatch(task_id, stage_id)` checks prerequisites against retained evidence,
-applies normal parameter/setup/subject admission, submits the procedure and saves
-its stage association in one write transaction. An interrupted transaction leaves
-neither a procedure nor an association. Repeated dispatch returns the same
-procedure, even after authority changes; new stages still require current
-authority. No earlier unrelated execution is silently adopted. Ready independent
-stages can be dispatched separately if another stage has an admission problem.
+`dispatch(task_id, stage_id)` 依据保留证据检查依赖，执行正常参数／setup／subject 准入，并在同一写事务中提交 procedure、保存阶段关联。
+事务中断不会留下单独的 procedure 或关联。重复 dispatch 返回同一 procedure，即使权限后来改变；新 stage 仍需当前权限。
+不会静默采用更早的无关 execution。某个 stage 准入失败时，已就绪的独立 stage 仍可单独派发。
 
-The task and associations survive daemon restarts and current-format backup and
-restore. Current development schema 110 stores task controls and indexes running
-tasks; use a fresh data directory
-for this format and retain older stores with their original environments.
+任务及关联可跨 daemon 重启和受支持格式的备份／恢复保留。升级与不支持格式的处理统一遵循
+[维护应用](maintain-application.md#install-a-newer-application)及其中的
+[备份并升级流程](maintain-application.md#back-up-and-upgrade-schema-115-to-116)。
+不要因为旧指南的格式声明就新建或删除数据目录；是否支持原位升级及恢复副本的边界，以维护指南为准。
 
-## Final verification and publication
+## 最终验证与发布 {#final-verification-and-publication}
 
-A task may name one registered procedure to run after **every planned check
-passes**. It receives the exact adopted evidence of every stage. A rejected,
-failed, cancelled or incomplete stage prevents this handoff; it never publishes
-a successful subset. Add the call when creating the immutable specification:
+任务可以指定一个已注册 procedure，在**全部计划检查通过**后运行。它接收各 stage 实际采用的精确证据。
+任一 stage 被拒绝、失败、取消或证据不完整都会阻止交接，不能只发布成功子集。创建不可变规格时加入调用：
 
 ```python
 task = lab.calibration_tasks.create(
@@ -136,63 +114,40 @@ task = lab.calibration_tasks.create(
 )
 ```
 
-`finalize_calibration` is your registered laboratory procedure. Its typed intent
-must declare `calibration_task: CalibrationTaskInputs | None = None`, importing
-`CalibrationTaskInputs` from `scopecat.automation.calibration_tasks`. At creation
-that field must be `None`; the daemon fills it at admission. Other fields remain
-unchanged. Capture the destination branch head, result revision name, composition
-mode, proposal IDs, verification scope and policy in that intent **before**
-starting the task. Supply the exact sample selectors needed by the final procedure.
-Do not look up a newer branch head or setup to repair a conflict during replay.
+`finalize_calibration` 是实验室注册的 procedure。其 typed intent 必须声明
+`calibration_task: CalibrationTaskInputs | None = None`，类型从 `scopecat.automation.calibration_tasks` 导入。
+创建时该字段必须为 `None`，daemon 在准入时填入，其他字段不变。
+**启动前**在 intent 中固定目标分支 head、结果 revision 名、组合模式、proposal ID、验证范围和策略，并提供收尾 procedure 所需的精确 sample selectors。
+不能在重放时通过查询新 head 或新 setup 来“修复”冲突。
 
-The **后台标定与最终发布** (`task-calibration`) independent course example under
-`packages/scopecat-tutorials/src/scopecat_tutorials/course_material` contains the
-fit stages, task creation and final verification/publication procedure. The three
-requests show acceptance, scientific rejection and a concurrent branch conflict.
+独立课程**后台标定与最终发布**（`task-calibration`）位于
+`packages/scopecat-tutorials/src/scopecat_tutorials/course_material`，包含拟合 stage、任务准备／提交及最终验证／发布 procedure。
+三个请求分别展示接受、科学拒绝和并发分支冲突；阶段与 finalization 都使用准备命令固定的源码。
 
-Inside the procedure, each `intent.calibration_task.checks[stage_id]` contains the
-adopted measurement and analysis identity, scientific binding, scope and result.
-Use `intent.calibration_task.measurement(stage_id)` and
-`intent.calibration_task.analysis(stage_id)` for the durable references consumed
-by `ctx.run_handle()` and `ctx.published_analysis()`. Choose the proposal
-from that exact analysis according to the captured intent, then use
-[`ctx.combine_parameter_candidates()`](automate-parameter-calibration.md#compose-measure-and-decide)
-for parallel or sequential composition. Measure the aggregate, retain all source
-and verification inputs in the laboratory decision, and only then call
-`ctx.publish_parameter_candidate()` against the captured branch head. This uses
-the ordinary fenced publication and durable-step recovery path. The task does
-not invent an acceptance policy or authorize publication from check success.
+procedure 内的 `intent.calibration_task.checks[stage_id]` 包含采用的测量／分析身份、科学绑定、范围和结果。
+`intent.calibration_task.measurement(stage_id)` 与 `intent.calibration_task.analysis(stage_id)` 返回持久引用，供
+`ctx.run_handle()` 和 `ctx.published_analysis()` 读取。按固定 intent 从精确分析选择 proposal，再用
+[`ctx.combine_parameter_candidates()`](automate-parameter-calibration.md#compose-measure-and-decide) 平行或顺序组合。
+测量组合结果，在实验室决策中保留全部来源和验证输入，然后才针对固定 head 调用 `ctx.publish_parameter_candidate()`。
+这沿用正常的发布校验和持久步骤恢复路径；任务不会发明接受策略，stage 检查成功本身不授权发布。
 
-Start the task to enable finalization admission. Check evidence binding and the
-new procedure association commit in one transaction; interrupted admission leaves
-neither behind. Restart and backup/restore retain the same association. The
-configured worker executes it even after the notebook disconnects. Admission
-errors appear in `task.task.finalization_error`; correct the cause and start again
-to retry. Procedure attention/input and unknown publication outcomes use existing
-procedure controls, without submitting a second finalizer.
+start 允许 finalization 准入。检查证据绑定与新 procedure 关联在同一事务提交，中断不会留下部分记录；重启及备份／恢复保留相同关联。
+配置好的 worker 可在 Notebook 断开后继续执行。准入错误显示于 `task.task.finalization_error`，修正原因后再次 start 可重试准入。
+procedure 的 attention／input 和未知发布结果使用其既有处理入口，不能另交一个 finalizer。
 
-`task.progress` describes the check stages only. Inspect `task.finalization` for
-the final procedure's state and closure, and its retained publication output for
-the actual branch receipt. `mode="finished"` means advancement ended, not that
-scientific verification passed or parameters were published. The workbench shows
-the final procedure separately and links to its evidence and controls. Pause or
-cancel prevents new finalization admission; it cannot undo an already admitted
-procedure or committed publication.
+`task.progress` 只描述检查 stage。最终 procedure 的状态与 closure 见 `task.finalization`，实际分支发布凭据见其保留输出。
+`mode="finished"` 表示推进已结束，不表示科学验证通过或参数已发布。工作台单独显示 final procedure 并链接证据和控制入口。
+pause／cancel 阻止新的 finalization 准入，但不能撤销已接纳的 procedure 或已提交的发布。
 
-## Run without keeping a notebook open
+## Notebook 关闭后继续运行 {#run-without-keeping-a-notebook-open}
 
-The workbench's **Calibration tasks** section lists retained plans. Open a task to
-inspect each stage's check, target, frozen context, prerequisites and admission
-errors. **Open execution** leads to the existing procedure view for worker/resource
-status, retained measurements, review input and execution cancellation. The task URL
-can be bookmarked and reopened after a browser restart.
+工作台 **Calibration tasks** 列出保留计划，可查看各 stage 的检查、目标、固定上下文、依赖和准入错误。
+**Open execution** 打开既有 procedure 视图，查看 worker／资源状态、测量、人工输入和执行取消入口。
+任务 URL 可收藏，浏览器重启后仍可重开。
 
-Start/resume, pause and cancel controls require an operator and reason. A conflicting
-control refreshes the view and displays the error without automatically retrying
-your action. Task progress describes this plan; it is not a sample-health or combined
-capability assessment. Plan creation currently remains in author Python code.
-
-Once the task specification is ready, ask the daemon to advance it:
+start／resume、pause、cancel 需要 operator 和 reason。控制冲突会刷新视图并显示错误，不自动重试动作。
+任务进度描述这个计划，不是样品健康或组合能力评估；计划创建仍在作者 Python 中完成。
+规格准备好后，可要求 daemon 推进：
 
 ```python
 task = lab.calibration_tasks.start(task, actor="alice", reason="check this cooldown")
@@ -202,33 +157,19 @@ print(task.task.mode, task.task.dispatch_errors)
 print(task.progress)
 ```
 
-The daemon polls running tasks and admits at most one stage per task at a time.
-Existing procedure workers load the configured application/author workspace and
-execute the retained definition. Its identity must still be available there;
-defining a procedure only in a notebook does not make it importable by a worker.
-Procedure leases and resource admission continue to apply. Different tasks may
-execute concurrently within the worker limit; distinct targets do not prove that
-their hardware is independent.
+daemon 轮询 running tasks，每个 task 一次最多接纳一个 stage。既有 worker 加载配置的应用／作者 workspace 并执行保留定义；该定义身份必须仍可用。
+只在 Notebook 内定义 procedure，不会使其自动可供 worker 导入。procedure lease 和资源准入继续适用。
+不同 task 可在 worker 数量限制内并发；目标不同不能证明真实硬件彼此独立。
 
-A rejected check blocks its descendants; other independent stages may continue.
-An admission failure is retained in `task.task.dispatch_errors` and is not retried
-on every poll. Correct the cause and call `start` with the latest task view to
-clear admission errors and try again. A failed worker process stays paused and
-requires explicit procedure dispatch after inspection; starting the task does
-not reset that worker pause. Waiting input or attention also stops sequential
-advancement until resolved through the procedure's existing controls.
+被拒绝检查阻塞其后继，独立 stage 可继续。准入失败保留于 `task.task.dispatch_errors`，不会每次轮询自动重试。
+修正原因后，用最新 task view 调用 start，清除准入错误并再次尝试。失败的 worker 进程保持暂停，需要检查后显式派发原 procedure；start task 不会清除此 worker 暂停。
+等待输入或 attention 也会停止顺序推进，直到通过 procedure 原有入口处理。
 
-An unavailable author workspace or worker-start failure pauses that execution;
-other tasks can still reach their workers. Open its execution to see the retained
-worker diagnostic and exact log path, restore its code workspace or environment, then use
-**Dispatch existing procedure**. This retries the admitted execution rather than
-creating a replacement check.
+作者 workspace 不可用或 worker 启动失败时，该 execution 暂停，其他 task 仍可到达各自 worker。
+打开 execution 查看保留诊断和精确日志路径，恢复代码 workspace／环境后使用 **继续任务**，重试已接纳的 execution，不创建替代检查。
 
-Expand **Recent worker output** in execution details to read the latest 16 KiB
-directly in the workbench. Use **Refresh worker output** for new messages. The view
-marks truncated output and distinguishes an absent log from an empty one; use the
-displayed file path when you need the complete log. Output is shown as plain text,
-separately from the retained measurement and procedure outcomes.
+执行详情的 **Recent worker output** 显示最近 16 KiB，**Refresh worker output** 获取新日志。
+视图标记截断，并区分日志不存在与日志为空；完整日志使用显示的路径查看。日志按纯文本显示，与保留测量和 procedure outcome 分开。
 
 ```python
 task = lab.calibration_tasks.pause(task, actor="alice", reason="inspect equipment")
@@ -238,31 +179,19 @@ task = lab.calibration_tasks.cancel(
 )
 ```
 
-Pause and cancellation stop **new stage admission**, including manual dispatch.
-Already admitted procedures may continue; use their procedure/run controls to
-request cancellation and inspect the actual outcome. Task cancellation is final
-and does not mean hardware has stopped or that the plan completed. Its progress
-still reports the retained stage results. A finished task likewise cannot restart;
-`progress.successful` distinguishes complete success from terminal partial results.
+pause 和 cancel 停止的是**新 stage 准入**，也包括手动 dispatch。已接纳 procedure 可能继续，需要使用其 procedure／run 控制请求取消并核实实际结果。
+任务取消是终态，不表示硬件已停止或计划已完成；progress 仍报告保留的阶段结果。finished task 也不能重启，`progress.successful` 区分完整成功与终止的部分结果。
 
-Control commands carry the revision from the supplied view, actor and reason.
-An exact retry is safe; a stale view cannot silently undo a newer control. Reload
-the task before issuing a different command after another operator changes it.
-The daemon recovers running tasks and admitted worker handoffs after restart;
-paused/cancelled tasks remain so. There is no automatic retry of scientific failures.
+控制命令携带给定 view 的 revision、actor 和 reason。精确重试安全，过期 view 不能静默覆盖新控制。
+其他操作者修改后，发出不同命令前先重读 task。daemon 重启会恢复 running tasks 及已接纳 worker 交接，paused／cancelled task 保持原状态，不自动重试科学失败。
 
-Tasks do not switch setups, refresh branches or publish combined readiness.
-Repairs must be declared before creating the task, as described below. Changing
-inputs, extending an exhausted budget or requesting another repair requires a new
-task specification and ID; starting again never resets the clock or spent budget.
+task 不切换 setup、不刷新分支，也不发布组合就绪声明。修复必须在创建前声明。
+改变输入、扩展已耗尽预算或请求新修复，需要新的 task 规格和 ID；再次 start 不会重置时间或已用预算。
 
-## Check first and repair only failed checks
+## 先检查，仅修复科学失败的检查 {#check-first-and-repair-only-failed-checks}
 
-Use ordinary check and fit procedures with separate scientific result scopes.
-The check tests the requested capability. The fit reports whether its candidate
-is acceptable for verification, not whether the original capability is already
-valid. Both return the standard check fact; the fit also publishes a named
-parameter proposal. Neither procedure should advance the destination branch.
+使用普通 check 和 fit procedure，并声明不同的科学结果 scope。check 检查请求的能力；fit 报告候选是否值得验证，不表示原能力已有效。
+两者都返回标准 check fact，fit 还发布具名参数 proposal。两者均不应推进目标分支。
 
 ```python
 from datetime import timedelta
@@ -286,63 +215,37 @@ task = lab.calibration_tasks.create(
 )
 ```
 
-The fit declaration must have the same saved input context, setup and targets as
-its stage and a **different check scope**. Repair currently requires a fixed
-initial context, not a `candidate_from` template. The worker always makes a fresh
-initial check; it does not silently adopt historical passing evidence. This keeps
-the first repair contract exact even where dependency coverage remains unknown.
+fit 声明必须与 stage 使用相同的已保存输入上下文、setup 和 targets，但具有**不同 check scope**。
+修复目前要求固定初始上下文，不接受 `candidate_from` 模板。worker 始终执行新的初始检查，不静默采用历史通过证据；即使依赖覆盖未知，也保持首轮修复契约精确。
 
-Each eligible stage admits at most three durable procedures: initial check, one
-fit after scientific rejection, then the original check on that fit's exact
-candidate. A passing initial check skips the fit. A rejected fit or failed candidate
-verification ends that stage; no second fit is automatically scheduled. Execution
-failure, cancellation, missing evidence and worker attention are not scientific
-rejection and never trigger a replacement fit. Independent stages may continue.
-Missing candidate output stops verification admission visibly; retrying admission
-reuses the completed fit rather than rerunning it.
+每个符合条件的 stage 最多接纳三个持久 procedure：初始 check、科学拒绝后的一次 fit、以及用该 fit 精确候选重做原 check。
+初始检查通过则跳过 fit；fit 被拒绝或候选验证失败则终止该 stage，不自动安排第二次 fit。
+执行失败、取消、证据缺失和 worker attention 不是科学拒绝，不触发替代 fit；独立 stage 仍可继续。
+候选输出缺失时明确停止验证准入，重试准入复用已完成 fit，不重做拟合。
 
-As with candidate edges, check code must consume the incoming declaration's exact
-parameters. Verification replaces only `intent.calibration_check.context.parameters`;
-copies in other intent fields are not rewritten. Use the retained analysis and
-proposal identified by an `AnalysisCandidateRunConfigSource` to open its
-`candidate_config`, then pass that to `ctx.run`. The ordinary child admission
-rejects accidentally using the original input instead.
+与 candidate edge 相同，check 代码必须消费传入声明的精确参数。验证只替换
+`intent.calibration_check.context.parameters`，不改写其他 intent 字段中的副本。
+用 `AnalysisCandidateRunConfigSource` 标识的保留分析和 proposal 读取 `candidate_config`，再传给 `ctx.run`。
+普通子任务准入会拒绝误用原始输入的代码。
 
-`max_repairs` counts admitted fits, including rejected or failed ones. Zero allows
-checks only. The elapsed budget begins at first start/manual dispatch; pauses and
-application restarts do not reset it. The deadline limits **new admission**, not
-execution duration: already admitted work may finish and needs normal procedure
-controls to stop. Final verification is also new work and cannot start after the
-deadline. An already admitted finalizer may finish its original publication.
-Budget exhaustion finishes advancement with `task.task.stop_reason`; partial
-checks never authorize finalization. A finished task cannot extend its budget.
+`max_repairs` 统计已接纳 fit，包含被拒绝或执行失败的 fit；零表示只检查。
+耗时预算从首次 start／手动 dispatch 开始，暂停和应用重启不重置。截止时间限制**新准入**，不限制已接纳工作的运行时长；停止已有工作仍需正常 procedure 控制。
+最终验证也是新工作，不能在截止后开始；已接纳 finalizer 可完成原发布。预算耗尽时以 `task.task.stop_reason` 结束推进，部分检查不授权 finalization，finished task 不能延长预算。
 
-`task.task.attempts[stage_id]` retains each phase, resolved check and procedure ID.
-Python `executions` and `resolved_checks` are derived views of the latest attempts;
-the store and HTTP use the attempt history as their single authority. The workbench
-shows the phase, budget, deadline, stop reason and links to earlier attempts.
-Restart/retry preserves those exact identities and spent budget.
-Use `task.progress` for the repair policy's state. The standalone `preview_task`
-API only assesses the supplied check bindings; it does not infer a repair workflow.
-Manual `dispatch` remains an idempotent initial-check operation; `start` advances
-the declared repair and verification phases.
+`task.task.attempts[stage_id]` 保留每个 phase、解析后的 check 和 procedure ID。
+Python 的 `executions`、`resolved_checks` 是最新 attempt 的派生视图，存储与 HTTP 以 attempt 历史为唯一依据。
+工作台显示 phase、预算、deadline、stop reason 及旧 attempt 链接；重启／重试保留相同身份与已用预算。
+修复策略状态使用 `task.progress`；独立 `preview_task` 只评估给定 check 绑定，不推断修复工作流。
+手动 dispatch 仍是幂等的初始 check 操作，start 推进声明的修复和验证 phase。
 
-Finalization still requires all stages to pass. `CalibrationTaskInputs.checks`
-contains their final checks; `CalibrationTaskInputs.repairs` contains only accepted
-fits that were followed by successful verification. Compose those fits' exact
-analysis proposals using `inputs.analysis(stage_id, from_repair=True)`; obtain
-their pre-fit measurements with `inputs.measurement(stage_id, from_repair=True)`.
-Retain passing unmodified targets in the final verification
-scope, and remeasure the aggregate. If nothing needed repair, verify the unchanged
-inputs and return without publishing a redundant revision. Publish only a positive
-joint decision against the originally captured destination. The six-target
-software fixture covers restart, selective repair, no-op, budget stop, rejected
-fit, rejected verification, coupled final failure and concurrent branch edits.
+finalization 仍要求全部 stage 通过。`CalibrationTaskInputs.checks` 包含最终检查；`CalibrationTaskInputs.repairs` 仅包含接受且后续验证成功的 fit。
+通过 `inputs.analysis(stage_id, from_repair=True)` 取得精确分析提案进行组合，`inputs.measurement(stage_id, from_repair=True)` 取得拟合前测量。
+最终验证范围保留未修改且已通过的目标，并重新测量组合结果。若无需修复，验证原输入后直接返回，不发布冗余 revision。
+只有正面联合决策才可对原固定 head 发布。六目标软件 fixture 覆盖重启、选择性修复、no-op、预算停止、fit 拒绝、验证拒绝、耦合导致最终失败及并发分支编辑。
 
-## Bind a prerequisite's candidate output
+## 绑定前置阶段的候选输出 {#bind-a-prerequisites-candidate-output}
 
-Use an explicit candidate edge when the next check must measure parameters fitted
-by a preceding stage:
+下一 check 必须测量前一 stage 拟合出的参数时，使用显式 candidate edge：
 
 ```python
 from scopecat.automation.calibration_tasks import (
@@ -358,32 +261,17 @@ verification_stage = CalibrationTaskStage(
 )
 ```
 
-`verification_template` is the usual `CalibrationCheckRequest`. Its scope, subject,
-setup, scenario, mapping and result-step addresses remain fixed. `candidate_from`
-explicitly replaces its parameter input at admission; until then that input is a
-template, not a resolved context. The matching call still contains the template
-under `calibration_check` at task creation.
+`verification_template` 是普通 `CalibrationCheckRequest`；scope、subject、setup、scenario、mapping 和结果 step 地址保持固定。
+`candidate_from` 在准入时显式替换参数输入；此前它只是模板，不是解析后的上下文。创建任务时，匹配调用仍在 `calibration_check` 中包含该模板。
 
-The source must be an explicit prerequisite and pass. Its adopted check analysis
-must publish the named parameter proposal alongside the standard check result.
-Another analysis of the same run, a latest-analysis lookup or a different stage's
-result cannot substitute for that output. A failed or rejected source blocks the
-dependent stage; this feature is not a repair-on-failure loop.
+来源必须是显式前置 stage 且已通过，其采用的 check analysis 必须同时发布标准 check result 与具名 proposal。
+同 run 的另一份分析、“最新分析”查询或其他 stage 的结果不能替代它。来源失败或被拒绝会阻塞依赖 stage；这不是失败后修复循环。
 
-At dispatch the server validates the output and scientific binding, then replaces
-only `intent.calibration_check.context.parameters` with the exact candidate source.
-Procedure code must consume this incoming declaration; parameter copies in other
-intent fields are not rewritten. The child measurement is checked against the
-admitted candidate, so code that accidentally keeps the template input is rejected.
+dispatch 时服务端验证输出和科学绑定，只替换 `intent.calibration_check.context.parameters` 为精确 candidate source。
+procedure 代码必须消费该声明，不改写其他 intent 字段中的参数副本。子测量按准入候选检查，误用模板输入会被拒绝。
 
-The resolved check and execution association commit together. `task.task.resolved_checks`
-retains the inputs; `task.task.resolved_plan` overlays them on the immutable
-specification for Python inspection and previews. Undispatched candidate stages
-remain templates. Restart/retry reuses the admitted check and procedure. An admission
-failure retains no partial binding; automatic advancement records the error until
-explicit resume, while independent work can proceed.
+解析后的 check 和 execution 关联共同提交。`task.task.resolved_checks` 保留输入，`task.task.resolved_plan` 将其覆盖到不可变规格上，供 Python 检查和预览。
+未派发的候选 stage 仍是模板。重启／重试复用已接纳 check 和 procedure；准入失败不保留部分绑定，自动推进记录错误直至显式恢复，独立工作可继续。
 
-The workbench shows the source stage/proposal while binding is pending and exposes
-the frozen candidate context and evidence query only after admission. Binding does
-not update the daily branch or certify the proposed values; verification and
-optimistically fenced publication remain explicit operations.
+工作台在待绑定时显示来源 stage／proposal，仅在准入后开放固定候选上下文和证据查询。
+绑定不更新日常分支，也不认证提案数值；验证和带版本冲突检查的发布仍须显式执行。
