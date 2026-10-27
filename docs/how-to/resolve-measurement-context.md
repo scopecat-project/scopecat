@@ -1,8 +1,7 @@
-# Resolve exact measurement inputs
+# 解析精确测量输入 {#resolve-exact-measurement-inputs}
 
-Use `lab.resolve_context(...)` to capture saved parameters and setup together
-without launching an experiment, changing session selection or importing author
-code. Calibration reports consume this same public measurement context.
+`lab.resolve_context(...)` 将已保存参数与 setup 一起捕获为精确上下文，不启动实验、
+不修改会话选择，也不导入作者代码。标定报告使用同一个公开测量上下文。
 
 ```python
 from scopecat.records.sample import SampleSelector
@@ -15,7 +14,7 @@ receipt = lab.resolve_context(
 context = receipt.context
 ```
 
-For a saved version without a branch, use `parameters` instead of `branch`:
+使用不依赖分支的已保存版本时，以 `parameters` 替代 `branch`：
 
 ```python
 parameters = lab.parameters.get("initial-estimates")
@@ -26,36 +25,31 @@ receipt = lab.resolve_context(
 )
 ```
 
-Pass a saved `ParameterRevision` or exact reference; a branch is neither required
-nor created. The API requires exactly one of `branch` and `parameters`. Both paths
-use the same revision validation and scientific binding resolver. A stale content
-hash is rejected rather than replaced with the current content.
+传入已保存的 `ParameterRevision` 或精确引用，无需存在或新建分支。
+已保存参数路径要求 `branch` 与 `parameters` 恰选其一；两者使用相同的修订验证与科学绑定解析器。
+旧内容哈希不匹配会被拒绝，不会退回当前内容或 latest。
 
-The sample workbench exposes the same choice under **Capability evidence from
-saved parameters**. Select **Exact saved revision** and enter the saved version's
-name; the workbench obtains its exact reference without asking you to copy a hash.
+样品工作台的 **工作参数与能力上下文** 提供相同选择。在 **参数来源** 中选择
+**精确保存版本**，输入已保存版本名称；工作台会读取它的精确引用，不要求手动复制哈希。
 
-Pass an explicit `SetupRevision` or exact reference. No global setup is substituted.
-For a registered
-target, pass `target=target.ref` instead of `samples`; the current execution
-binding supports one target member without target-level connections.
+必须显式传入 `SetupRevision` 或精确引用，不替换为全局 setup。
+使用已登记目标时，用 `target=target.ref` 替代 `samples`；
+当前执行绑定仅支持没有目标级连接的单成员目标。
 
-The result separates two responsibilities:
+解析结果区分两类信息：
 
-- `context` is a `MeasurementContext`: exact saved parameters, scientific subject,
-  executable setup hash, software scenario and target-to-setup mapping.
-- `receipt.branch` and `receipt.setup` record which branch generation and setup
-  revision were resolved. Branch names and generations are not scientific identity.
-  With exact parameters, `receipt.branch` is `None`; the parameter reference is
-  retained in `receipt.context.parameters`.
+- `context` 是 `MeasurementContext`：精确已保存参数、科学对象、可执行 setup 哈希、
+  软件场景及目标到 setup 的映射。
+- `receipt.branch` 和 `receipt.setup` 记录此次解析的分支代次与 setup 修订。
+  分支名称和代次不是科学身份。使用精确参数时，`receipt.branch` 为 `None`，
+  参数引用保存在 `receipt.context.parameters` 中。
 
-Moving the branch or selecting another setup does not change an existing context.
-Resolve again when you want a fresh snapshot. With neither samples nor a target,
-the context is unbound; this does not establish physical sample capability.
+推进分支或改选 setup 不改变已有上下文。需要新快照时重新解析。
+既不传样品也不传目标时，上下文未绑定对象，不能据此认定物理样品具有某种能力。
 
-## Read a context from an existing measurement
+## 从已有测量读取上下文 {#read-a-context-from-an-existing-measurement}
 
-For a retained candidate, resolve its original context directly:
+对于保留的候选，直接解析其原上下文：
 
 ```python
 candidate = author.config.candidate(source_run_id, "coarse-then-fine")
@@ -65,17 +59,14 @@ report = lab.calibration_checks.report(
 )
 ```
 
-Do not pass a branch, saved parameters, setup or subject override with a candidate.
-The server validates the exact retained proposal and resolved content, preserving
-its original subject, setup hash, scenario and mapping. `receipt.setup` retains
-the baseline's exact execution setup; `receipt.branch` is `None`. The context's parameter
-input is explicitly an `analysis_candidate`, not a saved parameter revision.
-Checks can declare this context before running the verification measurement.
-Actual admission verifies that the retained device connections remain available.
+候选不能与分支、已保存参数、setup 或对象覆盖同时传入。
+服务端验证精确保留提案及解析内容，保持原对象、setup 哈希、场景和映射。
+`receipt.setup` 保留基线的精确执行 setup，`receipt.branch` 为 `None`；
+上下文参数输入明确为 `analysis_candidate`，不是已保存参数修订。
+验证测量运行前可先声明这个上下文；实际接纳仍会检查保留的设备连接是否可用。
 
-Candidate evidence applies only to that exact candidate context. Matching values
-or publishing those values as a saved revision do not automatically transfer the
-check's applicability to another context.
+候选证据只适用于这个精确候选上下文。数值相同，或把这些值发布为参数修订，
+都不会自动把检查适用性转移给另一个上下文。
 
 ```python
 context = run.snapshot.measurement_context
@@ -84,15 +75,12 @@ if context is None:
 report = lab.calibration_checks.report(context=context, profile="daily-readiness")
 ```
 
-This property uses only retained evidence, including exact candidate inputs.
-Temporary parameter overrides and configurations without a saved revision or
-retained candidate return `None`. A context does not imply that the measurement succeeded,
-that its calibration is valid, or that hardware execution is authorized.
+这个属性只使用保留证据，包括精确候选输入。临时参数覆盖，以及没有已保存修订或保留候选的配置，
+返回 `None`。存在上下文不表示测量成功、标定有效，也不授予硬件执行权限。
 
-Code that already owns an exact parameter revision and resolved binding can use
-`MeasurementContext.from_binding(parameters, binding)` from
-`scopecat.records.measurement_context`. It copies the complete binding evidence;
-the caller must supply the parameter revision actually used without overrides.
+已持有精确参数修订和解析绑定的代码，可使用
+`scopecat.records.measurement_context.MeasurementContext.from_binding(parameters, binding)`。
+它复制完整绑定证据；调用方必须提供实际使用、没有临时覆盖的参数修订。
 
-See [calibration reports](read-calibration-report.md) for applicability policy and
-[independent parameters](independent-parameters.md) for parameter branches.
+适用性规则见[标定报告](read-calibration-report.md)，参数保存与分支选择见
+[独立参数](independent-parameters.md)；目标身份见[注册测量目标](register-measurement-targets.md)。
