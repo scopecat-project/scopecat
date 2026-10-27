@@ -189,7 +189,7 @@ export function MeasurementDataPreview({
               ...chart,
               kind: "scatter" as const,
               note: [
-                "CURRENT WINDOW · NOT FULL DATA. Only available scalar values in this saved window are plotted; gaps are not connected.",
+                "当前窗口，非全量数据。仅绘制此已保存窗口内的可用标量值，缺口不连线。",
                 chart.note,
               ]
                 .filter(Boolean)
@@ -920,8 +920,7 @@ function emptyChartMessage({
   if (usesSemanticSlice) {
     if (sliceError) return "The selected product-grid slice could not be read.";
     if (slicePending || !slice) return "Reading the selected product-grid slice before plotting.";
-    if (scalarWindow)
-      return "CURRENT WINDOW · NOT FULL DATA. No saved scalar values are available in this window.";
+    if (scalarWindow) return "当前窗口，非全量数据。此窗口内暂无已保存的可用标量值。";
     if (slice.truncated) {
       return "The selected slice is too large for an automatic plot. Use a projected Arrow reader for analysis.";
     }

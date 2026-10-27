@@ -1318,7 +1318,7 @@ describe("measurement visualization", () => {
         onFixedAxisIndexChange: vi.fn(),
       };
       const view = render(<MeasurementDataPreview {...props} />);
-      expect(screen.getByText(/CURRENT WINDOW · NOT FULL DATA/)).toBeVisible();
+      expect(screen.getByText(/当前窗口，非全量数据/)).toBeVisible();
       const runtime = vi.mocked(EChartRuntime);
       await waitFor(() =>
         expect(runtime.mock.lastCall?.[0].option.series).toEqual([
@@ -1366,7 +1366,7 @@ describe("measurement visualization", () => {
       expect(screen.getByLabelText("测量图表")).toHaveValue("slice:other:value");
       view.rerender(<MeasurementDataPreview {...props} slice={{ ...slice, items: [] }} />);
       expect(
-        screen.getByText(/CURRENT WINDOW · NOT FULL DATA. No saved scalar values/),
+        screen.getByText(/当前窗口，非全量数据。此窗口内暂无已保存的可用标量值/),
       ).toBeVisible();
     },
   );
@@ -1397,7 +1397,7 @@ describe("measurement visualization", () => {
     );
 
     expect(screen.getByText(/Points 4,097–4,102 of 10,000/)).toBeVisible();
-    expect(screen.queryByText(/CURRENT WINDOW/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/当前窗口，非全量数据/)).not.toBeInTheDocument();
     expect(screen.getByText(/The selected slice is too large for an automatic plot/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Previous measurement window" }));
     fireEvent.click(screen.getByRole("button", { name: "Next measurement window" }));
