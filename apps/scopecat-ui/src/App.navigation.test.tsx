@@ -678,6 +678,211 @@ describe("config provenance navigation", () => {
     expect(screen.queryByTitle("Inspect run run-20")).not.toBeInTheDocument();
   });
 
+  it("restores the run trace and slice after visiting analysis and samples", async () => {
+    window.history.replaceState(null, "", "/?run=run-1");
+    vi.mocked(getMeasurementPreview).mockResolvedValue({ schema: traceDatasetSchema(), items: [] });
+    vi.mocked(getMeasurementTracePreview).mockImplementation(async (_id, selection) =>
+      tracePreview(selection.valueMode),
+    );
+    renderApp();
+    await screen.findByRole("combobox", { name: "Measurement trace" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Measurement trace" }), {
+      target: { value: "trace:response:frequency:phase" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Bias slice" }), {
+      target: { value: "1" },
+    });
+    for (const destination of [/Analyses$/, /Samples$/]) {
+      fireEvent.click(screen.getByRole("button", { name: destination }));
+      fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
+      expect(await screen.findByRole("combobox", { name: "Measurement trace" })).toHaveValue(
+        "trace:response:frequency:phase",
+      );
+      expect(screen.getByRole("combobox", { name: "Bias slice" })).toHaveValue("1");
+    }
+  });
+
+  it.each(["read failure", "SSE reconnect", "daemon loss"])(
+    "restores a manual trace window after %s for the same identity",
+    async (interruption) => {
+      window.history.replaceState(null, "", "/?run=run-1");
+      vi.mocked(getMeasurementPreview).mockResolvedValue({
+        schema: traceDatasetSchema(),
+        items: [],
+      });
+      const response = tracePreview("magnitude");
+      response.series.push({
+        ...response.series[0]!,
+        label: "Point 1",
+        logical_point_id: "point-1",
+        point_index: 1,
+      });
+      response.returned_series_count = 2;
+      vi.mocked(getMeasurementTracePreview).mockResolvedValue(response);
+      const client = createQueryClient();
+      renderApp(client);
+      const label = "S21 magnitude: |S21| [ratio] by Frequency [GHz]";
+      const plot = await screen.findByRole("img", { name: label });
+      await waitFor(() =>
+        expect(getInstanceByDom(plot.firstElementChild as HTMLElement)).toBeDefined(),
+      );
+      const chart = getInstanceByDom(plot.firstElementChild as HTMLElement)!;
+      const hidden = (chart.getOption().series as Array<{ name: string }>)[0]!.name;
+      chart.dispatchAction({ type: "legendToggleSelect", name: hidden });
+      chart.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: 20, end: 60 });
+      const before = (
+        chart.getOption().dataZoom as Array<{ startValue: number; endValue: number }>
+      )[0]!;
+      let complete!: (value: typeof response) => void;
+      if (interruption === "read failure") {
+        vi.mocked(getMeasurementTracePreview).mockRejectedValueOnce(
+          new Error("read failure evidence"),
+        );
+        act(() => emitProjectEvent("run-1", "measurements_sealed"));
+      } else if (interruption === "daemon loss") {
+        vi.mocked(getHealth).mockRejectedValueOnce(new Error("synthetic daemon loss"));
+        await act(async () => {
+          await client.refetchQueries({ queryKey: ["health"] });
+        });
+      } else {
+        vi.mocked(getMeasurementTracePreview).mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              complete = resolve;
+            }),
+        );
+        act(() => emitSseOpen());
+      }
+      expect(
+        await screen.findByText(
+          interruption === "read failure"
+            ? /波形不可用： read failure evidence/
+            : interruption === "daemon loss"
+              ? "Connect to the local daemon"
+              : "正在读取有界波形预览…",
+        ),
+      ).toBeVisible();
+      expect(screen.queryByRole("img", { name: label })).not.toBeInTheDocument();
+      await act(async () => {
+        if (interruption === "read failure")
+          await client.invalidateQueries({ queryKey: ["measurement-trace", "run-1"] });
+        else if (interruption === "daemon loss")
+          await client.refetchQueries({ queryKey: ["health"] });
+        else complete(response);
+      });
+      const recovered = await screen.findByRole("img", { name: label });
+      await waitFor(() =>
+        expect(getInstanceByDom(recovered.firstElementChild as HTMLElement)).toBeDefined(),
+      );
+      const recoveredChart = getInstanceByDom(recovered.firstElementChild as HTMLElement)!;
+      expect(
+        (recoveredChart.getOption().legend as Array<{ selected: Record<string, boolean> }>)[0]!
+          .selected[hidden],
+      ).toBe(false);
+      expect(recoveredChart.getOption().dataZoom).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ startValue: before.startValue, endValue: before.endValue }),
+        ]),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "恢复自动范围" }));
+      await waitFor(() =>
+        expect(
+          (recoveredChart.getOption().dataZoom as Array<{ start: number; end: number }>)[0],
+        ).toMatchObject({ start: 0, end: 100 }),
+      );
+      expect(
+        (recoveredChart.getOption().legend as Array<{ selected: Record<string, boolean> }>)[0]!
+          .selected[hidden],
+      ).toBe(false);
+    },
+  );
+
+  it.each(["slice", "signal", "run", "store"])(
+    "does not apply the previous window to another %s",
+    async (identity) => {
+      window.history.replaceState(null, "", "/?run=run-1");
+      vi.mocked(getMeasurementPreview).mockResolvedValue({
+        schema: traceDatasetSchema(),
+        items: [],
+      });
+      vi.mocked(getMeasurementTracePreview).mockImplementation(async (_id, selection) =>
+        tracePreview(selection.valueMode),
+      );
+      const client = createQueryClient();
+      renderApp(client);
+      const plot = await screen.findByRole("img", {
+        name: "S21 magnitude: |S21| [ratio] by Frequency [GHz]",
+      });
+      await waitFor(() =>
+        expect(getInstanceByDom(plot.firstElementChild as HTMLElement)).toBeDefined(),
+      );
+      const chart = getInstanceByDom(plot.firstElementChild as HTMLElement)!;
+      chart.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: 20, end: 60 });
+      expect(
+        (chart.getOption().dataZoom as Array<{ startValue: number }>)[0]!.startValue,
+      ).toBeCloseTo(4.94);
+      if (identity === "slice")
+        fireEvent.change(screen.getByLabelText("Bias slice"), { target: { value: "1" } });
+      else if (identity === "signal")
+        fireEvent.change(screen.getByLabelText("Measurement trace"), {
+          target: { value: "trace:response:frequency:phase" },
+        });
+      else if (identity === "run") fireEvent.click(screen.getByTitle("Inspect run run-2"));
+      else
+        act(() => {
+          client.setQueryData(["health"], {
+            ...client.getQueryData<Awaited<ReturnType<typeof getHealth>>>(["health"])!,
+            projectId: "another-store",
+          });
+        });
+      const nextLabel =
+        identity === "signal"
+          ? "S21 phase: phase(S21) [rad] by Frequency [GHz]"
+          : "S21 magnitude: |S21| [ratio] by Frequency [GHz]";
+      await screen.findByRole("img", { name: nextLabel });
+      await waitFor(() =>
+        expect(
+          getInstanceByDom(
+            screen.getByRole("img", { name: nextLabel }).firstElementChild as HTMLElement,
+          )?.getOption().dataZoom,
+        ).toEqual(
+          expect.arrayContaining([expect.objectContaining({ startValue: 4.9, endValue: 5.1 })]),
+        ),
+      );
+    },
+  );
+
+  it("falls back explicitly when a retained run's measurement schema changes", async () => {
+    window.history.replaceState(null, "", "/?run=run-1");
+    const schema = traceDatasetSchema();
+    vi.mocked(getMeasurementPreview).mockResolvedValue({ schema, items: [] });
+    vi.mocked(getMeasurementTracePreview).mockImplementation(async (_id, selection) =>
+      tracePreview(selection.valueMode),
+    );
+    const client = createQueryClient();
+    renderApp(client);
+    fireEvent.change(await screen.findByLabelText("Measurement trace"), {
+      target: { value: "trace:response:frequency:phase" },
+    });
+    fireEvent.change(screen.getByLabelText("Bias slice"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Analyses$/ }));
+    vi.mocked(getMeasurementPreview).mockResolvedValue({
+      schema: { ...schema, dataset_id: "replacement-schema" },
+      items: [],
+    });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["measurements", "run-1"], exact: true });
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
+    expect(
+      await screen.findByText("测量结构已变化；已恢复当前结构的默认坐标、切片与波形选择。"),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Measurement trace")).toHaveValue(
+      "trace:response:frequency:magnitude",
+    );
+    expect(screen.getByLabelText("Bias slice")).toHaveValue("0");
+  });
+
   it("reports a lost daemon even while slower queries still hold data", async () => {
     window.history.replaceState(null, "", "/");
     vi.mocked(getHealth)

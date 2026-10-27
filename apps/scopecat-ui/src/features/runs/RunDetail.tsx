@@ -61,6 +61,7 @@ export function RunDetail({
   domainDecisions,
   domainDecisionsError,
   domainDecisionsPending,
+  measurementSelectionReset = false,
   measurements,
   measurementsError,
   measurementsPending,
@@ -104,6 +105,7 @@ export function RunDetail({
   domainDecisions?: RunDomainDecisionPage;
   domainDecisionsError: Error | null;
   domainDecisionsPending: boolean;
+  measurementSelectionReset?: boolean;
   measurements?: MeasurementPreview;
   measurementsError: Error | null;
   measurementsPending: boolean;
@@ -254,6 +256,9 @@ export function RunDetail({
           key={`measurement:${projectId}:${run.runId}`}
           notices={
             <>
+              {measurementSelectionReset && (
+                <p role="status">测量结构已变化；已恢复当前结构的默认坐标、切片与波形选择。</p>
+              )}
               <RunAttentionNotice
                 run={run}
                 onResolve={onResolveAttention}

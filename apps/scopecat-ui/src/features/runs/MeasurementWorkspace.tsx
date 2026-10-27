@@ -1,8 +1,60 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import type { ChartInteraction, ChartInteractionStore } from "../../ui/chart-interaction";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { classes, secondaryButton } from "../../ui/styles";
+
+const MeasurementInteractions = createContext<ChartInteractionStore | undefined>(undefined);
+export const useMeasurementInteractions = () => useContext(MeasurementInteractions);
+
+export interface MeasurementViewSelection {
+  schemaKey: string;
+  entities: Record<string, string[]>;
+  chartId?: string;
+}
+const MeasurementSelections = createContext<
+  | {
+      value: MeasurementViewSelection;
+      set: Dispatch<SetStateAction<MeasurementViewSelection>>;
+    }
+  | undefined
+>(undefined);
+export const useMeasurementSelections = () => useContext(MeasurementSelections);
 
 const MeasurementFocus = createContext<boolean | undefined>(undefined);
 export const useMeasurementFocus = () => useContext(MeasurementFocus);
+
+/** Lives outside transient unavailable-data branches, scoped to one store and run. */
+export function MeasurementInteractionBoundary({ children }: { children: ReactNode }) {
+  const [selection, setSelection] = useState<MeasurementViewSelection>({
+    schemaKey: "",
+    entities: {},
+  });
+  const [interactions] = useState<ChartInteractionStore>(() => {
+    const entries = new Map<string, ChartInteraction>();
+    return {
+      read: (key) => entries.get(key),
+      write: (key, value) => {
+        entries.delete(key);
+        entries.set(key, { zoom: value.zoom, selected: value.selected });
+        // A run may contain small multiples; keep this transient store bounded.
+        if (entries.size > 64) entries.delete(entries.keys().next().value!);
+      },
+    };
+  });
+  return (
+    <MeasurementSelections value={{ value: selection, set: setSelection }}>
+      <MeasurementInteractions value={interactions}>{children}</MeasurementInteractions>
+    </MeasurementSelections>
+  );
+}
 
 /** Keep the same controls mounted when entering/leaving the browser's modal top layer. */
 export function MeasurementWorkspace({

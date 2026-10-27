@@ -1,8 +1,14 @@
+import { measurementSelectionSchemaKey } from "./measurement-view-state";
 import { Field, Select, Input, Notice } from "../../ui/Controls";
-import { useMeasurementFocus } from "./MeasurementWorkspace";
+import {
+  useMeasurementFocus,
+  useMeasurementInteractions,
+  useMeasurementSelections,
+  type MeasurementViewSelection,
+} from "./MeasurementWorkspace";
 import { classes } from "../../ui/styles";
 import { MeasurementRecordTable } from "./MeasurementRecordTable";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { LoaderCircle } from "lucide-react";
 import type { MeasurementTracePreview } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
@@ -73,13 +79,49 @@ export function MeasurementDataPreview({
     () => measurementSlicePlan(preview.schema, measurementAxes),
     [preview.schema, measurementAxes],
   );
-  const [requestedChartId, setRequestedChartId] = useState<string>();
+  const schemaKey = measurementSelectionSchemaKey(preview.schema);
+  const retainedSelection = useMeasurementSelections();
+  const [localSelection, setLocalSelection] = useState<MeasurementViewSelection>({
+    schemaKey,
+    entities: {},
+  });
+  const savedSelection = retainedSelection?.value ?? localSelection;
+  const setSavedSelection = retainedSelection?.set ?? setLocalSelection;
+  const requestedChartId =
+    savedSelection.schemaKey === schemaKey ? savedSelection.chartId : undefined;
+  const selectedEntityIdentities = useMemo(
+    () => (savedSelection.schemaKey === schemaKey ? savedSelection.entities : {}),
+    [savedSelection, schemaKey],
+  );
+  const setRequestedChartId = (chartId: string) =>
+    setSavedSelection((current) => ({
+      schemaKey,
+      entities: current.schemaKey === schemaKey ? current.entities : {},
+      chartId,
+    }));
+  const setSelectedEntityIdentities = (update: SetStateAction<Record<string, string[]>>) =>
+    setSavedSelection((current) => {
+      const entities = current.schemaKey === schemaKey ? current.entities : {};
+      return {
+        schemaKey,
+        chartId: current.schemaKey === schemaKey ? current.chartId : undefined,
+        entities: typeof update === "function" ? update(entities) : update,
+      };
+    });
+  const selectionUnavailable =
+    savedSelection.schemaKey !== "" && savedSelection.schemaKey !== schemaKey;
   const supportsAxisSelection = (slicePlan?.scalarObservableIds.length ?? 0) > 0;
   const chartSchema = slice?.schema ?? preview.schema;
   const entityAxes = useMemo(() => measurementEntityAxes(preview.schema), [preview.schema]);
-  const [selectedEntityIdentities, setSelectedEntityIdentities] = useState<
-    Record<string, string[]>
-  >({});
+  const missingSelectedEntities = Object.entries(selectedEntityIdentities).some(
+    ([axisId, selected]) =>
+      selected.some(
+        (identity) =>
+          !entityAxes
+            .find((axis) => axis.id === axisId)
+            ?.members.some((member) => member.identity === identity),
+      ),
+  );
   const entitySelection = useMemo(
     () =>
       Object.fromEntries(
@@ -156,6 +198,8 @@ export function MeasurementDataPreview({
     slice?.offset ?? 0,
     preview.schema?.dataset_id,
     preview.schema?.variables,
+    preview.schema?.point_domain,
+    preview.schema?.dimensions,
   ]);
   const table = useMemo(
     () =>
@@ -205,6 +249,10 @@ export function MeasurementDataPreview({
         <strong className="text-sm text-text-soft">Measurement data</strong>
         <span>{preview.schema ? "Schema" : "Live"}</span>
       </div>
+      {selectionUnavailable && <p role="status">测量结构已变化；图表与实体选择已恢复默认值。</p>}
+      {missingSelectedEntities && (
+        <p role="status">部分已选实体不再可用；仅保留匹配的实体，若无匹配则显示默认实体选择。</p>
+      )}
       <section
         aria-label="测量数据摘要"
         className={classes(
@@ -544,6 +592,7 @@ export function MeasurementDataPreview({
           </div>
           <MeasurementTraceResult
             key={`${viewScope}:${selectedTracePlan?.id}`}
+            interactionScope={viewScope}
             preview={tracePreview}
             pending={tracePending}
             refreshing={traceRefreshing}
@@ -555,6 +604,7 @@ export function MeasurementDataPreview({
       {charts.length > 0 ? (
         <MeasurementChartPicker
           key={viewScope}
+          interactionScope={viewScope}
           charts={charts}
           requestedChartId={requestedChartId}
           onChartChange={setRequestedChartId}
@@ -636,11 +686,13 @@ export function MeasurementDataPreview({
 }
 
 export function MeasurementTraceResult({
+  interactionScope,
   preview,
   pending,
   refreshing = false,
   error,
 }: {
+  interactionScope?: string;
   preview?: MeasurementTracePreview;
   pending: boolean;
   refreshing?: boolean;
@@ -655,7 +707,7 @@ export function MeasurementTraceResult({
       <p role={error ? "alert" : "status"}>
         {tracePreviewStatus(preview, error, pending, refreshing)}
       </p>
-      {chart && <MeasurementChart chart={chart} />}
+      {chart && <MeasurementChart chart={chart} interactionScope={interactionScope} />}
       {!pending && !error && preview && <TraceAvailabilityDetails preview={preview} />}
       {!pending && !error && preview && !chart && <p>本次有界选择未返回已持久保存且可用的序列。</p>}
     </>
@@ -884,10 +936,12 @@ function sliceAxisOption(axis: MeasurementSliceAxis, index: number): string {
 }
 
 export function MeasurementChartPicker({
+  interactionScope,
   charts,
   requestedChartId,
   onChartChange,
 }: {
+  interactionScope?: string;
   charts: MeasurementChartPlan[];
   requestedChartId?: string;
   onChartChange?: (id: string) => void;
@@ -928,12 +982,21 @@ export function MeasurementChartPicker({
           </Field>
         )}
       </div>
-      {selectedChart && <MeasurementChart chart={selectedChart} />}
+      {selectedChart && (
+        <MeasurementChart chart={selectedChart} interactionScope={interactionScope} />
+      )}
     </div>
   );
 }
 
-export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
+export function MeasurementChart({
+  chart,
+  interactionScope,
+}: {
+  chart: MeasurementChartPlan;
+  interactionScope?: string;
+}) {
+  const interactionStore = useMeasurementInteractions();
   const focused = useMeasurementFocus();
   const [expanded, setExpanded] = useState(false);
   const [resetRange, setResetRange] = useState(0);
@@ -1013,6 +1076,7 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           {chart.series.map((series) => (
             <MeasurementSeriesPanel
               chart={chart}
+              interactionScope={interactionScope}
               key={series.id}
               series={series}
               resetRange={resetRange}
@@ -1024,7 +1088,8 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           <div className={focused ? "absolute inset-0" : undefined}>
             <EChart
               resetRange={resetRange}
-              interactionKey={measurementInteractionKey(chart)}
+              interactionKey={JSON.stringify([interactionScope, measurementInteractionKey(chart)])}
+              interactionStore={interactionStore}
               ariaLabel={accessibleTitle}
               height={focused ? focusHeight : expanded ? 540 : compact ? 240 : 340}
               option={option}
@@ -1041,14 +1106,17 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
 }
 
 function MeasurementSeriesPanel({
+  interactionScope,
   chart,
   series,
   resetRange,
 }: {
   chart: MeasurementChartPlan;
+  interactionScope?: string;
   series: MeasurementChartSeries;
   resetRange: number;
 }) {
+  const interactionStore = useMeasurementInteractions();
   const option = useMemo(
     () =>
       measurementChartOption({
@@ -1069,7 +1137,11 @@ function MeasurementSeriesPanel({
       {series.points.length > 0 ? (
         <EChart
           resetRange={resetRange}
-          interactionKey={measurementInteractionKey({ ...chart, series: [series] })}
+          interactionKey={JSON.stringify([
+            interactionScope,
+            measurementInteractionKey({ ...chart, series: [series] }),
+          ])}
+          interactionStore={interactionStore}
           ariaLabel={`${chart.title} · ${series.label}: ${chart.yLabel} by ${chart.xLabel}`}
           height={170}
           option={option}

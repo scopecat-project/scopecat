@@ -1,3 +1,4 @@
+import type { ChartInteractionStore } from "./chart-interaction";
 import { lazy, Suspense, useId } from "react";
 import type { EChartsCoreOption } from "echarts/core";
 
@@ -16,9 +17,11 @@ export function EChart({
   seriesCount,
   onPoint,
   interactionKey,
+  interactionStore,
   resetRange,
 }: {
   interactionKey?: string;
+  interactionStore?: ChartInteractionStore;
   resetRange?: number;
   ariaLabel: string;
   description?: string;
@@ -40,6 +43,7 @@ export function EChart({
             option={option}
             onPoint={onPoint}
             interactionKey={interactionKey}
+            interactionStore={interactionStore}
             resetRange={resetRange}
           />
         </Suspense>

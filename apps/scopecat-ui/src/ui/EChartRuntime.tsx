@@ -1,3 +1,4 @@
+import type { ChartInteraction, ChartInteractionStore } from "./chart-interaction";
 import { useEffect, useRef } from "react";
 import { CustomChart, LineChart, ScatterChart } from "echarts/charts";
 import {
@@ -27,10 +28,12 @@ export function EChartRuntime({
   option,
   onPoint,
   interactionKey,
+  interactionStore,
   resetRange = 0,
 }: {
   // Opt in only with a key covering the measurement domain, signal and axis units.
   interactionKey?: string;
+  interactionStore?: ChartInteractionStore;
   resetRange?: number;
   height: number;
   option: EChartsCoreOption;
@@ -39,11 +42,7 @@ export function EChartRuntime({
   const elementRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
   const heightRef = useRef(height);
-  const retained = useRef<{
-    key?: string;
-    zoom?: Array<{ startValue: number; endValue: number } | undefined>;
-    selected?: Record<string, boolean>;
-  }>({});
+  const retained = useRef<ChartInteraction & { key?: string }>({});
   const previousReset = useRef(resetRange);
 
   useEffect(() => {
@@ -79,11 +78,15 @@ export function EChartRuntime({
     const chart = chartRef.current;
     if (!chart) return;
     if (retained.current.key !== interactionKey) {
-      retained.current = { key: interactionKey };
+      retained.current = {
+        key: interactionKey,
+        ...(interactionKey === undefined ? undefined : interactionStore?.read(interactionKey)),
+      };
     }
     if (previousReset.current !== resetRange) {
       retained.current.zoom = undefined;
       previousReset.current = resetRange;
+      if (interactionKey !== undefined) interactionStore?.write(interactionKey, retained.current);
     }
     const saved = retained.current;
     chart.setOption(
@@ -104,7 +107,7 @@ export function EChartRuntime({
           },
       { notMerge: true },
     );
-  }, [option, interactionKey, resetRange]);
+  }, [option, interactionKey, resetRange, interactionStore]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -125,6 +128,7 @@ export function EChartRuntime({
               endValue: range.endValue,
             },
       );
+      interactionStore?.write(interactionKey, retained.current);
     };
     const legend = () => {
       const current = chart.getOption().legend as Array<{ selected: Record<string, boolean> }>;
@@ -137,7 +141,7 @@ export function EChartRuntime({
       chart.off("datazoom", zoom);
       chart.off("legendselectchanged", legend);
     };
-  }, [interactionKey]);
+  }, [interactionKey, interactionStore]);
 
   useEffect(() => {
     const chart = chartRef.current;
