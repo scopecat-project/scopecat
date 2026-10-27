@@ -160,29 +160,54 @@ export function MeasurementDataPreview({
     return [...records.values()].sort((a, b) => a.point_index - b.point_index);
   }, [liveScalarScan, slicePlan, slice, preview.items]);
   const plotIncludesLive = preview.livePointIndex !== undefined && (!slicePlan || liveScalarScan);
+  const scalarWindow = Boolean(
+    slice?.truncated &&
+    slicePlan?.varyingAxes.length === 1 &&
+    slicePlan.scalarObservableIds.length > 0 &&
+    slicePlan.numericAxes.some((axis) => axis.id === slicePlan.varyingAxes[0]?.id),
+  );
   const charts = useMemo(() => {
     if (!slicePlan) {
       return planMeasurementCharts(preview.items, preview.schema, undefined, entitySelection);
     }
     return planMeasurementCharts(
-      slice?.truncated ? [] : plotRecords,
+      slice?.truncated && !scalarWindow ? [] : plotRecords,
       chartSchema,
       fixedAxisIndices,
       entitySelection,
       measurementAxes,
-    ).map((chart) =>
-      liveScalarScan && chart.kind === "line"
-        ? {
-            ...chart,
-            kind: "scatter" as const,
-            note: "Partial received data; gaps are not interpolated.",
-          }
-        : chart,
-    );
+    )
+      .filter(
+        (chart) =>
+          !scalarWindow ||
+          (chart.kind !== "heatmap" &&
+            chart.series.every((series) => slicePlan.scalarObservableIds.includes(series.id))),
+      )
+      .map((chart) =>
+        scalarWindow && chart.kind !== "heatmap"
+          ? {
+              ...chart,
+              kind: "scatter" as const,
+              note: [
+                "当前窗口，非全量数据。仅绘制此已保存窗口内的可用标量值，缺口不连线。",
+                chart.note,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : liveScalarScan && chart.kind === "line"
+            ? {
+                ...chart,
+                kind: "scatter" as const,
+                note: "Partial received data; gaps are not interpolated.",
+              }
+            : chart,
+      );
   }, [
     plotRecords,
     measurementAxes,
     liveScalarScan,
+    scalarWindow,
     chartSchema,
     entitySelection,
     fixedAxisIndices,
@@ -611,6 +636,7 @@ export function MeasurementDataPreview({
         <p className="m-0 border-b border-line px-3 py-2.5 text-sm leading-normal text-text-dim">
           {emptyChartMessage({
             usesSemanticSlice: slicePlan !== undefined,
+            scalarWindow,
             slice,
             sliceError,
             slicePending,
@@ -878,12 +904,14 @@ function sliceStatus(
 
 function emptyChartMessage({
   usesSemanticSlice,
+  scalarWindow,
   slice,
   sliceError,
   slicePending,
   preview,
 }: {
   usesSemanticSlice: boolean;
+  scalarWindow: boolean;
   slice?: MeasurementSlicePreview;
   sliceError: Error | null;
   slicePending: boolean;
@@ -892,6 +920,7 @@ function emptyChartMessage({
   if (usesSemanticSlice) {
     if (sliceError) return "The selected product-grid slice could not be read.";
     if (slicePending || !slice) return "Reading the selected product-grid slice before plotting.";
+    if (scalarWindow) return "当前窗口，非全量数据。此窗口内暂无已保存的可用标量值。";
     if (slice.truncated) {
       return "The selected slice is too large for an automatic plot. Use a projected Arrow reader for analysis.";
     }
