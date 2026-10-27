@@ -249,6 +249,7 @@ export function RunDetail({
 
       <div className="mt-2 grid min-w-0 gap-3">
         <DataCard
+          key={`${projectId}:${run.runId}`}
           notices={
             <>
               <RunAttentionNotice

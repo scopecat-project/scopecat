@@ -145,6 +145,16 @@ export function MeasurementDataPreview({
   ]);
   const selectedTracePlan =
     tracePlans.find((plan) => plan.id === selectedTracePlanId) ?? tracePlans[0];
+  // Run changes already remount MeasurementRecords. Reset within a run when the
+  // selected domain changes; incoming records and receipt counts are not identity.
+  const viewScope = JSON.stringify([
+    fixedAxisIndices,
+    measurementAxes,
+    entitySelection,
+    slice?.offset ?? 0,
+    preview.schema?.dataset_id,
+    preview.schema?.variables,
+  ]);
   const table = useMemo(
     () =>
       measurementTable(
@@ -184,19 +194,65 @@ export function MeasurementDataPreview({
         focused ? "flex min-h-0 flex-1 flex-col overflow-auto [&>*]:shrink-0" : "overflow-hidden",
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2 text-xs font-bold tracking-[0.06em] text-text-dim uppercase">
+      <div
+        className={classes(
+          "flex items-center justify-between gap-3 border-b border-line px-3 py-2 text-xs font-bold tracking-[0.06em] text-text-dim uppercase",
+          focused && "hidden",
+        )}
+      >
         <strong className="text-sm text-text-soft">Measurement data</strong>
-        <span>
-          {preview.recordCount ?? preview.items.length}
-          {preview.truncated ? "+" : ""} records · {preview.schema ? "Schema" : "Live"}
-        </span>
+        <span>{preview.schema ? "Schema" : "Live"}</span>
       </div>
-
-      {preview.livePointIndex !== undefined && (
-        <div className="border-b border-line bg-blue-soft px-3 py-2 text-xs text-blue">
-          Latest received data: point index {preview.livePointIndex}; not saved yet.
+      <section
+        aria-label="测量数据摘要"
+        className={classes(
+          "border-b border-line px-3 text-xs text-text-soft",
+          focused ? "py-1" : "py-2",
+        )}
+      >
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          <span>
+            run 已接收 <strong>{preview.recordCount ?? "未知"}</strong> 条
+          </span>
+          <span>
+            run 已保存 <strong>{preview.durableRecordCount ?? "未知"}</strong> 条
+          </span>
+          <span>
+            当前记录预览 <strong>{plotRecords.length}</strong> 条记录
+          </span>
+          {slicePlan && (
+            <span>
+              当前切片已读取 <strong>{slice?.items.length ?? "未知"}</strong> 条记录
+            </span>
+          )}
         </div>
-      )}
+        {slicePending && (
+          <p className="mt-2" role="status">
+            正在读取当前切片，图表可能仍显示上次读取的数据。
+          </p>
+        )}
+        {sliceError && (
+          <p className="mt-2 text-yellow" role="alert">
+            当前切片读取失败，数据可能已过时： {errorMessage(sliceError)}
+          </p>
+        )}
+        {preview.livePointIndex !== undefined && (
+          <p className="mt-2 text-blue">
+            最新接收记录（点索引 {preview.livePointIndex}）尚未保存。
+          </p>
+        )}
+        {preview.recordCount !== undefined &&
+          preview.durableRecordCount !== undefined &&
+          preview.recordCount > preview.durableRecordCount && (
+            <p className="mt-2">
+              {preview.recordCount - preview.durableRecordCount}{" "}
+              条已接收记录尚未保存；最新记录不代表中间记录全部可见。
+            </p>
+          )}
+        {(plotIncludesLive || preview.truncated || slice?.truncated) && (
+          <p className="mt-2">这是有界预览，缺口不插值；当前可见数量不代表 run 总数或连续覆盖。</p>
+        )}
+      </section>
 
       {slicePlan &&
         !liveScalarScan &&
@@ -485,6 +541,7 @@ export function MeasurementDataPreview({
             </Field>
           </div>
           <MeasurementTraceResult
+            key={`${viewScope}:${selectedTracePlan?.id}`}
             preview={tracePreview}
             pending={tracePending}
             error={traceError}
@@ -494,6 +551,7 @@ export function MeasurementDataPreview({
 
       {charts.length > 0 ? (
         <MeasurementChartPicker
+          key={viewScope}
           charts={charts}
           requestedChartId={requestedChartId}
           onChartChange={setRequestedChartId}
@@ -511,16 +569,17 @@ export function MeasurementDataPreview({
       ) : null}
 
       {charts.length > 0 && (
-        <p
-          className="border-b border-line px-3 py-2 text-xs text-text-soft"
-          data-testid="plot-position"
-        >
-          Plot source: {plotIncludesLive ? "saved and received preview" : "saved preview"} ·{" "}
-          {plotRecords.length} available records
-          {plotRecords.length > 0 &&
-            ` · highest point index ${Math.max(...plotRecords.map((record) => record.point_index))}`}
-          {liveScalarScan && ". Buffered intermediate records may not be in this view."}
-        </p>
+        <details className="border-b border-line px-3 py-2 text-xs text-text-soft">
+          <summary className="cursor-pointer">图表数据来源与点索引</summary>
+          <p data-testid="plot-position" className="mt-2">
+            Plot source: {plotIncludesLive ? "saved and received preview" : "saved preview"} ·{" "}
+            {plotRecords.length} available records
+            {plotRecords.length > 0 &&
+              ` · highest point index ${Math.max(...plotRecords.map((record) => record.point_index))}`}
+            {" · 最高点索引不代表此前所有点均已接收、保存或显示。"}
+            {liveScalarScan && " Buffered intermediate records may not be in this view."}
+          </p>
+        </details>
       )}
       {(slicePlan || tracePlans.length > 0 || entityAxes.length > 0) && (
         <details
@@ -868,6 +927,7 @@ export function MeasurementChartPicker({
 export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
   const focused = useMeasurementFocus();
   const [expanded, setExpanded] = useState(false);
+  const [resetRange, setResetRange] = useState(0);
   const hasPoints = chart.series.some((series) => series.points.length > 0);
   const plotArea = useRef<HTMLDivElement>(null);
   const [focusHeight, setFocusHeight] = useState(240);
@@ -906,7 +966,7 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
       )}
     >
       <figcaption className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
-        <span>
+        <span className="min-w-0 flex-1">
           <strong className="block text-sm text-text-soft">{chart.title}</strong>
           <span className="text-xs text-text-dim">
             {chart.xLabel} → {chart.yLabel}
@@ -915,6 +975,15 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           </span>
         </span>
         <span className="flex items-center gap-2 text-xs text-text-dim">
+          {chart.kind !== "heatmap" && (
+            <button
+              type="button"
+              onClick={() => setResetRange((value) => value + 1)}
+              className="rounded-md border border-line px-2 py-1 text-xs text-text-soft hover:bg-panel-strong"
+            >
+              恢复自动范围
+            </button>
+          )}
           {focused === undefined && (
             <button
               type="button"
@@ -933,13 +1002,20 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
       ) : chart.layout === "small-multiples" && chart.series.length > 1 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-2">
           {chart.series.map((series) => (
-            <MeasurementSeriesPanel chart={chart} key={series.id} series={series} />
+            <MeasurementSeriesPanel
+              chart={chart}
+              key={series.id}
+              series={series}
+              resetRange={resetRange}
+            />
           ))}
         </div>
       ) : (
         <div ref={plotArea} className={focused ? "relative min-h-48 flex-1" : undefined}>
           <div className={focused ? "absolute inset-0" : undefined}>
             <EChart
+              resetRange={resetRange}
+              interactionKey={measurementInteractionKey(chart)}
               ariaLabel={accessibleTitle}
               height={focused ? focusHeight : expanded ? 540 : compact ? 240 : 340}
               option={option}
@@ -958,9 +1034,11 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
 function MeasurementSeriesPanel({
   chart,
   series,
+  resetRange,
 }: {
   chart: MeasurementChartPlan;
   series: MeasurementChartSeries;
+  resetRange: number;
 }) {
   const option = useMemo(
     () =>
@@ -981,6 +1059,8 @@ function MeasurementSeriesPanel({
       </div>
       {series.points.length > 0 ? (
         <EChart
+          resetRange={resetRange}
+          interactionKey={measurementInteractionKey({ ...chart, series: [series] })}
           ariaLabel={`${chart.title} · ${series.label}: ${chart.yLabel} by ${chart.xLabel}`}
           height={170}
           option={option}
@@ -1049,4 +1129,16 @@ function fixedCoordinateValueLabel(
 
 function shortNumber(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumSignificantDigits: 4 }).format(value);
+}
+
+function measurementInteractionKey(chart: MeasurementChartPlan): string {
+  return JSON.stringify([
+    chart.id,
+    chart.kind,
+    chart.xLabel,
+    chart.yLabel,
+    chart.colorLabel,
+    chart.fixedCoordinates,
+    chart.series.map((series) => [series.id, series.label]),
+  ]);
 }

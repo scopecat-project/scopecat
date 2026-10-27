@@ -129,7 +129,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
     await expect(page.getByTestId("measurement-slice-summary")).toContainText("Mode = low");
     await expect(page.getByTestId("measurement-charts")).toBeVisible();
     await expectSlice({ repeat: 0, mode: 0 }, 12);
-    const chart = page.getByLabel("Measurement chart", { exact: true });
+    const chart = page.getByLabel("测量图表", { exact: true });
     const phase = (await chart
       .locator("option")
       .filter({ hasText: "phase" })
@@ -179,7 +179,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
           "Bias slice",
           "Repeat slice",
           "Mode slice",
-          "Measurement chart",
+          "测量图表",
         ]) {
           await expect(page.getByLabel(label, { exact: true })).toBeInViewport({ ratio: 1 });
         }
@@ -211,7 +211,9 @@ test("browses independent dimensions and keeps a compatible signal across slices
         })
         .toBe(true);
       const plotBounds = (await plot.boundingBox())!;
-      const sourceBounds = (await page.getByTestId("plot-position").boundingBox())!;
+      const sourceBounds = (await page
+        .getByText("图表数据来源与点索引", { exact: true })
+        .boundingBox())!;
       expect(sourceBounds.y).toBeGreaterThanOrEqual(plotBounds.y + plotBounds.height);
       await testInfo.attach(`chart-focus-${viewport.width}`, {
         body: await page.screenshot({
@@ -421,7 +423,7 @@ test("contains large-axis controls and multi-series plots in normal and focused 
         if (focused) await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
         await expectContainedPlots(page, 1);
         await expect(page.locator("figure").getByRole("img")).toHaveAccessibleDescription(
-          /2 data series/,
+          /2 个数据系列/,
         );
         await testInfo.attach(`overlay-${width}-${focused}`, {
           body: await page

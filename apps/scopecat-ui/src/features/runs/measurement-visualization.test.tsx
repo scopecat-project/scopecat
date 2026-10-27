@@ -1354,13 +1354,51 @@ describe("measurement visualization", () => {
         onFixedAxisIndexChange={() => {}}
       />,
     );
+    expect(screen.getByRole("region", { name: "测量数据摘要" })).toHaveTextContent("run 已接收 3");
+    expect(screen.getByRole("region", { name: "测量数据摘要" })).toHaveTextContent("run 已保存 1");
+    expect(screen.getByRole("region", { name: "测量数据摘要" })).toHaveTextContent(
+      "当前记录预览 2",
+    );
+    expect(screen.getByRole("region", { name: "测量数据摘要" })).toHaveTextContent(
+      "当前切片已读取 1",
+    );
     expect(screen.getByTestId("plot-position")).toHaveTextContent(
       "saved and received preview · 2 available records · highest point index 2",
     );
     expect(screen.getByText(/Partial received data; gaps are not interpolated/)).toBeVisible();
     expect(screen.getByText(/共绘制 2 个点/)).toBeInTheDocument();
-    expect(screen.getByText(/Latest received data: point index 2; not saved yet/)).toBeVisible();
+    expect(screen.getByText(/最新接收记录（点索引 2）尚未保存/)).toBeVisible();
     expect(screen.queryByText(/共绘制 3 个点/)).not.toBeInTheDocument();
+  });
+
+  it("keeps unknown totals and slice failures visible as the selection changes", () => {
+    const schema = scalarSchema();
+    const saved = record(0, { bias: scalar(0, "V") }, { signal: scalar(1, "ratio") });
+    const props = {
+      preview: { schema, items: [saved] },
+      slice: slicePreview(schema, [saved]),
+      sliceError: null,
+      slicePending: false,
+      fixedAxisIndices: {},
+      onFixedAxisIndexChange: () => {},
+    };
+    const view = render(<MeasurementDataPreview {...props} />);
+    const summary = screen.getByRole("region", { name: "测量数据摘要" });
+    expect(summary).toHaveTextContent("run 已接收 未知");
+    expect(summary).toHaveTextContent("run 已保存 未知");
+    expect(summary).toHaveTextContent("当前切片已读取 1");
+    view.rerender(<MeasurementDataPreview {...props} slice={undefined} slicePending={true} />);
+    expect(summary).toHaveTextContent("当前切片已读取 未知");
+    expect(summary).toHaveTextContent("正在读取当前切片");
+    view.rerender(
+      <MeasurementDataPreview
+        {...props}
+        slice={undefined}
+        sliceError={new Error("source error 42")}
+      />,
+    );
+    expect(summary).toHaveTextContent("当前切片读取失败，数据可能已过时： source error 42");
+    expect(summary).not.toHaveTextContent("当前切片已读取 1");
   });
 
   it("shows the plot first and opens the bounded record table on demand", () => {
