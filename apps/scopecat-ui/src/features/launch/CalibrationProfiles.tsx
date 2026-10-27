@@ -7,15 +7,21 @@ import { CalibrationAssessments } from "./CalibrationAssessments";
 type Page = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-profiles">;
 type Report = MethodResponse<typeof apiClient, "post", "/api/v1/calibration-checks/report">;
 
-export function CalibrationProfiles({
-  context,
-  onProcedure,
-  contextDescription = "使用此阶段固定的测量上下文。",
-}: {
+type ProfileProps = {
   context: Report["context"];
   onProcedure?: (id: string) => void;
   contextDescription?: string;
-}) {
+};
+
+export function CalibrationProfiles(props: ProfileProps) {
+  return <CalibrationProfilesContext key={JSON.stringify(props.context)} {...props} />;
+}
+
+function CalibrationProfilesContext({
+  context,
+  onProcedure,
+  contextDescription = "使用此阶段固定的测量上下文。",
+}: ProfileProps) {
   const [profiles, setProfiles] = useState<Page["items"]>([]);
   const [cursor, setCursor] = useState<number | null>();
   const [selected, setSelected] = useState("");
