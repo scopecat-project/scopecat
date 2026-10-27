@@ -12,8 +12,7 @@ export function RunCancellationNotice({
     return null;
   return (
     <p role="status">
-      Run cancellation requested — waiting for acquisition and cleanup to settle. Collected data
-      remains available; cancellation is not complete yet.
+      已请求取消运行，正在等待采集和清理结束。已采集的数据仍可查看；取消尚未完成，也不表示设备已物理停止。
     </p>
   );
 }

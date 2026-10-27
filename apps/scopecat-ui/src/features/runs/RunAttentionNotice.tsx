@@ -27,9 +27,9 @@ export function RunAttentionNotice({
     >
       <AlertTriangle className="flex-none text-yellow" size={19} aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <strong className="text-sm text-yellow">Operator attention required</strong>
+        <strong className="text-sm text-yellow">需要人工处理</strong>
         <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
-          {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
+          {run.attentionReason ?? "服务尚未报告需要核对处理的原因。"}
         </p>
         {!focused &&
           run.attentionReason === "manual_line_confirmation_expired" &&
@@ -46,9 +46,7 @@ export function RunAttentionNotice({
           )}
         {run.attentionReason !== "manual_line_confirmation_expired" && (
           <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
-            Inspect retained data and reconcile external state using the project workflow. Unknown
-            hardware effects cannot be retried here. Closing this record does not establish that the
-            hardware is safe.
+            请检查已保留的数据，并按项目流程核对外部状态。硬件效果未知时不能在此重试。关闭此记录不代表硬件已安全。
           </p>
         )}
         {!focused && run.attentionReason !== "manual_line_confirmation_expired" && (
@@ -61,7 +59,7 @@ export function RunAttentionNotice({
                 disabled={pending}
               >
                 <Unlock size={15} aria-hidden="true" />
-                {pending ? "Closing…" : "Close without resuming"}
+                {pending ? "正在关闭…" : "关闭且不继续"}
               </button>
             </div>
           </>

@@ -589,9 +589,9 @@ it("explicit next-line preparation resolves only its same-list original receipt 
     expect(screen.getByLabelText("Line import error")).toHaveTextContent("Unknown suggested input"),
   );
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
-  expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/物理线路：Next/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByText("Prepare next line"));
-  await waitFor(() => expect(screen.getByText(/Physical line: Next/)).toBeVisible());
+  await waitFor(() => expect(screen.getByText(/物理线路：Next/)).toBeVisible());
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent(":");
   expect(screen.getByLabelText("Original attempt")).not.toHaveTextContent("original-key");
   expect(submissions).toBe(1);
@@ -627,7 +627,7 @@ it("line preparation cannot dismiss an unknown ordinary original submission", as
     fireEvent.click(screen.getByText("Prepare next line"));
   });
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
-  expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/物理线路：Next/)).not.toBeInTheDocument();
   expect(resolves).toBe(0);
 });
 
@@ -666,5 +666,5 @@ it("a late line receipt lookup cannot discard an original attempt after a draft 
   });
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
   expect(screen.getByLabelText("当前草稿")).toHaveTextContent("new edit");
-  expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/物理线路：Next/)).not.toBeInTheDocument();
 });

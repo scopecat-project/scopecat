@@ -1,3 +1,4 @@
+import { stateLabel } from "./procedure-operator";
 import { bindingForRequest } from "./scientific-selection";
 import type { MethodResponse } from "openapi-fetch";
 import { useOperatorInput } from "../application/use-operator-input";
@@ -13,6 +14,14 @@ import { navigate, useLocationUrl } from "../../lib/navigation";
 type Scan = View["scan"];
 type View = MethodResponse<typeof apiClient, "get", "/api/v1/manual-line-scans/{scan_id}">;
 type Create = components["schemas"]["ManualLineScanCreate"];
+const lineStateLabels: Record<View["lines"][number]["state"], string> = {
+  not_started: "尚未开始",
+  completed: "已完成",
+  in_progress: "进行中",
+  uncertain: "结果未知",
+  incomplete: "未完成",
+  confirmation_required: "需要确认接线",
+};
 const id = (prefix: string) => `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 
 export function LineScans() {
@@ -21,7 +30,7 @@ export function LineScans() {
   const visible = expanded || location.searchParams.has("line-scan");
   return (
     <details open={visible} onToggle={(event) => setExpanded(event.currentTarget.open)}>
-      <summary>Physical line scans</summary>
+      <summary>物理线路扫描</summary>
       {visible && <LineScanWorkspace />}
     </details>
   );
@@ -90,7 +99,7 @@ export function LineScanWorkspace() {
     setBusy(true);
     try {
       const plan = plans.data?.items.find((item) => item.ref.plan_id === template);
-      if (!pending && !plan) throw new Error("Choose a saved measurement template.");
+      if (!pending && !plan) throw new Error("请选择已保存的测量模板。");
       const command = pending ?? {
         scan_id: id("lines"),
         saved_by: await operator.freshSnapshot(),
@@ -148,12 +157,10 @@ export function LineScanWorkspace() {
       const entry = definitions.entries.find(
         (item) => item.id === saved.experiment && item.version === saved.version,
       );
-      if (!entry) throw new Error("Restore the saved template source before measuring this list.");
+      if (!entry) throw new Error("测量此清单前，请恢复已保存模板对应的源码。");
       if (opening.current !== token) return;
       if (!isCurrent(revision)) {
-        setError(
-          "The current draft changed while loading the template. Prepare the line again when input recovery is complete.",
-        );
+        setError("加载模板时当前草稿已变化。请等待输入恢复完成，再次准备此线路。");
         return;
       }
       const accepted = await openPlan(
@@ -167,9 +174,7 @@ export function LineScanWorkspace() {
       );
       if (opening.current !== token) return;
       if (!accepted) {
-        setError(
-          "The template was not opened. Finish saving or reviewing the current input and check any original submission from another list, then prepare this line again.",
-        );
+        setError("模板未打开。请先保存或核实当前输入，并检查其他清单的原提交，再次准备此线路。");
         return;
       }
       const url = new URL(window.location.href);
@@ -184,22 +189,21 @@ export function LineScanWorkspace() {
   }
   return (
     <section
-      aria-label="Physical line scans"
+      aria-label="物理线路扫描"
       className="min-w-0 break-words [overflow-wrap:anywhere] border border-line rounded p-3 space-y-3"
     >
-      <h3 className="font-semibold">Physical line scans</h3>
+      <h3 className="font-semibold">物理线路扫描</h3>
       <p>
-        One measurement template, an ordered line list and all attempts. Confirm each physical
-        connection before acquisition. Opening this list never starts a measurement.
+        共用一个测量模板，按线路清单顺序测量并保留所有尝试。每次采集前需确认实际接线；打开清单不会启动测量。
       </p>
       <Field>
-        Line list
+        线路清单
         <Select
-          aria-label="Line list"
+          aria-label="线路清单"
           value={selected}
           onChange={(event) => choose(event.target.value)}
         >
-          <option value="">Choose a line list</option>
+          <option value="">选择线路清单</option>
           {catalog.data?.items.map((scan) => (
             <option key={scan.scan_id} value={scan.scan_id}>
               {scan.name}
@@ -208,29 +212,26 @@ export function LineScanWorkspace() {
         </Select>
       </Field>
       <details>
-        <summary>Create a line list</summary>
+        <summary>创建线路清单</summary>
         <Field>
-          Operator
+          操作者
           <Input
-            aria-label="Line list operator"
+            aria-label="线路清单操作者"
             value={pending?.saved_by ?? operator.actor}
             disabled={!!pending}
             onChange={(event) => operator.setActor(event.target.value)}
           />
         </Field>
-        <p>
-          Preview and save a measurement plan to use as the shared template. Each acquisition can
-          adjust its ordinary settings.
-        </p>
+        <p>先预览并保存实验计划，作为共用测量模板。每次采集都可调整常规设置。</p>
         <Field>
-          Measurement template
+          测量模板
           <Select
-            aria-label="Measurement template"
+            aria-label="测量模板"
             value={template}
             disabled={!!pending}
             onChange={(event) => setTemplate(event.target.value)}
           >
-            <option value="">Choose a saved plan</option>
+            <option value="">选择已保存的计划</option>
             {plans.data?.items
               .filter((plan) => !plan.definition.manual_lines)
               .map((plan) => (
@@ -241,19 +242,19 @@ export function LineScanWorkspace() {
           </Select>
         </Field>
         <Field>
-          List name
+          清单名称
           <Input
-            aria-label="Line list name"
+            aria-label="线路清单名称"
             value={name}
             disabled={!!pending}
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
         <Field>
-          Physical lines, one per line
+          物理线路，每行一条
           <textarea
             className={formControl}
-            aria-label="Physical lines, one per line"
+            aria-label="物理线路，每行一条"
             value={lines}
             disabled={!!pending}
             onChange={(event) => setLines(event.target.value)}
@@ -264,7 +265,7 @@ export function LineScanWorkspace() {
           disabled={busy || (!pending && (!name.trim() || !lines.trim() || !template))}
           onClick={() => void create()}
         >
-          {pending ? "Retry saving line list" : "Save line list"}
+          {pending ? "重试保存线路清单" : "保存线路清单"}
         </Button>
       </details>
       {(error || catalog.error || detail.error) && (
@@ -333,8 +334,7 @@ function LineScanDetail({
     <div className="space-y-3">
       <h4 className="font-semibold">{view.scan.name}</h4>
       <p>
-        Recheck the current wiring after reopening. Unknown results must be reconciled before
-        continuing. Remeasurement adds an attempt; no attempt is chosen as the winner.
+        重新打开后需核实当前接线。结果未知时必须先核对处理，再继续。重新测量会新增一次尝试，不会自动选定最佳结果。
       </p>
       <Button
         type="button"
@@ -344,7 +344,7 @@ function LineScanDetail({
           setRevision(view.scan.revision);
         }}
       >
-        Edit line names
+        编辑线路名称
       </Button>
       {error && <p role="alert">{error}</p>}
       <ol className="space-y-3">
@@ -353,10 +353,10 @@ function LineScanDetail({
             <strong>
               {index + 1}. {item.line.label}
             </strong>{" "}
-            <span>{item.state.replaceAll("_", " ")}</span>
+            <span>{lineStateLabels[item.state] ?? item.state}</span>
             {editing && (
               <Input
-                aria-label={`Line ${index + 1} name`}
+                aria-label={`第 ${index + 1} 条线路名称`}
                 value={labels[index]?.label ?? ""}
                 onChange={(event) =>
                   setLabels(
@@ -374,7 +374,7 @@ function LineScanDetail({
               }
               onClick={() => onPrepare(item.line)}
             >
-              {item.attempts.length ? `Remeasure ${item.line.label}` : `Prepare ${item.line.label}`}
+              {item.attempts.length ? `重新测量 ${item.line.label}` : `准备 ${item.line.label}`}
             </Button>
             {item.attempts.map((attempt, number) => (
               <div key={attempt.procedure.procedure_run_id} className="space-y-1">
@@ -382,14 +382,13 @@ function LineScanDetail({
                   className="underline"
                   href={`?line-scan=${view.scan.scan_id}&procedure=${attempt.procedure.procedure_run_id}#launch`}
                 >
-                  Attempt {number + 1}: {attempt.selection.label} ·{" "}
-                  {attempt.procedure.closure?.status ??
-                    attempt.procedure.state.replaceAll("_", " ")}
+                  第 {number + 1} 次尝试： {attempt.selection.label} ·{" "}
+                  {stateLabel(attempt.procedure.closure?.status ?? attempt.procedure.state)}
                 </a>
                 {attempt.run && (
                   <>
                     <a className="underline ml-2" href={`?run=${attempt.run.snapshot.run_id}#runs`}>
-                      Curve and result
+                      曲线与结果
                     </a>
                     <label className="block">
                       <input
@@ -408,12 +407,12 @@ function LineScanDetail({
                           );
                         }}
                       />{" "}
-                      Compare this attempt
+                      比较此次尝试
                     </label>
                   </>
                 )}
                 <details>
-                  <summary>Recorded settings and source</summary>
+                  <summary>已记录的设置与来源</summary>
                   <pre className="text-xs overflow-auto">
                     {JSON.stringify(
                       {
@@ -433,12 +432,12 @@ function LineScanDetail({
       </ol>
       {editing && (
         <Button type="button" onClick={() => void saveLabels()}>
-          Save line names
+          保存线路名称
         </Button>
       )}
       {compared.length === 2 && (
-        <section aria-label="Line attempt comparison">
-          <h4>Selected attempt settings</h4>
+        <section aria-label="线路测量尝试比较">
+          <h4>所选尝试的设置</h4>
           <ul>
             {settingDifferences(
               measurementSettings(compared[0]!.procedure.intent),
@@ -451,11 +450,10 @@ function LineScanDetail({
             className="underline"
             href={`?compare=${selectedRuns[0]}&compare-with=${selectedRuns[1]}&workspace=${encodeURIComponent(view.scan.template.workspace_id)}#analyses`}
           >
-            Compare retained curves
+            比较已保留曲线
           </a>
           <p>
-            Curve comparison uses the existing explicit comparison model and each run's original
-            grid. This list does not interpolate or combine measurements into a rectangular array.
+            曲线比较使用现有的显式比较模型和各次运行的原始网格。此清单不会插值，也不会将测量合并为矩形数组。
           </p>
         </section>
       )}
@@ -491,5 +489,5 @@ export function settingDifferences(left: unknown, right: unknown, path = ""): st
       settingDifferences(a[key], b[key], path ? `${path}.${key}` : key),
     );
   }
-  return [`${path}: ${JSON.stringify(left) ?? "absent"} → ${JSON.stringify(right) ?? "absent"}`];
+  return [`${path}: ${JSON.stringify(left) ?? "缺失"} → ${JSON.stringify(right) ?? "缺失"}`];
 }

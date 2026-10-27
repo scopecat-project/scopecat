@@ -233,6 +233,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
           control: {
             ...retained.control,
             state: state === "running" ? "leased" : state === "failed" ? "closed" : state,
+            cancellation_requested_at: state === "running" ? "2026-10-27T00:00:00Z" : null,
             attention_reason:
               state === "attention_required" ? "Synthetic cleanup state is unknown" : null,
           },
@@ -266,9 +267,18 @@ test("browses independent dimensions and keeps a compatible signal across slices
                   related_locations: [],
                 },
           terminal_persistence: "unconfirmed",
-          secondary: [],
-          diagnostics: [],
-          truncated: false,
+          secondary: [
+            {
+              code: "synthetic_cleanup_failed",
+              message: "Synthetic cleanup failed",
+              phase: "execution",
+              related_locations: [],
+            },
+          ],
+          diagnostics: [
+            { generation: "a".repeat(32), retention: "unavailable_active_quota", href: null },
+          ],
+          truncated: true,
         },
       }),
     );
@@ -279,19 +289,27 @@ test("browses independent dimensions and keeps a compatible signal across slices
       state = "running";
       await refreshState();
       await expect(focused.getByRole("region", { name: "run 进度" })).toContainText("执行中");
+      await expect(focused.getByText(/取消尚未完成，也不表示设备已物理停止/)).toBeVisible();
       state = problem;
       await refreshState();
       await expect(
         focused.getByText("Synthetic computation failed", { exact: true }),
       ).toBeVisible();
       await expect(focused.getByText("Quarantined", { exact: true })).toBeVisible();
-      await expect(focused.getByText(/Terminal persistence is unconfirmed/)).toBeVisible();
-      await expect(focused.getByRole("button", { name: "Close without resuming" })).toHaveCount(0);
+      await expect(focused.getByText(/尚未确认终态是否已持久保存/)).toBeVisible();
+      await expect(focused.getByText(/诊断未保留/)).toBeVisible();
+      await expect(focused.getByText("仅显示最近保存的部分证据。")).toBeVisible();
+      const additional = focused.locator("summary").filter({ hasText: "其他失败证据（1）" });
+      await additional.press("Enter");
+      await expect(focused.getByText("Synthetic cleanup failed", { exact: true })).toBeVisible();
+      await additional.press("Enter");
+      await expect(focused.getByText(/取消尚未完成/)).toHaveCount(0);
+      await expect(focused.getByRole("button", { name: "关闭且不继续" })).toHaveCount(0);
       if (problem === "attention_required") {
         await expect(
           focused.getByText("Synthetic cleanup state is unknown", { exact: true }),
         ).toBeVisible();
-        await expect(focused.getByText(/Closing this record does not establish/)).toBeVisible();
+        await expect(focused.getByText(/关闭此记录不代表/)).toBeVisible();
       } else {
         await expect(focused.getByRole("region", { name: "run 进度" })).toContainText("失败");
       }
@@ -300,7 +318,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
         await focused.getByRole("button", { name: "退出聚焦，查看 run 详情" }).click();
         await expect(page.getByRole("button", { name: "聚焦曲线", exact: true })).toBeFocused();
         await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("2");
-        await expect(page.getByRole("button", { name: "Close without resuming" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "关闭且不继续" })).toBeVisible();
         await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
       }
     }

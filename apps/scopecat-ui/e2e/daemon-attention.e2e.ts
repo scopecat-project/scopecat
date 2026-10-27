@@ -70,7 +70,9 @@ const test = base.extend<{}, { daemon: ProjectDaemon }>({
         initialized = true;
         runUv(
           [
-            "scopecat",
+            "python",
+            "-m",
+            "scopecat_server.cli",
             "start",
             projectRoot,
             "--port",
@@ -124,17 +126,13 @@ test("handles naturally expired executors from the GUI", async ({ daemon, page }
 
   await selectAttentionRun(page, run);
   await assertResourceStatus(page, run, "Quarantined");
-  await expect(page.getByRole("alert")).toContainText(
-    "Unknown hardware effects cannot be retried here",
-  );
-  await expect(page.getByRole("alert")).toContainText(
-    "reconcile external state using the project workflow",
-  );
+  await expect(page.getByRole("alert")).toContainText("硬件效果未知时不能在此重试");
+  await expect(page.getByRole("alert")).toContainText("按项目流程核对外部状态");
   await expect(page.getByRole("button", { name: "Requeue", exact: true })).toHaveCount(0);
   await expect(page.getByTestId("execution-segments-card")).toContainText("Interrupted");
   await expect(page.getByTestId("execution-segments-card")).toContainText("0 → 0");
 
-  const receipt = await resolveAttention(page, run.runId, "Close without resuming", "Close run");
+  const receipt = await resolveAttention(page, run.runId, "关闭且不继续", "关闭运行");
   expect(receipt).toMatchObject({
     state: "closed",
     released_resource_count: 1,
@@ -220,7 +218,7 @@ async function selectAttentionRun(page: Page, run: AbandonedRun): Promise<void> 
     }),
   ).toBeVisible();
   await expect(page.getByTestId("run-status")).toHaveText("需要处理");
-  await expect(page.getByRole("alert")).toContainText("Operator attention required");
+  await expect(page.getByRole("alert")).toContainText("需要人工处理");
   await expect(page.getByRole("alert")).toContainText("executor_lease_expired");
 }
 
@@ -340,7 +338,11 @@ function runUv(arguments_: string[], cwd: string, allowFailure = false): SpawnSy
 }
 
 async function stopAndRemoveProject(projectRoot: string): Promise<void> {
-  const stopped = runUv(["scopecat", "stop", projectRoot], projectRoot, true);
+  const stopped = runUv(
+    ["python", "-m", "scopecat_server.cli", "stop", projectRoot],
+    projectRoot,
+    true,
+  );
   if (stopped.error || stopped.status !== 0) {
     const daemonLog = await readFile(join(projectRoot, ".scopecat/daemon.log"), "utf8").catch(
       () => "",

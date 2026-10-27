@@ -73,11 +73,11 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 async function fill() {
-  fireEvent.click(screen.getByText("Create a line list"));
+  fireEvent.click(screen.getByText("创建线路清单"));
   await screen.findByRole("option", { name: "Template" });
-  fireEvent.change(screen.getByLabelText("Measurement template"), { target: { value: "plan" } });
-  fireEvent.change(screen.getByLabelText("Line list name"), { target: { value: "Readout" } });
-  fireEvent.change(screen.getByLabelText("Physical lines, one per line"), {
+  fireEvent.change(screen.getByLabelText("测量模板"), { target: { value: "plan" } });
+  fireEvent.change(screen.getByLabelText("线路清单名称"), { target: { value: "Readout" } });
+  fireEvent.change(screen.getByLabelText("物理线路，每行一条"), {
     target: { value: "A\nB" },
   });
 }
@@ -86,10 +86,10 @@ it("carries workspace scope and permits correction after a definite rejection", 
     Response.json({ detail: "Invalid list" }, { status: 422 }),
   );
   await fill();
-  fireEvent.click(screen.getByRole("button", { name: "Save line list" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存线路清单" }));
   await screen.findByRole("alert");
-  expect(screen.getByLabelText("Line list name")).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Save line list" })).toBeEnabled();
+  expect(screen.getByLabelText("线路清单名称")).toBeEnabled();
+  expect(screen.getByRole("button", { name: "保存线路清单" })).toBeEnabled();
   expect(
     requests.every((request) => request.headers.get("X-Scopecat-Workspace") === "practice"),
   ).toBe(true);
@@ -101,10 +101,10 @@ it("retries the exact retained list command after an uncertain response", async 
     throw new TypeError("Response lost");
   });
   await fill();
-  fireEvent.click(screen.getByRole("button", { name: "Save line list" }));
-  const retry = await screen.findByRole("button", { name: "Retry saving line list" });
+  fireEvent.click(screen.getByRole("button", { name: "保存线路清单" }));
+  const retry = await screen.findByRole("button", { name: "重试保存线路清单" });
   await waitFor(() => expect(retry).toBeEnabled());
-  expect(screen.getByLabelText("Line list name")).toBeDisabled();
+  expect(screen.getByLabelText("线路清单名称")).toBeDisabled();
   fireEvent.click(retry);
   await waitFor(() => expect(commands).toHaveLength(2));
   expect(commands[1]).toEqual(commands[0]);
@@ -116,11 +116,11 @@ it("does not prepare a response after the user chooses another list", async () =
     resolve = done;
   });
   const { requests } = mount(async () => Response.json(scan), launcher);
-  fireEvent.click(await screen.findByRole("button", { name: "Prepare A" }));
+  fireEvent.click(await screen.findByRole("button", { name: "准备 A" }));
   await waitFor(() =>
     expect(requests.some((request) => request.url.includes("experiment-launcher"))).toBe(true),
   );
-  fireEvent.change(screen.getByLabelText("Line list"), { target: { value: "" } });
+  fireEvent.change(screen.getByLabelText("线路清单"), { target: { value: "" } });
   await act(async () => {
     resolve(Response.json({ entries: [{ id: "signal", version: "1" }] }));
   });
@@ -131,7 +131,7 @@ it("does not navigate when draft adoption is declined", async () => {
   window.history.replaceState(null, "", "/?line-scan=lines_1");
   openPlan.mockResolvedValue(false);
   mount(async () => Response.json(scan));
-  fireEvent.click(await screen.findByRole("button", { name: "Prepare A" }));
+  fireEvent.click(await screen.findByRole("button", { name: "准备 A" }));
   await waitFor(() => expect(openPlan).toHaveBeenCalledOnce());
   expect(window.location.search).not.toContain("preparation");
 });

@@ -332,7 +332,7 @@ it("does not label a run cancellation request as completion", () => {
   const rendered = render(
     <RunCancellationNotice run={{ status: "running", cancellationRequestedAt: NOW }} />,
   );
-  expect(screen.getByRole("status")).toHaveTextContent("cancellation is not complete yet");
+  expect(screen.getByRole("status")).toHaveTextContent("取消尚未完成");
   rendered.rerender(
     <RunCancellationNotice run={{ status: "cancelled", cancellationRequestedAt: NOW }} />,
   );

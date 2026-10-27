@@ -342,8 +342,7 @@ export function LaunchForm({
     >
       {draft.manualLine && (
         <Notice>
-          Physical line: {draft.manualLine.label}. Start prepares this attempt; confirm the current
-          wiring before measurement.
+          物理线路：{draft.manualLine.label}。开始操作会准备此次尝试；测量前需确认当前实际接线。
         </Notice>
       )}
       <section aria-label="Selected experiment" className="border-b border-line pb-2 space-y-1">

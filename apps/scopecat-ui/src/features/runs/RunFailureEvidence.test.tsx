@@ -42,12 +42,12 @@ it("leads with the acquisition cause and links bounded evidence separately", () 
   render(<RunFailureEvidenceContent evidence={evidence()} />);
   expect(screen.getByText("Detector acquisition failed")).toBeVisible();
   expect(screen.getByText("Instrument abort failed with unknown state")).not.toBeVisible();
-  expect(screen.getByText(/Terminal persistence is unconfirmed/)).toBeVisible();
-  expect(screen.getByRole("link", { name: /View retained diagnostics/ })).toHaveAttribute(
+  expect(screen.getByText(/尚未确认终态是否已持久保存/)).toBeVisible();
+  expect(screen.getByRole("link", { name: /查看已保留的诊断/ })).toHaveAttribute(
     "href",
     `/api/v1/instrument-workers/${"a".repeat(32)}/diagnostics`,
   );
-  expect(screen.getByText(/bounded prefix/)).toBeVisible();
+  expect(screen.getByText(/长度受限的开头部分/)).toBeVisible();
 });
 
 it("explains an exhausted retention quota without an unusable link", () => {
@@ -56,6 +56,16 @@ it("explains an exhausted retention quota without an unusable link", () => {
     { generation: "b".repeat(32), retention: "unavailable_active_quota", href: null },
   ];
   render(<RunFailureEvidenceContent evidence={value} />);
-  expect(screen.getByText(/Diagnostics not retained/)).toBeVisible();
+  expect(screen.getByText(/诊断未保留/)).toBeVisible();
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
+});
+
+it("marks truncated evidence and keeps an absent primary failure absent", () => {
+  const value = evidence();
+  value.truncated = true;
+  const view = render(<RunFailureEvidenceContent evidence={value} />);
+  expect(screen.getByText("仅显示最近保存的部分证据。")).toBeVisible();
+  expect(screen.getByText("其他失败证据（1）")).toBeVisible();
+  view.rerender(<RunFailureEvidenceContent evidence={{ ...value, primary: null }} />);
+  expect(screen.queryByRole("region", { name: "运行失败证据" })).toBeNull();
 });

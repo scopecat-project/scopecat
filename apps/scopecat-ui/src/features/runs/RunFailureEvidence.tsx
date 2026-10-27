@@ -13,7 +13,7 @@ export function RunFailureEvidence({ runId }: { runId: string }) {
       ),
     refetchInterval: 2000,
   });
-  if (query.error) return <p role="status">Failure evidence unavailable: {query.error.message}</p>;
+  if (query.error) return <p role="status">无法获取失败证据： {query.error.message}</p>;
   return query.data ? <RunFailureEvidenceContent evidence={query.data} /> : null;
 }
 
@@ -24,15 +24,15 @@ export function RunFailureEvidenceContent({
 }) {
   if (!evidence.primary) return null;
   return (
-    <section className="rounded border border-line p-4 space-y-2" aria-label="Run failure evidence">
-      <h3 className="font-semibold">Operation failed</h3>
+    <section className="rounded border border-line p-4 space-y-2" aria-label="运行失败证据">
+      <h3 className="font-semibold">操作失败</h3>
       <p>{evidence.primary.message}</p>
       {evidence.terminal_persistence === "unconfirmed" && (
-        <p>Terminal persistence is unconfirmed. Review the saved run state before continuing.</p>
+        <p>尚未确认终态是否已持久保存。请先核查已保存的运行状态，再继续。</p>
       )}
       {evidence.secondary && evidence.secondary.length > 0 && (
         <details>
-          <summary>Additional failure evidence ({evidence.secondary.length})</summary>
+          <summary>其他失败证据（{evidence.secondary.length}）</summary>
           <ul>
             {evidence.secondary.map((problem, index) => (
               <li key={problem.occurrence_id ?? `${problem.code}-${index}`}>{problem.message}</li>
@@ -44,21 +44,19 @@ export function RunFailureEvidenceContent({
         <p key={`${diagnostic.generation}-${diagnostic.request_id ?? index}`}>
           {diagnostic.href ? (
             <a className="underline" href={diagnostic.href} target="_blank" rel="noreferrer">
-              View retained diagnostics
+              查看已保留的诊断
               {diagnostic.instrument_id ? ` — ${diagnostic.instrument_id}` : ""}
               {diagnostic.operation ? ` / ${diagnostic.operation}` : ""}
             </a>
           ) : (
-            <>Diagnostics not retained: all worker retention slots were active.</>
+            <>诊断未保留：所有 Worker 诊断保留槽位均被活动任务占用。</>
           )}
         </p>
       ))}
       {evidence.diagnostics && evidence.diagnostics.length > 0 && (
-        <p className="text-sm">
-          Diagnostics retain a bounded prefix; later output may be discarded.
-        </p>
+        <p className="text-sm">诊断仅保留长度受限的开头部分，后续输出可能已被丢弃。</p>
       )}
-      {evidence.truncated && <p>Only the latest saved evidence window is shown.</p>}
+      {evidence.truncated && <p>仅显示最近保存的部分证据。</p>}
     </section>
   );
 }
