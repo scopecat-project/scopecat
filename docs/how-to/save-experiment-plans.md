@@ -1,85 +1,79 @@
-# Save and reopen experiment plans
+# 保存与重开实验计划 {#save-and-reopen-experiment-plans}
 
-A named plan saves immutable experiment inputs for later work. Saving, opening,
-copying and deleting a plan do not acquire data, reserve a device or change the
-lab's default configuration. Every execution uses a fresh normal launch preview.
+命名计划（plan）保存不可变的实验输入，供以后复用。保存、打开、复制或隐藏计划都不采集数据、
+不预留设备，也不修改实验室默认配置。每次执行都需重新获得正常启动流程的预览。
 
-In **Experiments**, edit the experiment inputs and preview them. Enter a plan
-name and choose **Save plan**. The revision records the definition, supported
-author code revision, scalar/scan controls, exact configuration entry or named
-parameter context and overrides, and the exact sample revision when a sample is
-selected. Experiments without a sample can use the current default configuration;
-saving does not require creating a working point. Later changes to the default
-never silently replace the saved configuration.
+在**实验**中编辑输入并点击**预览**，填写**计划名称**后选择**保存计划**。
+修订保存实验定义、受支持的作者代码修订、标量/扫描控件、精确配置条目或命名参数上下文及覆盖值，
+以及选定样品的精确修订。无样品实验可使用当前默认配置；保存计划不要求先创建工作点。
+以后默认配置的变化不会静默替换已保存配置。
 
-Every preview freezes the selected sample revision or registered target together
-with configuration evidence. Submitting or saving retains that reviewed binding;
-a later catalog edit cannot silently change it. Reopening a plan preserves its
-exact target, sample revisions and batch, independent of session defaults.
+每次预览将选定样品修订或已登记目标与配置证据一起冻结。提交或保存保留已审阅的绑定，
+后续目录编辑不能悄悄改变它。重开计划保留原目标、样品修订和实验批次，不采用会话当前默认值替换。
 
-Use **Saved plans** to open a revision. The saved name and revision, experiment,
-sample and source result appear before the optional exact-reference details.
-The current execution operator is separate from the person who saved the plan.
-Opening does not reuse that person's operator identity or a previous submission
-key. Review the selected configuration and obtain a new preview before starting.
+在**复用与恢复**中的已保存计划列表（当前界面标题 **Saved plans**）打开指定修订。
+先核对名称、修订、实验、样品和来源结果，必要时展开精确引用。
+本次执行操作者与保存计划的人分别记录；打开计划不会复用保存者身份或旧提交 key。
+检查选中的配置，重新预览，再显式开始采集。
 
-Edit inputs and preview again to **Save new revision**, or use **Save as copy**
-for another named plan. Revision comparison shows the actual changed fields.
-Existing revisions and acquired runs remain unchanged. **Delete** hides a named
-head; exact references from historical runs still read the retained revision.
-Resetting a launch draft only resets its editable UI state. A pending unknown
-submission retains its separate original-request recovery entry.
+编辑输入并重新预览后，可**保存新 revision**；用**另存为副本**创建另一计划身份。
+修订比较显示实际变化字段，已有修订和已采集运行保持不变。
+列表中的 **Delete** 只隐藏命名 head，不删除历史证据；已有运行的精确引用仍可读取保留修订。
+重置启动草稿只重置可编辑 UI 状态；响应未知的原提交仍保留独立恢复入口。
 
-## Start from a retained analysis
+## 从保留的分析结论开始 {#start-from-a-retained-analysis}
 
-从保存的比较结论显式导入建议后，可以审阅、编辑并直接 **Start acquisition**，
-不必先命名保存 plan。接纳的 procedure 和子运行保留精确分析决策来源，实际输入独立记录。
-如需重复使用配方，再按已有流程预览并保存 plan；plan 的精确来源也会随每次接纳传递。
+从保存的比较结论显式导入建议后，可审阅、编辑并直接**开始采集**，不必先命名保存计划。
+接纳的 procedure 和子运行保留精确分析决策来源，实际输入独立记录。
+如需重复使用配方，再预览并保存计划；计划的精确来源也随每次接纳传递。
 运行可打开原结论，原结论可分页找回后续实验，详见
 [从结论直接启动下一实验](retained-run-comparison.md)。
 
-## Python
+## Python {#python}
 
-The author client uses the same launch, plan and preview records as the GUI.
-From a registered code folder, select your existing parameter branch and saved
-device context (replace `daily` and `bench-a` with your names):
+作者客户端使用与 GUI 相同的启动、计划和预览记录。在已登记作者目录对应的 Notebook 中，
+选择已有参数分支和实验配置（将 `daily`、`bench-a`、`signal` 替换为实际名称）：
 
 ```python
 import scopecat as sc
 
-with sc.open_project().authoring() as author:
-    author.use(parameter_branch="daily", setup=author.setup.get("bench-a"))
-    prepared = author.prepare("signal", actor="alice")
-    saved = prepared.save_plan("Frequency check", saved_by="alice")
+author = sc.notebook()
+author.use(parameter_branch="daily", setup=author.setup.get("bench-a"))
+prepared = author.prepare("signal", actor="alice")
+saved = prepared.save_plan("Frequency check", saved_by="alice")
 
-    # A new preview selects the saved configuration and code, not today's default.
-    reopened = author.prepare_plan(saved.ref, actor="bob")
-    receipt = reopened.submit(request_key="frequency-check-2026-09-09")
+# 读取精确计划并重新预览，使用保存的配置与代码，不使用今天的默认值。
+reopened = author.prepare_plan(saved.ref, actor="bob")
 ```
 
-Use `lab.plans.list()`, `lab.plans.get(ref)`, `lab.plans.save(command)` and
-`lab.plans.delete(ref)` for typed revision management. `ExperimentPlanSave.previous`
-selects an optimistic edit; `copied_from` creates a distinct plan identity. Pass
-`PlanAnalysisSource` to `prepared.save_plan(..., source=...)` when deriving inputs
-from a retained analysis. The daemon checks that publication's exact identity.
-The server rejects stale edits rather than choosing a winner.
+以上代码尚未采集。确认要开展本次实验后，另行显式提交；在同一作者会话中调用：
 
-The shared configuration resolver supports active and explicit named contexts,
-and exact non-active registry entries selected by a plan. Admission checks the
-stored plan against the actual launch request and the server's checked-preview
-facts in the same transaction. An exact request-key replay still reopens its
-original procedure before current admission fences are evaluated.
+```python
+receipt = reopened.submit(request_key="frequency-check-2026-10-27")
+```
 
-## Storage and supported source boundary
+`request_key` 标识一次原始请求；响应未知时保留同一 key 查询/重试，新的采集意图使用新 key。
+不要把示例固定 key 当作每次采集都可复用的名称。
 
-Plans use immutable owned objects and small revision/head tables.
-[Current-format snapshot/restore](backup-and-restore.md) includes all plan revisions,
-including hidden heads, and referenced author bundles/sample content. New builds
-provide no prebaseline plan reader or conversion promise; see the
-[data policy](../development/data-compatibility.md).
+已有 `lab` 客户端可用 `lab.plans.list()`、`lab.plans.get(ref)`、
+`lab.plans.save(command)` 和 `lab.plans.delete(ref)` 管理类型化修订。
+`ExperimentPlanSave.previous` 用于乐观编辑；`copied_from` 创建独立计划身份。
+从保留分析导出输入时，把 `PlanAnalysisSource` 传给
+`prepared.save_plan(..., source=...)`，服务端校验 publication 的精确身份。
+过期编辑会被拒绝，不自动选择一个编辑者获胜。
 
-Supported author revisions use the existing complete-source manifest and
-matching environment contract. Maintained definitions retain their declaration
-fingerprint; a missing or changed definition requires an explicit revision and
-fresh validation. Plans do not archive external SDK installations or turn an
-unsupported source/environment into an executable historical environment.
+共享配置解析支持活动或显式命名上下文，以及计划选定的精确非活动登记项。
+接纳事务会同时核对已保存计划、实际启动请求和服务端检查过的预览事实。
+同一 request key 的精确重试会先找回原 procedure，不因今天的接纳约束变化创建另一条执行。
+
+## 存储与源码支持边界 {#storage-and-supported-source-boundary}
+
+计划保存在不可变归属对象及修订/head 表中。[当前格式快照与恢复](backup-and-restore.md)
+包括所有计划修订（含隐藏 head）及引用的作者源码包和样品内容。
+当前明确支持的旧格式升级只有 **115→116**，按
+[数据兼容策略](../development/data-compatibility.md#what-remains-supported-now)显式操作；
+快照恢复不代替升级，也不因此承诺读取或转换其他兼容基线之前的格式。
+
+受支持的作者修订使用完整源码清单及匹配的环境契约。维护中的定义保留声明指纹；
+定义缺失或变化时，需显式选择新修订并重新验证。
+计划不归档外部 SDK 安装，也不把不受支持的源码/环境变成可执行的历史环境。
