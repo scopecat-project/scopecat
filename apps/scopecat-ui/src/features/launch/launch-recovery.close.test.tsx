@@ -73,7 +73,7 @@ it("commits the synchronous input, flushes debounce and retains failed sessions 
   releaseLaunchClose("latest");
   fail = true;
   act(() => view.result.current.change("3e"));
-  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   const failedOperation = commands.at(-1)?.operation_id;
   view.unmount();
   await expect(prepareLaunchClose("detached")).resolves.toBe("blocked");

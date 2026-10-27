@@ -348,7 +348,7 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   await screen.findByText("预览就绪", { exact: true });
   await previewReady(); // Previewing the same request does not allocate another submission.
   fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
-  await screen.findByText(/No retained procedure found yet/);
+  await screen.findByText(/尚未找到保留的任务/);
   expect(submissions).toHaveLength(1);
   expect(submissions[0]?.request_key).toBe(originalKey);
   await screen.findByRole("alert");

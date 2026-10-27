@@ -53,7 +53,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
       );
       if (!entry)
         throw new Error(
-          "The saved definition is unavailable. Its plan and history remain readable; restore its supported author revision before reopening.",
+          "已保存的定义不可用。计划和历史仍可读取；请先恢复其受支持的作者源码修订，再重新打开。",
         );
       if (current()) await openPlan(plan, entry);
     } catch (caught) {
@@ -95,25 +95,17 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
     }
   }
   return (
-    <section
-      aria-label="Saved experiment plans"
-      className="border border-line rounded p-3 space-y-2"
-    >
-      <h3 className="font-semibold">Saved plans</h3>
-      <p>
-        Saving and opening never start an experiment or change the lab default. Each run needs a
-        fresh preview.
-      </p>
-      {initializing && <p role="status">Loading experiments before opening a saved plan…</p>}
+    <section aria-label="已保存的实验计划" className="border border-line rounded p-3 space-y-2">
+      <h3 className="font-semibold">已保存计划</h3>
+      <p>保存和打开计划不会启动实验，也不会改变实验室默认值。每次运行都需要重新预览。</p>
+      {initializing && <p role="status">正在加载实验，完成后可打开已保存计划…</p>}
       {history && (
         <button className={secondaryButton} type="button" onClick={() => setHistory(undefined)}>
-          Back to named plans
+          返回命名计划目录
         </button>
       )}
       {(error || plans.error) && <p role="alert">{error || plans.error?.message}</p>}
-      {plans.data?.items.length === 0 && (
-        <p>No saved plans yet. Preview your inputs, then save a named plan.</p>
-      )}
+      {plans.data?.items.length === 0 && <p>暂无已保存计划。请先预览输入，再保存命名计划。</p>}
       {plans.data?.items
         .filter((plan) => !plan.definition.manual_lines)
         .map((plan) => (
@@ -122,7 +114,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
             className="flex flex-wrap gap-2 items-center"
           >
             <span>
-              {plan.name} · revision {plan.ref.revision} · saved by {plan.saved_by}
+              {plan.name} · 修订 {plan.ref.revision} · 保存人：{plan.saved_by}
             </span>
             <button
               className={secondaryButton}
@@ -130,7 +122,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
               disabled={initializing}
               onClick={() => void open(plan)}
             >
-              Open {plan.name} r{plan.ref.revision}
+              打开 {plan.name} r{plan.ref.revision}
             </button>
             <button
               className={secondaryButton}
@@ -140,16 +132,16 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
                 setHistory(plan.ref.plan_id);
               }}
             >
-              History and compare
+              历史与对比
             </button>
             {!history && (
               <button className={secondaryButton} type="button" onClick={() => void hide(plan)}>
-                Delete {plan.name}
+                隐藏 {plan.name}
               </button>
             )}
             {history && (
               <button className={secondaryButton} type="button" onClick={() => setSelected(plan)}>
-                Compare revision {plan.ref.revision}
+                对比修订 {plan.ref.revision}
               </button>
             )}
           </div>
@@ -157,10 +149,10 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
       {selected && (
         <details open>
           <summary>
-            {selected.name}, revision {selected.ref.revision}
+            {selected.name}，修订 {selected.ref.revision}
           </summary>
           <p>
-            Experiment: {selected.definition.experiment}. Sample:{" "}
+            实验：{selected.definition.experiment}。样品/目标：{" "}
             {subjectLabel(selected.definition.selection)}.
           </p>
           {selected.definition.source && (
@@ -168,25 +160,24 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
               className="underline"
               href={`?compare=${encodeURIComponent(selected.definition.source.run_id)}&comparison-analysis=${encodeURIComponent(selected.definition.source.analysis_id)}#analyses`}
             >
-              Source analysis
+              来源分析
             </a>
           )}
           {draft?.plan && (
-            <ul aria-label="Plan revision differences">
+            <ul aria-label="计划修订差异">
               {planDifferences(draft.plan, selected).map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>
           )}
           <details>
-            <summary>Exact references and inputs</summary>
+            <summary>精确引用与输入</summary>
             <pre className="overflow-auto text-xs">{JSON.stringify(selected, null, 2)}</pre>
           </details>
         </details>
       )}
       <p className="text-sm">
-        Delete hides a named head. Existing run links and exact historical revisions remain
-        readable.
+        隐藏仅将命名计划的当前版本移出目录；已有运行链接和精确历史修订仍可读取。
       </p>
     </section>
   );

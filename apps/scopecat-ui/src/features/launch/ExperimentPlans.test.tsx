@@ -319,9 +319,9 @@ it("a slow older open cannot overwrite a later plan or a new edit", async () => 
       "实验输入已保存到应用数据。",
     ),
   );
-  await screen.findByText("Open First plan r1");
-  fireEvent.click(screen.getByText("Open First plan r1"));
-  fireEvent.click(screen.getByText("Open Second plan r1"));
+  await screen.findByText("打开 First plan r1");
+  fireEvent.click(screen.getByText("打开 First plan r1"));
+  fireEvent.click(screen.getByText("打开 Second plan r1"));
   await waitFor(() => expect(pending).toHaveLength(2));
   await act(async () => {
     pending[1]!(reply({ entries: [entry] }));
@@ -331,13 +331,49 @@ it("a slow older open cannot overwrite a later plan or a new edit", async () => 
     pending[0]!(reply({ entries: [entry] }));
   });
   expect(screen.getByLabelText("当前草稿")).toHaveTextContent("Second plan");
-  fireEvent.click(screen.getByText("Open First plan r1"));
+  fireEvent.click(screen.getByText("打开 First plan r1"));
   await waitFor(() => expect(pending).toHaveLength(3));
   fireEvent.click(screen.getByText("Edit while opening"));
   await act(async () => {
     pending[2]!(reply({ entries: [entry] }));
   });
   expect(screen.getByLabelText("当前草稿")).toHaveTextContent("new edit");
+});
+
+it("keeps an unavailable saved author revision readable without opening current source", async () => {
+  const retained = {
+    ...first,
+    definition: {
+      ...first.definition,
+      code_revision: { content_hash: `sha256:${"a".repeat(64)}` },
+    },
+  };
+  const fetch = vi.fn(async (input: Request) =>
+    reply(input.url.includes("experiment-plans") ? { items: [retained] } : { entries: [] }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  setup(true);
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "实验输入已保存到应用数据。",
+    ),
+  );
+  const before = screen.getByLabelText("当前草稿").textContent;
+  fireEvent.click(await screen.findByRole("button", { name: "打开 First plan r1" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "已保存的定义不可用。计划和历史仍可读取；请先恢复其受支持的作者源码修订，再重新打开。",
+  );
+  const catalogReads = fetch.mock.calls
+    .map(([request]) => request)
+    .filter((request) => request.url.includes("experiment-launcher"));
+  expect(catalogReads).toHaveLength(1);
+  expect(new URL(catalogReads[0]!.url).searchParams.get("code_revision")).toBe(
+    retained.definition.code_revision.content_hash,
+  );
+  expect(catalogReads[0]!.headers.get("X-Scopecat-Workspace")).toBe(first.definition.workspace_id);
+  expect(screen.getByLabelText("当前草稿").textContent).toBe(before);
+  fireEvent.click(screen.getByRole("button", { name: "历史与对比" }));
+  expect(screen.getByText("精确引用与输入")).toBeVisible();
 });
 
 it("comparison identifies changed inputs without placing hashes in the ordinary summary", () => {
@@ -349,8 +385,8 @@ it("comparison identifies changed inputs without placing hashes in the ordinary 
     },
   };
   const changes = planDifferences(first, different);
-  expect(changes.some((line) => line.includes("inputs:"))).toBe(true);
-  expect(changes).toContain("Definition declaration changed (exact references in details).");
+  expect(changes.some((line) => line.includes("输入:"))).toBe(true);
+  expect(changes).toContain("定义声明已变化（精确引用见详情）。");
   expect(changes.join(" ")).not.toContain("sha256:");
 });
 
@@ -368,8 +404,8 @@ it("an open started without a draft cannot replace the subsequently selected cat
     }),
   );
   setup(true, false);
-  await screen.findByText("Open First plan r1");
-  fireEvent.click(screen.getByText("Open First plan r1"));
+  await screen.findByText("打开 First plan r1");
+  fireEvent.click(screen.getByText("打开 First plan r1"));
   await waitFor(() => expect(finish).toBeDefined());
   fireEvent.click(screen.getByText("Select current catalog"));
   await waitFor(() => expect(screen.getByLabelText("当前草稿")).toHaveTextContent("default"));
@@ -395,9 +431,9 @@ it("waits for initial catalog readiness before allowing a saved plan to open", a
   );
   installLaunchRecoveryRoutes();
   const rendered = render(view(true));
-  const open = await screen.findByRole("button", { name: "Open First plan r1" });
+  const open = await screen.findByRole("button", { name: "打开 First plan r1" });
   expect(open).toBeDisabled();
-  expect(screen.getByRole("status")).toHaveTextContent("Loading experiments");
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载实验，完成后可打开已保存计划…");
   fireEvent.click(open);
   expect(fetch).toHaveBeenCalledTimes(1);
   rendered.rerender(view(false));
@@ -533,15 +569,15 @@ it("keeps course plan catalogs, history and hiding in the active workspace", asy
     }),
   );
   setup(true);
-  await screen.findByRole("button", { name: "Open First plan r1" });
-  fireEvent.click(screen.getByRole("button", { name: "History and compare" }));
+  await screen.findByRole("button", { name: "打开 First plan r1" });
+  fireEvent.click(screen.getByRole("button", { name: "历史与对比" }));
   await waitFor(() =>
     expect(
       seen.some((item) => item.path.includes("plan_id=a") && item.workspace === "legacy"),
     ).toBe(true),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Back to named plans" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First plan" }));
+  fireEvent.click(screen.getByRole("button", { name: "返回命名计划目录" }));
+  fireEvent.click(await screen.findByRole("button", { name: "隐藏 First plan" }));
   await waitFor(() =>
     expect(
       seen.some(

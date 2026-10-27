@@ -20,6 +20,7 @@ function uv(args: string[]): string {
 test("saves, reopens, copies and submits an immutable plan without activating configuration", async ({
   page,
 }, testInfo) => {
+  page.setDefaultTimeout(10_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-plans-e2e-"));
   let passed = false;
   try {
@@ -72,12 +73,12 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await expect(page.getByLabel("Frequency 单位")).toHaveValue("MHz");
     await expect(page.getByRole("alert").filter({ hasText: "未知或不兼容的单位" })).toBeVisible();
     await page
-      .getByRole("group", { name: "Controls", exact: true })
+      .getByRole("group", { name: "控制项", exact: true })
       .screenshot({ path: testInfo.outputPath("unit-error.png") });
     await frequency.fill("4900M");
     await frequency.blur();
     await page
-      .getByRole("group", { name: "Controls", exact: true })
+      .getByRole("group", { name: "控制项", exact: true })
       .screenshot({ path: testInfo.outputPath("unit-input.png") });
     await preview();
     await page.getByLabel("计划名称").fill("Signal baseline");
@@ -98,7 +99,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await page.reload();
     // Opening a plan follows recovery of the page's author catalog and draft.
     await expect(page.getByRole("region", { name: "核实恢复的实验", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Open Signal baseline r1", exact: true }).click();
+    await page.getByRole("button", { name: "打开 Signal baseline r1", exact: true }).click();
     await expect(page.getByLabel("计划名称")).toHaveValue("Signal baseline");
     await expect(frequency).toHaveValue("4900");
     await expect(page.getByLabel("Frequency 单位")).toHaveValue("MHz");
@@ -111,12 +112,30 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     expect(copied.ref.plan_id).not.toBe(first.ref.plan_id);
     expect(copied.copied_from).toEqual(first.ref);
     expect(copied.saved_by).toBe("bob");
+    const library = page.getByRole("region", { name: "已保存的实验计划", exact: true });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const history = library.getByRole("button", { name: "历史与对比", exact: true }).first();
+      await history.focus();
+      await page.keyboard.press("Enter");
+      await expect(library.getByRole("button", { name: "返回命名计划目录" })).toBeVisible();
+      await expect(library.getByText("精确引用与输入", { exact: true })).toBeVisible();
+      expect(
+        await page.locator("html").evaluate((element) => element.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await library.screenshot({ path: testInfo.outputPath(`plan-library-${width}.png`) });
+      await library.getByRole("button", { name: "返回命名计划目录" }).click();
+    }
+    expect(
+      (await (await page.request.get(`${endpoint}/api/v1/runs?limit=100`)).json()).items,
+    ).toHaveLength(0);
+
     await preview();
     const receipt = page.waitForResponse((r) => r.url().endsWith("/experiment-launcher/submit"));
     await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const submitted = await receipt;
     expect(submitted.status(), await submitted.text()).toBe(200);
-    await expect(page.getByRole("link", { name: "Reopen exact plan" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "重新打开此精确计划" })).toBeVisible();
     const retained = await page.request.post(`${endpoint}/api/v1/experiment-plans/read`, {
       data: first.ref,
     });

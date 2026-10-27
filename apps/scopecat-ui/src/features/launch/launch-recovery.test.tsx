@@ -133,7 +133,9 @@ it("retains both windows and fences submission until explicit conflict choice", 
   );
   await waitFor(() => expect(two.result.current.recovery.conflict).toBe(true));
   expect(history.at(-1)?.state).toBe("conflict");
-  await expect(two.result.current.recovery.flush()).rejects.toThrow("Resolve and save");
+  await expect(two.result.current.recovery.flush()).rejects.toThrow(
+    "请先解决当前输入问题并保存，再提交。",
+  );
   expect(one.result.current.draft.values.center).toBe("window one");
   act(() => two.result.current.recovery.adoptLocal());
   await saved(two);
@@ -166,7 +168,7 @@ it("waits for the queued save and retries the identical operation after a lost s
   act(() =>
     view.result.current.setDraft((current) => ({ ...current!, values: { center: "newer" } })),
   );
-  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   const operation = commands.at(-1);
   failSave = false;
   await act(async () => {
@@ -198,7 +200,9 @@ it("conditions a historical copy against its target head even when opened from a
     view.result.current.setDraft(restoreDraft(old, 10));
   });
   await waitFor(() => expect(view.result.current.recovery.conflict).toBe(true));
-  await expect(view.result.current.recovery.flush()).rejects.toThrow("Resolve and save");
+  await expect(view.result.current.recovery.flush()).rejects.toThrow(
+    "请先解决当前输入问题并保存，再提交。",
+  );
   expect(
     history.filter((item) => item.target.experiment === "signal" && item.state === "saved").at(-1)
       ?.input.values.center,
@@ -240,7 +244,7 @@ it("restores a pending target's local copy when its save fails after navigation"
   );
   act(() => view.result.current.setDraft(initial()));
   await waitFor(() => expect(view.result.current.draft.values.center).toBe("pending original"));
-  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   failSave = false;
   await act(async () => {
     await view.result.current.recovery.retry();
@@ -384,7 +388,7 @@ it("retries the failed sent identity before saving the latest coalesced edits", 
   await act(async () => {
     release();
   });
-  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   failSave = false;
   await act(async () => {
     await view.result.current.recovery.retry();
@@ -401,7 +405,7 @@ it("allows only one failed-operation retry in flight before saving newer edits",
   act(() =>
     view.result.current.setDraft((current) => ({ ...current!, values: { center: "failed" } })),
   );
-  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   const failedOperation = commands.at(-1);
   let release!: () => void;
   holdSave = new Promise<void>((resolve) => {
@@ -461,9 +465,7 @@ it.each([false, true])(
         () => "saved",
         (error: unknown) => String(error),
       );
-      expect(outcome).toBe(
-        fails ? "Error: Resolve and save the current input before submitting." : "saved",
-      );
+      expect(outcome).toBe(fails ? "Error: 请先解决当前输入问题并保存，再提交。" : "saved");
       expect(commands).toHaveLength(count + 1);
       expect(history.at(-1)?.input.values.center).toBe(fails ? "0" : "retained on close");
     } finally {
@@ -484,9 +486,7 @@ it.each([false, true])(
         values: { center: "retry on close" },
       })),
     );
-    await waitFor(() =>
-      expect(view.result.current.recovery.status).toContain("not confirmed saved"),
-    );
+    await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
     const operation = commands.at(-1);
     let release!: () => void;
     holdSave = new Promise<void>((resolve) => {
@@ -573,7 +573,7 @@ it("requests browser close confirmation until pending or failed input is confirm
   await act(async () => {
     release!();
   });
-  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   expect(unloadIsPrevented()).toBe(true);
   failSave = false;
   holdSave = undefined;

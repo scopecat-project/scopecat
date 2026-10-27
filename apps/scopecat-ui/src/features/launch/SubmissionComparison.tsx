@@ -15,8 +15,8 @@ export function SubmissionComparison({
   if (!draft)
     return (
       <details className="border-t border-line pt-2">
-        <summary className="cursor-pointer font-semibold">Submitted inputs</summary>
-        <p className="my-2">Select a draft to compare with this submitted request.</p>
+        <summary className="cursor-pointer font-semibold">已提交输入</summary>
+        <p className="my-2">选择草稿以与此已提交请求比较。</p>
         <dl className="space-y-2">
           {submittedInputRows(request).map((row) => (
             <div key={row.label}>
@@ -37,45 +37,38 @@ export function SubmissionComparison({
     .sort((a, b) => order[a.status] - order[b.status]);
   return (
     <details className="border-t border-line pt-2">
-      <summary className="cursor-pointer font-semibold">
-        Compare submitted request with current draft
-      </summary>
+      <summary className="cursor-pointer font-semibold">比较已提交请求与当前草稿</summary>
       <p className="mt-2 text-sm text-text-dim">
-        Selected submitted request compared with current draft “{draft.draftName ?? "Draft"}”. This
-        does not identify the draft originally submitted. Editing this draft does not change
-        submitted work.
+        将所选已提交请求与当前草稿“{draft.draftName ?? "草稿"}”比较。
+        这不表示当前草稿就是最初提交的草稿。编辑此草稿不会改变已提交工作。
       </p>
       {mismatch && (
-        <p className="mt-2 text-yellow">
-          Different workspace or experiment selected. These are separate preparations.
-        </p>
+        <p className="mt-2 text-yellow">当前选择了不同的工作区或实验。这是相互独立的准备。</p>
       )}
       <p className="my-2">
-        {changed} changed {changed === 1 ? "field" : "fields"}. Defaults and incomplete inputs are
-        not treated as equal. Start still checks inputs before submission.
+        {changed} 个字段已变化。默认值和未完整输入不会判为相同。
+        此处仅作描述性比较，不触发预览或执行；开始时仍会在提交前核实输入。
       </p>
       <Button
         type="button"
         onClick={() => setShowUnchanged((value) => !value)}
         aria-expanded={showUnchanged}
       >
-        {showUnchanged ? "Hide unchanged fields" : "Show unchanged fields"}
+        {showUnchanged ? "隐藏未变化字段" : "显示未变化字段"}
       </Button>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full table-fixed text-left text-sm">
-          <caption className="sr-only">
-            Selected submitted request and current draft comparison
-          </caption>
+          <caption className="sr-only">所选已提交请求与当前草稿对比</caption>
           <thead>
             <tr>
               <th scope="col" className="w-1/4 p-2">
-                Input
+                输入
               </th>
               <th scope="col" className="p-2">
-                Selected submitted request
+                所选已提交请求
               </th>
               <th scope="col" className="p-2">
-                当前草稿 · {draft.draftName ?? "Draft"}
+                当前草稿 · {draft.draftName ?? "草稿"}
               </th>
             </tr>
           </thead>
@@ -84,7 +77,9 @@ export function SubmissionComparison({
               <tr key={row.label} className="border-t border-line align-top">
                 <th scope="row" className="break-words p-2 font-medium">
                   {row.label}
-                  <span className="block text-xs font-normal text-text-dim">{row.status}</span>
+                  <span className="block text-xs font-normal text-text-dim">
+                    {comparisonStatusLabel[row.status]}
+                  </span>
                 </th>
                 <td className="whitespace-pre-wrap break-words p-2 [overflow-wrap:anywhere]">
                   {row.submitted}
@@ -100,3 +95,10 @@ export function SubmissionComparison({
     </details>
   );
 }
+
+const comparisonStatusLabel = {
+  Changed: "已变化",
+  Same: "相同",
+  "Incomplete current input": "当前输入未完整",
+  "Not compared": "未比较",
+};

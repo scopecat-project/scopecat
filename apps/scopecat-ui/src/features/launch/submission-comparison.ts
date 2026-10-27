@@ -23,7 +23,7 @@ export interface ComparisonRow {
 const cell = (value: unknown, text = displayValue(value)): Cell => ({ value, text });
 const unknown = (text: string): Cell => ({ text, state: "unknown" });
 const incomplete = (text: string): Cell => ({
-  text: `${text || "Empty"} · incomplete`,
+  text: `${text || "空"} · 未完整`,
   state: "incomplete",
 });
 
@@ -51,13 +51,13 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "undefined";
 }
 function displayValue(value: unknown): string {
-  if (value === undefined) return "Not specified";
-  if (value === null) return "None";
-  if (Array.isArray(value)) return value.length ? value.map(displayValue).join(", ") : "Empty list";
-  if (typeof value === "object") return formatCoordinateValue(value) || "Structured value";
+  if (value === undefined) return "未指定";
+  if (value === null) return "无";
+  if (Array.isArray(value)) return value.length ? value.map(displayValue).join(", ") : "空列表";
+  if (typeof value === "object") return formatCoordinateValue(value) || "结构化值";
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
     ? String(value)
-    : "Unsupported value";
+    : "不支持的值";
 }
 function declaration(draft: LaunchDraft): LaunchCatalogEntry | undefined {
   try {
@@ -71,8 +71,8 @@ function currentField(raw: string | undefined, name: string, entry?: LaunchCatal
   if (raw === undefined || raw === "")
     return entry?.request?.required?.includes(name)
       ? incomplete("")
-      : unknown("Current default · preview required");
-  if (!field || !canRenderField(field)) return unknown(`${raw} · field declaration unavailable`);
+      : unknown("当前默认值 · 需要预览");
+  if (!field || !canRenderField(field)) return unknown(`${raw} · 字段声明不可用`);
   let value: unknown = raw;
   if (field.type === "number" || field.type === "integer") {
     try {
@@ -105,15 +105,15 @@ function currentField(raw: string | undefined, name: string, entry?: LaunchCatal
   return cell(value, raw);
 }
 function controlLabel(edit: NonNullable<SubmissionRequest["control_edits"]>[string]): string {
-  if (edit.mode === "default") return "Declared default";
-  if (edit.mode === "fixed") return `Fixed · ${displayValue(edit.value)}`;
+  if (edit.mode === "default") return "声明默认值";
+  if (edit.mode === "fixed") return `固定值 · ${displayValue(edit.value)}`;
   if (edit.axis?.kind === "values")
-    return `Scan · ${edit.axis.values.map(displayValue).join(", ")}`;
+    return `扫描 · ${edit.axis.values.map(displayValue).join(", ")}`;
   if (edit.axis?.kind === "range")
-    return `Scan · ${displayValue(edit.axis.start)} → ${displayValue(edit.axis.stop)} · ${edit.axis.points} points`;
+    return `扫描 · ${displayValue(edit.axis.start)} → ${displayValue(edit.axis.stop)} · ${edit.axis.points} 点`;
   if (edit.axis?.kind === "around")
-    return `Scan around ${displayValue(edit.axis.center)} · span ${displayValue(edit.axis.span)} · ${edit.axis.points} points`;
-  return "Retained scan";
+    return `中心扫描 ${displayValue(edit.axis.center)} · 跨度 ${displayValue(edit.axis.span)} · ${edit.axis.points} 点`;
+  return "保留的扫描";
 }
 function controlIdentity(edit: NonNullable<SubmissionRequest["control_edits"]>[string]) {
   return edit.mode === "fixed"
@@ -121,8 +121,8 @@ function controlIdentity(edit: NonNullable<SubmissionRequest["control_edits"]>[s
     : { mode: edit.mode, axis: edit.axis };
 }
 function currentControl(control?: ControlDraft): Cell {
-  if (!control) return unknown("Current default · preview required");
-  if (control.mode === "default") return unknown("Current default · preview required");
+  if (!control) return unknown("当前默认值 · 需要预览");
+  if (control.mode === "default") return unknown("当前默认值 · 需要预览");
   try {
     const edit = controlEdits({ control }).control!;
     if (
@@ -137,16 +137,16 @@ function currentControl(control?: ControlDraft): Cell {
         ? control.value
         : control.mode === "values"
           ? control.values
-          : `${control.start} → ${control.stop} · ${control.points} points`;
+          : `${control.start} → ${control.stop} · ${control.points} 点`;
     return incomplete(raw);
   }
 }
 function configurationLabel(selection: SubmissionRequest["selection"]): string {
   const config = normalizeSelection(selection).configuration;
-  if (config.kind === "parameters") return `Parameter version ${config.ref.revision_id}`;
+  if (config.kind === "parameters") return `参数版本 ${config.ref.revision_id}`;
   if (config.kind === "candidate")
-    return `Candidate ${config.source.proposal_id} from run ${config.source.source_run_id}`;
-  return "Not selected";
+    return `候选 ${config.source.proposal_id}，来源运行 ${config.source.source_run_id}`;
+  return "未选择";
 }
 
 const parameterFields = (values: Record<string, unknown>) =>
@@ -155,7 +155,7 @@ const parameterFields = (values: Record<string, unknown>) =>
     .join(", ");
 
 function parameterEditsLabel(edits: components["schemas"]["ParameterUpdate-Input"][]): string {
-  if (!edits.length) return "None";
+  if (!edits.length) return "无";
   return edits
     .map((edit) => {
       switch (edit.kind) {
@@ -164,9 +164,9 @@ function parameterEditsLabel(edits: components["schemas"]["ParameterUpdate-Input
         case "update_parameter_rows":
           return `${edit.parameter_id} [${parameterFields(edit.key)}]: ${parameterFields(edit.values)}`;
         case "insert_parameter_rows":
-          return `${edit.parameter_id} · add ${edit.rows.map(parameterFields).join("; ")}`;
+          return `${edit.parameter_id} · 新增 ${edit.rows.map(parameterFields).join("; ")}`;
         case "delete_parameter_rows":
-          return `${edit.parameter_id} · delete [${parameterFields(edit.key)}]`;
+          return `${edit.parameter_id} · 删除 [${parameterFields(edit.key)}]`;
       }
     })
     .join("\n");
@@ -192,28 +192,22 @@ export function compareSubmission(request: SubmissionRequest, draft: LaunchDraft
   const entry = declaration(draft);
   const previous = normalizeSelection(request.selection);
   const next = draft.selection;
-  add("Workspace", cell(request.workspace_id), cell(draft.workspaceId));
-  add("Experiment", cell(request.experiment), cell(draft.experiment));
+  add("工作区", cell(request.workspace_id), cell(draft.workspaceId));
+  add("实验", cell(request.experiment), cell(draft.experiment));
+  add("实验版本", cell(request.version), entry ? cell(entry.version) : unknown("声明不可用"));
   add(
-    "Experiment version",
-    cell(request.version),
-    entry ? cell(entry.version) : unknown("Declaration unavailable"),
-  );
-  add(
-    "Source revision",
-    request.code_revision
-      ? cell(request.code_revision.content_hash)
-      : unknown("Default at submission"),
+    "源码修订",
+    request.code_revision ? cell(request.code_revision.content_hash) : unknown("提交时默认值"),
     (draft.codeRevision ?? draft.sourceBaseline)
       ? cell((draft.codeRevision ?? draft.sourceBaseline)!.content_hash)
-      : unknown("Current source · preview required"),
+      : unknown("当前源码 · 需要预览"),
   );
   const configurationIdentity = (selection: typeof previous) =>
     selection.configuration.kind === "parameters"
       ? selection.configuration.ref
       : selection.configuration;
   add(
-    "Configuration",
+    "配置",
     cell(configurationIdentity(previous), configurationLabel(previous)),
     cell(configurationIdentity(next), configurationLabel(next)),
   );
@@ -224,65 +218,59 @@ export function compareSubmission(request: SubmissionRequest, draft: LaunchDraft
         ? selection.configuration.source.setup
         : undefined;
   add(
-    "Setup version",
-    setup(previous)
-      ? cell(setup(previous), setup(previous)!.revision_id)
-      : unknown("Default at submission"),
-    setup(next) ? cell(setup(next), setup(next)!.revision_id) : unknown("Not selected"),
+    "实验配置版本",
+    setup(previous) ? cell(setup(previous), setup(previous)!.revision_id) : unknown("提交时默认值"),
+    setup(next) ? cell(setup(next), setup(next)!.revision_id) : unknown("未选择"),
   );
   const overrides = (selection: typeof previous) =>
     selection.configuration.kind === "parameters" ? selection.configuration.overrides : [];
   add(
-    "Parameter edits",
+    "参数改动",
     cell(overrides(previous), parameterEditsLabel(overrides(previous))),
     cell(overrides(next), parameterEditsLabel(overrides(next))),
   );
   add(
-    "Sample / target",
+    "样品/目标",
     cell(previous.subject, subjectLabel(previous)),
     cell(next.subject, subjectLabel(next)),
   );
   add(
-    "Batch",
-    cell(previous.batch, previous.batch.kind === "declared" ? previous.batch.id : "No batch"),
-    cell(next.batch, next.batch.kind === "declared" ? next.batch.id : "No batch"),
+    "批次",
+    cell(previous.batch, previous.batch.kind === "declared" ? previous.batch.id : "无批次"),
+    cell(next.batch, next.batch.kind === "declared" ? next.batch.id : "无批次"),
   );
   add(
-    "Operator",
+    "操作人",
     cell(request.actor),
     draft.actor.trim() ? cell(draft.actor) : incomplete(draft.actor),
   );
   add(
-    "Collection",
-    request.record_collection ? cell(request.record_collection) : unknown("Default at submission"),
-    draft.collection ? cell(draft.collection) : unknown("Current default · preview required"),
+    "记录集合",
+    request.record_collection ? cell(request.record_collection) : unknown("提交时默认值"),
+    draft.collection ? cell(draft.collection) : unknown("当前默认值 · 需要预览"),
   );
   const plan = draft.planDirty ? undefined : draft.plan?.ref;
   add(
-    "Saved plan",
+    "已保存计划",
     cell(
       request.plan_ref ?? null,
-      request.plan_ref
-        ? `${request.plan_ref.plan_id} · revision ${request.plan_ref.revision}`
-        : "None",
+      request.plan_ref ? `${request.plan_ref.plan_id} · 修订 ${request.plan_ref.revision}` : "无",
     ),
-    cell(plan ?? null, plan ? `${plan.plan_id} · revision ${plan.revision}` : "None"),
+    cell(plan ?? null, plan ? `${plan.plan_id} · 修订 ${plan.revision}` : "无"),
   );
   if (request.manual_line || draft.manualLine)
     add(
-      "Manual scan line",
-      cell(request.manual_line ?? null, request.manual_line?.label ?? "None"),
-      cell(draft.manualLine ?? null, draft.manualLine?.label ?? "None"),
+      "手动扫描线路",
+      cell(request.manual_line ?? null, request.manual_line?.label ?? "无"),
+      cell(draft.manualLine ?? null, draft.manualLine?.label ?? "无"),
     );
   if (draft.workingInput)
     add(
-      "Working parameter table",
+      "工作参数表",
       request.reviewed
-        ? cell(request.reviewed.binding.config_content_hash, "Frozen configuration retained")
-        : unknown("Not recorded in this request"),
-      unknown(
-        `Working table revision ${draft.workingInput.revision} · preview and freeze required`,
-      ),
+        ? cell(request.reviewed.binding.config_content_hash, "已保留冻结配置")
+        : unknown("此请求未记录"),
+      unknown(`工作表修订 ${draft.workingInput.revision} · 需要预览与冻结`),
     );
   const decision = draft.handoff
     ? {
@@ -293,24 +281,21 @@ export function compareSubmission(request: SubmissionRequest, draft: LaunchDraft
     : (draft.lineSource ?? draft.plan?.definition.source);
   if (request.decision_source || decision)
     add(
-      "Analysis source",
+      "分析来源",
       cell(
         request.decision_source ?? null,
         request.decision_source
-          ? `${request.decision_source.analysis_id} · run ${request.decision_source.run_id}`
-          : "None",
+          ? `${request.decision_source.analysis_id} · 运行 ${request.decision_source.run_id}`
+          : "无",
       ),
-      cell(
-        decision ?? null,
-        decision ? `${decision.analysis_id} · run ${decision.run_id}` : "None",
-      ),
+      cell(decision ?? null, decision ? `${decision.analysis_id} · 运行 ${decision.run_id}` : "无"),
     );
-  add("Scan layout", cell(request.scan_mode), cell("cartesian"));
+  add("扫描布局", cell(request.scan_mode), cell("cartesian"));
   if (request.parameter_sweeps.length)
     add(
-      "Parameter sweeps",
-      cell(request.parameter_sweeps, `${request.parameter_sweeps.length} retained sweeps`),
-      unknown("Not represented by this editor"),
+      "参数扫描",
+      cell(request.parameter_sweeps, `${request.parameter_sweeps.length} 项保留的参数扫描`),
+      unknown("此编辑器未表示该输入"),
     );
   for (const name of new Set([
     ...Object.keys(request.inputs ?? {}),
@@ -318,10 +303,10 @@ export function compareSubmission(request: SubmissionRequest, draft: LaunchDraft
     ...(entry?.request?.required ?? []),
   ])) {
     add(
-      `Input · ${name}`,
+      `输入 · ${name}`,
       Object.hasOwn(request.inputs ?? {}, name)
         ? cell(request.inputs![name])
-        : unknown("Default at submission"),
+        : unknown("提交时默认值"),
       currentField(draft.values[name], name, entry),
     );
   }
@@ -331,10 +316,10 @@ export function compareSubmission(request: SubmissionRequest, draft: LaunchDraft
   ])) {
     const edit = request.control_edits?.[name];
     add(
-      `Control · ${name}`,
+      `控制项 · ${name}`,
       edit && edit.mode !== "default"
         ? cell(controlIdentity(edit), controlLabel(edit))
-        : unknown("Default at submission"),
+        : unknown("提交时默认值"),
       currentControl(draft.controls[name]),
     );
   }
@@ -344,11 +329,11 @@ export function compareSubmission(request: SubmissionRequest, draft: LaunchDraft
 export function submittedInputRows(request: SubmissionRequest): { label: string; value: string }[] {
   return [
     ...Object.entries(request.inputs ?? {}).map(([name, value]) => ({
-      label: `Input · ${name}`,
+      label: `输入 · ${name}`,
       value: displayValue(value),
     })),
     ...Object.entries(request.control_edits ?? {}).map(([name, edit]) => ({
-      label: `Control · ${name}`,
+      label: `控制项 · ${name}`,
       value: controlLabel(edit),
     })),
   ];

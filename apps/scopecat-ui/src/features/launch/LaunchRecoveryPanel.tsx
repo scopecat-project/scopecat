@@ -23,11 +23,8 @@ export function LaunchRecoveryPanel() {
   });
   return (
     <details className="rounded-md border border-line bg-panel-soft p-4 space-y-3">
-      <summary>Recover experiment input or an original submission</summary>
-      <p>
-        Recovery never starts acquisition. Input versions and conflicting copies remain in
-        application data.
-      </p>
+      <summary>恢复实验输入或原始提交</summary>
+      <p>恢复不会开始采集。输入版本与冲突副本仍保留在应用数据中。</p>
       <button
         className={secondaryButton}
         type="button"
@@ -37,26 +34,27 @@ export function LaunchRecoveryPanel() {
           void attempts.refetch();
         }}
       >
-        Refresh recovery history
+        刷新恢复历史
       </button>
       {(drafts.error || attempts.error) && (
-        <p role="alert">Cannot load recovery history. Retry when the application reconnects.</p>
+        <p role="alert">无法加载恢复历史。请在应用重新连接后重试。</p>
       )}
-      {!attemptsReady && (
-        <p>
-          Loading original submission records. Use Refresh recovery history to retry if unavailable.
-        </p>
-      )}
+      {!attemptsReady && <p>正在加载原始提交记录。如暂不可用，请点击“刷新恢复历史”重试。</p>}
       <ul>
         {drafts.data?.pages
           .flatMap((page) => page.items)
           .map((record) => (
             <li key={record.revision}>
-              {record.input.draft_name ?? "Draft"} · {record.target.draft_id ?? "default"} ·{" "}
-              {record.target.experiment} · {record.target.workspace_id} · {record.state} ·{" "}
-              {record.created_at}
+              {record.input.draft_name ?? "草稿"} · {record.target.draft_id ?? "default"} ·{" "}
+              {record.target.experiment} · {record.target.workspace_id} ·{" "}
+              {record.state === "saved"
+                ? "已保存"
+                : record.state === "conflict"
+                  ? "冲突副本"
+                  : record.state}{" "}
+              · {record.created_at}
               <button className={secondaryButton} type="button" onClick={() => recover(record)}>
-                Review input revision {record.revision}
+                审阅输入修订 {record.revision}
               </button>
             </li>
           ))}
@@ -69,7 +67,7 @@ export function LaunchRecoveryPanel() {
             void drafts.fetchNextPage();
           }}
         >
-          Older input versions
+          更早的输入版本
         </button>
       )}
       <ul>
@@ -83,7 +81,7 @@ export function LaunchRecoveryPanel() {
                 type="button"
                 onClick={() => recoverAttempt(record)}
               >
-                Recover original submission {record.sequence}
+                恢复原始提交 {record.sequence}
               </button>
             </li>
           ))}
@@ -96,7 +94,7 @@ export function LaunchRecoveryPanel() {
             void attempts.fetchNextPage();
           }}
         >
-          Older submission receipts
+          更早的提交收据
         </button>
       )}
     </details>

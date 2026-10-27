@@ -166,7 +166,7 @@ it("previews a typed request and clears results after edits", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await screen.findByText("预览就绪");
-  expect(screen.getAllByRole("region", { name: "Saved experiment plans" })).toHaveLength(1);
+  expect(screen.getAllByRole("region", { name: "已保存的实验计划" })).toHaveLength(1);
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({
     workspace_id: "legacy",
@@ -842,9 +842,7 @@ it("reopens a pinned draft even when its experiment is absent from current code"
   expect(await screen.findByLabelText("Amplitude")).toHaveValue("0.72");
   expect(await screen.findByRole("link", { name: "Reopen this saved draft" })).toBeVisible();
   expect(revisions).toEqual(["sha256:historical-code"]);
-  expect(
-    screen.getByText(/This draft is pinned to author revision sha256:historical-code/),
-  ).toBeVisible();
+  expect(screen.getByText(/此草稿固定使用作者源码修订 sha256:historical-code/)).toBeVisible();
   expect(new URL(window.location.href).searchParams.get("draft")).toBe("pinned-b");
 });
 
