@@ -1992,11 +1992,19 @@ class SQLiteMeasurementDatasetRepository:
 
         try:
             with self._runs.sqlite.read_connection() as connection:
-                return _measurement_projected_record_count(connection, self._run_id)
+                return self.measurement_record_count_in_transaction(connection)
         except Exception as error:
             raise ExecutionStateError(
                 f"failed to read measurement dataset size: {error}"
             ) from error
+
+    def measurement_record_count_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+    ) -> int:
+        """Read the projection watermark within the caller's write fence."""
+
+        return _measurement_projected_record_count(connection, self._run_id)
 
     def acquisition_record_count(self) -> int:
         """Read physical acquisition-log rows, including retries and orphans."""

@@ -1761,6 +1761,10 @@ def test_recovery_groups_are_sparse_idempotent_and_survive_restart(
         )
 
         assert retry == committed
+        assert not any(
+            event.kind == "measurement_projection_advanced"
+            for event in _events(runtime, run_id=run_id).items
+        )
         assert (
             runtime.application.executor.run_coverage(run_id).completed_point_count == 0
         )
@@ -1793,6 +1797,294 @@ def test_recovery_groups_are_sparse_idempotent_and_survive_restart(
     with LocalDaemonRuntime(tmp_path) as restarted:
         restored = restarted.application.executor.recovery_groups(run_id)
         assert tuple(item.completion for item in restored.items) == (first, second)
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+def test_sparse_recovery_projection_notifies_after_old_reads_finish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rollback: bool
+) -> None:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        client = TestClient(runtime.app())
+        executor = runtime.application.executor
+        admission = runtime.application.submit_run(
+            _submission(runtime, "sparse-projection-refresh", point_count=4)
+        )
+        run_id = admission.run_id
+        lease = executor.start_executor(
+            run_id, ExecutorStartRequest(executor_id="sparse-producer")
+        )
+        measurement_records = tuple(
+            MeasurementRecord(
+                run_id=run_id,
+                logical_point_id=f"point-{point_index}",
+                point_index=point_index,
+                coordinates={
+                    "frequency": MeasurementArray.create(
+                        dtype="float64",
+                        unit="Hz",
+                        values=tuple(float(index) for index in range(5)),
+                    )
+                },
+                observables={
+                    "signal": MeasurementScalar.create(
+                        dtype="float64",
+                        value=point_index + 1.25,
+                        unit="ratio",
+                    ),
+                    "trace": (
+                        MeasurementUnavailable.create(
+                            reason="overload",
+                            dtype="complex128",
+                            unit="ratio",
+                            shape=(5,),
+                            metadata={},
+                        )
+                        if point_index == 0
+                        else MeasurementArray.create(
+                            dtype="complex128",
+                            unit="ratio",
+                            values=tuple(
+                                complex(point_index + 1.0, index) for index in range(5)
+                            ),
+                        )
+                    ),
+                },
+            )
+            for point_index in range(4)
+        )
+        measurement_header = MeasurementDatasetHeader(
+            run_id=run_id,
+            recording_contract_fingerprint="test.recording.v1",
+            dataset_schema=MeasurementDatasetSchema(
+                dataset_id="raw-measurements",
+                point_domain=MeasurementProductGridPointDomain(
+                    axes=[
+                        MeasurementPointDomainAxis(
+                            id="x",
+                            size=2,
+                            source=MeasurementPointDomainValuesSource(
+                                values=[
+                                    MeasurementScalar.create(dtype="int64", value=value)
+                                    for value in (10, 20)
+                                ]
+                            ),
+                        ),
+                        MeasurementPointDomainAxis(
+                            id="bias",
+                            size=2,
+                            source=MeasurementPointDomainValuesSource(
+                                values=[
+                                    MeasurementScalar.create(dtype="int64", value=value)
+                                    for value in (0, 1)
+                                ]
+                            ),
+                        ),
+                    ]
+                ),
+                dimensions=[
+                    MeasurementDimension(id="point", kind="point", size=4),
+                    MeasurementDimension(id="sample", kind="frequency", size=5),
+                ],
+                variables=[
+                    MeasurementVariable(
+                        id="frequency",
+                        role="coordinate",
+                        dtype="float64",
+                        unit="Hz",
+                        dims=["point", "sample"],
+                        recording_group_id="readout",
+                    ),
+                    MeasurementVariable(
+                        id="signal",
+                        role="observable",
+                        dtype="float64",
+                        unit="ratio",
+                        dims=["point"],
+                    ),
+                    MeasurementVariable(
+                        id="trace",
+                        role="observable",
+                        dtype="complex128",
+                        unit="ratio",
+                        dims=["point", "sample"],
+                        recording_group_id="readout",
+                    ),
+                ],
+                variable_groups=[MeasurementVariableGroup(id="readout")],
+                primary_coordinates=["frequency"],
+                primary_observables=["signal", "trace"],
+            ),
+            expected_record_count=4,
+            record_count_limit=4,
+        )
+
+        executor.initialize_measurements(
+            run_id,
+            MeasurementHeaderCommand(
+                lease_id=lease.lease_id, header=measurement_header
+            ),
+        )
+        # Publish only sparse points 1 and 3; point zero never completes.
+        records = tuple(measurement_records[i] for i in (1, 3))
+        executor.ingest_measurements(
+            run_id,
+            lease_id=lease.lease_id,
+            content=encode_measurement_append(
+                MeasurementDatasetAppend(
+                    run_id=run_id,
+                    header_content_hash=measurement_header.content_hash,
+                    acquisition_start=0,
+                    records=records,
+                ),
+                measurement_header.dataset_schema,
+            ),
+        )
+        executor.flush_measurements(
+            run_id, MeasurementFlushCommand(lease_id=lease.lease_id)
+        )
+        command = RunRecoveryGroupCommitCommand(
+            lease_id=lease.lease_id,
+            groups=(
+                RecoveryGroupCompletion(
+                    schedule_fingerprint="sparse-schedule",
+                    group_id="bias-1",
+                    point_indices=(1, 3),
+                    output_kind="measurement",
+                    record_content_hashes=tuple(
+                        measurement_record_content_hash(r) for r in records
+                    ),
+                ),
+            ),
+        )
+
+        def read_views() -> tuple[list[int], list[int]]:
+            sliced = client.post(
+                f"/api/v1/runs/{run_id}/measurements/query",
+                json={"fixed_axis_indices": {"bias": 1}},
+            )
+            traced = client.post(
+                f"/api/v1/runs/{run_id}/measurements/traces/query",
+                json={
+                    "observable_id": "trace",
+                    "coordinate_id": "frequency",
+                    "fixed_axis_indices": {"bias": 1},
+                },
+            )
+            assert sliced.status_code == traced.status_code == 200
+            return (
+                [r["point_index"] for r in sliced.json()["items"]],
+                [r["point_index"] for r in traced.json()["series"]],
+            )
+
+        old_reads_consumed = Event()
+
+        def commit_after_gate() -> None:
+            assert old_reads_consumed.wait(timeout=10)
+            executor.commit_recovery_groups(run_id, command)
+
+        # Drain every earlier append notification and finish both old HTTP reads
+        # before allowing commit. There is no later append, prefix advance or seal.
+        events_before = _events(runtime, run_id=run_id).items
+        assert any(e.kind == "measurements_appended" for e in events_before)
+        cursor = events_before[-1].event_id
+        cached_views = read_views()
+        assert cached_views == ([], [])
+
+        with pytest.raises(BackendConflict):
+            executor.commit_recovery_groups(
+                run_id, command.model_copy(update={"lease_id": "stale-lease"})
+            )
+        assert _events(runtime, run_id=run_id).items == events_before
+        assert executor.recovery_groups(run_id).items == ()
+        assert read_views() == ([], [])
+
+        # A later invalid group rolls back earlier rows from the same batch.
+        invalid = command.groups[0].model_copy(
+            update={
+                "group_id": "overlap",
+                "point_indices": (1,),
+                "record_content_hashes": (command.groups[0].record_content_hashes[0],),
+            }
+        )
+        with pytest.raises(BackendConflict):
+            executor.commit_recovery_groups(
+                run_id,
+                command.model_copy(update={"groups": (*command.groups, invalid)}),
+            )
+        assert _events(runtime, run_id=run_id).items == events_before
+        assert executor.recovery_groups(run_id).items == ()
+        assert read_views() == ([], [])
+
+        if rollback:
+            original = SQLiteControlPlane.append_event_in_transaction
+
+            def fail_after_event(
+                control: SQLiteControlPlane,
+                connection: sqlite3.Connection,
+                event: DurableEventInput,
+            ) -> DurableEvent:
+                result = original(control, connection, event)
+                if event.kind == "measurement_projection_advanced":
+                    raise RuntimeError("projection notification rollback")
+                return result
+
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    SQLiteControlPlane, "append_event_in_transaction", fail_after_event
+                )
+                with pytest.raises(
+                    RuntimeError, match="projection notification rollback"
+                ):
+                    executor.commit_recovery_groups(run_id, command)
+            assert _events(runtime, run_id=run_id).items == events_before
+            assert executor.recovery_groups(run_id).items == ()
+            assert read_views() == ([], [])
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(commit_after_gate)
+            old_reads_consumed.set()
+            pending.result(timeout=10)
+
+        assert read_views() == ([1, 3], [1, 3])
+        assert cached_views == ([], [])
+        # The replay consumer can invalidate the actual slice and trace queries
+        # solely from events newer than the fully consumed append watermark.
+        fresh = runtime.application.runs.list_events(
+            limit=500, after=cursor, run_id=run_id
+        )
+        assert [e.kind for e in fresh.items] == ["measurement_projection_advanced"]
+        assert fresh.items[0].payload == {"projected_record_count": 2}
+        for event in fresh.items:
+            if event.kind == "measurement_projection_advanced":
+                cached_views = read_views()
+        assert cached_views == ([1, 3], [1, 3])
+        assert executor.run_coverage(run_id).completed_point_count == 0
+        executor.commit_recovery_groups(run_id, command)
+        assert (
+            runtime.application.runs.list_events(limit=500, after=cursor, run_id=run_id)
+            == fresh
+        )
+
+    with LocalDaemonRuntime(tmp_path) as restarted:
+        client = TestClient(restarted.app())
+        assert read_views() == ([1, 3], [1, 3])
+        assert (
+            restarted.application.executor.run_coverage(run_id).completed_point_count
+            == 0
+        )
+        replayed = restarted.application.runs.list_events(
+            limit=500, after=cursor, run_id=run_id
+        )
+        assert (
+            tuple(
+                event
+                for event in replayed.items
+                if event.kind == "measurement_projection_advanced"
+            )
+            == fresh.items
+        )
 
 
 def test_measurement_recovery_group_requires_published_matching_records(
