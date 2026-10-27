@@ -200,3 +200,13 @@ it("documents compact suffixes for whitespace-separated scan lists", () => {
     controlEdits({ frequency: { mode: "values", values: "1 GHz, 500 MHz", unit: "MHz" } }),
   ).toThrow("有限数值");
 });
+
+it("explains source replacement, validation and publication boundaries in Chinese", () => {
+  render(<DraftForm />);
+  fireEvent.click(screen.getByText("取值来源与校验说明"));
+  expect(
+    screen.getByText(
+      "切换取值来源会替换其数值。固定值从声明默认值开始。预览与接纳前会检查项目约束。编辑输入不会发布参数版本。",
+    ),
+  ).toBeVisible();
+});

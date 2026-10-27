@@ -326,9 +326,7 @@ export function ControlFields({
         <details className="text-xs text-text-dim">
           <summary className="cursor-pointer">取值来源与校验说明</summary>
           <p>
-            Changing source replaces its values. 固定值 starts from the declared default. Project
-            constraints are checked during preview and before admission. Editing inputs does not
-            publish a parameter version.
+            切换取值来源会替换其数值。固定值从声明默认值开始。预览与接纳前会检查项目约束。编辑输入不会发布参数版本。
           </p>
         </details>
       )}
