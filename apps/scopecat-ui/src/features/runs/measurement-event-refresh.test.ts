@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { measurementEventRefresh } from "./measurement-event-refresh";
@@ -16,16 +18,18 @@ function fixture() {
     refresh.dispose();
     client.clear();
   });
-  function observe(key: readonly string[]) {
+  function observe(key: readonly string[], options: { mount?: boolean; poll?: boolean } = {}) {
     const reads: {
       signal: AbortSignal;
       resolve: (value: number) => void;
       reject: (error: Error) => void;
     }[] = [];
-    client.setQueryData(key, 0);
+    if (!options.mount) client.setQueryData(key, 0);
     const observer = new QueryObserver(client, {
       queryKey: key,
       staleTime: Infinity,
+      refetchInterval: options.poll ? 10 : false,
+      refetchIntervalInBackground: true,
       queryFn: ({ signal }) =>
         new Promise<number>((resolve, reject) => {
           reads.push({ signal, resolve, reject });
@@ -34,7 +38,12 @@ function fixture() {
     });
     const stop = observer.subscribe(() => {});
     cleanups.push(stop);
-    return { reads, stop, key };
+    return {
+      reads,
+      stop,
+      key,
+      stopPolling: () => observer.setOptions({ ...observer.options, refetchInterval: false }),
+    };
   }
   return { client, refresh, observe };
 }
@@ -137,3 +146,33 @@ it("invalidates inactive identities without starting requests", async () => {
   expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   expect(client.isFetching()).toBe(0);
 });
+
+it.each(["mount", "poll", "reconnect"] as const)(
+  "refreshes after an external %s read when a single notification arrives mid-flight",
+  async (source) => {
+    const { client, refresh, observe } = fixture();
+    const query = observe(["measurement-slice", "run", "slice"], {
+      mount: source === "mount",
+      poll: source === "poll",
+    });
+    let resetting: Promise<void> | undefined;
+    if (source === "reconnect") {
+      refresh.reset();
+      resetting = client.resetQueries({ queryKey: ["measurement-slice"] });
+    }
+    await vi.waitFor(() => expect(query.reads).toHaveLength(1));
+    query.stopPolling();
+    // This is the final notification: the existing read contains a pre-event snapshot.
+    refresh.invalidate("run");
+    expect(query.reads[0]!.signal.aborted).toBe(false);
+    expect(query.reads).toHaveLength(1);
+    query.reads[0]!.resolve(1);
+    await resetting;
+    await vi.waitFor(() => expect(query.reads).toHaveLength(2));
+    expect(client.getQueryData(query.key)).toBe(1);
+    query.reads[1]!.resolve(2);
+    await vi.waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(client.getQueryData(query.key)).toBe(2);
+    expect(query.reads).toHaveLength(2);
+  },
+);

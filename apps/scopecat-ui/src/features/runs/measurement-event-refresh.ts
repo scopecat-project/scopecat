@@ -16,12 +16,16 @@ export function measurementEventRefresh(client: QueryClient) {
         existing.pending = true;
         continue;
       }
+      // The first await may join a mount, poll or reconnect read started before this event.
+      // Its result cannot consume this notification; retain one post-event read as well.
+      let joiningEarlierRead = query.state.fetchStatus === "fetching";
       const lane = { pending: true, generation };
       lanes.set(query.queryHash, lane);
       void (async () => {
         try {
           do {
-            lane.pending = false;
+            lane.pending = joiningEarlierRead;
+            joiningEarlierRead = false;
             await client.refetchQueries(
               { queryKey: query.queryKey, exact: true, type: "active" },
               { cancelRefetch: false },
