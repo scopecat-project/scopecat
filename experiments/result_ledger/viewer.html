@@ -19,6 +19,7 @@ details { margin-top:16px } pre { white-space:pre-wrap; overflow-wrap:anywhere }
 <h1>Result ledger <span class="muted">/ synthetic reader</span></h1>
 <p class="muted">A frozen scientific input can be readable while earlier logical points are unfinished.</p>
 <div class="banner">Simulation only · No hardware connection. Physical execution unknown is shown separately from saved results and published groups.</div>
+<p id="commit-mode" class="muted small"></p>
 <div id="counts" class="cards"></div>
 <div class="panel">
   <div class="controls">
@@ -51,6 +52,7 @@ for(const id of ['xmin','xmax'])$(id).value=saved[id]||'';
 function options(id,choices) { const previous=$(id).value||saved[id]; $(id).replaceChildren(...choices.map(value=>textNode('option',value,{value}))); if(choices.includes(previous))$(id).value=previous; }
 function render() {
   if(!state)return;
+  $('commit-mode').textContent='Persisted commit mode: '+(state.author_intent?.commit_mode||'unspecified')+' · Scientific membership: explicit closure · Selection policy: sole candidate';
   $('counts').replaceChildren(...Object.entries(state.counts).map(([label,count])=>{const e=textNode('div','',{className:'card'});e.append(textNode('strong',count),textNode('span',label==='results'?'saved bundles':label));return e;}));
   options('group',state.groups.map(group=>group.id));
   const group=state.groups.find(group=>group.id===$('group').value), ready=state.readiness[group?.id];
@@ -97,7 +99,7 @@ function render() {
   const analysis=state.analyses.find(item=>item.snapshot_id===snapshot?.id);$('analysis').replaceChildren();
   if(analysis){const table=document.createElement('table'),head=document.createElement('tr');for(const title of ['Point','Channel','Mean','Available','Unit'])head.append(textNode('th',title));table.append(head);for(const row of analysis.rows){const tr=document.createElement('tr');for(const value of [row.point_id,row.channel,row.mean===null?'unavailable':row.mean.toFixed(6),row.available_samples+'/'+row.expected_samples,row.unit])tr.append(textNode('td',value));table.append(tr);}$('analysis').append(table,textNode('p','Exact input hash: '+analysis.input_sha256,{className:'small muted'}));}
   else $('analysis').append(textNode('p','No completed exact-input analysis for this group.'));
-  $('evidence').textContent=JSON.stringify({snapshot,deliveries:state.deliveries,notification_cursor:state.notification_cursor},null,2);
+  $('evidence').textContent=JSON.stringify({author_intent:state.author_intent,proposals:state.proposals,snapshot,deliveries:state.deliveries,notification_cursor:state.notification_cursor},null,2);
 }
 for(const id of ['group','output','channel','xmin','xmax'])$(id).addEventListener('change',()=>{remember();render();});
 $('reset').addEventListener('click',()=>{$('xmin').value='';$('xmax').value='';remember();render();});

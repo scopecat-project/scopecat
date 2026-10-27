@@ -38,6 +38,8 @@ def test_process_boundary_recovery_preserves_unknown_and_does_not_repeat_saved_w
         "demo",
         "--directory",
         directory,
+        "--commit-mode",
+        "staged",
         "--crash-at",
         boundary,
         *(["--hard-crash"] if hard_crash else []),

@@ -8,6 +8,8 @@ Differences: actual available interpreter (not the v1-required Python 3.15.1),
 two-channel waveforms, sparse groups, forced per-group flush, and attempt/snapshot
 auditing on the experimental side. No hardware, HTTP, GUI, or provider latency.
 Disk growth is retained footprint, NOT physical device write amplification.
+Version 2 compares staged and atomic completion with identical attempt auditing;
+the production-port baseline remains a separate storage-component comparator.
 """
 
 from __future__ import annotations
@@ -485,7 +487,7 @@ def _baseline(root: Path, payload: list[dict], samples: int, repo: Path) -> dict
         return result
 
 
-def _experiment(root: Path, payload: list[dict], samples: int) -> dict:
+def _experiment(root: Path, payload: list[dict], samples: int, *, atomic: bool) -> dict:
     from .core import Store, _validate_outputs
     from .core import _hash as core_hash
 
@@ -509,6 +511,7 @@ def _experiment(root: Path, payload: list[dict], samples: int) -> dict:
                     "id": f"u-{g[0]}",
                     "point_ids": [f"p-{p}" for p in g],
                     "required_outputs": ["waveform"],
+                    "selection_policy": "sole_candidate",
                     "output_contracts": {
                         "waveform": {
                             "dtype": "float64",
@@ -625,11 +628,22 @@ def _experiment(root: Path, payload: list[dict], samples: int) -> dict:
         started = time.perf_counter()
         for group, output in zip(groups, outputs, strict=True):
             attempt = store.begin_attempt(fence, f"u-{group[0]}")
-            bundle = store.save_result(
-                fence, attempt, output, {"provider": "synthetic"}
-            )
-            store.select_result(fence, f"u-{group[0]}", bundle)
-            snapshots.append(store.publish_group(fence, f"g-{group[0]}"))
+            if atomic:
+                receipt = store.complete_attempt(
+                    fence,
+                    attempt,
+                    output,
+                    {"provider": "synthetic"},
+                    selection_policy="sole_candidate",
+                    publish_groups=(f"g-{group[0]}",),
+                )
+                snapshots.append(receipt["snapshot_ids"][f"g-{group[0]}"])
+            else:
+                bundle = store.save_result(
+                    fence, attempt, output, {"provider": "synthetic"}
+                )
+                store.select_result(fence, f"u-{group[0]}", bundle)
+                snapshots.append(store.publish_group(fence, f"g-{group[0]}"))
             if first is None:
                 assert store.snapshot(snapshots[-1])
                 first = time.perf_counter() - started
@@ -689,6 +703,22 @@ def _experiment(root: Path, payload: list[dict], samples: int) -> dict:
             == result["scientific_values_sha256"]
         )
         result["verified_roundtrip"] = True
+        result["completion_protocol"] = "atomic" if atomic else "staged"
+        result["attempt_audit"] = "durable begin before simulated provider result"
+        result["audit_counts"] = {
+            table: connection.execute(
+                f"SELECT count(*) FROM {table}"  # noqa: S608 - fixed table literals below
+            ).fetchone()[0]
+            for table in (
+                "attempts",
+                "bundles",
+                "selections",
+                "selection_history",
+                "snapshots",
+                "outbox",
+            )
+        }
+        assert all(value == len(groups) for value in result["audit_counts"].values())
         return result
 
 
@@ -704,7 +734,15 @@ def main(argv=None) -> int:
         "--repeats", type=int, default=1, help="Number of explicit ABBA cycles"
     )
     parser.add_argument(
-        "--worker", choices=["baseline", "experiment"], help=argparse.SUPPRESS
+        "--worker",
+        choices=["baseline", "experiment_staged", "experiment_atomic"],
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--comparison",
+        choices=["all", "baseline-atomic", "staged-atomic"],
+        default="all",
+        help="Separate ABBA pairs: baseline ports vs atomic; staged vs atomic",
     )
     args = parser.parse_args(argv)
     if (
@@ -720,7 +758,9 @@ def main(argv=None) -> int:
         result = (
             _baseline(root, payload, args.samples, repo)
             if args.worker == "baseline"
-            else _experiment(root, payload, args.samples)
+            else _experiment(
+                root, payload, args.samples, atomic=args.worker == "experiment_atomic"
+            )
         )
         print(
             json.dumps(
@@ -735,12 +775,20 @@ def main(argv=None) -> int:
         )
         return 0
     results = []
+    comparisons = {
+        "baseline-atomic": ("baseline", "experiment_atomic"),
+        "staged-atomic": ("experiment_staged", "experiment_atomic"),
+    }
+    schedule = [
+        (name, index, side)
+        for name, (left, right) in comparisons.items()
+        if args.comparison in {"all", name}
+        for index, side in enumerate((left, right, right, left))
+    ]
     for points in args.points:
         for repeat in range(args.repeats):
-            for index, side in enumerate(
-                ("baseline", "experiment", "experiment", "baseline")
-            ):
-                name = f"n{points}-r{repeat}-{index}-{side}"
+            for comparison, index, side in schedule:
+                name = f"n{points}-r{repeat}-{comparison}-{index}-{side}"
                 command = [
                     sys.executable,
                     "-m",
@@ -776,13 +824,26 @@ def main(argv=None) -> int:
                     )
                 record = json.loads(child.stdout.strip().splitlines()[-1])
                 record.update(
-                    {"command": command, "abba_position": index, "repeat": repeat}
+                    {
+                        "command": command,
+                        "abba_position": index,
+                        "repeat": repeat,
+                        "comparison": comparison,
+                    }
                 )
                 results.append(record)
                 (root / "samples.json").write_text(json.dumps(results, indent=2))
+    for points in args.points:
+        identities = {
+            sample["scientific_values_sha256"]
+            for sample in results
+            if sample["points"] == points
+        }
+        if len(identities) != 1:
+            raise AssertionError("comparators did not preserve identical science")
     summary = {
         "protocol": "result-ledger-publication-component",
-        "version": 1,
+        "version": 2,
         "baseline_sha": BASELINE_SHA,
         "experiment_sha": _git(ROOT, "rev-parse", "HEAD"),
         "experiment_dirty": bool(_git(ROOT, "status", "--porcelain")),
@@ -797,6 +858,7 @@ def main(argv=None) -> int:
                 "experiment is standalone JSON SQLite"
             ),
             "Forced publication per 2-point group; not batching throughput",
+            "Baseline bypasses interpreter batching; storage components only",
             (
                 "Experiment audits attempts/selections/snapshots; "
                 "baseline only publication recovery proof"
@@ -809,6 +871,10 @@ def main(argv=None) -> int:
             ),
             "One untimed encode/decode/validation warms lazy imports; no writes",
             "No adaptive recovery or fault injection measured here; see demo/tests",
+            (
+                "Staged vs atomic isolates completion transaction composition; "
+                "both retain durable attempt begin, history and exact snapshot"
+            ),
         ],
         "samples": results,
     }

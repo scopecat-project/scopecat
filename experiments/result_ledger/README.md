@@ -2,6 +2,9 @@
 
 An isolated, disposable replacement of the acquisition-to-analysis path. This is
 not a production backend, an adopted migration, or a hardware implementation.
+Round 2 specifically tests single-source author intent and atomic post-provider
+completion; the original milestone `698fda92725e7359a016cea8af1a2816d2dd6100`
+and its negative/cost evidence remain preserved below.
 All demonstration data and provider actions are synthetic.
 
 Baseline: public main `f2e514a1a1075b9de0c1bf5de697bba455a72aae`.
@@ -25,7 +28,8 @@ invent those capabilities. It tests a different completion protocol.
 - Saved results are immutable candidates. Selection is an explicit step. Closed
   groups become ready from selected member units, without a global prefix.
   Publication freezes the selected inputs and emits its notification in the same
-  SQLite transaction. Acknowledging a notification is separate; delivery is at
+  SQLite transaction. In atomic mode, saving the returned result and recording
+  its declared selection share this transaction; staged mode remains available. Acknowledging a notification is separate; delivery is at
   least once and consumers deduplicate durable event IDs.
 - An open group admits additional work and must be closed explicitly. Its closed
   membership is the completeness contract. Readiness means inputs are fixed,
@@ -38,6 +42,42 @@ immutable results, explicit selections, and frozen publication/outbox. Completio
 counts and prefix summaries are derived. This does not make state disappear:
 provider execution still lies outside the database transaction, and consumers
 still maintain a delivery cursor. Those boundaries are intentional.
+
+## Current architecture and public boundary
+
+`Intent/Axis → compile/initialize → drain(provider) → Store → snapshot/outbox → analysis/viewer`.
+The declaration names ordered coordinate axes, output contracts, `work_by`,
+`group_by`, traversal direction and closure. It never lists points or member IDs.
+The compiler derives those identities by axis indices (including duplicate-value
+points), separately from execution order. Grouping by index is explicit and is
+not the production analysis rule that can combine equal coordinate values.
+
+- `Intent.initialize/verify/extend`: persist a single admitted intent; extension
+  binds a proposal ID, exact source snapshot and rule. Extension never closes a
+  group. `Store.close_group` is the author's explicit membership commitment.
+- `drain`: interpret admitted work order and declared `sole_candidate` policy,
+  without scenario IDs, guessed closure, or implicit authorization to retry.
+- `Store.begin_attempt`: persist the pre-provider external-effect boundary.
+  Attempt lifecycle, physical certainty and retry authorization remain distinct.
+- `Store.complete_attempt`: validate/save the result, audit the declared choice,
+  and freeze requested ready closed groups with their outbox in one fenced commit.
+  The result cannot be partially saved by failure inside this operation.
+- `save_result`, `select_result`, `select_and_publish`: retain candidate-only and
+  explicit later-choice paths; an ambiguous candidate set is never guessed.
+- `snapshot/events/state`: immutable exact inputs, publication notifications,
+  and one coherent derived readiness view. There is no mutable prefix authority.
+
+State responsibilities are membership/intent, execution attempts/evidence,
+immutable bundles, explicit selection history, frozen snapshots and outbox.
+The numerical contract rejects unsupported narrow floats and integer components
+that cannot be exactly represented by the declared float64/complex128 type.
+
+The new author DSL is deliberately bounded: `group_by` must be a subset of
+`work_by`, so a work unit cannot straddle analysis groups. Raw-core overlapping
+groups are not exposed by this DSL. All result blocks still require a point axis
+and every required output must cover the unit's points; point-free work-level
+aggregates are not implemented. `state()`/GUI eagerly materialize a small run,
+not a streaming long-run query interface.
 
 ## Scope and adoption boundary
 
@@ -88,9 +128,15 @@ python -m experiments.result_ledger recover --directory /tmp/result-fault \
   --authorize-retry
 ```
 
-Other boundaries are `result-save`, `group-publish`, and `notification`. Omit
+Other boundaries are `result-save`, `group-publish`, `notification`,
+`adaptive-append` and `adaptive-close`. Omit
 `--hard-crash` for controlled exception exit. Every recovery is driven by the
 ledger; the provider audit is inspection evidence, never a recovery oracle.
+Default `--commit-mode atomic` saves/selects/publishes in one transaction;
+`--commit-mode staged` preserves the four-commit first-round path. Recovery uses
+the admitted mode. An atomic `result-save` fault is **inside** the transaction:
+it rolls back and leaves physical execution unknown. A staged `result-save` fault
+is **after** durable candidate saving and needs no repeated provider action.
 The sole-candidate selection policy is explicit in the demo. Multiple candidates
 are rejected rather than guessed; the core exposes explicit selection.
 
@@ -129,7 +175,7 @@ native allocations and prebuilt payloads. File growth is retained footprint,
 not physical device write amplification. No portable threshold is claimed.
 
 
-## Milestone evidence and decision
+## Round 1 evidence and decision (preserved)
 
 Measured implementation: `cd4874f7a8bf959341319b898785585c79963ebc` (clean).
 Baseline: `f2e514a1a1075b9de0c1bf5de697bba455a72aae` (clean).
@@ -179,7 +225,7 @@ Ruff check/format and diff whitespace checks pass. Arbitrary instruction-level
 SIGKILL, real devices, production distributed leases, native-memory scale and
 complete product feature parity remain untested.
 
-**Recommendation: partial absorption, not wholesale adoption.** The executable
+**Round 1 recommendation: partial absorption, not wholesale adoption.** The executable
 slice supports multi-point result bundles and explicit closed-group readiness
 without a global prefix, including an open group's persisted extension. It also
 shows why attempt certainty and retry permission need independent state. The

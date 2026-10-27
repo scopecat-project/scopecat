@@ -19,9 +19,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .authoring import Axis, Intent
 from .core import Store
+from .execution import drain
 
-BOUNDARIES = ("provider-return", "result-save", "group-publish", "notification")
+BOUNDARIES = (
+    "provider-return",
+    "result-save",
+    "group-publish",
+    "notification",
+    "adaptive-append",
+    "adaptive-close",
+)
 
 
 class InjectedCrash(RuntimeError):
@@ -32,22 +41,22 @@ def encode(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-def point(identity: str, frequency: float, bias: float) -> dict:
-    return {
-        "id": identity,
-        "coordinates": {
-            "frequency": {"value": frequency, "unit": "GHz"},
-            "bias": {"value": bias, "unit": "V"},
-        },
-    }
-
-
-def unit(identity: str, point_ids: list[str]) -> dict:
-    return {
-        "id": identity,
-        "point_ids": point_ids,
-        "required_outputs": ["waveform", "diagnostic"],
-        "output_contracts": {
+def declaration() -> Intent:
+    """One author intent; point IDs, memberships and traversal are derived."""
+    return Intent(
+        run_id="synthetic-2d",
+        axes=(
+            Axis("frequency", (5.0, 5.1), "GHz"),
+            Axis("bias", (0.0, 0.2), "V", labels=("low", "high")),
+        ),
+        work_by=("bias",),
+        group_by=("bias",),
+        static_closed=True,
+        partition_identity="axis-index",
+        selection_policy="sole_candidate",
+        reverse_axes=("bias",),
+        open_groups=("adaptive",),
+        outputs={
             "waveform": {
                 "dims": ["point", "channel", "sample"],
                 "shape": [None, 2, 16],
@@ -66,29 +75,7 @@ def unit(identity: str, point_ids: list[str]) -> dict:
                 "coordinates": {},
             },
         },
-    }
-
-
-def declaration() -> dict:
-    """A small 2D domain; a work unit intentionally spans nonadjacent points."""
-    return {
-        "run_id": "synthetic-2d",
-        "points": [
-            point("p00", 5.0, 0.0),
-            point("p01", 5.0, 0.2),
-            point("p10", 5.1, 0.0),
-            point("p11", 5.1, 0.2),
-        ],
-        "units": [
-            unit("bias-low", ["p00", "p10"]),
-            unit("bias-high", ["p01", "p11"]),
-        ],
-        "groups": [
-            {"id": "low", "unit_ids": ["bias-low"], "closed": True},
-            {"id": "high", "unit_ids": ["bias-high"], "closed": True},
-            {"id": "adaptive", "unit_ids": [], "closed": False},
-        ],
-    }
+    )
 
 
 def connect_aux(path: Path) -> sqlite3.Connection:
@@ -118,7 +105,9 @@ def simulate_provider(
         bias = coordinates["bias"]["value"]
         for channel in range(2):
             for sample in range(samples):
-                valid = not (identity == "p11" and channel == 1 and sample >= 12)
+                valid = not (
+                    frequency == 5.1 and bias == 0.2 and channel == 1 and sample >= 12
+                )
                 available.append(valid)
                 values.append(
                     round(bias + (frequency - 4.9) * math.sin(sample / 3 + channel), 8)
@@ -303,11 +292,15 @@ def execute(
     authorize_retry: bool = False,
     crash_at: str | None = None,
     hard_crash: bool = False,
+    commit_mode: str = "atomic",
 ) -> dict:
     start = time.perf_counter()
     with Store(directory / "ledger.sqlite3") as store:
+        intent = declaration()
         if not recover:
-            store.initialize(**declaration())
+            intent.initialize(store, commit_mode=commit_mode)
+        else:
+            intent.verify(store)
         fence = store.acquire("synthetic-cli")
         if recover:
             store.reconcile_unknowns(fence)
@@ -333,75 +326,47 @@ def execute(
         # Recover already-published notifications before doing new work.
         notify(directory, store)
         first_readable = None
-        for unit_id, group_id in (
-            ("bias-high", "high"),
-            ("bias-low", "low"),
-            ("adaptive-2", "adaptive"),
-        ):
-            state = store.state()
-            if unit_id == "adaptive-2" and not any(
-                unit["id"] == unit_id for unit in state["units"]
-            ):
-                # A deterministic observation-derived proposal is persisted once.
-                high = next(group for group in state["groups"] if group["id"] == "high")
-                source = analyze(store.snapshot(high["published_snapshot"]))
-                measured = next(
-                    row["mean"] for row in source["rows"] if row["mean"] is not None
-                )
-                bias = round(float(measured), 6)
-                store.append_work(
-                    fence,
-                    [point("p20", 5.2, bias), point("p21", 5.3, bias)],
-                    [unit(unit_id, ["p20", "p21"])],
-                    "adaptive",
-                )
-                state = store.state()
-            group = next(group for group in state["groups"] if group["id"] == group_id)
-            if not group["closed"]:
-                store.close_group(fence, group_id)
-            if group["published_snapshot"]:
-                continue
-            selected = next(
-                (item for item in state["selections"] if item["unit_id"] == unit_id),
-                None,
-            )
-            if selected is None:
-                saved = [
-                    item for item in state["results"] if item["unit_id"] == unit_id
-                ]
-                if len(saved) > 1:
-                    raise ValueError(
-                        "multiple saved candidates require explicit selection; "
-                        "demo refuses guessing"
-                    )
-                if saved:
-                    bundle_hash = saved[0]["hash"]
-                else:
-                    current_unit = next(
-                        unit for unit in state["units"] if unit["id"] == unit_id
-                    )
-                    attempt_id = store.begin_attempt(fence, unit_id)
-                    outputs = simulate_provider(
-                        directory,
-                        attempt_id,
-                        current_unit,
-                        {point["id"]: point for point in state["points"]},
-                    )
-                    crash("provider-return", crash_at, hard_crash=hard_crash)
-                    bundle_hash = store.save_result(
-                        fence,
-                        attempt_id,
-                        outputs,
-                        {"provider": "synthetic-only", "attempt_id": attempt_id},
-                    )
-                    crash("result-save", crash_at, hard_crash=hard_crash)
-                # Explicit demo policy: select the sole persisted completed candidate.
-                store.select_result(fence, unit_id, bundle_hash)
-            store.publish_group(fence, group_id)
+
+        def fault(boundary: str) -> None:
+            crash(boundary, crash_at, hard_crash=hard_crash)
+
+        def published(_group_id: str, _snapshot_id: str) -> None:
+            nonlocal first_readable
             if first_readable is None:
                 first_readable = time.perf_counter() - start
-            crash("group-publish", crash_at, hard_crash=hard_crash)
             notify(directory, store, crash_at, hard_crash=hard_crash)
+
+        def provider(attempt_id: str, unit: dict, points: dict) -> list[dict]:
+            return simulate_provider(directory, attempt_id, unit, points)
+
+        # Generic runtime interprets persisted traversal and selection policy.
+        drain(store, fence, provider, fault=fault, on_publish=published)
+        state = store.state()
+        adaptive = next(group for group in state["groups"] if group["id"] == "adaptive")
+        if not adaptive["unit_ids"]:
+            high = next(group for group in state["groups"] if group["id"] == "high")
+            snapshot = store.snapshot(high["published_snapshot"])
+            source = analyze(snapshot)
+            measured = next(
+                row["mean"] for row in source["rows"] if row["mean"] is not None
+            )
+            intent.extend(
+                store,
+                fence,
+                group_id="adaptive",
+                proposal_id="refine-1",
+                axis_values={
+                    "frequency": (5.2, 5.3),
+                    "bias": (round(float(measured), 6),),
+                },
+                source_snapshot=snapshot["id"],
+                rule_id="first-available-channel-mean-rounded-6/v1",
+            )
+            fault("adaptive-append")
+        if not adaptive["closed"]:
+            store.close_group(fence, "adaptive")
+            fault("adaptive-close")
+        drain(store, fence, provider, fault=fault, on_publish=published)
         result = inspect(directory, store=store)
         result["status"] = "completed"
         result["invocation_seconds"] = time.perf_counter() - start
@@ -414,19 +379,6 @@ def inspect(directory: Path, *, store: Store | None = None) -> dict:
         with Store(directory / "ledger.sqlite3", readonly=True) as reader:
             return inspect(directory, store=reader)
     state = store.state()
-    selected_units = {selection["unit_id"] for selection in state["selections"]}
-    # Derive readiness from this same reader snapshot, not later transactions.
-    state["readiness"] = {}
-    for group in state["groups"]:
-        missing = [
-            identity for identity in group["unit_ids"] if identity not in selected_units
-        ]
-        state["readiness"][group["id"]] = {
-            "closed": group["closed"],
-            "ready": group["closed"] and not missing,
-            "missing_units": missing,
-            "published_snapshot": group["published_snapshot"],
-        }
     state["analyses"] = [
         json.loads(path.read_text())
         for path in sorted((directory / "analyses").glob("*.json"))
@@ -509,6 +461,12 @@ def main(argv: list[str] | None = None) -> int:
         if command == "demo":
             selected.add_argument("--crash-at", choices=BOUNDARIES)
             selected.add_argument(
+                "--commit-mode",
+                choices=("atomic", "staged"),
+                default="atomic",
+                help="persist result/selection/publication atomically or in stages",
+            )
+            selected.add_argument(
                 "--hard-crash",
                 action="store_true",
                 help="exit the process without cleanup at --crash-at",
@@ -542,6 +500,7 @@ def main(argv: list[str] | None = None) -> int:
                 authorize_retry=getattr(args, "authorize_retry", False),
                 crash_at=getattr(args, "crash_at", None),
                 hard_crash=getattr(args, "hard_crash", False),
+                commit_mode=getattr(args, "commit_mode", "atomic"),
             )
         print(json.dumps(result, indent=2, allow_nan=False))
         return 3 if result.get("status") == "blocked" else 0

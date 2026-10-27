@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from hashlib import sha256
 from math import isfinite, prod
@@ -86,11 +86,17 @@ CREATE TABLE IF NOT EXISTS bundles (
 );
 CREATE TABLE IF NOT EXISTS selections (
  unit_id TEXT PRIMARY KEY REFERENCES units(id),
- bundle_hash TEXT NOT NULL REFERENCES bundles(hash)
+ bundle_hash TEXT NOT NULL REFERENCES bundles(hash),
+ policy TEXT NOT NULL, owner TEXT NOT NULL, fence INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS selection_history (
  seq INTEGER PRIMARY KEY AUTOINCREMENT, unit_id TEXT NOT NULL,
- bundle_hash TEXT NOT NULL, fence INTEGER NOT NULL
+ bundle_hash TEXT NOT NULL, fence INTEGER NOT NULL,
+ policy TEXT NOT NULL, owner TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS proposals (
+ id TEXT PRIMARY KEY, body TEXT NOT NULL, content_hash TEXT NOT NULL,
+ owner TEXT NOT NULL, fence INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS snapshots (
  id TEXT PRIMARY KEY, group_id TEXT NOT NULL UNIQUE REFERENCES groups(id),
@@ -183,11 +189,25 @@ class Store:
         return row
 
     def initialize(
-        self, run_id: str, points: list[dict], units: list[dict], groups: list[dict]
+        self,
+        run_id: str,
+        points: list[dict],
+        units: list[dict],
+        groups: list[dict],
+        *,
+        author_intent: dict | None = None,
     ) -> None:
         _text(run_id, "run id")
+        if author_intent is not None and not isinstance(author_intent, dict):
+            raise ValueError("author intent must be a mapping")
         intent = _json(
-            {"run_id": run_id, "points": points, "units": units, "groups": groups}
+            {
+                "run_id": run_id,
+                "points": points,
+                "units": units,
+                "groups": groups,
+                "author_intent": author_intent,
+            }
         )
         with self._write():
             existing = self.connection.execute("SELECT * FROM run").fetchone()
@@ -245,6 +265,8 @@ class Store:
                 self._get("points", point_id)
             _unique(unit["required_outputs"], "required outputs")
             _validate_contracts(unit)
+            if unit.get("selection_policy", "sole_candidate") != "sole_candidate":
+                raise ValueError("only the declared sole_candidate policy is supported")
             if self.connection.execute(
                 "SELECT 1 FROM units WHERE id=?", (identity,)
             ).fetchone():
@@ -272,14 +294,48 @@ class Store:
             return self.connection.execute("SELECT fence FROM run").fetchone()[0]
 
     def append_work(
-        self, fence: int, points: list[dict], units: list[dict], group_id: str
+        self,
+        fence: int,
+        points: list[dict],
+        units: list[dict],
+        group_id: str,
+        *,
+        proposal: dict | None = None,
     ) -> None:
         with self._write(fence):
+            body = _json(
+                {
+                    "proposal": proposal,
+                    "points": points,
+                    "units": units,
+                    "group_id": group_id,
+                }
+            )
+            if proposal is not None:
+                if not isinstance(proposal, dict) or len(proposal) < 2:
+                    raise ValueError("a proposal needs an id and provenance")
+                identity = _text(proposal.get("id"), "proposal id")
+                previous = self.connection.execute(
+                    "SELECT body FROM proposals WHERE id=?", (identity,)
+                ).fetchone()
+                if previous is not None:
+                    if previous["body"] != body:
+                        raise Conflict(
+                            "proposal id already has different accepted work"
+                        )
+                    return
+                if "source_snapshot" in proposal:
+                    self._get("snapshots", proposal["source_snapshot"])
             group = self._get("groups", group_id)
             if group["closed"]:
                 raise Conflict("cannot append work to a closed group")
             self._add_work(points, units)
             self._add_members(group_id, [unit["id"] for unit in units])
+            if proposal is not None:
+                self.connection.execute(
+                    "INSERT INTO proposals VALUES(?,?,?,(SELECT owner FROM run),?)",
+                    (identity, body, _hash(json.loads(body)), fence),
+                )
 
     def close_group(self, fence: int, group_id: str) -> None:
         with self._write(fence):
@@ -350,67 +406,150 @@ class Store:
         self, fence: int, attempt_id: str, outputs: list[dict], provenance: dict
     ) -> str:
         with self._write(fence):
-            attempt = self._get("attempts", attempt_id)
-            unit = json.loads(self._get("units", attempt["unit_id"])["body"])
-            _validate_outputs(unit, outputs)
-            if not isinstance(provenance, dict) or not provenance:
-                raise ValueError("result provenance must be a nonempty mapping")
-            _finite(provenance)
-            payload = {
-                "attempt_id": attempt_id,
-                "unit_id": attempt["unit_id"],
-                "outputs": outputs,
-                "provenance": provenance,
-            }
-            digest = _hash(payload)
-            if attempt["status"] == "result_saved":
-                if attempt["bundle_hash"] != digest:
-                    raise Conflict("attempt already has a different immutable result")
-                return digest
-            if attempt["status"] != "running" or attempt["fence"] != fence:
-                raise Conflict("only the current running attempt can save a result")
-            self.connection.execute(
-                "INSERT INTO bundles VALUES(?,?,?,?)",
-                (digest, attempt_id, attempt["unit_id"], _json(payload)),
-            )
-            self.connection.execute(
-                "UPDATE attempts SET status='result_saved', "
-                "physical_status='result_observed',bundle_hash=? WHERE id=?",
-                (digest, attempt_id),
-            )
+            return self._save_result(fence, attempt_id, outputs, provenance)
+
+    def _save_result(
+        self, fence: int, attempt_id: str, outputs: list[dict], provenance: dict
+    ) -> str:
+        attempt = self._get("attempts", attempt_id)
+        unit = json.loads(self._get("units", attempt["unit_id"])["body"])
+        _validate_outputs(unit, outputs)
+        if not isinstance(provenance, dict) or not provenance:
+            raise ValueError("result provenance must be a nonempty mapping")
+        _finite(provenance)
+        payload = {
+            "attempt_id": attempt_id,
+            "unit_id": attempt["unit_id"],
+            "outputs": outputs,
+            "provenance": provenance,
+        }
+        digest = _hash(payload)
+        if attempt["status"] == "result_saved":
+            if attempt["bundle_hash"] != digest:
+                raise Conflict("attempt already has a different immutable result")
             return digest
+        if attempt["status"] != "running" or attempt["fence"] != fence:
+            raise Conflict("only the current running attempt can save a result")
+        self.connection.execute(
+            "INSERT INTO bundles VALUES(?,?,?,?)",
+            (digest, attempt_id, attempt["unit_id"], _json(payload)),
+        )
+        self.connection.execute(
+            "UPDATE attempts SET status='result_saved', "
+            "physical_status='result_observed',bundle_hash=? WHERE id=?",
+            (digest, attempt_id),
+        )
+        return digest
 
     def select_result(self, fence: int, unit_id: str, bundle_hash: str) -> None:
         with self._write(fence):
-            self._get("units", unit_id)
-            bundle = self.connection.execute(
-                "SELECT * FROM bundles WHERE hash=?", (bundle_hash,)
-            ).fetchone()
-            if bundle is None or bundle["unit_id"] != unit_id:
-                raise Conflict(
-                    "selection must reference a saved result of this work unit"
-                )
-            prior = self.connection.execute(
-                "SELECT bundle_hash FROM selections WHERE unit_id=?", (unit_id,)
-            ).fetchone()
-            if prior is not None and prior[0] == bundle_hash:
-                return
-            if self.connection.execute(
-                "SELECT 1 FROM members m JOIN groups g ON g.id=m.group_id "
-                "WHERE m.unit_id=? AND g.snapshot_id IS NOT NULL",
-                (unit_id,),
-            ).fetchone():
-                raise Conflict("published input selections are immutable")
-            self.connection.execute(
-                "INSERT INTO selections VALUES(?,?) ON CONFLICT(unit_id) "
-                "DO UPDATE SET bundle_hash=excluded.bundle_hash",
-                (unit_id, bundle_hash),
-            )
-            self.connection.execute(
-                "INSERT INTO selection_history(unit_id,bundle_hash,fence) "
-                "VALUES(?,?,?)",
-                (unit_id, bundle_hash, fence),
-            )
+            return self._select_result(fence, unit_id, bundle_hash, policy="explicit")
+
+    def _select_result(
+        self, fence: int, unit_id: str, bundle_hash: str, *, policy: str
+    ) -> None:
+        self._get("units", unit_id)
+        bundle = self.connection.execute(
+            "SELECT * FROM bundles WHERE hash=?", (bundle_hash,)
+        ).fetchone()
+        if bundle is None or bundle["unit_id"] != unit_id:
+            raise Conflict("selection must reference a saved result of this work unit")
+        prior = self.connection.execute(
+            "SELECT bundle_hash FROM selections WHERE unit_id=?", (unit_id,)
+        ).fetchone()
+        if prior is not None and prior[0] == bundle_hash:
+            return
+        if self.connection.execute(
+            "SELECT 1 FROM members m JOIN groups g ON g.id=m.group_id "
+            "WHERE m.unit_id=? AND g.snapshot_id IS NOT NULL",
+            (unit_id,),
+        ).fetchone():
+            raise Conflict("published input selections are immutable")
+        self.connection.execute(
+            "INSERT INTO selections VALUES(?,?,?,(SELECT owner FROM run),?) "
+            "ON CONFLICT(unit_id) DO UPDATE SET bundle_hash=excluded.bundle_hash, "
+            "policy=excluded.policy,owner=excluded.owner,fence=excluded.fence",
+            (unit_id, bundle_hash, policy, fence),
+        )
+        self.connection.execute(
+            "INSERT INTO selection_history(unit_id,bundle_hash,fence,policy,owner) "
+            "VALUES(?,?,?,?,(SELECT owner FROM run))",
+            (unit_id, bundle_hash, fence, policy),
+        )
+
+    def complete_attempt(
+        self,
+        fence: int,
+        attempt_id: str,
+        outputs: list[dict],
+        provenance: dict,
+        *,
+        selection_policy: str,
+        publish_groups: tuple[str, ...] = (),
+        fault_hook: Callable[[str], None] | None = None,
+    ) -> dict:
+        """Commit a returned result and an author-declared sole-candidate choice.
+
+        The provider ran after a separate durable ``begin_attempt``. Result,
+        selection and every requested ready publication now share one commit.
+        A pre-commit interruption leaves that attempt physically unconfirmed;
+        the next owner must reconcile it as unknown, never silently replay it.
+        """
+        with self._write(fence):
+            attempt = self._get("attempts", attempt_id)
+            unit_id = attempt["unit_id"]
+            unit = json.loads(self._get("units", unit_id)["body"])
+            if selection_policy != "sole_candidate":
+                raise ValueError("completion requires the sole_candidate policy")
+            if unit.get("selection_policy", selection_policy) != selection_policy:
+                raise Conflict("completion policy differs from the authored work")
+            digest = self._save_result(fence, attempt_id, outputs, provenance)
+            if fault_hook is not None:
+                fault_hook("result-save")
+            if (
+                self.connection.execute(
+                    "SELECT count(*) FROM bundles WHERE unit_id=?", (unit_id,)
+                ).fetchone()[0]
+                != 1
+            ):
+                raise Conflict("sole_candidate cannot choose between saved results")
+            self._select_result(fence, unit_id, digest, policy=selection_policy)
+            if fault_hook is not None:
+                fault_hook("selection")
+            snapshots = self._publish_requested(unit_id, publish_groups)
+            return {"bundle_hash": digest, "snapshot_ids": snapshots}
+
+    def select_and_publish(
+        self,
+        fence: int,
+        unit_id: str,
+        bundle_hash: str,
+        *,
+        publish_groups: tuple[str, ...] = (),
+    ) -> dict[str, str]:
+        """Explicitly choose a saved candidate without invoking a provider again."""
+        with self._write(fence):
+            self._select_result(fence, unit_id, bundle_hash, policy="explicit")
+            return self._publish_requested(unit_id, publish_groups)
+
+    def _publish_requested(
+        self, unit_id: str, publish_groups: tuple[str, ...]
+    ) -> dict[str, str]:
+        requested = _unique(list(publish_groups), "publication groups", nonempty=False)
+        snapshots: dict[str, str] = {}
+        for group_id in requested:
+            self._get("groups", group_id)
+            if (
+                self.connection.execute(
+                    "SELECT 1 FROM members WHERE group_id=? AND unit_id=?",
+                    (group_id, unit_id),
+                ).fetchone()
+                is None
+            ):
+                raise Conflict("requested publication does not contain this work")
+            if self.readiness(group_id)["ready"]:
+                snapshots[group_id] = self._publish_group(group_id)
+        return snapshots
 
     def readiness(self, group_id: str) -> dict:
         with self._read():
@@ -433,53 +572,53 @@ class Store:
 
     def publish_group(self, fence: int, group_id: str) -> str:
         with self._write(fence):
-            readiness = self.readiness(group_id)
-            if readiness["published_snapshot"] is not None:
-                return readiness["published_snapshot"]
-            if not readiness["ready"]:
-                raise Conflict(
-                    "group must be closed with every required result "
-                    "explicitly selected"
-                )
-            rows = self.connection.execute(
-                "SELECT u.body, s.bundle_hash, b.body AS bundle FROM members m "
-                "JOIN units u ON u.id=m.unit_id JOIN selections s ON s.unit_id=u.id "
-                "JOIN bundles b ON b.hash=s.bundle_hash "
-                "WHERE m.group_id=? ORDER BY m.ordinal",
-                (group_id,),
-            ).fetchall()
-            units = [json.loads(row["body"]) for row in rows]
-            point_ids = list(
-                dict.fromkeys(
-                    identity for unit in units for identity in unit["point_ids"]
-                )
+            return self._publish_group(group_id)
+
+    def _publish_group(self, group_id: str) -> str:
+        readiness = self.readiness(group_id)
+        if readiness["published_snapshot"] is not None:
+            return readiness["published_snapshot"]
+        if not readiness["ready"]:
+            raise Conflict(
+                "group must be closed with every required result explicitly selected"
             )
-            payload = {
-                "run_id": self.connection.execute("SELECT id FROM run").fetchone()[0],
-                "group_id": group_id,
-                "points": [
-                    json.loads(self._get("points", identity)["body"])
-                    for identity in point_ids
-                ],
-                "units": units,
-                "selection": [
-                    {"unit_id": unit["id"], "bundle_hash": row["bundle_hash"]}
-                    for unit, row in zip(units, rows, strict=True)
-                ],
-            }
-            identity = _hash(payload)
-            self.connection.execute(
-                "INSERT INTO snapshots VALUES(?,?,?)",
-                (identity, group_id, _json(payload)),
-            )
-            self.connection.execute(
-                "UPDATE groups SET snapshot_id=? WHERE id=?", (identity, group_id)
-            )
-            self.connection.execute(
-                "INSERT INTO outbox(kind,payload) VALUES('group_published',?)",
-                (_json({"group_id": group_id, "snapshot_id": identity}),),
-            )
-            return identity
+        rows = self.connection.execute(
+            "SELECT u.body, s.bundle_hash, b.body AS bundle FROM members m "
+            "JOIN units u ON u.id=m.unit_id JOIN selections s ON s.unit_id=u.id "
+            "JOIN bundles b ON b.hash=s.bundle_hash "
+            "WHERE m.group_id=? ORDER BY m.ordinal",
+            (group_id,),
+        ).fetchall()
+        units = [json.loads(row["body"]) for row in rows]
+        point_ids = list(
+            dict.fromkeys(identity for unit in units for identity in unit["point_ids"])
+        )
+        payload = {
+            "run_id": self.connection.execute("SELECT id FROM run").fetchone()[0],
+            "group_id": group_id,
+            "points": [
+                json.loads(self._get("points", identity)["body"])
+                for identity in point_ids
+            ],
+            "units": units,
+            "selection": [
+                {"unit_id": unit["id"], "bundle_hash": row["bundle_hash"]}
+                for unit, row in zip(units, rows, strict=True)
+            ],
+        }
+        identity = _hash(payload)
+        self.connection.execute(
+            "INSERT INTO snapshots VALUES(?,?,?)",
+            (identity, group_id, _json(payload)),
+        )
+        self.connection.execute(
+            "UPDATE groups SET snapshot_id=? WHERE id=?", (identity, group_id)
+        )
+        self.connection.execute(
+            "INSERT INTO outbox(kind,payload) VALUES('group_published',?)",
+            (_json({"group_id": group_id, "snapshot_id": identity}),),
+        )
+        return identity
 
     def snapshot(self, snapshot_id: str) -> dict:
         with self._read():
@@ -526,6 +665,7 @@ class Store:
             if run is None:
                 return {
                     "run_id": None,
+                    "author_intent": None,
                     "fence": 0,
                     "points": [],
                     "units": [],
@@ -535,6 +675,8 @@ class Store:
                     "selections": [],
                     "snapshots": [],
                     "events": [],
+                    "readiness": {},
+                    "proposals": [],
                 }
             groups = [
                 {
@@ -556,6 +698,7 @@ class Store:
             ]
             return {
                 "run_id": run["id"],
+                "author_intent": json.loads(run["initial_intent"])["author_intent"],
                 "fence": run["fence"],
                 "points": [
                     json.loads(row[0])
@@ -570,6 +713,21 @@ class Store:
                     )
                 ],
                 "groups": groups,
+                "readiness": {
+                    group["id"]: self.readiness(group["id"]) for group in groups
+                },
+                "proposals": [
+                    {
+                        "id": row["id"],
+                        "content_hash": row["content_hash"],
+                        "owner": row["owner"],
+                        "fence": row["fence"],
+                        **json.loads(row["body"]),
+                    }
+                    for row in self.connection.execute(
+                        "SELECT * FROM proposals ORDER BY rowid"
+                    )
+                ],
                 "attempts": [
                     dict(row)
                     for row in self.connection.execute(
@@ -675,16 +833,14 @@ def _validate_outputs(unit: dict, outputs: list[dict]) -> None:
 def _validate_array_values(block: dict, shape: list[int]) -> None:
     dtype = _text(block["dtype"], "output dtype")
     if dtype not in {
-        "float32",
         "float64",
         "int32",
         "int64",
-        "complex64",
         "complex128",
         "bool",
         "string",
     }:
-        raise ValueError("unsupported scientific dtype")
+        raise ValueError("unsupported declared scientific dtype")
     values, available = block["values"], block["availability"]
     size = prod(shape)
     if (
@@ -724,13 +880,20 @@ def _validate_array_values(block: dict, shape: list[int]) -> None:
                 raise ValueError("integer value is outside its declared dtype")
         elif dtype.startswith(("float", "complex")):
             components = value if dtype.startswith("complex") else [value]
-            limit = (
-                3.4028234663852886e38
-                if dtype in {"float32", "complex64"}
-                else 1.7976931348623157e308
-            )
-            if any(not -limit <= component <= limit for component in components):
-                raise ValueError("floating value is outside its declared dtype")
+            for component in components:
+                _validate_binary64_component(component)
+
+
+def _validate_binary64_component(value: float) -> None:
+    """Reject ambiguous JSON integers rather than silently rounding scientific data."""
+    try:
+        represented = float(value)
+    except OverflowError as error:
+        raise ValueError("floating value is outside its declared dtype") from error
+    if not isfinite(represented):
+        raise ValueError("floating value is outside its declared dtype")
+    if represented != value:
+        raise ValueError("floating value is not exactly representable as binary64")
 
 
 def _validate_contracts(unit: dict) -> None:
@@ -770,11 +933,9 @@ def _validate_contracts(unit: dict) -> None:
         }:
             raise ValueError("contract must label every local dimension")
         if contract["dtype"] not in {
-            "float32",
             "float64",
             "int32",
             "int64",
-            "complex64",
             "complex128",
             "bool",
             "string",
