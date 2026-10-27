@@ -686,6 +686,7 @@ function measurementEventRunId(event: Event): string | undefined {
     if (
       source.kind !== "measurement_dataset_initialized" &&
       source.kind !== "measurements_appended" &&
+      source.kind !== "run_coverage_advanced" &&
       source.kind !== "measurements_sealed"
     ) {
       return undefined;

@@ -749,48 +749,60 @@ describe("config provenance navigation", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("refreshes the bounded measurement preview without closing its disclosure", async () => {
-    window.history.replaceState(null, "", "/?run=run-1");
-    vi.mocked(getMeasurementPreview).mockResolvedValue({
-      items: [measurementRecord(0, 0)],
-      truncated: false,
-    });
+  it.each(["measurement_dataset_initialized", "measurements_sealed", "run_coverage_advanced"])(
+    "refreshes bounded measurement queries for %s without closing its disclosure",
+    async (kind) => {
+      window.history.replaceState(null, "", "/?run=run-1");
+      vi.mocked(getMeasurementPreview).mockResolvedValue({
+        items: [measurementRecord(0, 0)],
+        truncated: false,
+      });
 
-    const queryClient = createQueryClient();
-    renderApp(queryClient);
-    await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByText("Raw records", { exact: true }));
-    expect(screen.getByTestId("measurement-preview")).toBeVisible();
-    expect(projectEventListener).toBeDefined();
-    queryClient.setQueryData(["measurements", "run-2"], {
-      items: [measurementRecord(9, 9)],
-      truncated: false,
-    });
-    queryClient.setQueryData(["measurement-trace", "run-2", "trace", "{}"], {
-      stale: true,
-    });
+      const queryClient = createQueryClient();
+      renderApp(queryClient);
+      await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getByText("Raw records", { exact: true }));
+      expect(screen.getByTestId("measurement-preview")).toBeVisible();
+      expect(projectEventListener).toBeDefined();
+      queryClient.setQueryData(["measurements", "run-2"], {
+        items: [measurementRecord(9, 9)],
+        truncated: false,
+      });
+      queryClient.setQueryData(["measurement-trace", "run-2", "trace", "{}"], {
+        stale: true,
+      });
 
-    act(() => {
-      emitProjectEvent("run-2", "measurement_dataset_initialized");
-    });
-    await waitFor(() =>
-      expect(queryClient.getQueryState(["measurements", "run-2"])?.isInvalidated).toBe(true),
-    );
-    expect(
-      queryClient.getQueryState(["measurement-trace", "run-2", "trace", "{}"])?.isInvalidated,
-    ).toBe(true);
-    expect(getMeasurementPreview).toHaveBeenCalledTimes(1);
+      queryClient.setQueryData(["measurement-slice", "run-2", "{}"], { stale: true });
+      queryClient.setQueryData(["measurements", "live", "run-2"], { stale: true });
 
-    act(() => {
-      emitProjectEvent("run-1", "measurements_sealed");
-    });
-    await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(2));
-    expect(screen.getByTestId("measurement-preview")).toBeVisible();
-    expect(vi.mocked(getMeasurementPreview).mock.calls.map(([runId]) => runId)).toEqual([
-      "run-1",
-      "run-1",
-    ]);
-  });
+      act(() => {
+        emitProjectEvent("run-2", kind);
+      });
+      await waitFor(() =>
+        expect(queryClient.getQueryState(["measurements", "run-2"])?.isInvalidated).toBe(true),
+      );
+      expect(
+        queryClient.getQueryState(["measurement-trace", "run-2", "trace", "{}"])?.isInvalidated,
+      ).toBe(true);
+      expect(queryClient.getQueryState(["measurement-slice", "run-2", "{}"])?.isInvalidated).toBe(
+        true,
+      );
+      expect(queryClient.getQueryState(["measurements", "live", "run-2"])?.isInvalidated).toBe(
+        true,
+      );
+      expect(getMeasurementPreview).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        emitProjectEvent("run-1", kind);
+      });
+      await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(2));
+      expect(screen.getByTestId("measurement-preview")).toBeVisible();
+      expect(vi.mocked(getMeasurementPreview).mock.calls.map(([runId]) => runId)).toEqual([
+        "run-1",
+        "run-1",
+      ]);
+    },
+  );
 
   it("queries only the selected bounded trace mode and authored slice", async () => {
     window.history.replaceState(null, "", "/?run=run-1");

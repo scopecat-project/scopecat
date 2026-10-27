@@ -217,11 +217,22 @@ class ExecutorService:
                 raise ExecutionStateConflict(
                     "coverage range exceeds the admitted point count"
                 )
-            completed, _advanced = coverage.advance_in_transaction(
+            completed, advanced = coverage.advance_in_transaction(
                 connection,
                 start_index=command.start_index,
                 point_count=command.point_count,
             )
+            if advanced:
+                # This contiguous readable prefix is committed with its event;
+                # the earlier measurement append event may precede projection.
+                self._control.append_event_in_transaction(
+                    connection,
+                    DurableEventInput(
+                        run_id=run_id,
+                        kind="run_coverage_advanced",
+                        payload={"completed_point_count": completed},
+                    ),
+                )
         return RunCoverageState(
             run_id=run_id,
             completed_point_count=completed,
