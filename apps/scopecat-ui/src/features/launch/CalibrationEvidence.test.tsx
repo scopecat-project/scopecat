@@ -248,11 +248,8 @@ for (const inspector of ["evidence", "profile"] as const) {
       const onProcedure = vi.fn();
       const view = render(<CalibrationEvidence stage={stage} onProcedure={onProcedure} />);
       async function check() {
-        const detail = screen
-          .getByText("检查适用证据： readout")
-          .closest("details")!;
-        if (!detail.open)
-          fireEvent.click(screen.getByText("检查适用证据： readout"));
+        const detail = screen.getByText("检查适用证据： readout").closest("details")!;
+        if (!detail.open) fireEvent.click(screen.getByText("检查适用证据： readout"));
         if (inspector === "evidence") inspect();
         else {
           const load = screen.queryByText("加载已保存的 profile");
