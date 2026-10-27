@@ -1,7 +1,7 @@
 import * as Controls from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { RunAddressLabel } from "./RunAddressLabel";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { NavigationOptions } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -38,6 +38,7 @@ import type {
 } from "../../types";
 import { useConfirmationDialog, type ConfirmationRequest } from "../../ui/ConfirmationDialog";
 import { classes, eyebrow, secondaryButton } from "../../ui/styles";
+import { RunHistoryList } from "./RunHistoryList";
 import { RunDetail } from "./RunDetail";
 import {
   measurementSlicePlan,
@@ -48,11 +49,13 @@ import {
 
 type FilterKey = "all" | "active" | "attention" | "complete";
 interface OlderRunHistory {
-  headCursor: number;
-  pages: ProjectRunPage[];
+  projectId?: string;
+  items: ProjectRun[];
+  ranges: Array<{ before: number; next?: number }>;
 }
 interface OlderRunPageRequest {
-  headCursor: number;
+  projectId?: string;
+  generation: number;
   before: number;
 }
 
@@ -121,19 +124,35 @@ export function RunsWorkspace({
     [selectedRunId],
   );
   const runsQuery = useQuery({
-    queryKey: ["runs"],
+    queryKey: ["runs", health?.projectId],
     queryFn: ({ signal }) => getRuns(signal),
   });
   const runHeadCursor = runsQuery.data?.nextCursor;
+  const currentProject = useRef(health?.projectId);
+  const pageGeneration = useRef(0);
+  useEffect(() => {
+    if (currentProject.current !== health?.projectId) pageGeneration.current += 1;
+    currentProject.current = health?.projectId;
+  }, [health?.projectId]);
+  const [retainedHead, setRetainedHead] = useState<{ projectId?: string; page: ProjectRunPage }>();
+  const headPage = runsQuery.data;
+  if (
+    headPage &&
+    (retainedHead?.page !== headPage || retainedHead.projectId !== health?.projectId)
+  ) {
+    setRetainedHead({ projectId: health?.projectId, page: headPage });
+    setOlderRunHistory((current) => retainRunPage(current, health?.projectId, headPage));
+  }
   const olderRunsMutation = useMutation({
     mutationFn: ({ before }: OlderRunPageRequest) => getOlderRuns(before),
     onSuccess: (page, request) => {
-      const latestHeadCursor = queryClient.getQueryData<ProjectRunPage>(["runs"])?.nextCursor;
-      if (latestHeadCursor !== request.headCursor) return;
+      if (
+        currentProject.current !== request.projectId ||
+        pageGeneration.current !== request.generation
+      )
+        return;
       setOlderRunHistory((current) =>
-        current?.headCursor === request.headCursor
-          ? { ...current, pages: [...current.pages, page] }
-          : { headCursor: request.headCursor, pages: [page] },
+        retainRunPage(current, request.projectId, page, request.before),
       );
     },
   });
@@ -214,14 +233,11 @@ export function RunsWorkspace({
     },
   });
 
-  const olderRunPages = useMemo(
-    () =>
-      olderRunHistory && olderRunHistory.headCursor === runHeadCursor ? olderRunHistory.pages : [],
-    [olderRunHistory, runHeadCursor],
-  );
   const runs = useMemo(() => {
     const indexedRuns = mergeRunPages([
-      ...olderRunPages,
+      ...(olderRunHistory?.projectId === health?.projectId
+        ? [{ items: olderRunHistory?.items ?? [] }]
+        : []),
       ...(runsQuery.data ? [runsQuery.data] : []),
     ]);
     return runDetailQuery.data
@@ -229,7 +245,7 @@ export function RunsWorkspace({
           run.runId === runDetailQuery.data.runId ? runDetailQuery.data : run,
         )
       : indexedRuns;
-  }, [olderRunPages, runDetailQuery.data, runsQuery.data]);
+  }, [olderRunHistory, health?.projectId, runDetailQuery.data, runsQuery.data]);
   const collectionNames = useRecordCollectionNames(
     health?.projectId,
     Boolean(
@@ -238,7 +254,13 @@ export function RunsWorkspace({
       (runDetailQuery.data?.address || runs.some((run) => run.address)),
     ),
   );
-  const nextRunCursor = olderRunPages.length > 0 ? olderRunPages.at(-1)?.nextCursor : runHeadCursor;
+  const nextRunCursor = nextUnloadedRunCursor(
+    runHeadCursor,
+    olderRunHistory?.projectId === health?.projectId ? (olderRunHistory?.ranges ?? []) : [],
+  );
+  const hasUnreadGap =
+    nextRunCursor !== undefined &&
+    runs.some((run) => run.sequence !== undefined && run.sequence < nextRunCursor);
   const measurements = useMemo(
     () => mergeMeasurementPreviews(measurementsQuery.data, liveMeasurementsQuery.data),
     [liveMeasurementsQuery.data, measurementsQuery.data],
@@ -500,7 +522,10 @@ export function RunsWorkspace({
               ))}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-[7px] overflow-auto p-0.5 [scrollbar-color:#344252_transparent] [scrollbar-width:thin] max-[880px]:grid max-[880px]:grid-flow-col max-[880px]:auto-cols-[minmax(270px,64vw)] max-[880px]:overflow-x-auto max-[880px]:pb-[5px] max-[460px]:auto-cols-[minmax(260px,86vw)]">
+            <RunHistoryList
+              scope={JSON.stringify([health?.projectId, search, filter])}
+              className="flex min-h-0 flex-1 flex-col gap-[7px] overflow-auto p-0.5 [scrollbar-color:#344252_transparent] [scrollbar-width:thin] max-[880px]:grid max-[880px]:grid-flow-col max-[880px]:auto-cols-[minmax(270px,64vw)] max-[880px]:overflow-x-auto max-[880px]:pb-[5px] max-[460px]:auto-cols-[minmax(260px,86vw)]"
+            >
               {runsQuery.isPending && (
                 <PanelMessage
                   icon={<LoaderCircle className="animate-spin" />}
@@ -555,7 +580,8 @@ export function RunsWorkspace({
                       disabled={olderRunsMutation.isPending}
                       onClick={() =>
                         olderRunsMutation.mutate({
-                          headCursor: runHeadCursor,
+                          projectId: health?.projectId,
+                          generation: ++pageGeneration.current,
                           before: nextRunCursor,
                         })
                       }
@@ -565,11 +591,15 @@ export function RunsWorkspace({
                       ) : (
                         <ChevronRight size={14} aria-hidden="true" />
                       )}
-                      {olderRunsMutation.isPending ? "正在加载更早 run…" : "加载更早 run"}
+                      {olderRunsMutation.isPending
+                        ? "正在加载更早 run…"
+                        : hasUnreadGap
+                          ? "加载未读取区间"
+                          : "加载更早 run"}
                     </button>
                   </div>
                 )}
-            </div>
+            </RunHistoryList>
           </aside>
         )}
 
@@ -873,6 +903,55 @@ const runStatusBadge: Record<ProjectRun["status"], string> = {
   failed: "border-[rgb(255_140_136_/_20%)] bg-red-soft text-red",
   cancelled: "border-[rgb(255_140_136_/_20%)] bg-red-soft text-red",
 };
+
+// Keep only one copy of each loaded run, and the cursor intervals actually read.
+// A newer first page can leave an unread gap; load that gap before the old tail.
+function retainRunPage(
+  current: OlderRunHistory | undefined,
+  projectId: string | undefined,
+  page: ProjectRunPage,
+  before?: number,
+): OlderRunHistory {
+  const previous = current?.projectId === projectId ? current : undefined;
+  const upper =
+    before ??
+    page.items.reduce<number | undefined>(
+      (value, run) => (run.sequence === undefined ? value : Math.max(value ?? 0, run.sequence + 1)),
+      undefined,
+    );
+  const ranges = [...(previous?.ranges ?? [])];
+  if (upper !== undefined && (page.nextCursor === undefined || page.nextCursor < upper)) {
+    ranges.push({ before: upper, next: page.nextCursor });
+  }
+  ranges.sort((left, right) => right.before - left.before);
+  const merged: OlderRunHistory["ranges"] = [];
+  for (const range of ranges) {
+    const last = merged.at(-1);
+    if (last && (last.next ?? -Infinity) <= range.before) {
+      last.next =
+        last.next === undefined || range.next === undefined
+          ? undefined
+          : Math.min(last.next, range.next);
+    } else merged.push({ ...range });
+  }
+  return {
+    projectId,
+    items: mergeRunPages([{ items: previous?.items ?? [] }, page]),
+    ranges: merged,
+  };
+}
+
+function nextUnloadedRunCursor(
+  cursor: number | undefined,
+  ranges: OlderRunHistory["ranges"],
+): number | undefined {
+  for (const range of ranges) {
+    if (cursor === undefined) return undefined;
+    if (range.before >= cursor && (range.next === undefined || range.next < cursor))
+      cursor = range.next;
+  }
+  return cursor;
+}
 
 function mergeRunPages(pages: ProjectRunPage[]): ProjectRun[] {
   const runs = new Map<string, ProjectRun>();

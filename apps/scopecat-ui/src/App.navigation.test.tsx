@@ -514,32 +514,168 @@ describe("config provenance navigation", () => {
     expect(screen.queryByRole("button", { name: "加载更早 run" })).not.toBeInTheDocument();
   });
 
-  it("discards loaded history when the latest page head moves", async () => {
-    window.history.replaceState(null, "", "/");
-    vi.mocked(getRuns)
-      .mockResolvedValueOnce({
-        items: RUNS.map((run, index) => ({ ...run, sequence: index + 20 })),
-        nextCursor: 20,
-      })
-      .mockResolvedValue({
-        items: RUNS.map((run, index) => ({ ...run, sequence: index + 30 })),
-        nextCursor: 30,
+  it.each(["run_admitted", "run_state_changed"])(
+    "refreshes filtered research runs for %s without losing the selected project",
+    async (kind) => {
+      window.history.replaceState(null, "", "/#history");
+      let changed = false;
+      const requests: URL[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (request: Request) => {
+          const url = new URL(request.url);
+          requests.push(url);
+          if (url.pathname === "/api/v1/research-projects")
+            return Response.json({
+              items: [{ id: "alpha", name: "Alpha", revision: 1, description: "" }],
+            });
+          if (url.pathname.endsWith("/members/samples")) return Response.json({ ids: [] });
+          if (url.pathname === "/api/v1/data/captures") return Response.json([]);
+          if (url.pathname === "/api/v1/runs")
+            return Response.json({
+              items: [
+                {
+                  snapshot: {
+                    run_id: changed && kind === "run_admitted" ? "new-run" : "old-run",
+                    created_at: "2026-10-27T00:00:00Z",
+                    samples: [],
+                    outcome: { result: changed ? "succeeded" : "failed", certainty: "known" },
+                  },
+                  control: {
+                    state: "closed",
+                    admission: { display_name: changed ? "New retained run" : "Old retained run" },
+                  },
+                },
+              ],
+            });
+          return Response.json({ items: [] });
+        }),
+      );
+      renderApp();
+      await screen.findByRole("option", { name: "Alpha" });
+      fireEvent.change(screen.getByRole("combobox", { name: "研究项目" }), {
+        target: { value: "alpha" },
       });
-    vi.mocked(getOlderRuns).mockResolvedValue({
-      items: [{ ...projectRun("run-old"), sequence: 2 }],
-    });
+      await screen.findByRole("button", { name: "Old retained run" });
+      await waitFor(() =>
+        expect(requests.some((url) => url.searchParams.get("research_project") === "alpha")).toBe(
+          true,
+        ),
+      );
+      changed = true;
+      act(() => emitProjectEvent(kind === "run_admitted" ? "new-run" : "old-run", kind));
+      expect(await screen.findByRole("button", { name: "New retained run" })).toBeVisible();
+      expect(screen.getByRole("combobox", { name: "研究项目" })).toHaveValue("alpha");
+      expect(
+        requests
+          .filter((url) => url.pathname === "/api/v1/runs")
+          .at(-1)
+          ?.searchParams.get("research_project"),
+      ).toBe("alpha");
+    },
+  );
 
-    renderApp();
+  it("retains three loaded run pages and an outstanding page when the head advances", async () => {
+    window.history.replaceState(null, "", "/?run=run-60");
+    vi.mocked(getRuns).mockResolvedValue(runPage([60, 59], 59));
+    vi.mocked(getOlderRuns)
+      .mockResolvedValueOnce(runPage([58, 57], 57))
+      .mockResolvedValueOnce(runPage([56, 55], 55));
+    const client = createQueryClient();
+    renderApp(client);
     fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
-    expect(await screen.findByTitle("Inspect run run-old")).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: "刷新项目数据" }));
-
-    await waitFor(() => expect(screen.queryByTitle("Inspect run run-old")).not.toBeInTheDocument());
-    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
-    await waitFor(() =>
-      expect(vi.mocked(getOlderRuns).mock.calls.map(([cursor]) => cursor)).toEqual([20, 30]),
+    await screen.findByTitle("Inspect run run-57");
+    fireEvent.click(screen.getByRole("button", { name: "加载更早 run" }));
+    fireEvent.click(await screen.findByTitle("Inspect run run-55"));
+    let complete!: (value: ReturnType<typeof runPage>) => void;
+    vi.mocked(getOlderRuns).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "加载更早 run" }));
+    await waitFor(() => expect(complete).toBeDefined());
+    vi.mocked(getRuns).mockResolvedValue(runPage([62, 61], 61));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["runs"] });
+    });
+    await screen.findByTitle("Inspect run run-62");
+    expect(screen.getByTitle("Inspect run run-55")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByTitle("Inspect run run-59")).toBeVisible();
+    await act(async () => complete(runPage([54, 53])));
+    await screen.findByTitle("Inspect run run-53");
+    expect(
+      screen.getAllByTitle(/^Inspect run /).map((button) => button.getAttribute("title")),
+    ).toEqual([62, 61, 60, 59, 58, 57, 56, 55, 54, 53].map((id) => `Inspect run run-${id}`));
+  });
+
+  it("fills a new head gap before continuing the retained tail without duplicate rows", async () => {
+    window.history.replaceState(null, "", "/?run=run-55");
+    vi.mocked(getRuns).mockResolvedValue(runPage([60, 59], 59));
+    vi.mocked(getOlderRuns)
+      .mockResolvedValueOnce(runPage([58, 57], 57))
+      .mockResolvedValueOnce(runPage([56, 55], 55));
+    const client = createQueryClient();
+    renderApp(client);
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
+    await screen.findByTitle("Inspect run run-57");
+    fireEvent.click(screen.getByRole("button", { name: "加载更早 run" }));
+    await screen.findByTitle("Inspect run run-55");
+    vi.mocked(getRuns).mockResolvedValue(runPage([66, 65], 65));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["runs"] });
+    });
+    await screen.findByTitle("Inspect run run-66");
+    vi.mocked(getOlderRuns)
+      .mockResolvedValueOnce(runPage([64, 63], 63))
+      .mockResolvedValueOnce(runPage([62, 61, 60, 59], 59))
+      .mockResolvedValueOnce(runPage([54, 53]));
+    fireEvent.click(screen.getByRole("button", { name: "加载未读取区间" }));
+    await screen.findByTitle("Inspect run run-63");
+    fireEvent.click(screen.getByRole("button", { name: "加载未读取区间" }));
+    await screen.findByTitle("Inspect run run-61");
+    fireEvent.click(screen.getByRole("button", { name: "加载更早 run" }));
+    await screen.findByTitle("Inspect run run-53");
+    expect(vi.mocked(getOlderRuns).mock.calls.map(([cursor]) => cursor)).toEqual([
+      59, 57, 65, 63, 55,
+    ]);
+    expect(
+      screen.getAllByTitle(/^Inspect run /).map((button) => button.getAttribute("title")),
+    ).toEqual(Array.from({ length: 14 }, (_, i) => `Inspect run run-${66 - i}`));
+    expect(screen.getByTitle("Inspect run run-55")).toHaveAttribute("aria-current", "true");
+    expect(screen.queryByRole("button", { name: "加载更早 run" })).not.toBeInTheDocument();
+  });
+
+  it("rejects an old store page even after switching away and back", async () => {
+    window.history.replaceState(null, "", "/?run=run-60");
+    vi.mocked(getRuns).mockResolvedValue(runPage([60, 59], 59));
+    let complete!: (value: ReturnType<typeof runPage>) => void;
+    vi.mocked(getOlderRuns).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const client = createQueryClient();
+    renderApp(client);
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
+    await waitFor(() => expect(complete).toBeDefined());
+    const original = client.getQueryData(["health"]) as Awaited<ReturnType<typeof getHealth>>;
+    vi.mocked(getRuns).mockResolvedValue(runPage([20, 19], 19));
+    act(() => {
+      client.setQueryData(["health"], { ...original, projectId: "other-store" });
+    });
+    await screen.findByTitle("Inspect run run-20");
+    expect(screen.queryByTitle("Inspect run run-59")).not.toBeInTheDocument();
+    vi.mocked(getRuns).mockResolvedValue(runPage([60, 59], 59));
+    act(() => {
+      client.setQueryData(["health"], original);
+    });
+    await screen.findByTitle("Inspect run run-59");
+    await act(async () => complete(runPage([58, 57])));
+    expect(screen.queryByTitle("Inspect run run-57")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Inspect run run-20")).not.toBeInTheDocument();
   });
 
   it("reports a lost daemon even while slower queries still hold data", async () => {
@@ -749,7 +885,12 @@ describe("config provenance navigation", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it.each(["measurement_dataset_initialized", "measurements_sealed", "run_coverage_advanced"])(
+  it.each([
+    "measurement_dataset_initialized",
+    "measurements_sealed",
+    "run_coverage_advanced",
+    "measurement_projection_advanced",
+  ])(
     "refreshes bounded measurement queries for %s without closing its disclosure",
     async (kind) => {
       window.history.replaceState(null, "", "/?run=run-1");
@@ -1463,3 +1604,7 @@ it("opens preparation when adopting parameters while preserving the fixed monito
   expect(url.searchParams.has("workbench")).toBe(false);
   expect(url.searchParams.get("procedure")).toBe("run-a");
 });
+
+function runPage(ids: number[], nextCursor?: number) {
+  return { items: ids.map((id) => ({ ...projectRun(`run-${id}`), sequence: id })), nextCursor };
+}

@@ -188,6 +188,7 @@ export default function App() {
     const measurementRunsToRefresh = new Set<string>();
     const invalidateCanonicalQueries = () => {
       void queryClient.invalidateQueries({ queryKey: ["runs"] });
+      void queryClient.invalidateQueries({ queryKey: ["research", "runs"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["run"] });
       void queryClient.invalidateQueries({ queryKey: ["analyses"] });
@@ -687,6 +688,7 @@ function measurementEventRunId(event: Event): string | undefined {
       source.kind !== "measurement_dataset_initialized" &&
       source.kind !== "measurements_appended" &&
       source.kind !== "run_coverage_advanced" &&
+      source.kind !== "measurement_projection_advanced" &&
       source.kind !== "measurements_sealed"
     ) {
       return undefined;
