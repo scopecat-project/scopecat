@@ -591,9 +591,7 @@ export function MeasurementTraceResult({
       <p role={error ? "alert" : "status"}>{tracePreviewStatus(preview, error, pending)}</p>
       {chart && <MeasurementChart chart={chart} />}
       {!pending && !error && preview && <TraceAvailabilityDetails preview={preview} />}
-      {!pending && !error && preview && !chart && (
-        <p>No durable or available series were returned for this bounded selection.</p>
-      )}
+      {!pending && !error && preview && !chart && <p>本次有界选择未返回已持久保存且可用的序列。</p>}
     </>
   );
 }
@@ -603,9 +601,9 @@ function tracePreviewStatus(
   error: Error | null,
   pending: boolean,
 ): string {
-  if (error) return `Trace unavailable: ${errorMessage(error)}`;
-  if (pending) return "Reading bounded trace preview…";
-  if (!preview) return "Waiting for bounded trace preview";
+  if (error) return `波形不可用： ${errorMessage(error)}`;
+  if (pending) return "正在读取有界波形预览…";
+  if (!preview) return "等待有界波形预览";
   return measurementTraceStatus(preview);
 }
 
@@ -626,12 +624,12 @@ export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTrac
         <strong className="text-text-soft">
           {[
             preview.failures.length > 0
-              ? `${preview.failures.length.toLocaleString()} unavailable`
+              ? `${preview.failures.length.toLocaleString()} 条不可用`
               : undefined,
-            incomplete.length > 0 ? `${incomplete.length.toLocaleString()} incomplete` : undefined,
+            incomplete.length > 0 ? `${incomplete.length.toLocaleString()} 条不完整` : undefined,
           ]
             .filter(Boolean)
-            .join(" · ") || "Entity acquisition"}
+            .join(" · ") || "对象采集"}
         </strong>
         {acquisition && (
           <span>
@@ -647,12 +645,12 @@ export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTrac
         >
           <summary className="cursor-pointer text-text-soft">
             <strong>{failure.label}</strong>
-            <span className="ml-1.5 text-red">Unavailable · {failure.reasons.join(", ")}</span>
+            <span className="ml-1.5 text-red">不可用 · {failure.reasons.join(", ")}</span>
           </summary>
           {failure.evidence ? (
             <TraceEvidence evidence={failure.evidence} />
           ) : (
-            <p className="mt-1.5 mb-0">No acquisition evidence was recorded.</p>
+            <p className="mt-1.5 mb-0">未记录采集证据。</p>
           )}
         </details>
       ))}
@@ -664,7 +662,7 @@ export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTrac
           <summary className="cursor-pointer text-text-soft">
             <strong>{series.label}</strong>
             <span className="ml-1.5 text-yellow">
-              {series.available_sample_count}/{series.source_sample_count} samples available
+              {series.available_sample_count}/{series.source_sample_count} 个采样点可用
               {series.unavailable_reasons.length > 0
                 ? ` · ${series.unavailable_reasons.join(", ")}`
                 : ""}
@@ -673,7 +671,7 @@ export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTrac
           {series.evidence ? (
             <TraceEvidence evidence={series.evidence} />
           ) : (
-            <p className="mt-1.5 mb-0">No acquisition evidence was recorded.</p>
+            <p className="mt-1.5 mb-0">未记录采集证据。</p>
           )}
         </details>
       ))}
@@ -688,21 +686,21 @@ function TraceEvidence({
 }) {
   return (
     <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
-      <dt>Result</dt>
+      <dt>结果</dt>
       <dd className="m-0 font-mono text-text-soft">
         {evidence.instrument_id} · {evidence.acquisition_id} → {evidence.result_id}
       </dd>
-      <dt>Command</dt>
+      <dt>命令</dt>
       <dd className="m-0 font-mono text-text-soft">{evidence.command_id}</dd>
-      <dt>Interface</dt>
+      <dt>接口</dt>
       <dd className="m-0 font-mono text-text-soft">{evidence.interface_id}</dd>
       {evidence.component_path.length > 0 && (
         <>
-          <dt>Component</dt>
+          <dt>部件</dt>
           <dd className="m-0 font-mono text-text-soft">{evidence.component_path.join(" / ")}</dd>
         </>
       )}
-      <dt>Interval</dt>
+      <dt>时间范围</dt>
       <dd className="m-0 font-mono text-text-soft">
         <time dateTime={evidence.started_at}>{evidence.started_at}</time> →{" "}
         <time dateTime={evidence.completed_at}>{evidence.completed_at}</time>
@@ -842,17 +840,13 @@ export function MeasurementChartPicker({
       >
         <span>
           {charts.length}{" "}
-          {signalViews
-            ? "signal views"
-            : charts.length === 1
-              ? "chart candidate"
-              : "chart candidates"}
+          {signalViews ? "个信号视图" : charts.length === 1 ? "个候选图表" : "个候选图表"}
         </span>
         {charts.length > 1 && (
           <Field>
-            {signalViews ? "Signal" : "Chart"}
+            {signalViews ? "信号" : "图表"}
             <Select
-              aria-label="Measurement chart"
+              aria-label="测量图表"
               className="max-w-[min(70vw,420px)]"
               onChange={(event) => (onChartChange ?? setLocalChartId)(event.target.value)}
               value={selectedChart?.id ?? ""}
@@ -928,14 +922,14 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
               onClick={() => setExpanded(!expanded)}
               className="rounded-md border border-line px-3 py-1.5 text-xs text-text-soft hover:bg-panel-strong"
             >
-              {expanded ? "Standard chart height" : "Expand chart"}
+              {expanded ? "标准图表高度" : "展开图表"}
             </button>
           )}
           {chart.layout === "small-multiples" ? "small multiples" : chart.kind.replace("-", " ")}
         </span>
       </figcaption>
       {points.length === 0 ? (
-        <Notice role="status">No available values for this signal in the selected slice.</Notice>
+        <Notice role="status">所选切片中没有此信号的可用值。</Notice>
       ) : chart.layout === "small-multiples" && chart.series.length > 1 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-2">
           {chart.series.map((series) => (
@@ -982,7 +976,7 @@ function MeasurementSeriesPanel({
       <div className="mb-1 flex items-center justify-between gap-2 text-xs">
         <strong className="text-text-soft">{series.label}</strong>
         <span className="text-text-dim">
-          {series.points.length} samples{series.status ? ` · ${series.status}` : ""}
+          {series.points.length} 个采样点{series.status ? ` · ${series.status}` : ""}
         </span>
       </div>
       {series.points.length > 0 ? (
@@ -996,7 +990,7 @@ function MeasurementSeriesPanel({
         />
       ) : (
         <p className="m-0 grid h-[170px] place-items-center text-xs text-text-dim">
-          {series.status ?? "Unavailable for this point"}
+          {series.status ?? "此点不可用"}
         </p>
       )}
     </section>

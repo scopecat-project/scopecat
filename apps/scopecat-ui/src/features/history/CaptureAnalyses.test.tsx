@@ -52,10 +52,10 @@ it("saves an artifact from its captured analysis with cancellation and failure f
       ]}
     />,
   );
-  fireEvent.click(screen.getByText("Report · revision 1"));
-  const button = screen.getByRole("button", { name: "Download file" });
+  fireEvent.click(screen.getByText("Report · 修订 1"));
+  const button = screen.getByRole("button", { name: "下载文件" });
   fireEvent.click(button);
-  await screen.findByText("Saved to /chosen/report.txt");
+  await screen.findByText("已保存到 /chosen/report.txt");
   expect(save).toHaveBeenCalledWith("capture", "sha256:record", "artifact", "report.txt");
   fireEvent.click(button);
   await waitFor(() => expect(button).toHaveProperty("disabled", false));
@@ -116,7 +116,7 @@ it("uses retained analysis inputs for navigation and displays published facts", 
       ]}
     />,
   );
-  fireEvent.click(screen.getByText("Fit · revision 1"));
+  fireEvent.click(screen.getByText("Fit · 修订 1"));
   expect(screen.getByText("Fitted frequency")).toBeTruthy();
   expect(screen.getByText("fit.v1")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "source" }));

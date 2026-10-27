@@ -40,7 +40,7 @@ export function AnalysisOutputView({
       link.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : "Download failed");
+      setDownloadError(error instanceof Error ? error.message : "下载失败");
     } finally {
       setDownloading(false);
     }
@@ -62,15 +62,15 @@ export function AnalysisOutputView({
   } else if (output.kind === "dataset") {
     content = (
       <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-xs">
-        <dt className="font-bold text-text-dim">Dataset</dt>
+        <dt className="font-bold text-text-dim">数据集</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.dataset_id}</code>
         </dd>
-        <dt className="font-bold text-text-dim">Codec</dt>
+        <dt className="font-bold text-text-dim">编码</dt>
         <dd className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text-soft">
           <code title={output.content.codec}>{output.content.codec}</code>
         </dd>
-        <dt className="font-bold text-text-dim">Content</dt>
+        <dt className="font-bold text-text-dim">内容</dt>
         <dd className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text-soft">
           <code title={output.content.content_hash}>{output.content.content_hash}</code>
         </dd>
@@ -94,19 +94,19 @@ export function AnalysisOutputView({
   } else if (output.kind === "artifact") {
     content = (
       <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-xs">
-        <dt className="font-bold text-text-dim">Artifact</dt>
+        <dt className="font-bold text-text-dim">附件</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.artifact_id}</code>
         </dd>
-        <dt className="font-bold text-text-dim">File</dt>
+        <dt className="font-bold text-text-dim">文件</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.filename}</code>
         </dd>
-        <dt className="font-bold text-text-dim">Media type</dt>
+        <dt className="font-bold text-text-dim">媒体类型</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.media_type}</code>
         </dd>
-        <dt className="font-bold text-text-dim">Content</dt>
+        <dt className="font-bold text-text-dim">内容</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <button
             className="cursor-pointer rounded border border-line bg-panel-soft px-2 py-1 text-xs font-bold text-text-soft hover:border-line-strong disabled:cursor-wait disabled:opacity-60"
@@ -114,11 +114,11 @@ export function AnalysisOutputView({
             onClick={downloadArtifact}
             type="button"
           >
-            {downloading ? "Downloading…" : "Download file"}
+            {downloading ? "正在下载…" : "下载文件"}
           </button>
           {savedPath && (
             <span className="ml-2" role="status">
-              Saved to {savedPath}
+              已保存到 {savedPath}
             </span>
           )}
           {downloadError ? (
@@ -132,11 +132,11 @@ export function AnalysisOutputView({
   } else {
     content = (
       <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-xs">
-        <dt className="font-bold text-text-dim">Proposal</dt>
+        <dt className="font-bold text-text-dim">提议</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.proposal_id}</code>
         </dd>
-        <dt className="font-bold text-text-dim">Record</dt>
+        <dt className="font-bold text-text-dim">记录</dt>
         <dd className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text-soft">
           <code title={output.content.record_ref}>{output.content.record_ref}</code>
         </dd>
@@ -270,16 +270,16 @@ function AnalysisFigureView({
             )}
             {showMetadata && (
               <details>
-                <summary>Retained source and projection</summary>
+                <summary>保留的数据来源与投影</summary>
                 {layer.source.kind === "dataset" ? (
                   <p>
-                    Dataset output in this publication: <code>{layer.source.output_id}</code>
+                    本发布中的数据集输出： <code>{layer.source.output_id}</code>
                   </p>
                 ) : (
                   <>
                     <p>
-                      Analysis <code>{layer.source.source.analysis_record_id}</code> · dataset
-                      output <code>{layer.source.source.output_id}</code>
+                      分析 <code>{layer.source.source.analysis_record_id}</code> · 数据集输出{" "}
+                      <code>{layer.source.source.output_id}</code>
                     </p>
                     <code>{layer.source.dataset.content_hash}</code>
                   </>
@@ -310,7 +310,7 @@ export function AnalysisMetadataView({ metadata }: { metadata: Record<string, un
   if (Object.keys(metadata).length === 0) return null;
   return (
     <details className="border-t border-line px-[9px] py-[7px] text-xs text-text-dim">
-      <summary className="cursor-pointer font-bold">Metadata</summary>
+      <summary className="cursor-pointer font-bold">元数据</summary>
       <pre className="mt-1.5 mb-0 max-h-36 overflow-auto whitespace-pre-wrap text-xs text-text-soft">
         {JSON.stringify(metadata, null, 2)}
       </pre>

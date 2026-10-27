@@ -37,9 +37,8 @@ export function EChart({
       <span className="sr-only" id={descriptionId}>
         {description ?? (
           <>
-            {seriesCount.toLocaleString()} data series with {pointCount.toLocaleString()} plotted{" "}
-            {pointCount === 1 ? "point" : "points"}.
-            {seriesLabels.length > 0 ? ` Series: ${seriesLabels.join(", ")}.` : ""}
+            {seriesCount.toLocaleString()} 个数据系列，共绘制 {pointCount.toLocaleString()} 个点。
+            {seriesLabels.length > 0 ? ` 系列：${seriesLabels.join("、")}。` : ""}
           </>
         )}
       </span>

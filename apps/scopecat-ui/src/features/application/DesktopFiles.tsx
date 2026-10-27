@@ -29,7 +29,7 @@ export function DesktopFiles() {
         if (receipt) {
           void cache.invalidateQueries({ queryKey: ["data", "captures"] });
           selectCapture(receipt.capture.content_hash);
-          setMessage(receipt.created ? "File imported." : "This data is already available.");
+          setMessage(receipt.created ? "文件已导入。" : "此数据已在应用中。");
         }
       } catch (failure) {
         setError(failure instanceof Error ? failure.message : String(failure));
@@ -62,7 +62,7 @@ export function DesktopFiles() {
   if (!opening && !message && !error) return null;
   return (
     <aside className="fixed bottom-4 right-4 z-50 max-w-lg rounded-lg border border-line bg-panel p-4 text-text shadow-lg">
-      {opening && <p role="status">Opening and checking the selected file…</p>}
+      {opening && <p role="status">正在打开并检查选定文件…</p>}
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}
       {!opening && (
@@ -73,7 +73,7 @@ export function DesktopFiles() {
             setError(undefined);
           }}
         >
-          Dismiss
+          关闭提示
         </button>
       )}
     </aside>

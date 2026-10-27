@@ -29,13 +29,13 @@ it("shows export progress and distinguishes completion, cancellation and failure
   act(() => {
     window.dispatchEvent(new Event("pywebviewready"));
   });
-  const button = screen.getByRole("button", { name: "Export Scopecat file…" });
+  const button = screen.getByRole("button", { name: "导出 Scopecat 文件…" });
   fireEvent.click(button);
-  await screen.findByText("Preparing export and saving file…");
+  await screen.findByText("正在准备导出并保存文件…");
   expect(button).toHaveProperty("disabled", true);
   expect(save).toHaveBeenCalledWith("run-a");
   finish("/chosen/run.scopecat");
-  await screen.findByText("Saved to /chosen/run.scopecat");
+  await screen.findByText("已保存到 /chosen/run.scopecat");
   fireEvent.click(button);
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.queryByRole("status")).toBeNull());

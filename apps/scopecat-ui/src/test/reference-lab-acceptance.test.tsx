@@ -271,7 +271,7 @@ describe("shared reference-lab acceptance", () => {
         onFixedAxisIndexChange={() => {}}
       />,
     );
-    const selector = screen.getByRole("combobox", { name: "Measurement chart" });
+    const selector = screen.getByRole("combobox", { name: "测量图表" });
     for (const chart of heatmaps) {
       fireEvent.change(selector, { target: { value: chart.id } });
       expect(screen.getByRole("img", { name: new RegExp(`^${chart.title}:`) })).toBeVisible();

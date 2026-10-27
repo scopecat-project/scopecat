@@ -52,18 +52,18 @@ it("selects acquisition offsets and entities without hiding unavailable traces o
   expect(requests[0]!.url.pathname).toContain("/source-a/runs/scan/recording/traces");
   expect(requests[0]!.url.searchParams.get("selection")).toBe("acquired");
   expect(requests[0]!.url.searchParams.get("limit")).toBe("1");
-  fireEvent.change(screen.getByLabelText("Waveform entity"), { target: { value: "1" } });
+  fireEvent.change(screen.getByLabelText("波形对象"), { target: { value: "1" } });
   await waitFor(() => expect(requests.at(-1)!.body.entity_indices).toEqual([1]));
-  fireEvent.change(screen.getByLabelText("Waveform record"), { target: { value: "1" } });
+  fireEvent.change(screen.getByLabelText("波形记录"), { target: { value: "1" } });
   await screen.findByText("Second acquisition");
   expect(requests.at(-1)!.url.searchParams.get("offset")).toBe("21");
   expect(screen.queryByRole("img")).toBeNull();
-  expect(screen.getByText("Unavailable · missing")).toBeTruthy();
-  const waveform = screen.getByLabelText("Waveform") as HTMLSelectElement;
+  expect(screen.getByText("不可用 · missing")).toBeTruthy();
+  const waveform = screen.getByLabelText("波形") as HTMLSelectElement;
   const phase = Array.from(waveform.options).find((option) => option.value.endsWith(":phase"))!;
   fireEvent.change(waveform, { target: { value: phase.value } });
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "Trace unavailable: Cannot read stored trace",
+    "波形不可用： Cannot read stored trace",
   );
   expect(screen.queryByText("Second acquisition")).toBeNull();
 });

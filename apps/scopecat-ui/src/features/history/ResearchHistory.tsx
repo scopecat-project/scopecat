@@ -477,7 +477,7 @@ function ResearchRecords({
             )}
           </details>
           <details className={detailCard}>
-            <summary className="cursor-pointer font-semibold">Data cleanup</summary>
+            <summary className="cursor-pointer font-semibold">数据清理</summary>
             <div className="mt-3 space-y-4">
               <DataCleanupHistory />
             </div>

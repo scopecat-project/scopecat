@@ -24,7 +24,7 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
       ),
   });
   if (evidence.error) return <Notice role="alert">{evidence.error.message}</Notice>;
-  if (!evidence.data) return <Notice role="status">Loading data…</Notice>;
+  if (!evidence.data) return <Notice role="status">正在加载数据…</Notice>;
   const capture = evidence.data;
   const run = capture.runs.find(
     (item) => item.snapshot.run_id === (selection.runId ?? capture.roots[0]),
@@ -32,15 +32,15 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
   if (!run)
     return (
       <div>
-        <Notice role="alert">The referenced run is missing from this file.</Notice>
-        <Button onClick={() => selectRun()}>Back to captured run</Button>
+        <Notice role="alert">此文件中缺少引用的运行。</Notice>
+        <Button onClick={() => selectRun()}>返回文件的入口运行</Button>
       </div>
     );
   return (
-    <section className="mt-3 space-y-3" aria-label="Captured run">
+    <section className="mt-3 space-y-3" aria-label="文件中的运行">
       <WindowTitle title={`${run.snapshot.run_id} · ${capture.source_project_id} · Scopecat`} />
       <Field>
-        Run{" "}
+        运行{" "}
         <Select value={run.snapshot.run_id} onChange={(event) => selectRun(event.target.value)}>
           {capture.runs.map((item) => (
             <option key={item.snapshot.run_id} value={item.snapshot.run_id}>
@@ -53,8 +53,8 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
       <h4 className="font-semibold">
         {run.request.display_name ?? run.request.experiment_id ?? run.snapshot.run_id}
       </h4>
-      <p>Run: {run.snapshot.run_id}</p>
-      <p>Source: {capture.source_project_id}</p>
+      <p>运行：{run.snapshot.run_id}</p>
+      <p>来源：{capture.source_project_id}</p>
       <CaptureRecording
         key={run.snapshot.run_id}
         contentHash={contentHash}
@@ -62,7 +62,7 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
         selection={selection}
       />
       <details>
-        <summary>Retained request and configuration</summary>
+        <summary>保留的请求与配置</summary>
         <pre className="max-h-80 overflow-auto text-xs">
           {JSON.stringify({ request: run.request, configuration: run.configuration }, null, 2)}
         </pre>
@@ -108,7 +108,7 @@ function CaptureRecording({
   return (
     <div className="space-y-3">
       <Field>
-        Measurements{" "}
+        测量记录{" "}
         <Select
           value={selection}
           onChange={(event) => {
@@ -119,20 +119,18 @@ function CaptureRecording({
             });
           }}
         >
-          <option value="acquired">Acquisition history</option>
-          <option value="selected">Retained analysis selection</option>
+          <option value="acquired">采集历史</option>
+          <option value="selected">保留的分析选点</option>
         </Select>
       </Field>
-      {page.isPending && <Notice role="status">Loading measurements…</Notice>}
+      {page.isPending && <Notice role="status">正在加载测量记录…</Notice>}
       {page.error && <Notice role="alert">{page.error.message}</Notice>}
       {page.data && (
         <>
           <p>
             {page.data.record_count}{" "}
-            {selection === "acquired"
-              ? "acquisitions, in acquisition order"
-              : "selected points, in logical point order"}
-            .{page.data.selected_record_count === null && " No analysis selection was retained."}
+            {selection === "acquired" ? "次采集，按采集顺序排列" : "个选定点，按逻辑点顺序排列"}.
+            {page.data.selected_record_count === null && " 未保留分析选点。"}
           </p>
           <MeasurementRecordTable
             table={measurementTable(page.data.items, page.data.dataset_schema)}
@@ -141,7 +139,7 @@ function CaptureRecording({
             [...Object.values(record.coordinates), ...Object.values(record.observables)].some(
               (value) => value.kind === "array_summary",
             ),
-          ) && <p>Large arrays are summarized in the table and omitted from point charts.</p>}
+          ) && <p>表格仅显示大型数组摘要，点图不包含这些数组。</p>}
           <CaptureTraces
             key={`${selection}:${offset}`}
             contentHash={contentHash}
@@ -152,17 +150,14 @@ function CaptureRecording({
             schema={page.data.dataset_schema}
           />
           {charts.length > 0 && (
-            <section aria-label="Charts for the current measurement page">
-              <p>
-                Charts show only this page ({page.data.items.length}{" "}
-                {page.data.items.length === 1 ? "record" : "records"}).
-              </p>
+            <section aria-label="当前测量页的图表">
+              <p>图表仅显示本页的 {page.data.items.length} 条记录。</p>
               <MeasurementChartPicker charts={charts} />
             </section>
           )}
           <div className="flex flex-wrap items-end gap-3">
             <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>
-              Previous measurements
+              上一页测量记录
             </Button>
             <span>
               {page.data.items.length ? offset + 1 : 0}–{offset + page.data.items.length} /{" "}
@@ -172,7 +167,7 @@ function CaptureRecording({
               disabled={page.data.next_offset === null}
               onClick={() => setOffset(page.data.next_offset!)}
             >
-              Next measurements
+              下一页测量记录
             </Button>
           </div>
         </>

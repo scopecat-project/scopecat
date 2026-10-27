@@ -1,59 +1,71 @@
-# Open and share recorded data
+# 打开与分享记录数据 {#open-and-share-recorded-data}
 
-You only need the Scopecat application to browse a `.scopecat` file. You do not
-need the original experiment code, laboratory adapter, devices or a Python setup.
+浏览 `.scopecat` 文件只需 Scopecat 应用，无需原实验源码、实验室适配器、设备或另装 Python 环境。
+文件中的来源身份、运行 ID 与导入内容身份共同标识所读证据；同名实验不代表同一次运行。
 
-## Open a file
+## 打开文件 {#open-a-file}
 
-Choose **File → Open** (Cmd-O on Mac, Ctrl-O on Windows), then select the file.
-Scopecat checks it and opens its records on **Data**. The record ID and source
-identify what you are viewing. Opening keeps a copy in the application's data
-store; it does not edit the original file or repeat the experiment.
+使用应用菜单的文件打开入口（Mac 为 Cmd-O，Windows 为 Ctrl-O），或在**数据 → 导入的结果**
+中展开**导入数据**并选择**打开 Scopecat 文件…**。选定文件后，应用检查内容并在数据页打开记录。
+打开会把副本保存到应用数据中，不修改原文件，不重复采集，也不重新执行分析。
+再次打开相同内容不会创建新的测量；已导入来源/运行身份若对应冲突内容，会拒绝导入，不覆盖旧证据。
 
-Choose a run if the file contains several. **Measurements** lets you switch
-between acquisition history and the retained analysis selection, when available.
-Acquisition history includes repeated measurements; the analysis selection shows
-the exact points retained for analysis. Large arrays appear as summaries in the
-table. Use **Waveform record** to inspect an individual trace; the plot states
-when it displays sampled data. Expand **Retained analyses** to read saved
-conclusions, their inputs and any tables, figures or attachments.
+选择**查看数据**，文件含多个运行时通过**运行**选择器切换，核对显示的运行 ID 与来源。
+明确引用的运行缺失时会显示错误，不自动换成另一次运行；可显式选择返回文件入口运行。
+**测量记录**可切换**采集历史**与**保留的分析选点**：前者包含重复采集并按采集顺序显示，
+后者显示保留用于分析的精确点并按逻辑顺序排列；未保留分析选点时会说明，不据此推断没有采集。
 
-To compare files, choose **File → New Window** and open the other file there.
-Each window keeps its own selected record and zoom. Use Cmd/Ctrl-F to find text
-in the current view, Cmd/Ctrl-C to copy selected text, and the **View** menu to
-change zoom. Closing the last window leaves Scopecat in the menu bar or system
-tray; choose **Quit** there when you want to exit.
+表格分页读取，**上一页测量记录 / 下一页测量记录**切换页；图表只覆盖当前页，不代表整个数据集。
+大型数组在表格中显示摘要，不纳入点图。用**波形记录**选择本页一条记录，
+再选择**波形**及可用的**波形对象**。长波形采用有界最小值/最大值抽样，
+状态显示已检查/选定序列数、已绘制/原始采样点数及是否应用上限。
+不可用或不完整证据仍显示，不把缺失点插值成成功采集。
 
-## Share a record or save a copy
+展开**保留的分析**读取保存的结论、输入及表格、图形或附件。
+作者命名、字段、单位、内容和原始错误保持原样；阅读不表示接受候选或开始新的分析。
+附件保存只在显式动作后进行。
 
-For a run in your application, select it in **Runs** and choose
-**Export Scopecat file…**. Choose a destination and wait for the saved-path
-confirmation. The file includes retained measurements and their scientific
-dependencies, which can include other runs used by the saved analyses.
+若应用菜单提供新建窗口，可在另一窗口打开另一文件，分别保留所选记录与缩放。
+Cmd/Ctrl-F 查找当前视图文字，Cmd/Ctrl-C 复制所选文字；视图菜单调整缩放。
+关闭最后一个窗口后应用仍可驻留菜单栏或系统托盘；需要退出时使用退出入口。
 
-For an imported file, choose **Save a copy…** on **Data**. This preserves its
-original contents, including retained analyses. Share the resulting file with
-someone using a compatible Scopecat version. This development format is not yet
-a promised long-term archival format; keep the application version with important
-exports. A portable file is separate from a [whole-store backup](backup-and-restore.md).
+## 导出记录或另存副本 {#share-a-record-or-save-a-copy}
 
-If opening or saving fails, the error remains visible and you can retry after
-correcting the cause. Cancelling a file dialog preserves the current view.
-Repeatedly opening the same data does not create another measurement. A file with
-conflicting content for an already imported source/run is rejected rather than
-replacing the earlier data.
+打开应用中的精确运行详情，选择**导出 Scopecat 文件…**，选择保存位置并等待**已保存到**路径提示。
+文件包含保留测量及科学依赖，可能包含保存分析引用的其他运行，不仅是当前图表或当前页。
 
-To remove an imported copy, choose **Review data cleanup…** beside it on Data.
-Review the selected file and space to reclaim, then confirm deletion. This removes
-the application's copy, not your original file. If cleanup cannot finish, use
-**Data cleanup history** to retry. Other imported files keep their own records;
-you can open a removed file again after cleanup finishes.
+对导入文件，在**导入的结果**中选择**另存副本…**。
+副本保留原内容和保留分析，不覆盖原文件，也不把导入记录变为新的本地采集。
+用兼容版本分享文件；开发格式尚非长期归档承诺，重要导出请同时保留应用版本。
+支持格式及升级边以[数据兼容策略](../development/data-compatibility.md)为准。
+便携文件不等于[整个数据空间备份](backup-and-restore.md)。
 
-## Analyze with your own Python tools
+打开或保存失败会保留错误，可修正原因后重试；取消文件选择不改变当前视图，也不显示保存成功。
 
-Install the matching public Scopecat Python package in your own environment,
-alongside your analysis tools. Do not use the interpreter inside the application.
-Follow [ordinary Python analysis](../guides/ordinary-analysis.md#analyze-an-exported-file-in-your-own-python-environment)
-to read the file and save conclusions to a new `.scopecat` file. Open that result
-through **File → Open** to inspect its measurements and new analysis together.
-The original file is unchanged; opening the result does not rerun its analysis.
+## 清理应用中的副本或记录 {#clean-up-application-data}
+
+对导入副本，在**数据 → 导入的结果 → 管理导入的结果**中选择**预览数据清理…**。
+其他记录的清理入口使用相同流程。先核对选中身份、记录数量、预计回收空间及阻塞原因，
+需要保留的内容先导出或备份。预览本身不会删除数据。
+
+保留的科学记录可能仍引用所选内容；活动任务、实时跟随分析或练习归属也可能阻止清理。
+根据提示通过正常任务入口处理活动工作；不要把数据清理当作停止设备的方法。
+若要一并删除引用者，选择**纳入此依赖记录并重新预览**，重新审查扩展后的全部选择。
+扩展选择不是绕过阻塞，也不复用旧预览授权。状态变化导致预览指纹失效时，须重新核对预览。
+
+只有明确点击**删除选定记录与文件**才提交清理。
+删除导入文件的应用副本不删除原 `.scopecat` 文件；其他导入副本保留各自记录。
+**取消**退出本次预览，不发起删除。
+
+**数据库记录已删除；物理文件清理尚未完成，需要重试**与**记录与文件已清理**是不同结果。
+若文件清理失败，保留错误与原操作，在**数据清理历史**中选择**重试清理**，
+继续同一 operation，不新建另一删除请求或更换目标。
+请求结果未知时先检查原操作历史，不凭一次网络错误认定未删除。
+只有清理完成后才可重新导入已移除文件；历史成功回执不代表另一个数据空间的操作。
+
+## 使用自己的 Python 工具分析 {#analyze-with-your-own-python-tools}
+
+在自己的环境中安装匹配的公开 Scopecat Python 包和分析工具，不使用应用内部解释器。
+按[普通 Python 分析](../guides/ordinary-analysis.md#analyze-an-exported-file-in-your-own-python-environment)
+读取文件，把新结论保存到新的 `.scopecat` 文件，再通过应用的打开入口一起查看测量和新分析。
+原文件保持不变；打开新文件不会重跑其中分析。

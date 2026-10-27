@@ -186,9 +186,9 @@ describe("measurement visualization", () => {
       />,
     );
     const phase = "slice:temperature:phase";
-    fireEvent.change(screen.getByLabelText("Measurement chart"), { target: { value: phase } });
+    fireEvent.change(screen.getByLabelText("测量图表"), { target: { value: phase } });
     rerender(<MeasurementDataPreview {...props} slicePending={true} />);
-    expect(screen.queryByLabelText("Measurement chart")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("测量图表")).not.toBeInTheDocument();
     rerender(
       <MeasurementDataPreview
         {...props}
@@ -196,7 +196,7 @@ describe("measurement visualization", () => {
         slice={slicePreview(schema, items)}
       />,
     );
-    expect(screen.getByLabelText("Measurement chart")).toHaveValue(phase);
+    expect(screen.getByLabelText("测量图表")).toHaveValue(phase);
   });
 
   it("offers axis choices, independent stepping and a readable current slice", () => {
@@ -359,7 +359,7 @@ describe("measurement visualization", () => {
     expect(screen.getAllByText("1/2 entities · ratio · All available")).toHaveLength(3);
     expect(
       screen.getByRole("img", { name: "Readout by Qubit: Readout [ratio] by Bias [V]" }),
-    ).toHaveAccessibleDescription(/Series: Q1/);
+    ).toHaveAccessibleDescription(/系列：Q1/);
 
     const reorderedSchema: MeasurementDatasetSchema = {
       ...schema,
@@ -402,7 +402,7 @@ describe("measurement visualization", () => {
     );
     expect(
       screen.getByRole("img", { name: "Readout by Qubit: Readout [ratio] by Bias [V]" }),
-    ).toHaveAccessibleDescription(/Series: Q1/);
+    ).toHaveAccessibleDescription(/系列：Q1/);
   });
 
   it("keeps mixed-kind entity labels and selection identities collision-free", () => {
@@ -1358,9 +1358,9 @@ describe("measurement visualization", () => {
       "saved and received preview · 2 available records · highest point index 2",
     );
     expect(screen.getByText(/Partial received data; gaps are not interpolated/)).toBeVisible();
-    expect(screen.getByText(/2 plotted points/)).toBeInTheDocument();
+    expect(screen.getByText(/共绘制 2 个点/)).toBeInTheDocument();
     expect(screen.getByText(/Latest received data: point index 2; not saved yet/)).toBeVisible();
-    expect(screen.queryByText(/3 plotted points/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/共绘制 3 个点/)).not.toBeInTheDocument();
   });
 
   it("shows the plot first and opens the bounded record table on demand", () => {
@@ -1445,10 +1445,10 @@ describe("measurement visualization", () => {
       />,
     );
 
-    const selector = screen.getByRole("combobox", { name: "Measurement chart" });
+    const selector = screen.getByRole("combobox", { name: "测量图表" });
     expect(selector).toHaveValue("scalar:signal-0:bias:value");
     expect(screen.getAllByRole("option")).toHaveLength(8);
-    expect(screen.getByText("8 chart candidates")).toBeVisible();
+    expect(screen.getByText("8 个候选图表")).toBeVisible();
 
     fireEvent.change(selector, { target: { value: "scalar:signal-7:bias:value" } });
     expect(

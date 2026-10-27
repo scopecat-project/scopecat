@@ -91,10 +91,10 @@ it("keeps captures with the same run ID separate and requests retained selection
   await first.findByText("11 V");
   await second.findByText("22 V");
   expect((await first.findByTestId("chart-values")).textContent).toBe("[[[0,11]]]");
-  expect(first.getByText("Charts show only this page (1 record).")).toBeTruthy();
-  fireEvent.click(first.getByRole("button", { name: "Expand chart" }));
+  expect(first.getByText("图表仅显示本页的 1 条记录。")).toBeTruthy();
+  fireEvent.click(first.getByRole("button", { name: "展开图表" }));
   expect(first.getByTestId("chart-values").getAttribute("data-height")).toBe("540");
-  fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
+  fireEvent.change(first.getByLabelText("测量记录"), { target: { value: "selected" } });
   await first.findByText("12 V");
   expect(first.getByTestId("chart-values").textContent).toBe("[[[0,12]]]");
   expect(second.getByText("22 V")).toBeTruthy();
@@ -104,19 +104,17 @@ it("keeps captures with the same run ID separate and requests retained selection
         url.pathname.includes("/second/") && url.searchParams.get("selection") === "selected",
     ),
   ).toBe(false);
-  fireEvent.change(first.getByLabelText("Run"), { target: { value: "reference" } });
+  fireEvent.change(first.getByLabelText("运行"), { target: { value: "reference" } });
   await first.findByText("11 V");
   expect(first.getByRole("heading", { name: "first reference" })).toBeTruthy();
-  fireEvent.click(first.getByRole("button", { name: "Next measurements" }));
+  fireEvent.click(first.getByRole("button", { name: "下一页测量记录" }));
   await first.findByText("111 V");
   expect(first.getByTestId("chart-values").textContent).toBe("[[[0,111]]]");
-  fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
+  fireEvent.change(first.getByLabelText("测量记录"), { target: { value: "selected" } });
   await first.findByText("12 V");
   act(() => window.history.back());
   await first.findByText("111 V");
-  await waitFor(() =>
-    expect(first.getByLabelText("Measurements")).toHaveProperty("value", "acquired"),
-  );
+  await waitFor(() => expect(first.getByLabelText("测量记录")).toHaveProperty("value", "acquired"));
   expect(second.getByText("22 V")).toBeTruthy();
 
   // Leaving and recreating the view restores the same source, run and page.

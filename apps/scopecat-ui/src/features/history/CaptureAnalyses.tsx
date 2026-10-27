@@ -13,16 +13,20 @@ export function CaptureAnalyses({
   onOpenRun: (runId: string) => void;
 }) {
   return (
-    <section className="space-y-3" aria-label="Retained analyses">
-      <h4 className="font-semibold">Retained analyses</h4>
-      {analyses.length === 0 && <p>No analysis publications in this file.</p>}
+    <section className="space-y-3" aria-label="保留的分析">
+      <h4 className="font-semibold">保留的分析</h4>
+      {analyses.length === 0 && <p>此文件没有已发布的分析记录。</p>}
       {analyses.map(({ record, entry, published_at }) => (
         <details key={entry.content_hash}>
           <summary>
-            {record.title} · revision {record.revision}
+            {record.title} · 修订 {record.revision}
           </summary>
           <p className="text-sm text-text-dim">
-            {record.subject.kind === "run" ? `Run: ${record.subject.run_id}` : record.subject.kind}
+            {record.subject.kind === "run"
+              ? `来源运行：${record.subject.run_id}`
+              : record.subject.kind === "project"
+                ? "项目分析"
+                : "样品分析"}
           </p>
           <AnalysisPublicationView
             analysis={{
