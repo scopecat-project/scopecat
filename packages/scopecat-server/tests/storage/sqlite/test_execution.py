@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +25,7 @@ from scopecat.daemon.wire import RunDomainJobTransitionItem
 from scopecat.kernel.points import PointProposalAttempt
 from scopecat.kernel.quantity import Quantity
 from scopecat.measurements import recording_arrow
+from scopecat.records import measurement_recording
 from scopecat.records.execution import (
     DomainExecutionReceipt,
     DomainJobCheckpoint,
@@ -1034,6 +1036,73 @@ def test_measurement_repository_reuses_schema_hash_for_appends(
     _commit_append(runs, repository, _append(header, point_index=1))
 
     assert hash_calls == 1
+
+
+@pytest.mark.parametrize("record_count", [1, 16, 64])
+def test_measurement_append_hash_work_is_linear_and_preserves_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    record_count: int,
+) -> None:
+    runs = _runs(tmp_path)
+    run_id = "run-batch-hashes"
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=run_id)
+    header = _header(run_id, point_count=record_count)
+    _commit_header(runs, repository, header)
+    append = MeasurementDatasetAppend(
+        run_id=run_id,
+        header_content_hash=header.content_hash,
+        acquisition_start=0,
+        records=tuple(
+            _append(header, point_index=index, value=float(index)).records[0]
+            for index in range(record_count)
+        ),
+    )
+    expected_hashes = append.record_content_hashes
+    expected_content_hash = append.content_hash
+    prepared = repository.prepare_append(append)
+    original = measurement_recording.measurement_record_content_hash
+    hash_calls = 0
+
+    def counted_hash(record: MeasurementRecord) -> str:
+        nonlocal hash_calls
+        hash_calls += 1
+        return original(record)
+
+    monkeypatch.setattr(
+        measurement_recording, "measurement_record_content_hash", counted_hash
+    )
+    with _sqlite_transaction(runs) as connection:
+        receipt, created = repository.append_prepared_in_transaction(
+            connection, prepared, segment_id=_segment_id(run_id)
+        )
+        # Per-batch identities may require linear passes, never one pass per row.
+        assert record_count <= hash_calls <= 3 * record_count
+        assert created
+        assert receipt.dataset_content_hash == expected_content_hash
+        assert receipt.acquisition_record_count == record_count
+        rows = connection.execute(
+            "SELECT record_content_hash FROM execution_measurement_records "
+            "WHERE run_id = ? ORDER BY acquisition_index",
+            (run_id,),
+        ).fetchall()
+        assert tuple(row[0] for row in rows) == expected_hashes
+        stored = connection.execute(
+            "SELECT record_content_hashes_json FROM execution_measurement_appends "
+            "WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        assert stored is not None
+        assert json.loads(stored[0]) == list(expected_hashes)
+    hash_calls = 0
+    with _sqlite_transaction(runs) as connection:
+        replay, created = repository.append_prepared_in_transaction(
+            connection, prepared, segment_id=_segment_id(run_id)
+        )
+        assert not created
+        assert replay == receipt
+        assert hash_calls <= record_count
+    runs.sqlite.close()
 
 
 def test_in_transaction_primitives_report_created_and_replay_durable_values(

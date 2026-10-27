@@ -1528,6 +1528,7 @@ class SQLiteMeasurementDatasetRepository:
                 raise ExecutionStateConflict(
                     "measurement append references a point outside its declared limit"
                 )
+            record_content_hashes = durable.record_content_hashes
             _publish_ref(connection, self._run_id, ref, prepared.stored)
             connection.execute(
                 """
@@ -1546,7 +1547,7 @@ class SQLiteMeasurementDatasetRepository:
                     durable.operation_id,
                     durable.content_hash,
                     durable.header_content_hash,
-                    json.dumps(durable.record_content_hashes),
+                    json.dumps(record_content_hashes),
                     len(durable.records),
                     ref,
                 ),
@@ -1566,7 +1567,7 @@ class SQLiteMeasurementDatasetRepository:
                         durable.acquisition_start,
                         row_offset,
                         record.point_index,
-                        durable.record_content_hashes[row_offset],
+                        record_content_hashes[row_offset],
                     )
                     for row_offset, record in enumerate(durable.records)
                 ),
