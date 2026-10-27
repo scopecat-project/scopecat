@@ -1,7 +1,6 @@
-# Save parameters before selecting execution context
+# 先保存参数，再选择执行上下文 {#save-parameters-before-selecting-execution-context}
 
-Parameter declarations and values can exist before a bench, sample or batch
-is selected. Use a connected `lab` or author `session`:
+参数声明和值可以先于实验配置、样品或批次存在。通过已连接的 `lab` 或作者 `session` 保存：
 
 ```python
 parameters = lab.parameters.save(
@@ -12,98 +11,78 @@ parameters = lab.parameters.save(
 )
 ```
 
-This validates the values against their declarations and saves an immutable
-revision. No setup is required, no default changes, and no device is opened.
-Use a new name for changed content; retrying the same name and input returns the
-original revision. `lab.parameters.get(name)` and `.list()` reopen saved versions.
-Saving does not assert that values are calibrated for any physical conditions.
+保存会按声明验证值并创建不可变修订；不要求 setup，不改变默认选择，也不打开设备。
+内容改变时使用新名称；以同名和相同输入重试会返回原修订。
+`lab.parameters.get(name)` 和 `.list()` 可重新读取已保存版本。
+保存不表示这些值已针对某种物理条件完成标定。
 
-For a notebook or author session, select the parameter version directly:
+在 Notebook 或作者会话中直接选择参数版本：
 
 ```python
-session.use(parameters=parameters)  # a saved name or exact reference also works
+session.use(parameters=parameters)  # 也可传入已保存名称或精确引用。
 ```
 
-This preserves the selected subject, batch, operator and record collection.
-Independent parameters replace the configuration choice, not the whole context.
-Selecting values does not assert calibration applicability. Other sessions are
-unaffected. Selection and editing require no executable setup; select a saved
-setup in this session before previewing or running an experiment. For repeated editing,
-use [a parameter branch and `session.params`](parameter-branches.md).
+这会保留当前对象、批次、操作者和记录集。独立参数替换配置选择，不替换整个上下文，
+也不影响其他会话；选中值仍不代表已确认标定适用性。
+选择和编辑参数不需要可执行 setup，但预览或运行实验前须在本会话选择已保存 setup。
+需要持续编辑时，使用[参数分支与 `session.params`](parameter-branches.md)。
 
-Preview resolves the parameter revision and selected setup through the common
-measurement resolver without creating a configuration-registry entry. Reviewed
-requests retain both exact references; a later setup selection or session edit
-cannot silently replace them. Admission uses that saved setup, independently of
-other clients' defaults; common physical resources still share ownership checks.
-Saved experiment plans pin both references and reuse the same resolver.
+预览通过共享测量解析器解析参数修订和选中的 setup，不创建组合配置注册项。
+已审查请求保留两者的精确引用；后来改选 setup 或编辑会话不能悄悄替换它们。
+接纳使用该请求固定的 setup，不依赖其他客户端的默认选择；共享物理资源仍遵守所有权检查。
+保存的实验计划也固定这两个引用，并复用同一解析器。
 
-The low-level runner can use the same read-only resolution:
+低层运行入口可使用同样的只读解析结果。对于 `@sc.experiment` 声明，显式构建调用：
 
 ```python
 inputs = lab.parameters.resolve(parameters, setup=lab.setup.get("bench-v1"))
-result = lab.run(experiment(), config=inputs)
+result = lab.run(experiment.build(), config=inputs)
 ```
 
-To pin a setup in an author session:
+在作者会话中固定 setup：
 
 ```python
 setup = session.setup.get("bench-v1")
 session.use(parameter_branch="daily", setup=setup)
-prepared = session.prepare(experiment, parameters=session.params)
+prepared = session.prepare(experiment(), parameters=session.params)
 ```
 
-Use a saved setup revision or exact reference. Selecting another independent
-parameter revision, saving branch edits and preparing with a branch editor retain
-this setup choice. `session.use(setup=None)` clears the pin; choose a setup again
-before the next preview. A failed selection leaves both the session and editor
-unchanged. Setup selection requires independent parameters; retained candidates
-already own their configuration evidence. Changing the subject retains
-independent parameters, the selected setup and unsaved branch edits, and clears
-the previous subject's batch. Preview checks whether those inputs are suitable
-for the new subject.
+使用已保存 setup 修订或精确引用。改选另一独立参数修订、保存分支编辑以及用分支编辑器准备实验，
+都会保留这个 setup 选择。`session.use(setup=None)` 清除固定选择，下一次预览前须重新选择。
+选择失败时，会话和编辑器均保持原状。显式 setup 选择用于独立参数；保留的候选已拥有自己的配置证据。
+切换对象时，会保留独立参数、setup 和未保存分支编辑，并清除前一对象的批次。
+预览负责检查这些输入是否适用于新对象。
 
-A new session starts without a parameter selection. Clearing parameters returns
-to that state; neither operation selects a global default. Choose parameters and
-setup before preview.
+新会话初始不选择参数；清除参数会返回这个状态，两者都不会自动选择全局默认值。
+预览前须选择参数和 setup。独立打开的分支编辑器需要 `params.preview(setup=setup)`，
+会话准备则把本会话选中的 setup 传给编辑器。两种操作都不激活设备。
+显式 setup 引用不要求全局活动 setup，也不会因另一客户端改选而失效。
 
-Standalone branch editors require `params.preview(setup=setup)`.
-Session preparation supplies its selected setup to the editor.
-Neither operation activates equipment. Explicit setup references do not require
-a global active setup and are not invalidated when another client selects one.
+在工作台中，选择参数分支并采用其版本，再通过 **实验配置** 为本页解析已保存 setup；
+完成选择后才能预览。同一服务上的另一浏览器页面可以使用不同上下文。
+刷新列表或采用新的参数版本会保留已选 setup；只有显式改选或 **重新检查设备连接**
+才会替换捕获的连接修订。
 
-In the workbench, choose a parameter branch and adopt its version, then use
-the **Experiment setup** field to resolve a saved setup for this page. Preview becomes
-available after this selection. Another browser page may use a different context
-on the same service. Refreshing either list or adopting a new parameter version
-preserves the selected setup; only an explicit change or **Recheck device connections**
-replaces the captured connection revisions.
+低层调用方可向 `resolve` 传入精确 `setup=`，或在科学选择中使用
+`ParameterConfiguration(ref=..., setup=...)`。准备会保留这组精确组合，作为执行证据；
+不需要另存一个组合配置。
 
-Low-level callers can supply an exact `setup=` to `resolve`, or choose
-`ParameterConfiguration(ref=..., setup=...)` inside a scientific selection.
-Preparation retains the exact combination as execution evidence. There is no
-separate combined-configuration save step.
+这些操作和记录承担不同职责：
 
-These are distinct responsibilities:
-
-| Record | Meaning |
+| 操作或记录 | 含义 |
 | --- | --- |
-| Parameter revision | Declarations and values, independent of equipment |
-| Prepared inputs | Exact parameter/setup combination; no calibration acceptance |
-| Measurement selection | Subject, batch and explicit parameters or retained candidate |
-| Run evidence | Resolved inputs and scientific binding used for that run |
+| 保存参数修订 | 保存声明和值，不依赖设备，也不接受标定结论 |
+| 选择 setup | 选择实验配置证据，不打开设备、不改变其他会话 |
+| 准备输入 | 固定精确参数/setup 组合，不等于标定接受 |
+| 测量选择 | 选择对象、批次，以及显式参数或保留候选 |
+| 运行证据 | 记录该次运行实际解析的输入和科学绑定 |
+| 接受标定结果 | 按对应标定流程审查证据并更新明确的参数分支，不能由保存或 prepare 代替 |
 
-Compilation still consumes a combined snapshot, while run provenance retains
-the independent input references. Adapter templates also save independent
-parameter revisions and setup revisions atomically, without selecting defaults.
-Parameter edits and verified publications update explicit parameter branches.
-The former working-point editor and global-default publication API are retired.
+编译仍消费组合快照，运行来源则保留独立输入引用。适配器模板也会原子保存独立参数修订与 setup 修订，
+不选择默认值。参数编辑和经验证的发布更新明确的参数分支；旧工作点编辑器和全局默认发布 API 已退役。
 
-No prebaseline migration or persistent compatibility promise is introduced;
-see the [data-format policy](../development/data-compatibility.md).
-Current-format backup/restore includes
-standalone revisions even when no setup has ever been saved.
+本流程不增加历史格式迁移或持久兼容承诺，见[数据兼容性策略](../development/data-compatibility.md)。
+当前格式的备份与恢复包含独立参数修订，即使该数据空间从未保存过 setup。
 
-For ongoing edits without naming every revision, use a
-[parameter branch](parameter-branches.md). Session checkout preserves an editing
-base and saves advance only that branch.
+持续编辑时不必为每个修订另起名称，可使用[参数分支](parameter-branches.md)。
+会话 checkout 保留编辑基线，保存只推进该分支。
