@@ -33,13 +33,23 @@ const reasons: Record<string, string> = {
   subject_unbound: "A physical measurement subject is not bound.",
 };
 
-export function CalibrationEvidence({
-  stage,
-  onProcedure,
-}: {
+type EvidenceProps = {
   stage: Stage;
   onProcedure: (id: string) => void;
-}) {
+};
+
+export function CalibrationEvidence(props: EvidenceProps) {
+  // A stage ID survives repair/verification attempts; its resolved check does not.
+  // Replacing the state owner also prevents a late old request from updating the new report.
+  return (
+    <CalibrationEvidenceContext
+      key={JSON.stringify([props.stage.id, props.stage.check])}
+      {...props}
+    />
+  );
+}
+
+function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
   const [hours, setHours] = useState("");
   const [limit, setLimit] = useState("50");
   const [report, setReport] = useState<Report>();

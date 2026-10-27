@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { components } from "../../api-schema";
 import { CalibrationEvidence } from "./CalibrationEvidence";
@@ -215,3 +215,77 @@ it("removes a previously usable result when refresh fails", async () => {
   expect(screen.queryByText("Usable evidence")).not.toBeInTheDocument();
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
+
+for (const inspector of ["evidence", "profile"] as const) {
+  for (const late of [false, true]) {
+    it(`${inspector} binds ${late ? "late" : "completed"} reports to the exact context on a mounted stage`, async () => {
+      let finishA!: () => void;
+      const requests: unknown[] = [];
+      vi.stubGlobal("fetch", async (request: Request) => {
+        if (request.method === "GET")
+          return Response.json({
+            items: [
+              {
+                created_at: "2026-09-23T00:00:00Z",
+                profile: {
+                  id: "daily-v1",
+                  description: "Policy",
+                  requirements: [report("usable").items[0]!.requirement],
+                },
+              },
+            ],
+            next_cursor: null,
+          });
+        const body = await request.json();
+        requests.push(body);
+        if (requests.length === 1) {
+          if (late)
+            await new Promise<void>((resolve) => {
+              finishA = resolve;
+            });
+          return Response.json(report("usable"));
+        }
+        return Response.json({ detail: "B unavailable" }, { status: 409 });
+      });
+      const onProcedure = vi.fn();
+      const view = render(<CalibrationEvidence stage={stage} onProcedure={onProcedure} />);
+      async function check() {
+        const detail = screen
+          .getByText("Inspect applicable evidence for readout")
+          .closest("details")!;
+        if (!detail.open)
+          fireEvent.click(screen.getByText("Inspect applicable evidence for readout"));
+        if (inspector === "evidence") inspect();
+        else {
+          const load = screen.queryByText("加载已保存的 profile");
+          if (load) fireEvent.click(load);
+          fireEvent.change(await screen.findByLabelText("能力 profile"), {
+            target: { value: "daily-v1" },
+          });
+          fireEvent.click(screen.getByText("检查已保存的 profile"));
+        }
+      }
+      const name = inspector === "evidence" ? "Evidence report for readout" : "已保存的能力报告";
+      await check();
+      if (late)
+        await act(async () => {
+          await Promise.resolve();
+        });
+      else await screen.findByRole("region", { name, hidden: true });
+      const next = structuredClone(stage);
+      next.check.context.parameters = { revision_id: "candidate-B", content_hash: "sha256:B" };
+      view.rerender(<CalibrationEvidence stage={next} onProcedure={onProcedure} />);
+      if (late)
+        await act(async () => {
+          finishA();
+        });
+      expect(screen.queryByRole("region", { name, hidden: true })).not.toBeInTheDocument();
+      expect(requests).toHaveLength(1);
+      await check();
+      await screen.findByText("B unavailable");
+      expect(screen.queryByRole("region", { name, hidden: true })).not.toBeInTheDocument();
+      expect(requests).toHaveLength(2);
+      expect(requests[1]).toMatchObject({ context: next.check.context });
+    });
+  }
+}
