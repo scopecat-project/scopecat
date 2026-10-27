@@ -44,13 +44,14 @@ still maintain a delivery cursor. Those boundaries are intentional.
 | Capability | Experiment intent | Baseline relationship |
 | --- | --- | --- |
 | 2D coordinates, duplicate-value-safe identity | Stable point IDs and explicit axes | Preserve |
-| Full waveform and synchronized-channel provenance | Multi-point, multi-output blocks; synthetic common acquisition | Preserve model semantics; no physical timing qualification |
+| Full waveform and channel provenance | Multi-point, multi-output blocks; synthetic common acquisition | Preserve this fixture; no physical synchronization qualification |
 | Units, shapes, per-sample availability | Validate and retain; analysis reports valid/missing counts | Preserve selected subset |
 | Sparse completion and retry history | Explicit selection; no global-prefix publication gate | Preserve with a different protocol |
 | Frozen analysis inputs and outbox notification | Content identity and atomic publication | Preserve |
 | Adaptive append/restart and open-group closure | Persist membership; resume from durable facts | New exploration, not claimed baseline parity |
 | GUI selection/manual ranges | Minimal read-only local viewer | Preserve key reading behavior, not full UI parity |
-| Arbitrary dtype, ragged/entity contracts | Only explicitly implemented types/shapes | Incomplete; cannot silently replace production |
+| Arbitrary dtype, ragged/entity/cohort contracts | Numeric types and fixed contracts; split blocks only in deferred-schema mode | Incomplete; no general cohort/all-or-nothing policy or declared ragged dimensions |
+| Production adaptive proposal ledger, region budgets, operator queue | Demo only persists one observation-derived append | Uncovered; not equivalent to the production optimizer |
 | Real providers, compiler/lowering, device recovery | Not implemented | Uncovered |
 | Calibration, procedure orchestration, exports, all existing UI | Not implemented | Uncovered |
 
@@ -126,3 +127,62 @@ These are deliberately different protocols, not an end-to-end speed contest.
 First-readable is a storage read, not rendered GUI latency. Tracemalloc omits
 native allocations and prebuilt payloads. File growth is retained footprint,
 not physical device write amplification. No portable threshold is claimed.
+
+
+## Milestone evidence and decision
+
+Measured implementation: `cd4874f7a8bf959341319b898785585c79963ebc` (clean).
+Baseline: `f2e514a1a1075b9de0c1bf5de697bba455a72aae` (clean).
+Python 3.14.7, SQLite 3.53.1, Linux x86_64; each row contains the two raw
+observations in one ABBA cycle, 2 channels × 32 samples, 2 points per group.
+Both settings: WAL, synchronous=NORMAL, foreign_keys=ON, page_size=4096,
+wal_autocheckpoint=1000. These are local component observations, not adoption
+thresholds or a comparison of equivalent end-to-end feature sets.
+
+| Points | Path | Publication seconds | First sparse read ms | Write transactions | Timed Python peak KiB | Footprint growth / scientific JSON bytes |
+| ---: | --- | --- | --- | ---: | --- | --- |
+| 16 | baseline | 0.48 / 0.47 | 80.32 / 79.40 | 16 | 297.93 / 297.73 | 71.12 / 71.12 |
+| 16 | experiment | 0.02 / 0.02 | 3.79 / 4.46 | 32 | 35.25 / 35.25 | 44.73 / 44.73 |
+| 64 | baseline | 2.53 / 2.64 | 100.75 / 99.79 | 64 | 422.20 / 424.04 | 75.83 / 75.83 |
+| 64 | experiment | 0.08 / 0.09 | 4.24 / 4.27 | 128 | 43.34 / 43.34 | 43.45 / 43.45 |
+| 256 | baseline | 23.59 / 25.30 | 214.42 / 223.39 | 256 | 1002.26 / 1004.56 | 25.03 / 25.11 |
+| 256 | experiment | 0.35 / 0.31 | 5.87 / 3.94 | 512 | 58.51 / 58.51 | 18.97 / 19.04 |
+
+All 12 samples independently reopened persisted scientific values, availability
+masks, units and coordinates and matched the same scientific-value hash. The
+experimental path is faster in this fixture, but uses **4 write transactions per
+group versus 2** for baseline publication. The additional attempts and selections
+are durable facts, not free simplification. Arrow/daemon validation and standalone
+JSON SQLite have different responsibilities. Neither measured path prices complete application responsibilities;
+missing experimental features cannot be priced by these figures. Do not
+extrapolate an end-to-end speedup.
+Physical I/O write amplification and process RSS were not measured.
+
+Author burden is **not yet improved**: the demo explicitly declares points,
+work/group membership and output contracts (53 source lines across `point`,
+`unit`, `declaration`), then drives a 111-line fixture orchestration function.
+The existing `workflow_fixtures.load_invocation` is a 16-line grid declaration
+backed by the production DSL; it is a simpler workload, so these counts describe
+interfaces, not an equivalent LOC contest. The experiment removes the separate
+pending-record/group/coverage handshakes from its execution chain, but still has
+begin/save/select/publish plus a consumer cursor. It has no generic ergonomic
+replacement for the existing author DSL, compiler, analysis framework or GUI.
+
+Validation: **33 tests passed** (8.27 s), including real Chromium, four fault
+boundaries with both controlled exit and `os._exit`, stale-fence rejection,
+publication/outbox rollback, scientific-contract rejection and frozen snapshots.
+Provider-return loss blocks recovery without authorization; authorized recovery
+retains four attempts and three results, including the old physical unknown.
+Other boundaries need only three provider calls. Notification replay increments
+delivery attempts without duplicating publications or changing analysis inputs.
+Ruff check/format and diff whitespace checks pass. Arbitrary instruction-level
+SIGKILL, real devices, production distributed leases, native-memory scale and
+complete product feature parity remain untested.
+
+**Recommendation: partial absorption, not wholesale adoption.** The executable
+slice supports multi-point result bundles and explicit closed-group readiness
+without a global prefix, including an open group's persisted extension. It also
+shows why attempt certainty and retry permission need independent state. The
+experiment has not met the author-burden or fewer-durable-protocol goals, and
+missing production capabilities rule out replacing main. Preserve these concrete
+findings; do not treat positive fixture timings as a migration mandate.
