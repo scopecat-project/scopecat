@@ -87,6 +87,7 @@ _MEASUREMENT_TRANSPORT_VALUE_BYTE_LIMIT = 8 * 1024 * 1024
 _MEASUREMENT_TRANSPORT_LATENCY_SECONDS = 0.1
 _COVERAGE_TRANSPORT_POINT_LIMIT = 256
 _COVERAGE_TRANSPORT_LATENCY_SECONDS = 0.1
+_DATASET_COVERAGE_LATENCY_SECONDS = 0.25
 _DOMAIN_TRANSITION_TRANSPORT_ITEM_LIMIT = 64
 _RECOVERY_GROUP_TRANSPORT_ITEM_LIMIT = 256
 
@@ -372,20 +373,24 @@ class _DaemonRunCoverage:
             raise ValueError("coverage advances must be contiguous")
         self._pending_count += point_count
         now = monotonic()
+        interval = (
+            _DATASET_COVERAGE_LATENCY_SECONDS
+            if self._measurements.has_dataset
+            else _COVERAGE_TRANSPORT_LATENCY_SECONDS
+        )
         if (
             self._last_send_at is None
             or self._pending_count >= _COVERAGE_TRANSPORT_POINT_LIMIT
-            or (
-                not self._measurements.has_dataset
-                and now - self._last_send_at >= _COVERAGE_TRANSPORT_LATENCY_SECONDS
-            )
+            or now - self._last_send_at >= interval
         ):
-            self._send_pending(now=now)
+            # Only completed execution checkpoints publish the durable slice.
+            # This elapsed check cannot bound a later blocking hardware call.
+            self._send_pending()
 
     def flush(self) -> None:
         self._send_pending()
 
-    def _send_pending(self, *, now: float | None = None) -> None:
+    def _send_pending(self) -> None:
         start_index = self._pending_start
         point_count = self._pending_count
         if start_index is None:
@@ -409,7 +414,8 @@ class _DaemonRunCoverage:
             raise ValueError("run coverage receipt did not commit the requested prefix")
         self._pending_start = None
         self._pending_count = 0
-        self._last_send_at = monotonic() if now is None else now
+        # Slow writes/RPCs must not consume the next batching interval.
+        self._last_send_at = monotonic()
 
 
 class _DaemonRunRecoveryGroups:

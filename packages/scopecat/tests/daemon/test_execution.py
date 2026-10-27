@@ -893,9 +893,11 @@ def _outcome() -> RunOutcome:
 
 
 @pytest.mark.parametrize("has_dataset", [True, False])
-def test_slow_rpc_clock_does_not_force_per_point_measurement_checkpoints(
+@pytest.mark.parametrize("point_delay", [0.0, 0.3])
+def test_elapsed_checkpoints_preserve_batching_and_flush_before_coverage(
     monkeypatch: pytest.MonkeyPatch,
     has_dataset: bool,
+    point_delay: float,
 ) -> None:
     import scopecat.daemon.execution as execution
 
@@ -923,6 +925,8 @@ def test_slow_rpc_clock_does_not_force_per_point_measurement_checkpoints(
             )
         assert request.url.path.endswith("/coverage/advance")
         command = RunCoverageAdvanceCommand.model_validate_json(request.content)
+        if has_dataset:
+            assert flushes == len(ranges) + 1
         ranges.append((command.start_index, command.point_count))
         return _model(
             RunCoverageState(
@@ -947,23 +951,17 @@ def test_slow_rpc_clock_does_not_force_per_point_measurement_checkpoints(
             measurements,
             execution._DaemonRunRecoveryGroups(authority),
         )
-        for point in range(33):
-            now += 1.0
+        for point in range(257):
+            now += point_delay
             coverage.advance(start_index=point, point_count=1)
-        if has_dataset:
-            assert ranges == [(0, 1)]
-            assert flushes == 1
+        if point_delay:
+            assert ranges == [(point, 1) for point in range(257)]
         else:
-            assert ranges == [(point, 1) for point in range(33)]
-            assert flushes == 0
-        for point in range(33, 257):
-            now += 1.0
-            coverage.advance(start_index=point, point_count=1)
-        if has_dataset:
             assert ranges == [(0, 1), (1, 256)]
-            assert flushes == 2
+        assert flushes == (len(ranges) if has_dataset else 0)
+        # A final below-interval point is retained until the explicit tail flush.
         coverage.advance(start_index=257, point_count=1)
+        assert ranges[-1] != (257, 1)
         coverage.flush()
-        if has_dataset:
-            assert ranges == [(0, 1), (1, 256), (257, 1)]
-            assert flushes == 3
+        assert ranges[-1] == (257, 1)
+        assert flushes == (len(ranges) if has_dataset else 0)

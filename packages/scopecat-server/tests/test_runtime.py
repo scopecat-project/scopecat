@@ -487,11 +487,8 @@ def test_lease_supervisor_health_recovers_after_one_failed_iteration(
 
 
 def test_lease_supervisor_releases_unflushed_live_measurements(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    import scopecat_server.services.active_measurements as active_measurements
-
-    monkeypatch.setattr(active_measurements, "monotonic", lambda: 0.0)
     with LocalDaemonRuntime(
         tmp_path,
         bootstrap_config=_config(),
@@ -4012,15 +4009,10 @@ def test_continuation_appends_measurements_in_a_new_segment_fragment(
                 assert failure["reasons"] == ["missing"]
 
 
-@pytest.mark.parametrize("publication", ["pending", "explicit", "elapsed"])
+@pytest.mark.parametrize("durable", [False, True])
 def test_measurement_acknowledgment_loss_and_replay_boundaries(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, publication: str
+    tmp_path: Path, durable: bool
 ) -> None:
-    import scopecat_server.services.active_measurements as active_measurements
-
-    now = 0.0
-    monkeypatch.setattr(active_measurements, "monotonic", lambda: now)
-    durable = publication != "pending"
     with ExitStack() as stack:
         runtime = stack.enter_context(
             LocalDaemonRuntime(
@@ -4090,20 +4082,11 @@ def test_measurement_acknowledgment_loss_and_replay_boundaries(
             return encode_measurement_append(append, header.dataset_schema)
 
         first = content(0)
-        if publication == "elapsed":
-            now = 0.11
         receipt = executor.ingest_measurements(
             run_id, lease_id=lease.lease_id, content=first
         )
         assert receipt.received_record_count == 1
-        assert receipt.durable_record_count == int(publication == "elapsed")
-        assert len(
-            runtime.application.runs.measurement_preview(run_id, limit=10).items
-        ) == int(publication == "elapsed")
-        assert sum(
-            event.kind == "measurements_appended"
-            for event in _events(runtime, run_id=run_id).items
-        ) == int(publication == "elapsed")
+        assert receipt.durable_record_count == 0
         # Simulate a lost acknowledgment by retransmitting exactly the same bytes.
         with pytest.raises(BackendConflict, match="acquisition-log"):
             executor.ingest_measurements(run_id, lease_id=lease.lease_id, content=first)

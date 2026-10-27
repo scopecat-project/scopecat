@@ -17,7 +17,6 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetHeader,
 )
 
-import scopecat_server.services.active_measurements as active_measurements
 from scopecat_server.services.active_measurements import (
     ActiveMeasurementConflict,
     ActiveMeasurementStore,
@@ -57,34 +56,6 @@ def test_active_measurements_bound_large_waveforms_by_array_bytes() -> None:
     assert chunk == (records[0],)
     store.commit_chunk("run-1", chunk)
     assert store.next_chunk("run-1", force=False) == (records[1],)
-
-
-@pytest.mark.parametrize("waveform", [False, True])
-def test_elapsed_flush_keeps_durable_prefix_until_commit(
-    monkeypatch: pytest.MonkeyPatch, waveform: bool
-) -> None:
-    now = 0.0
-    monkeypatch.setattr(active_measurements, "monotonic", lambda: now)
-    store = ActiveMeasurementStore()
-    header = _header(point_count=4)
-    store.initialize(header, segment_id="segment-1", acquisition_start=0)
-    records = tuple(_record(index, waveform=waveform) for index in range(4))
-    store.ingest(_append(header, records[:3]))
-    assert store.next_chunk("run-1", force=False) == ()
-    now = 0.11
-    # Reading after the interval does not write or advance durable coverage.
-    assert store.preview("run-1").durable_record_count == 0
-    chunk = store.next_chunk("run-1", force=False)
-    assert chunk == records[:3]
-    assert store.preview("run-1").durable_record_count == 0
-    assert store.next_chunk("run-1", force=False) == chunk
-    # A slow successful transaction starts a fresh batching interval.
-    now = 1.0
-    store.commit_chunk("run-1", chunk)
-    store.ingest(_append(header, records[3:]))
-    assert store.preview("run-1").durable_record_count == 3
-    assert store.next_chunk("run-1", force=False) == ()
-    assert store.next_chunk("run-1", force=True) == records[3:]
 
 
 def test_active_measurements_reject_nonsequential_acquisition_ingest() -> None:
