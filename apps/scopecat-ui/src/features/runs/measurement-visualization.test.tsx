@@ -1599,7 +1599,7 @@ describe("measurement visualization", () => {
       );
       expect(stringify.mock.calls.some(([value]) => value === items)).toBe(true);
       expect(JSON.parse(screen.getByTestId("measurement-preview").textContent)).toEqual(items);
-      fireEvent.click(screen.getByRole("button", { name: "聚焦曲线", exact: true }));
+      fireEvent.click(screen.getByRole("button", { name: "聚焦曲线" }));
       expect(screen.queryByTestId("measurement-table")).not.toBeInTheDocument();
       expect(screen.queryByTestId("measurement-preview")).not.toBeInTheDocument();
       table.mockClear();
@@ -1607,7 +1607,7 @@ describe("measurement visualization", () => {
       view.rerender(viewFor(next));
       expect(table).not.toHaveBeenCalled();
       expect(stringify.mock.calls.some(([value]) => value === next)).toBe(false);
-      fireEvent.click(screen.getByRole("button", { name: "退出聚焦，查看 run 详情", exact: true }));
+      fireEvent.click(screen.getByRole("button", { name: "退出聚焦，查看 run 详情" }));
       await screen.findByTestId("measurement-table");
       expect(table).toHaveBeenLastCalledWith(next, schema, {});
       expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
