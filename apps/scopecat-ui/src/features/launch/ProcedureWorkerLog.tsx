@@ -21,10 +21,10 @@ export function ProcedureWorkerLog({ procedureId }: { procedureId: string }) {
   const data = log.isError ? undefined : log.data;
   return (
     <details className="space-y-2" onToggle={(event) => setExpanded(event.currentTarget.open)}>
-      <summary>Recent worker output</summary>
+      <summary>最近的 Worker 输出</summary>
       {expanded && (
         <>
-          <p>This execution's process output; it does not establish the measurement outcome.</p>
+          <p>本次执行的进程输出，不作为测量结果的判定。</p>
           <Controls.Button
             type="button"
             disabled={log.isFetching}
@@ -32,31 +32,29 @@ export function ProcedureWorkerLog({ procedureId }: { procedureId: string }) {
               void log.refetch();
             }}
           >
-            Refresh worker output
+            刷新 Worker 输出
           </Controls.Button>
-          {log.isFetching && <p role="status">Reading worker output…</p>}
+          {log.isFetching && <p role="status">正在读取 Worker 输出…</p>}
           {log.error && <p role="alert">{log.error.message}</p>}
           {data && (
             <>
               {!data.available ? (
-                <p>No worker log has been created for this execution.</p>
+                <p>本次执行尚未创建 Worker 日志。</p>
               ) : (
                 <>
                   <p>
                     {data.truncated
-                      ? "Showing only the latest 16 KiB; earlier output is omitted."
-                      : "Showing all output read."}{" "}
-                    File size at read: {data.total_bytes} bytes.
+                      ? "仅显示最后 16 KiB，已省略更早的输出。"
+                      : "显示本次读取的全部输出。"}{" "}
+                    读取时文件大小： {data.total_bytes} 字节。
                   </p>
-                  <p>
-                    Refresh to read new output. Use the displayed log path for the complete file.
-                  </p>
+                  <p>刷新可读取新输出。完整文件请查看所显示的日志路径。</p>
                   {data.text ? (
                     <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border p-3 text-xs">
                       {data.text}
                     </pre>
                   ) : (
-                    <p>The worker log is empty.</p>
+                    <p>Worker 日志为空。</p>
                   )}
                 </>
               )}

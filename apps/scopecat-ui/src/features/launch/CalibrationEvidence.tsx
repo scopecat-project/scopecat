@@ -1,3 +1,4 @@
+import { calibrationStatusLabel, calibrationReasonLabel } from "./calibration-labels";
 import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
@@ -8,30 +9,6 @@ import { CalibrationAssessments } from "./CalibrationAssessments";
 type TaskView = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-tasks/{task_id}">;
 type Stage = TaskView["task"]["specification"]["plan"]["stages"][number];
 type Report = MethodResponse<typeof apiClient, "post", "/api/v1/calibration-checks/report">;
-
-const statuses = {
-  usable: "Usable evidence",
-  out_of_spec: "Out of specification",
-  recheck: "New check needed",
-  unknown: "Unknown",
-};
-const reasons: Record<string, string> = {
-  latest_matching: "Selected the latest matching measurement.",
-  no_matching_evidence: "No check matches this exact scope and measurement context.",
-  ambiguous_latest: "Equally recent evidence has conflicting authority; inspect the records.",
-  incomplete_history: "The inspected history cannot establish a result.",
-  scan_limit:
-    "More checks exist than the history limit allows. Increase the limit to inspect more.",
-  unresolved_checks: "Some checks have no resolved evidence. Inspect their executions below.",
-  check_expired: "The measurement is older than the requested maximum age.",
-  within_spec: "The selected check passed its scientific criterion.",
-  out_of_spec: "The selected check did not meet its scientific criterion.",
-  analysis_missing: "The scientific result is missing.",
-  measurement_incomplete: "The measurement did not complete successfully.",
-  evidence_from_future: "The measurement time is in the future; check clock consistency.",
-  parameters_unsaved: "The measurement does not use an exact saved parameter revision.",
-  subject_unbound: "A physical measurement subject is not bound.",
-};
 
 type EvidenceProps = {
   stage: Stage;
@@ -98,10 +75,9 @@ function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
   const evidence = result?.selection.evidence;
   return (
     <details className="space-y-2">
-      <summary>Inspect applicable evidence for {stage.id}</summary>
+      <summary>检查适用证据： {stage.id}</summary>
       <p>
-        Uses this stage's frozen parameters, subject, setup and scope, across retained tasks. This
-        does not assess the current branch head or overall sample readiness.
+        使用此阶段固定的参数、对象、配置与范围，跨已保留任务读取证据。不评估当前分支头或样品整体就绪状态。
       </p>
       <form
         onSubmit={(event) => {
@@ -111,7 +87,7 @@ function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
       >
         <fieldset disabled={pending} className="flex flex-wrap gap-3 items-end">
           <Controls.Field>
-            Maximum evidence age (hours)
+            证据最大有效时长（小时）
             <Controls.Input
               className="block"
               type="number"
@@ -126,7 +102,7 @@ function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
             />
           </Controls.Field>
           <Controls.Field>
-            History limit
+            历史检查上限
             <Controls.Input
               className="block"
               type="number"
@@ -143,18 +119,18 @@ function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
             />
           </Controls.Field>
           <Controls.Button type="submit" disabled={!valid || pending}>
-            Check evidence for {stage.id}
+            检查证据： {stage.id}
           </Controls.Button>
         </fieldset>
       </form>
-      {pending && <p role="status">Reading retained evidence…</p>}
+      {pending && <p role="status">正在读取已保留证据…</p>}
       {error && <p role="alert">{error}</p>}
       {report && result && (
-        <section aria-label={`Evidence report for ${stage.id}`} className="space-y-1">
-          <p className="font-semibold">{statuses[result.selection.status]}</p>
+        <section aria-label={`证据报告： ${stage.id}`} className="space-y-1">
+          <p className="font-semibold">{calibrationStatusLabel(result.selection.status)}</p>
           <p>
-            Evaluated at {report.observed_at}. Read {result.scanned} checks. Refresh by checking
-            again; this result does not update automatically.
+            评估时间： {report.observed_at}. 已读取 {result.scanned}{" "}
+            条检查。重新检查可刷新；此结果不会自动更新。
           </p>
           <ul>
             {[
@@ -162,25 +138,25 @@ function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
               ...(result.selection.assessment?.reasons ?? []),
               ...result.incomplete_reasons,
             ].map((reason) => (
-              <li key={reason}>{reasons[reason] ?? reason.replaceAll("_", " ")}</li>
+              <li key={reason}>{calibrationReasonLabel(reason)}</li>
             ))}
           </ul>
           <CalibrationAssessments assessments={result.assessments} />
           {evidence && (
             <>
-              <p>Measurement created at {evidence.measurement.created_at}.</p>
+              <p>测量创建时间： {evidence.measurement.created_at}.</p>
               <a
                 className="underline"
                 href={`?run=${encodeURIComponent(evidence.measurement.run_id)}#runs`}
               >
-                Open selected measurement
+                打开所选测量
               </a>
               {evidence.analysis_record_id && (
                 <a
                   className="underline block"
                   href={`?run=${encodeURIComponent(evidence.measurement.run_id)}&run-analysis=${encodeURIComponent(evidence.analysis_record_id)}#runs`}
                 >
-                  Open selected analysis
+                  打开所选分析
                 </a>
               )}
             </>
@@ -192,7 +168,7 @@ function CalibrationEvidenceContext({ stage, onProcedure }: EvidenceProps) {
               key={id}
               onClick={() => onProcedure(id)}
             >
-              Inspect unresolved execution {id}
+              查看未解决的执行： {id}
             </button>
           ))}
         </section>

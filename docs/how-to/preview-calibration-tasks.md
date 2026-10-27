@@ -141,8 +141,8 @@ pause／cancel 阻止新的 finalization 准入，但不能撤销已接纳的 pr
 
 ## Notebook 关闭后继续运行 {#run-without-keeping-a-notebook-open}
 
-工作台 **Calibration tasks** 列出保留计划，可查看各 stage 的检查、目标、固定上下文、依赖和准入错误。
-**Open execution** 打开既有 procedure 视图，查看 worker／资源状态、测量、人工输入和执行取消入口。
+工作台 **校准任务** 列出保留计划，可查看各 stage 的检查、目标、固定上下文、依赖和准入错误。
+**打开执行** 打开既有 procedure 视图，查看 worker／资源状态、测量、人工输入和执行取消入口。
 任务 URL 可收藏，浏览器重启后仍可重开。
 
 start／resume、pause、cancel 需要 operator 和 reason。控制冲突会刷新视图并显示错误，不自动重试动作。
@@ -168,7 +168,7 @@ daemon 轮询 running tasks，每个 task 一次最多接纳一个 stage。既�
 作者 workspace 不可用或 worker 启动失败时，该 execution 暂停，其他 task 仍可到达各自 worker。
 打开 execution 查看保留诊断和精确日志路径，恢复代码 workspace／环境后使用 **继续任务**，重试已接纳的 execution，不创建替代检查。
 
-执行详情的 **Recent worker output** 显示最近 16 KiB，**Refresh worker output** 获取新日志。
+执行详情的 **最近的 Worker 输出** 显示最近 16 KiB，**刷新 Worker 输出** 获取新日志。
 视图标记截断，并区分日志不存在与日志为空；完整日志使用显示的路径查看。日志按纯文本显示，与保留测量和 procedure outcome 分开。
 
 ```python

@@ -93,9 +93,9 @@ it("shows budget stop and retains the initial check link", async () => {
     ),
   );
   const onProcedure = mount();
-  expect(await screen.findByText(/Admission stopped: repair budget exhausted/)).toBeInTheDocument();
-  expect(screen.getByText(/One repair per stage/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Open execution for q0" }));
+  expect(await screen.findByText(/已停止接纳： 修复预算已用尽/)).toBeInTheDocument();
+  expect(screen.getByText(/每个阶段最多修复一次/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "打开执行： q0" }));
   expect(onProcedure).toHaveBeenCalledWith("initial-check");
 });
 
@@ -117,8 +117,8 @@ it("does not show a frozen parameter context before a candidate output is bound"
     ),
   );
   mount();
-  expect(await screen.findByText(/Parameter input is not bound yet/)).toBeInTheDocument();
-  expect(screen.queryByText("Frozen measurement context")).not.toBeInTheDocument();
+  expect(await screen.findByText(/参数输入尚未绑定/)).toBeInTheDocument();
+  expect(screen.queryByText("固定测量上下文")).not.toBeInTheDocument();
 });
 
 it("separates passed checks from finalization admission and allows retry", async () => {
@@ -144,13 +144,11 @@ it("separates passed checks from finalization admission and allows retry", async
     ),
   );
   mount();
-  expect(
-    await screen.findByText(/Finalization admission stopped: setup changed/),
-  ).toBeInTheDocument();
-  expect(screen.getByText(/Check success alone does not verify/)).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Task operator"), { target: { value: "Alice" } });
-  fireEvent.change(screen.getByLabelText("Task control reason"), { target: { value: "retry" } });
-  expect(screen.getByRole("button", { name: "Resume / retry admission" })).toBeEnabled();
+  expect(await screen.findByText(/最终处理已停止接纳： setup changed/)).toBeInTheDocument();
+  expect(screen.getByText(/检查通过本身并不验证/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("任务操作者"), { target: { value: "Alice" } });
+  fireEvent.change(screen.getByLabelText("任务控制原因"), { target: { value: "retry" } });
+  expect(screen.getByRole("button", { name: "恢复 / 重试接纳" })).toBeEnabled();
 });
 
 it("reopens a task, shows admission failure, and fences a control with the observed revision", async () => {
@@ -177,12 +175,12 @@ it("reopens a task, shows admission failure, and fences a control with the obser
     }),
   );
   mount();
-  expect(await screen.findByText(/Admission stopped: setup changed/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Pause task" })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Task operator"), { target: { value: "Alice" } });
-  fireEvent.change(screen.getByLabelText("Task control reason"), { target: { value: "inspect" } });
-  fireEvent.click(screen.getByRole("button", { name: "Pause task" }));
-  await screen.findByText(/Advancement: paused/);
+  expect(await screen.findByText(/已停止接纳： setup changed/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "暂停任务" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("任务操作者"), { target: { value: "Alice" } });
+  fireEvent.change(screen.getByLabelText("任务控制原因"), { target: { value: "inspect" } });
+  fireEvent.click(screen.getByRole("button", { name: "暂停任务" }));
+  await screen.findByText(/推进状态： 已暂停/);
   expect(commands).toEqual([
     {
       task_id: "round/1",
@@ -192,7 +190,7 @@ it("reopens a task, shows admission failure, and fences a control with the obser
       reason: "inspect",
     },
   ]);
-  expect(screen.getByText(/Already admitted measurements may continue/)).toBeInTheDocument();
+  expect(screen.getByText(/已接纳的测量可能继续/)).toBeInTheDocument();
 });
 
 it("refreshes a stale control without retrying it and opens the retained execution", async () => {
@@ -217,14 +215,14 @@ it("refreshes a stale control without retrying it and opens the retained executi
     }),
   );
   const open = mount();
-  fireEvent.click(await screen.findByRole("button", { name: "Open execution for q0" }));
+  fireEvent.click(await screen.findByRole("button", { name: "打开执行： q0" }));
   expect(open).toHaveBeenCalledWith("p1");
-  fireEvent.change(screen.getByLabelText("Task operator"), { target: { value: "Alice" } });
-  fireEvent.change(screen.getByLabelText("Task control reason"), { target: { value: "inspect" } });
-  fireEvent.click(screen.getByRole("button", { name: "Pause task" }));
+  fireEvent.change(screen.getByLabelText("任务操作者"), { target: { value: "Alice" } });
+  fireEvent.change(screen.getByLabelText("任务控制原因"), { target: { value: "inspect" } });
+  fireEvent.click(screen.getByRole("button", { name: "暂停任务" }));
   await screen.findByText("task control revision changed");
-  await screen.findByText(/Advancement: cancelled/);
-  expect(screen.queryByRole("button", { name: "Pause task" })).not.toBeInTheDocument();
+  await screen.findByText(/推进状态： 已取消/);
+  expect(screen.queryByRole("button", { name: "暂停任务" })).not.toBeInTheDocument();
   expect(controls).toHaveBeenCalledTimes(1);
 });
 
@@ -248,11 +246,11 @@ it("loads history only when expanded and paginates retained tasks", async () => 
   vi.stubGlobal("fetch", fetcher);
   mount();
   expect(fetcher).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText("Calibration tasks"));
-  fireEvent.click(await screen.findByRole("button", { name: "Load earlier tasks" }));
+  fireEvent.click(screen.getByText("校准任务"));
+  fireEvent.click(await screen.findByRole("button", { name: "加载更早的任务" }));
   await screen.findByRole("button", { name: /older/ });
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Load earlier tasks" })).not.toBeInTheDocument(),
+    expect(screen.queryByRole("button", { name: "加载更早的任务" })).not.toBeInTheDocument(),
   );
 });
 
@@ -274,12 +272,12 @@ it("carries the selected course workspace through task history and controls", as
     }),
   );
   mount(undefined, "course-source");
-  await screen.findByRole("button", { name: "Cancel remaining stages" });
-  fireEvent.change(screen.getByLabelText("Task operator"), { target: { value: "tester" } });
-  fireEvent.change(screen.getByLabelText("Task control reason"), {
+  await screen.findByRole("button", { name: "取消剩余阶段" });
+  fireEvent.change(screen.getByLabelText("任务操作者"), { target: { value: "tester" } });
+  fireEvent.change(screen.getByLabelText("任务控制原因"), {
     target: { value: "finish course" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Cancel remaining stages" }));
+  fireEvent.click(screen.getByRole("button", { name: "取消剩余阶段" }));
   await waitFor(() => expect(seen.some((item) => item.method === "POST")).toBe(true));
   expect(seen.every((item) => item.workspace === "course-source")).toBe(true);
 });
