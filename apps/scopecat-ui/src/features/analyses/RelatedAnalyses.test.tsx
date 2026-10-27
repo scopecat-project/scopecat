@@ -125,8 +125,8 @@ it("isolates the same run, publication and source references across data spaces 
   );
   const mounted = render(view());
   await screen.findByText("Collection a #7 · Experiment a");
-  fireEvent.click(screen.getByRole("button", { name: "加载更早 analysis" }));
-  await screen.findByText("Sample Chip a");
+  fireEvent.click(screen.getByRole("button", { name: "加载更早的分析结果" }));
+  await screen.findByText("样品 Chip a");
   expect(screen.getAllByText("a run result")).toHaveLength(1);
   const open = async (title: string) => {
     const row = screen.getByText(title).closest("details")!;
@@ -146,8 +146,8 @@ it("isolates the same run, publication and source references across data spaces 
   expect(screen.queryByText("Detail a")).not.toBeInTheDocument();
   expect(screen.queryByText("a sample result")).not.toBeInTheDocument();
   expect(screen.getByText("b run result").closest("details")).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByRole("button", { name: "加载更早 analysis" }));
-  await screen.findByText("Sample Chip b");
+  fireEvent.click(screen.getByRole("button", { name: "加载更早的分析结果" }));
+  await screen.findByText("样品 Chip b");
   await open("b run result");
   expect(screen.getByText("来源与执行证据").closest("details")).not.toHaveAttribute("open");
   await waitFor(() => expect(getRunAnalysis).toHaveBeenCalledTimes(2));
@@ -191,17 +191,17 @@ it("keeps an exact off-page publication once when its list page arrives", async 
     </QueryClientProvider>,
   );
   await screen.findByTestId("publication-id");
-  fireEvent.click(await screen.findByRole("button", { name: "加载更早 analysis" }));
+  fireEvent.click(await screen.findByRole("button", { name: "加载更早的分析结果" }));
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "加载更早 analysis" })).not.toBeInTheDocument(),
+    expect(screen.queryByRole("button", { name: "加载更早的分析结果" })).not.toBeInTheDocument(),
   );
   expect(screen.getAllByTestId("publication-id")).toHaveLength(1);
   expect(screen.getByTestId("publication-id")).toHaveTextContent("exact");
-  expect(screen.getByRole("link", { name: "Open saved version" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "打开已保存的版本" })).toHaveAttribute(
     "href",
     "?run=owner&run-analysis=exact#runs",
   );
-  expect(screen.getByText("None declared")).toBeVisible();
+  expect(screen.getByText("未声明")).toBeVisible();
 });
 
 it("ignores an old-space list response arriving after a switch", async () => {
@@ -320,7 +320,7 @@ it("saves source open and close before any scroll timer or return navigation", a
     </QueryClientProvider>
   );
   const mounted = render(view());
-  await screen.findByText("Exact · revision 1");
+  await screen.findByText("Exact · 修订 1");
   const sources = screen.getByText("来源与执行证据").closest("details")!;
   // Click capture runs before the browser toggles the element.
   fireEvent.click(sources.querySelector("summary")!);

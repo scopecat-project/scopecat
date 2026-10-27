@@ -49,7 +49,17 @@ test("repeats a retained ordinary analysis with its original source after author
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -130,7 +140,7 @@ test("repeats a retained ordinary analysis with its original source after author
     const sources = page.getByText("来源与执行证据", { exact: true }).first();
     await expect(sources.locator("..")).not.toHaveAttribute("open");
     await sources.click();
-    await expect(page.getByRole("heading", { name: "Inputs", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "输入", exact: true }).first()).toBeVisible();
     await sources.click();
     await expect(page.getByTestId("publication-id").first()).toHaveText(seed.first);
     await page
@@ -138,15 +148,15 @@ test("repeats a retained ordinary analysis with its original source after author
       .first()
       .locator("xpath=ancestor::section[1]")
       .screenshot({ path: testInfo.outputPath("analysis-results.png") });
-    const action = page.getByRole("region", { name: "Repeat saved analysis" });
-    await expect(action.getByRole("button", { name: "Repeat with saved settings" })).toBeVisible();
+    const action = page.getByRole("region", { name: "重新执行已保存的分析" });
+    await expect(action.getByRole("button", { name: "按已保存设置重新分析" })).toBeVisible();
     expect(posts).toBe(0);
     const pendingResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/author-revisions/analyze") &&
         response.request().method() === "POST",
     );
-    await action.getByRole("button", { name: "Repeat with saved settings" }).click();
+    await action.getByRole("button", { name: "按已保存设置重新分析" }).click();
     const result = await pendingResponse;
     expect(result.status(), await result.text()).toBe(200);
     expect(result.request().postDataJSON()).toMatchObject({
@@ -155,7 +165,7 @@ test("repeats a retained ordinary analysis with its original source after author
       arguments: {},
     });
     const receipt = await result.json();
-    await expect(action.getByRole("link", { name: "View saved result" })).toHaveAttribute(
+    await expect(action.getByRole("link", { name: "查看已保存的结果" })).toHaveAttribute(
       "href",
       `?run=${encodeURIComponent(seed.run)}&run-analysis=${encodeURIComponent(receipt.analysis_id)}#runs`,
     );
@@ -177,12 +187,10 @@ test("repeats a retained ordinary analysis with its original source after author
       publication.outputs.find((output: { id: string }) => output.id === "author_code_revision")
         .content.value,
     ).toBe(seed.source);
-    await action.getByRole("link", { name: "View saved result" }).click();
+    await action.getByRole("link", { name: "查看已保存的结果" }).click();
     await expect(page.getByTestId("publication-id").first()).toHaveText(receipt.analysis_id);
     await page.reload();
-    await expect(
-      page.getByRole("button", { name: "Repeat with saved settings" }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "按已保存设置重新分析" }).first()).toBeVisible();
     expect(posts).toBe(1);
     const runs = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
     expect((await runs.json()).items).toHaveLength(1);
@@ -195,7 +203,7 @@ test("repeats a retained ordinary analysis with its original source after author
     ).toBe(200);
     passed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (passed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved repeat project", {
