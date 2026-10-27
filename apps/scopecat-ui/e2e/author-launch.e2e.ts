@@ -64,12 +64,45 @@ test("discovers an ordinary author experiment and edits controls before submitti
       contentType: "image/png",
     });
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const source = page.getByLabel("Frequency 取值来源");
+      await source.selectOption("fixed");
+      const value = page.getByLabel("Frequency", { exact: true });
+      await value.fill("4.9wat");
+      await value.press("Tab");
+      await expect(value).toHaveValue("4.9wat");
+      await expect(page.getByRole("alert").filter({ hasText: "未知或不兼容的单位" })).toBeVisible();
+      await value.fill("4900MHz");
+      await value.press("Tab");
+      await expect(value).toHaveValue("4.9");
+      await page.getByLabel("Frequency 单位").selectOption("MHz");
+      await expect(value).toHaveValue("4900");
+      await source.selectOption("default");
+      await expect(page.getByText("4.8 GHz · 声明默认值", { exact: true })).toBeVisible();
+      await source.selectOption("values");
+      const values = page.getByLabel("Frequency 扫描列表");
+      await values.fill("4700MHz,4900MHz");
+      await values.press("Tab");
+      await expect(values).toHaveValue("4.7,4.9");
+      await source.selectOption("range");
+      await expect(page.getByLabel("Frequency 起点")).toHaveValue("4.8");
+      await expect(page.getByLabel("Frequency 终点")).toHaveValue("");
+      await page.getByLabel("Frequency 终点").fill("4.9");
+      expect(
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: testInfo.outputPath(`control-inputs-${width}.png`),
+        fullPage: true,
+      });
+    }
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Polarity", { exact: true }).selectOption("negative");
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency start").fill("4.7");
-    await page.getByLabel("Frequency stop").fill("4.9");
-    await page.getByLabel("Frequency points").fill("3");
+    await page.getByLabel("Frequency 取值来源").selectOption("range");
+    await page.getByLabel("Frequency 起点").fill("4.7");
+    await page.getByLabel("Frequency 终点").fill("4.9");
+    await page.getByLabel("Frequency 点数").fill("3");
     const previewResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/experiment-launcher/preview") &&
@@ -93,6 +126,18 @@ test("discovers an ordinary author experiment and edits controls before submitti
       body: await page.screenshot(),
       contentType: "image/png",
     });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole("heading", { name: "已解析控制项", exact: true })).toBeVisible();
+      expect(
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: testInfo.outputPath(`control-summary-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
     const sourcePath = join(project, "src/ui_author/signal.py");
     const originalSource = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
@@ -104,7 +149,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await expect(page.getByLabel("Frequency points")).toHaveValue("3");
+    await expect(page.getByLabel("Frequency 点数")).toHaveValue("3");
     await reviewRetainedExperiment(page);
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     const nextPreviewResponse = page.waitForResponse(
@@ -203,10 +248,10 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
     await page.getByLabel("Gain", { exact: true }).fill("2");
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency start").fill("4.7");
-    await page.getByLabel("Frequency stop").fill("4.9");
-    await page.getByLabel("Frequency points").fill("3");
+    await page.getByLabel("Frequency 取值来源").selectOption("range");
+    await page.getByLabel("Frequency 起点").fill("4.7");
+    await page.getByLabel("Frequency 终点").fill("4.9");
+    await page.getByLabel("Frequency 点数").fill("3");
     const preview = async () => {
       const response = page.waitForResponse(
         (r) => r.url().endsWith("/experiment-launcher/preview") && r.request().method() === "POST",

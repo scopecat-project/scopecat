@@ -61,15 +61,15 @@ test("saves, reopens, copies and submits an immutable plan without activating co
       return await result.json();
     }
     const frequency = page.getByLabel("Frequency", { exact: true });
-    await page.getByLabel("Frequency unit").selectOption("MHz");
+    await page.getByLabel("Frequency 单位").selectOption("MHz");
     await frequency.fill("4.9G");
     await expect(frequency).toHaveValue("4.9G");
     await frequency.blur();
     await expect(frequency).toHaveValue("4900");
     await frequency.fill("4.9wat");
-    await page.getByLabel("Frequency unit").selectOption("GHz");
+    await page.getByLabel("Frequency 单位").selectOption("GHz");
     await expect(frequency).toHaveValue("4.9wat");
-    await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
+    await expect(page.getByLabel("Frequency 单位")).toHaveValue("MHz");
     await expect(page.getByRole("alert").filter({ hasText: "未知或不兼容的单位" })).toBeVisible();
     await page
       .getByRole("group", { name: "Controls", exact: true })
@@ -101,7 +101,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await page.getByRole("button", { name: "Open Signal baseline r1", exact: true }).click();
     await expect(page.getByLabel("计划名称")).toHaveValue("Signal baseline");
     await expect(frequency).toHaveValue("4900");
-    await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
+    await expect(page.getByLabel("Frequency 单位")).toHaveValue("MHz");
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "操作人", exact: true }).fill("bob");

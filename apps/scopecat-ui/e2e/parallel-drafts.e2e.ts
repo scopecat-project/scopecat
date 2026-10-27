@@ -137,10 +137,10 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await chooseAuthorContext(page);
     await nameDraft(page, "A");
     await page.getByLabel("Gain", { exact: true }).fill("1");
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency start").fill("4.8");
-    await page.getByLabel("Frequency stop").fill("4.9");
-    await page.getByLabel("Frequency points").fill("2");
+    await page.getByLabel("Frequency 取值来源").selectOption("range");
+    await page.getByLabel("Frequency 起点").fill("4.8");
+    await page.getByLabel("Frequency 终点").fill("4.9");
+    await page.getByLabel("Frequency 点数").fill("2");
     await saved(page);
     await expect(
       page.getByText("作者代码已刷新。", {
@@ -150,7 +150,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await captureWorkbench("editor-before-start");
     await page.screenshot({ path: testInfo.outputPath("editor-ready-full.png"), fullPage: true });
     await expect(page.getByLabel("Gain", { exact: true })).toBeInViewport();
-    await expect(page.getByLabel("Frequency start", { exact: true })).toBeInViewport();
+    await expect(page.getByLabel("Frequency 起点", { exact: true })).toBeInViewport();
     await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const current = page.getByRole("link", { name: /查看当前结果:/ });
     await expect(current).toBeVisible();

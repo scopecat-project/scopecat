@@ -83,17 +83,15 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page.getByRole("button", { name: "打开工作参数表", exact: true }).click();
     await page.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
     await page.getByLabel("实验配置", { exact: true }).selectOption("loop-bench");
-    await page.getByLabel("Position source", { exact: true }).selectOption("values");
-    await page.getByLabel("Position scan values", { exact: true }).fill("-1, nope, 1");
+    await page.getByLabel("Position 取值来源", { exact: true }).selectOption("values");
+    await page.getByLabel("Position 扫描列表", { exact: true }).fill("-1, nope, 1");
     await page.getByLabel("Center", { exact: true }).fill("-");
     const saved = (target = page) =>
       expect(target.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
     await saved();
     url = restart();
     await page.goto(`${url}/?workspace=${prepared.workspace}#launch`);
-    await expect(page.getByLabel("Position scan values", { exact: true })).toHaveValue(
-      "-1, nope, 1",
-    );
+    await expect(page.getByLabel("Position 扫描列表", { exact: true })).toHaveValue("-1, nope, 1");
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("-");
     await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
       "Recovery tester",
@@ -131,11 +129,9 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByLabel("Position scan values", { exact: true })).toHaveValue(
-      "-1, nope, 1",
-    );
+    await expect(page.getByLabel("Position 扫描列表", { exact: true })).toHaveValue("-1, nope, 1");
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("0.25");
-    await page.getByLabel("Position scan values", { exact: true }).fill("-1, 0, 1");
+    await page.getByLabel("Position 扫描列表", { exact: true }).fill("-1, 0, 1");
     await page.getByLabel("Center", { exact: true }).fill("0");
     await page.getByRole("button", { name: "确认已核实输入", exact: true }).click();
     await saved();

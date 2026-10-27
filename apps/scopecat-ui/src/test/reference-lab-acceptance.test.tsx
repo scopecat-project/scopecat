@@ -5,7 +5,7 @@ import { serviceWorkspaceCatalog } from "./scientific-fixtures";
 import "@testing-library/jest-dom/vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlannedSettings } from "../features/launch/PlannedSettings";
@@ -183,32 +183,38 @@ describe("shared reference-lab acceptance", () => {
     fireEvent.change(await screen.findByLabelText("实验类型"), {
       target: { value: "ui_signal.signal" },
     });
-    expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("signal[signal]");
-    fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
+    expect(screen.getByText(/由配置提供/)).toHaveTextContent("signal[signal]");
+    fireEvent.change(screen.getByLabelText("Frequency 单位"), { target: { value: "MHz" } });
     fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4900" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "预览" }));
-    await screen.findByText("Resolved controls");
-    expect(screen.getAllByText("fixed")).toHaveLength(2);
-    expect(screen.getByText("configuration")).toBeVisible();
-    expect(screen.getByText("derived")).toBeVisible();
+    await screen.findByText("已解析控制项");
+    expect(
+      within(screen.getByText("已解析控制项").closest("section")!).getAllByText("固定值"),
+    ).toHaveLength(2);
+    expect(
+      within(screen.getByText("已解析控制项").closest("section")!).getByText("由配置提供"),
+    ).toBeVisible();
+    expect(
+      within(screen.getByText("已解析控制项").closest("section")!).getByText("派生值"),
+    ).toBeVisible();
     expect(requests[0]?.control_edits).toMatchObject({
       frequency: { mode: "fixed", value: { value: 4900, unit: "MHz" } },
     });
-    fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
-    expect(screen.queryByText("Resolved controls")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Frequency 取值来源"), { target: { value: "range" } });
+    expect(screen.queryByText("已解析控制项")).toBeNull();
     expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
-    fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4.7" } });
-    fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4.9" } });
-    fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });
-    fireEvent.change(screen.getByLabelText("Amplitude source"), { target: { value: "values" } });
-    fireEvent.change(screen.getByLabelText("Amplitude scan values"), {
+    fireEvent.change(screen.getByLabelText("Frequency 起点"), { target: { value: "4.7" } });
+    fireEvent.change(screen.getByLabelText("Frequency 终点"), { target: { value: "4.9" } });
+    fireEvent.change(screen.getByLabelText("Frequency 点数"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Amplitude 取值来源"), { target: { value: "values" } });
+    fireEvent.change(screen.getByLabelText("Amplitude 扫描列表"), {
       target: { value: "0.05, 0.1" },
     });
     await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "预览" }));
-    await screen.findByText("Resolved controls");
-    expect(screen.getAllByText("scanned")).toHaveLength(2);
+    await screen.findByText("已解析控制项");
+    expect(screen.getAllByText("扫描")).toHaveLength(2);
     const edits = requests[1]?.control_edits;
     expect(edits).toMatchObject({
       frequency: { mode: "scan", axis: { kind: "range", points: 3 } },
