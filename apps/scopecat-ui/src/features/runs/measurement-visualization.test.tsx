@@ -10,7 +10,8 @@ import type {
   MeasurementValue,
 } from "../../api-contract";
 import { EChartRuntime } from "../../ui/EChartRuntime";
-import { MeasurementInteractionBoundary } from "./MeasurementWorkspace";
+import * as visualization from "./measurement-visualization";
+import { MeasurementWorkspace, MeasurementInteractionBoundary } from "./MeasurementWorkspace";
 import { MeasurementDataPreview } from "./MeasurementDataPreview";
 import {
   measurementEntityAxes,
@@ -333,7 +334,7 @@ describe("measurement visualization", () => {
     );
   });
 
-  it("compares entity scalar values by default and filters them with identity chips", () => {
+  it("compares entity scalar values by default and filters them with identity chips", async () => {
     const schema = entityScalarSchema();
     const items = [0, 1, 2].map((point) =>
       record(
@@ -401,7 +402,8 @@ describe("measurement visualization", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getAllByText("1/2 entities · ratio · All available")).toHaveLength(3);
+    fireEvent.click(screen.getByText(/Record table/));
+    expect(await screen.findAllByText("1/2 entities · ratio · All available")).toHaveLength(3);
     expect(
       screen.getByRole("img", { name: "Readout by Qubit: Readout [ratio] by Bias [V]" }),
     ).toHaveAccessibleDescription(/系列：Q1/);
@@ -1511,7 +1513,130 @@ describe("measurement visualization", () => {
     expect(summary).not.toHaveTextContent("当前切片已读取 1");
   });
 
-  it("shows the plot first and opens the bounded record table on demand", () => {
+  it("builds 4096 array rows and raw JSON only while open and visible, using current data", async () => {
+    const schema: MeasurementDatasetSchema = {
+      ...baseSchema(),
+      dimensions: [
+        { id: "point", kind: "point", size: 4096 },
+        { id: "row", kind: "sample", size: 2 },
+        { id: "column", kind: "sample", size: 2 },
+      ],
+      variables: [
+        {
+          id: "image",
+          role: "observable",
+          dtype: "float64",
+          unit: "V",
+          dims: ["point", "row", "column"],
+        },
+      ],
+    };
+    const items = Array.from({ length: 4096 }, (_, index) =>
+      record(
+        index,
+        {},
+        {
+          image: {
+            kind: "array",
+            dtype: "float64",
+            unit: "V",
+            shape: [2, 2],
+            availability: {
+              valid: [
+                [true, false],
+                [true, true],
+              ],
+              unavailable: [{ reason: "overload", flat_indices: [1] }],
+            },
+            values: [
+              [index, 2],
+              [3, 4],
+            ],
+          },
+        },
+      ),
+    );
+    const next = items.map((item) => ({ ...item, logical_point_id: `new-${item.point_index}` }));
+    const table = vi.spyOn(visualization, "measurementTable");
+    const stringify = vi.spyOn(JSON, "stringify");
+    const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
+    const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close");
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(HTMLDialogElement.prototype, "close", {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.dispatchEvent(new Event("close"));
+      },
+    });
+    const viewFor = (records: MeasurementRecord[]) => (
+      <MeasurementWorkspace title="Synthetic">
+        <MeasurementDataPreview
+          preview={{ schema, items: records }}
+          sliceError={null}
+          slicePending={false}
+          fixedAxisIndices={{}}
+          onFixedAxisIndexChange={vi.fn()}
+        />
+      </MeasurementWorkspace>
+    );
+    try {
+      const view = render(viewFor(items));
+      expect(table).not.toHaveBeenCalled();
+      expect(stringify.mock.calls.some(([value]) => value === items)).toBe(false);
+      expect(screen.getByText("Record table · 4096 rows in this view")).toBeVisible();
+      fireEvent.click(screen.getByText(/Record table/));
+      await screen.findByTestId("measurement-table");
+      expect(table).toHaveBeenLastCalledWith(items, schema, {});
+      expect(screen.getByTestId("measurement-table").querySelectorAll("tbody tr")).toHaveLength(
+        4096,
+      );
+      fireEvent.click(screen.getByText("Raw records", { exact: true }));
+      expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
+        '"point_index": 4095',
+      );
+      expect(stringify.mock.calls.some(([value]) => value === items)).toBe(true);
+      expect(JSON.parse(screen.getByTestId("measurement-preview").textContent)).toEqual(items);
+      fireEvent.click(screen.getByRole("button", { name: "聚焦曲线", exact: true }));
+      expect(screen.queryByTestId("measurement-table")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("measurement-preview")).not.toBeInTheDocument();
+      table.mockClear();
+      stringify.mockClear();
+      view.rerender(viewFor(next));
+      expect(table).not.toHaveBeenCalled();
+      expect(stringify.mock.calls.some(([value]) => value === next)).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "退出聚焦，查看 run 详情", exact: true }));
+      await screen.findByTestId("measurement-table");
+      expect(table).toHaveBeenLastCalledWith(next, schema, {});
+      expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
+        '"logical_point_id": "new-4095"',
+      );
+      fireEvent.click(screen.getByText(/Record table/));
+      fireEvent.click(screen.getByText("Raw records", { exact: true }));
+      await waitFor(() =>
+        expect(screen.queryByTestId("measurement-table")).not.toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId("measurement-preview")).not.toBeInTheDocument();
+      table.mockClear();
+      stringify.mockClear();
+      view.rerender(viewFor(items));
+      expect(table).not.toHaveBeenCalled();
+      expect(stringify.mock.calls.some(([value]) => value === items)).toBe(false);
+      fireEvent.click(screen.getByText("Raw records", { exact: true }));
+      expect(await screen.findByTestId("measurement-preview")).not.toHaveTextContent("new-4095");
+    } finally {
+      table.mockRestore();
+      stringify.mockRestore();
+      if (showModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", showModal);
+      else Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
+      if (close) Object.defineProperty(HTMLDialogElement.prototype, "close", close);
+      else Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
+    }
+  });
+
+  it("shows the plot first and opens the bounded record table on demand", async () => {
     const schema = scalarSchema();
     const items = [
       record(0, { bias: scalar(0, "V") }, { signal: scalar(1, "ratio") }),
@@ -1532,14 +1657,14 @@ describe("measurement visualization", () => {
     expect(
       screen.getByRole("img", { name: "Response: Response [ratio] by Bias [V]" }),
     ).toBeVisible();
-    expect(screen.getByRole("table")).not.toBeVisible();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText(/Record table/));
-    expect(screen.getByRole("columnheader", { name: /Bias \[V\]/ })).toBeVisible();
+    expect(await screen.findByRole("columnheader", { name: /Bias \[V\]/ })).toBeVisible();
     expect(screen.getByText(/Raw records/)).toBeVisible();
-    expect(screen.getByTestId("measurement-preview")).not.toBeVisible();
+    expect(screen.queryByTestId("measurement-preview")).not.toBeInTheDocument();
   });
 
-  it("keeps a live daemon receipt visible while the selected slice is not durable", () => {
+  it("keeps a live daemon receipt visible while the selected slice is not durable", async () => {
     const schema = threeDimensionalGridSchema();
     const liveRecord = slicedGridRecords([0])[0]!;
 
@@ -1555,7 +1680,7 @@ describe("measurement visualization", () => {
     );
 
     fireEvent.click(screen.getByText("Raw records", { exact: true }));
-    expect(screen.getByTestId("measurement-preview")).toHaveTextContent('"point_index": 0');
+    expect(await screen.findByTestId("measurement-preview")).toHaveTextContent('"point_index": 0');
   });
 
   it("offers every chart candidate instead of silently truncating observables", () => {
