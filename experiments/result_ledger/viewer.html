@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result ledger · synthetic reader</title>
+<style>
+:root { color-scheme: light; font-family: system-ui,sans-serif; background:#f3f5f8; color:#18283d }
+body { max-width:1160px; margin:32px auto; padding:0 20px } h1 { font-size:28px; margin-bottom:8px }
+.muted { color:#58677a } .banner { background:#fff5d8; border:1px solid #e1c564; padding:12px 16px; border-radius:8px }
+.cards { display:flex; flex-wrap:wrap; gap:12px; margin:22px 0 } .card { background:white; padding:14px 20px; border-radius:10px; min-width:105px }
+.card strong { display:block; font-size:27px } .panel { background:white; padding:22px; border-radius:12px; margin:16px 0; border:1px solid #e1e6ed }
+.controls { display:flex; flex-wrap:wrap; gap:16px; align-items:end } label { display:grid; gap:5px; font-size:13px }
+select,input,button { font:inherit; border:1px solid #aab8c9; border-radius:5px; padding:8px; background:white } input { width:86px }
+button { cursor:pointer } svg { width:100%; height:340px; display:block; margin-top:16px } table { border-collapse:collapse; width:100%; font-size:13px }
+td,th { border-bottom:1px solid #e1e6ed; padding:9px 8px; text-align:left; overflow-wrap:anywhere } code { font-size:12px; overflow-wrap:anywhere }
+.warning { color:#925100 } .good { color:#08774d } #legend { display:flex; gap:16px; flex-wrap:wrap; font-size:13px } .small { font-size:12px }
+details { margin-top:16px } pre { white-space:pre-wrap; overflow-wrap:anywhere } .error { color:#b12424 }
+</style>
+<h1>Result ledger <span class="muted">/ synthetic reader</span></h1>
+<p class="muted">A frozen scientific input can be readable while earlier logical points are unfinished.</p>
+<div class="banner">Simulation only · No hardware connection. Physical execution unknown is shown separately from saved results and published groups.</div>
+<div id="counts" class="cards"></div>
+<div class="panel">
+  <div class="controls">
+    <label>Analysis group<select id="group"></select></label>
+    <label>Observable<select id="output"></select></label>
+    <label>Channel<select id="channel"></select></label>
+    <label>Manual x minimum<input id="xmin" type="number" placeholder="auto"></label>
+    <label>Manual x maximum<input id="xmax" type="number" placeholder="auto"></label>
+    <button id="reset">Reset view</button>
+  </div>
+  <p id="readiness"></p>
+  <p id="snapshot" class="muted small"></p>
+  <svg id="chart" viewBox="0 0 1020 340" role="img" aria-label="Frozen measurement traces"></svg>
+  <div id="legend"></div>
+  <p id="availability" class="muted small"></p>
+</div>
+<div class="panel"><h2>Attempt history</h2><p class="muted small">A permitted retry retains the earlier unknown attempt. A saved result does not by itself publish a scientific group.</p><table><thead><tr><th>Work unit</th><th>Attempt</th><th>Status</th><th>Reason</th></tr></thead><tbody id="attempts"></tbody></table></div>
+<div class="panel"><h2>Exact-input analysis</h2><div id="analysis"></div><details><summary>Current immutable inputs and delivery state</summary><pre id="evidence"></pre></details></div>
+<p id="connection" class="muted small" aria-live="polite">Connecting…</p>
+<script>
+'use strict';
+const $ = id => document.getElementById(id), NS='http://www.w3.org/2000/svg';
+const palette=['#176bb2','#e28622','#5f48a6','#149a8a'];
+let state=null;
+function textNode(tag,text,attrs={}) { const e=document.createElement(tag); e.textContent=text; Object.assign(e,attrs); return e; }
+function svg(tag,attrs,text) { const e=document.createElementNS(NS,tag); for(const [key,value] of Object.entries(attrs))e.setAttribute(key,value); if(text!==undefined)e.textContent=text; $('chart').append(e); return e; }
+function remember() { try { localStorage.setItem('result-ledger-view',JSON.stringify(Object.fromEntries(['group','output','channel','xmin','xmax'].map(id=>[id,$(id).value])))); }catch(_){} }
+let saved={};try{saved=JSON.parse(localStorage.getItem('result-ledger-view')||'{}')}catch(_){}
+for(const id of ['xmin','xmax'])$(id).value=saved[id]||'';
+function options(id,choices) { const previous=$(id).value||saved[id]; $(id).replaceChildren(...choices.map(value=>textNode('option',value,{value}))); if(choices.includes(previous))$(id).value=previous; }
+function render() {
+  if(!state)return;
+  $('counts').replaceChildren(...Object.entries(state.counts).map(([label,count])=>{const e=textNode('div','',{className:'card'});e.append(textNode('strong',count),textNode('span',label==='results'?'saved bundles':label));return e;}));
+  options('group',state.groups.map(group=>group.id));
+  const group=state.groups.find(group=>group.id===$('group').value), ready=state.readiness[group?.id];
+  const snapshot=state.snapshots.find(snapshot=>snapshot.id===group?.published_snapshot);
+  const blocks=snapshot?.bundles.flatMap(bundle=>bundle.outputs)||[];
+  options('output',[...new Set(blocks.map(output=>output.id))]);
+  const outputs=blocks.filter(output=>output.id===$('output').value);
+  options('channel',[...new Set(outputs.flatMap(output=>output.coordinates.channel?.values||['scalar']))]);
+  $('readiness').textContent=group ? (group.closed?'Closed group':'Open group — membership can still grow')+' · '+(snapshot?'Published and readable':ready.ready?'Complete selection; awaiting publication':'Not ready · missing units: '+ready.missing_units.join(', ')) : 'No group yet';
+  $('readiness').className=snapshot?'good':'warning';
+  $('snapshot').textContent=snapshot?'Immutable snapshot: '+snapshot.id:'No published input. Unselected or unpublished results are not plotted.';
+  $('chart').replaceChildren();$('legend').replaceChildren();
+  const traces=[]; let missing=0,total=0;
+  for(const output of outputs){
+    const channel=output.coordinates.channel?.values.indexOf($('channel').value)??0;
+    const samples=output.dims.includes('sample')?output.shape[output.dims.indexOf('sample')]:1;
+    const channels=output.dims.includes('channel')?output.shape[output.dims.indexOf('channel')]:1;
+    for(let p=0;p<output.point_ids.length;p++){
+      const values=[];for(let s=0;s<samples;s++){
+        const index=(p*channels+Math.max(0,channel))*samples+s;
+        const valid=output.availability[index];total++;if(!valid)missing++;
+        values.push({x:output.coordinates.sample?.values[s]??p,y:valid?output.values[index]:null});
+      }traces.push({name:output.point_ids[p],values,unit:output.unit,xunit:output.coordinates.sample?.unit||'point'});
+    }
+  }
+  if(!traces.length){svg('text',{x:510,y:165,'text-anchor':'middle',fill:'#58677a'},'Waiting for a published group');}
+  else {
+    const all=traces.flatMap(trace=>trace.values), xs=all.map(v=>v.x);
+    let xmin=$('xmin').value===''?Math.min(...xs):Number($('xmin').value),xmax=$('xmax').value===''?Math.max(...xs):Number($('xmax').value);
+    if(xmin>=xmax){ if($('xmin').value||$('xmax').value){svg('text',{x:510,y:165,'text-anchor':'middle',fill:'#b12424'},'Manual minimum must be less than maximum');return;}xmax=xmin+1; }
+    const ys=all.filter(v=>v.y!==null&&v.x>=xmin&&v.x<=xmax).map(v=>v.y);let ymin=ys.length?Math.min(...ys):0,ymax=ys.length?Math.max(...ys):1;if(ymin===ymax){ymin-=.1;ymax+=.1;}
+    const xp=x=>65+(x-xmin)/(xmax-xmin)*925,yp=y=>290-(y-ymin)/(ymax-ymin)*250;
+    for(let i=0;i<=4;i++){const y=ymin+(ymax-ymin)*i/4;svg('line',{x1:65,x2:990,y1:yp(y),y2:yp(y),stroke:'#e7ecf2'});svg('text',{x:55,y:yp(y)+4,'text-anchor':'end',fill:'#58677a','font-size':12},y.toFixed(3));const x=xmin+(xmax-xmin)*i/4;svg('text',{x:xp(x),y:313,'text-anchor':'middle',fill:'#58677a','font-size':12},x.toFixed(1));}
+    svg('text',{x:65,y:21,fill:'#58677a','font-size':12},traces[0].unit);svg('text',{x:990,y:335,'text-anchor':'end',fill:'#58677a','font-size':12},traces[0].xunit);
+    traces.forEach((trace,i)=>{let segment=[];function flush(){if(segment.length)svg('polyline',{points:segment.join(' '),fill:'none',stroke:palette[i%palette.length],'stroke-width':2});segment=[];}
+      for(const value of trace.values){if(value.y===null||value.x<xmin||value.x>xmax){flush();continue;}segment.push(xp(value.x)+','+yp(value.y));svg('circle',{cx:xp(value.x),cy:yp(value.y),r:2.5,fill:palette[i%palette.length]});}flush();const label=textNode('span',trace.name);label.style.color=palette[i%palette.length];$('legend').append(label);});
+  }
+  $('availability').textContent=`${total-missing} / ${total} samples available; ${missing} explicitly unavailable. Gaps are retained. Manual x range survives live refresh.`;
+  $('attempts').replaceChildren(...state.attempts.map(attempt=>{const tr=document.createElement('tr');for(const value of [attempt.unit_id,attempt.id,attempt.status,attempt.reason||'—'])tr.append(textNode('td',value));if(['unknown','retry_authorized'].includes(attempt.status))tr.className='warning';return tr;}));
+  const analysis=state.analyses.find(item=>item.snapshot_id===snapshot?.id);$('analysis').replaceChildren();
+  if(analysis){const table=document.createElement('table'),head=document.createElement('tr');for(const title of ['Point','Channel','Mean','Available','Unit'])head.append(textNode('th',title));table.append(head);for(const row of analysis.rows){const tr=document.createElement('tr');for(const value of [row.point_id,row.channel,row.mean===null?'unavailable':row.mean.toFixed(6),row.available_samples+'/'+row.expected_samples,row.unit])tr.append(textNode('td',value));table.append(tr);}$('analysis').append(table,textNode('p','Exact input hash: '+analysis.input_sha256,{className:'small muted'}));}
+  else $('analysis').append(textNode('p','No completed exact-input analysis for this group.'));
+  $('evidence').textContent=JSON.stringify({snapshot,deliveries:state.deliveries,notification_cursor:state.notification_cursor},null,2);
+}
+for(const id of ['group','output','channel','xmin','xmax'])$(id).addEventListener('change',()=>{remember();render();});
+$('reset').addEventListener('click',()=>{$('xmin').value='';$('xmax').value='';remember();render();});
+async function refresh(){try{const response=await fetch('/api/state',{cache:'no-store'});if(!response.ok)throw new Error(response.status);state=await response.json();render();$('connection').className='muted small';$('connection').textContent='Read-only live view · refreshed '+new Date().toLocaleTimeString();}catch(error){$('connection').className='error';$('connection').textContent='Disconnected — retaining last readable view: '+error;} }
+refresh();setInterval(refresh,1500);
+</script>
+</html>
