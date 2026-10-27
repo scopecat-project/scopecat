@@ -45,6 +45,7 @@ export function MeasurementDataPreview({
   selectedTracePlanId,
   tracePreview,
   tracePending = false,
+  traceRefreshing = false,
   traceError = null,
   onTracePlanChange,
   onEntitySelectionChange,
@@ -62,6 +63,7 @@ export function MeasurementDataPreview({
   selectedTracePlanId?: string;
   tracePreview?: MeasurementTracePreview;
   tracePending?: boolean;
+  traceRefreshing?: boolean;
   traceError?: Error | null;
   onTracePlanChange?: (planId: string) => void;
   onEntitySelectionChange?: (selection: MeasurementEntitySelection) => void;
@@ -544,6 +546,7 @@ export function MeasurementDataPreview({
             key={`${viewScope}:${selectedTracePlan?.id}`}
             preview={tracePreview}
             pending={tracePending}
+            refreshing={traceRefreshing}
             error={traceError}
           />
         </div>
@@ -635,10 +638,12 @@ export function MeasurementDataPreview({
 export function MeasurementTraceResult({
   preview,
   pending,
+  refreshing = false,
   error,
 }: {
   preview?: MeasurementTracePreview;
   pending: boolean;
+  refreshing?: boolean;
   error: Error | null;
 }) {
   const chart = useMemo(
@@ -647,7 +652,9 @@ export function MeasurementTraceResult({
   );
   return (
     <>
-      <p role={error ? "alert" : "status"}>{tracePreviewStatus(preview, error, pending)}</p>
+      <p role={error ? "alert" : "status"}>
+        {tracePreviewStatus(preview, error, pending, refreshing)}
+      </p>
       {chart && <MeasurementChart chart={chart} />}
       {!pending && !error && preview && <TraceAvailabilityDetails preview={preview} />}
       {!pending && !error && preview && !chart && <p>本次有界选择未返回已持久保存且可用的序列。</p>}
@@ -659,10 +666,12 @@ function tracePreviewStatus(
   preview: MeasurementTracePreview | undefined,
   error: Error | null,
   pending: boolean,
+  refreshing: boolean,
 ): string {
   if (error) return `波形不可用： ${errorMessage(error)}`;
   if (pending) return "正在读取有界波形预览…";
   if (!preview) return "等待有界波形预览";
+  if (refreshing) return "正在刷新有界波形；图表显示上次成功读取的数据。";
   return measurementTraceStatus(preview);
 }
 
@@ -1134,7 +1143,8 @@ function shortNumber(value: number): string {
 function measurementInteractionKey(chart: MeasurementChartPlan): string {
   return JSON.stringify([
     chart.id,
-    chart.kind,
+    // Sparse/live and durable data can switch scatter/line without changing semantics.
+    chart.kind === "line" || chart.kind === "scatter" ? "xy" : chart.kind,
     chart.xLabel,
     chart.yLabel,
     chart.colorLabel,

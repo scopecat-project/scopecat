@@ -2,13 +2,14 @@
 
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   MeasurementDatasetSchema,
   MeasurementRecord,
   MeasurementValue,
 } from "../../api-contract";
+import { EChartRuntime } from "../../ui/EChartRuntime";
 import { MeasurementDataPreview } from "./MeasurementDataPreview";
 import {
   measurementEntityAxes,
@@ -22,7 +23,7 @@ import {
 import { tracePreview, traceSeries } from "./measurement-trace.test-support";
 import type { components } from "../../api-schema";
 
-vi.mock("../../ui/EChartRuntime", () => ({ EChartRuntime: () => null }));
+vi.mock("../../ui/EChartRuntime", () => ({ EChartRuntime: vi.fn(() => null) }));
 
 afterEach(cleanup);
 
@@ -1369,6 +1370,71 @@ describe("measurement visualization", () => {
     expect(screen.getByText(/共绘制 2 个点/)).toBeInTheDocument();
     expect(screen.getByText(/最新接收记录（点索引 2）尚未保存/)).toBeVisible();
     expect(screen.queryByText(/共绘制 3 个点/)).not.toBeInTheDocument();
+  });
+
+  it("keeps one scan identity when durable data catches up with a live scatter", async () => {
+    const schema = entityScalarSchema();
+    schema.point_domain = {
+      kind: "product_grid",
+      axes: [
+        gridAxis(
+          "bias",
+          [0, 1, 2, 3].map((index) => scalar(index / 10, "V")),
+        ),
+      ],
+    };
+    schema.dimensions[0]!.size = 4;
+    const items = [0, 1, 2, 3].map((index) =>
+      record(
+        index,
+        { bias: scalar(index / 10, "V") },
+        { readout: entityArray([index, index + 1], "ratio") },
+      ),
+    );
+    const props = {
+      preview: { schema, items: [items[0]!, items[2]!], livePointIndex: 2 },
+      slice: slicePreview(schema, [items[0]!]),
+      sliceError: null,
+      slicePending: false,
+      fixedAxisIndices: {},
+      onFixedAxisIndexChange: () => {},
+    };
+    const view = render(<MeasurementDataPreview {...props} />);
+    const runtime = vi.mocked(EChartRuntime);
+    const lastProps = () => runtime.mock.lastCall?.[0];
+    await waitFor(() =>
+      expect(lastProps()?.option.series).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: "scatter" })]),
+      ),
+    );
+    const identity = lastProps()!.interactionKey;
+    expect(identity).toBeDefined();
+    view.rerender(
+      <MeasurementDataPreview
+        {...props}
+        preview={{ schema, items: items.slice(0, 3) }}
+        slice={slicePreview(schema, items.slice(0, 3))}
+      />,
+    );
+    await waitFor(() =>
+      expect(lastProps()?.option.series).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: "line" })]),
+      ),
+    );
+    expect(lastProps()!.interactionKey).toBe(identity);
+    view.rerender(
+      <MeasurementDataPreview
+        {...props}
+        preview={{ schema, items, livePointIndex: 3 }}
+        slice={slicePreview(schema, items.slice(0, 3))}
+      />,
+    );
+    await waitFor(() =>
+      expect(lastProps()?.option.series).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: "scatter" })]),
+      ),
+    );
+    expect(lastProps()!.interactionKey).toBe(identity);
   });
 
   it("keeps unknown totals and slice failures visible as the selection changes", () => {

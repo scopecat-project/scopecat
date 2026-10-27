@@ -352,6 +352,7 @@ export function DataCard({
   tracePreview,
   traceError,
   tracePending,
+  traceRefreshing,
   onTracePlanChange,
   onMeasurementEntitySelectionChange,
   measurementFixedAxisIndices,
@@ -379,6 +380,7 @@ export function DataCard({
   tracePreview?: MeasurementTracePreview;
   traceError: Error | null;
   tracePending: boolean;
+  traceRefreshing?: boolean;
   onTracePlanChange: (planId: string) => void;
   onMeasurementEntitySelectionChange: (selection: MeasurementEntitySelection) => void;
   measurementFixedAxisIndices: Record<string, number>;
@@ -429,6 +431,7 @@ export function DataCard({
           tracePreview={tracePreview}
           traceError={traceError}
           tracePending={tracePending}
+          traceRefreshing={traceRefreshing}
           onTracePlanChange={onTracePlanChange}
           onMeasurementEntitySelectionChange={onMeasurementEntitySelectionChange}
           fixedAxisIndices={measurementFixedAxisIndices}
@@ -636,6 +639,7 @@ function MeasurementRecords({
   tracePreview,
   traceError,
   tracePending,
+  traceRefreshing,
   onTracePlanChange,
   onMeasurementEntitySelectionChange,
   fixedAxisIndices,
@@ -655,6 +659,7 @@ function MeasurementRecords({
   tracePreview?: MeasurementTracePreview;
   traceError: Error | null;
   tracePending: boolean;
+  traceRefreshing?: boolean;
   onTracePlanChange: (planId: string) => void;
   onMeasurementEntitySelectionChange: (selection: MeasurementEntitySelection) => void;
   fixedAxisIndices: Record<string, number>;
@@ -697,6 +702,7 @@ function MeasurementRecords({
       tracePreview={tracePreview}
       traceError={traceError}
       tracePending={tracePending}
+      traceRefreshing={traceRefreshing}
       onTracePlanChange={onTracePlanChange}
       onEntitySelectionChange={onMeasurementEntitySelectionChange}
       fixedAxisIndices={fixedAxisIndices}
