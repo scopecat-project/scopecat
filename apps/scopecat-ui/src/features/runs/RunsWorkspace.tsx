@@ -924,10 +924,9 @@ function healthDetail(health?: ProjectHealth): string {
 
 function attentionConfirmation(): Omit<ConfirmationRequest, "onConfirm"> {
   return {
-    title: "Close without resuming this run?",
-    description:
-      "Confirm the external hardware state is reconciled. This releases its resources and makes the run terminal.",
-    confirmLabel: "Close run",
+    title: "关闭此运行且不继续执行？",
+    description: "请确认已核对处理外部硬件状态。此操作将释放其资源，并使运行进入终态。",
+    confirmLabel: "关闭运行",
     intent: "danger",
   };
 }

@@ -96,22 +96,20 @@ it.each(["attention_required", "failed"] as const)(
     rerender(view(true));
     const focused = within(screen.getByRole("dialog"));
     expect(focused.getByText("Synthetic computation failed")).toBeVisible();
-    expect(focused.getByText(/Terminal persistence is unconfirmed/)).toBeVisible();
+    expect(focused.getByText(/尚未确认终态是否已持久保存/)).toBeVisible();
     expect(focused.getByText("Quarantined")).toBeVisible();
     expect(focused.queryAllByText("Cleanup state is unknown")).toHaveLength(
       status === "attention_required" ? 1 : 0,
     );
-    expect(focused.queryAllByText(/does not establish that the hardware is safe/)).toHaveLength(
+    expect(focused.queryAllByText(/不代表硬件已安全/)).toHaveLength(
       status === "attention_required" ? 1 : 0,
     );
-    expect(
-      focused.queryByRole("button", { name: "Close without resuming" }),
-    ).not.toBeInTheDocument();
+    expect(focused.queryByRole("button", { name: "关闭且不继续" })).not.toBeInTheDocument();
     fireEvent.click(focused.getByRole("button", { name: "退出聚焦，查看 run 详情" }));
     expect(screen.getByLabelText("Slice")).toHaveValue("1");
     expect(screen.getByRole("button", { name: "聚焦曲线" })).toHaveFocus();
     expect(resolve).not.toHaveBeenCalled();
-    expect(screen.queryAllByRole("button", { name: "Close without resuming" })).toHaveLength(
+    expect(screen.queryAllByRole("button", { name: "关闭且不继续" })).toHaveLength(
       status === "attention_required" ? 1 : 0,
     );
   },

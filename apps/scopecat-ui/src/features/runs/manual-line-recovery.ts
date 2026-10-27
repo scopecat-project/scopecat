@@ -57,9 +57,7 @@ export async function reconfirmManualLine(
     step.operation !== "run" ||
     step.attention_reason !== `confirm current wiring before continuing run ${runId}`
   ) {
-    throw new Error(
-      "Wiring confirmation was recorded. The task changed or its worker is still settling; inspect it before continuing.",
-    );
+    throw new Error("接线确认已记录。任务已变化或其 Worker 尚未结束处理；请先检查任务，再继续。");
   }
   if (view.procedure.state === "attention_required")
     await apiData(

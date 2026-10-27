@@ -131,7 +131,7 @@ test("populated workspaces, exact result window and focus view remain readable",
       await route.fulfill({ response, json: data });
     });
     await page.goto(`${base}/?run=${seed.run}#runs`);
-    await page.getByRole("button", { name: "Close without resuming", exact: true }).click();
+    await page.getByRole("button", { name: "关闭且不继续", exact: true }).click();
     await expect(page.getByRole("alertdialog")).toBeVisible();
     await capture(page, "reconciliation-dialog-390");
     await page

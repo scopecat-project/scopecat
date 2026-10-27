@@ -71,7 +71,7 @@ with sc.open_project(sys.argv[1]).authoring() as author:
 for (const width of [1280, 390]) {
   test(`manual line reopens and survives a lost reconfirmation response at ${width}px`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(180_000);
     const project = await mkdtemp(join(tmpdir(), "scopecat-manual-line-"));
     let started = false;
@@ -117,18 +117,25 @@ for (const width of [1280, 390]) {
       });
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${baseUrl}/?run=${seed.run}#runs`);
-      const region = page.getByRole("region", { name: "Confirm current line wiring" });
+      const region = page.getByRole("region", { name: "确认当前线路接线" });
       await expect(region).toBeVisible();
-      await region.getByLabel("Line confirmation operator").fill("second-operator");
+      await region.getByLabel("线路确认操作者").fill("second-operator");
       await region.getByRole("checkbox").check();
-      await region.getByRole("button", { name: "Confirm wiring and continue" }).click();
+      await region.getByRole("button", { name: "确认接线并继续" }).click();
       await expect(region.getByRole("status")).toContainText("did not respond");
       await page.reload();
       await expect(region).toBeVisible();
-      await expect(region.getByLabel("Line confirmation operator")).toHaveValue("second-operator");
+      await expect(region.getByLabel("线路确认操作者")).toHaveValue("second-operator");
       expect(commands).toHaveLength(1);
+      expect(
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: testInfo.outputPath(`line-recovery-${width}.png`),
+        fullPage: true,
+      });
       await region.getByRole("checkbox").check();
-      await region.getByRole("button", { name: "Retry saved confirmation" }).click();
+      await region.getByRole("button", { name: "重试已保存的确认" }).press("Enter");
       await expect
         .poll(
           async () => {

@@ -21,9 +21,7 @@ function retained(
     typeof value.actor !== "string" ||
     typeof value.request_key !== "string"
   ) {
-    throw new Error(
-      "The saved confirmation could not be read. Inspect this run before continuing.",
-    );
+    throw new Error("无法读取已保存的确认。请先检查此运行，再继续。");
   }
   return { original, actor: value.actor, request_key: value.request_key };
 }
@@ -64,7 +62,7 @@ export function ManualLineRecovery({
         actor: await operator.freshSnapshot(),
         request_key: crypto.randomUUID(),
       };
-      if (!selected.actor.trim()) throw new Error("Enter an operator.");
+      if (!selected.actor.trim()) throw new Error("请输入操作者。");
       // Persist before sending. An uncertain response must retain the actor and key.
       localStorage.setItem(
         key,
@@ -77,8 +75,8 @@ export function ManualLineRecovery({
       setChecked(false);
       setMessage(
         result === "expired"
-          ? "The earlier confirmation is retained but has expired after restart. Check the wiring and confirm again."
-          : "Wiring confirmation recorded for the original run.",
+          ? "先前确认仍被保留，但已在重启后失效。请核实接线并重新确认。"
+          : "已为原运行记录接线确认。",
       );
       await queryClient.invalidateQueries();
     } catch (error) {
@@ -89,19 +87,17 @@ export function ManualLineRecovery({
   }
   if (pendingOnly && !command && !saved.error) return null;
   return (
-    <section className="mt-3 grid gap-2" aria-label="Confirm current line wiring">
+    <section className="mt-3 grid gap-2" aria-label="确认当前线路接线">
       <p>
-        This measurement has not started. Confirm line <strong>{original.line_id}</strong> with its
-        original configuration before continuing the same run.
+        本次测量尚未开始。请核实线路 <strong>{original.line_id}</strong>{" "}
+        的实际接线与原配置，再继续同一次运行。
       </p>
-      <p className="break-all text-xs">
-        Configuration: {configHash ?? "Inspect the retained configuration"}
-      </p>
+      <p className="break-all text-xs">配置：{configHash ?? "请检查已保留的配置"}</p>
       <label className={fieldLabel}>
-        Operator
+        操作者
         <input
           className={formControl}
-          aria-label="Line confirmation operator"
+          aria-label="线路确认操作者"
           value={command?.actor ?? operator.actor}
           disabled={pending || !!command}
           onChange={(event) => operator.setActor(event.target.value)}
@@ -114,7 +110,7 @@ export function ManualLineRecovery({
           disabled={pending}
           onChange={(event) => setChecked(event.target.checked)}
         />{" "}
-        I checked the current wiring and this run’s configuration.
+        我已核实当前实际接线与本次运行的配置。
       </label>
       <button
         className="min-h-9 rounded-md border border-line-strong bg-panel px-3 py-1.5 text-sm text-text hover:bg-panel-strong disabled:opacity-50"
@@ -122,11 +118,7 @@ export function ManualLineRecovery({
         disabled={pending || !checked || !operator.ready || !!saved.error}
         onClick={() => void confirm()}
       >
-        {pending
-          ? "Confirming…"
-          : command
-            ? "Retry saved confirmation"
-            : "Confirm wiring and continue"}
+        {pending ? "正在确认…" : command ? "重试已保存的确认" : "确认接线并继续"}
       </button>
       {(message || operator.error) && <p role="status">{message || operator.error}</p>}
     </section>

@@ -21,6 +21,8 @@ with project.authoring() as author:
     print(json.dumps({"plan": plan.ref.plan_id, "workspace": plan.definition.workspace_id}))
 `;
 
+const firstLine = "Readout A — " + "long-physical-line-name-".repeat(5);
+
 for (const width of [1280, 390]) {
   test(`finite physical lines retain every attempt across reopening at ${width}px`, async ({
     page,
@@ -46,31 +48,31 @@ for (const width of [1280, 390]) {
       await page.getByRole("button", { name: "保存操作者", exact: true }).click();
       await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
       await page.goto(`${base}/?workspace=${encodeURIComponent(seed.workspace)}#launch`);
-      await page.getByText("Physical line scans", { exact: true }).click();
-      const region = page.getByRole("region", { name: "Physical line scans", exact: true });
-      await region.getByText("Create a line list", { exact: true }).click();
-      await region.getByLabel("Measurement template").selectOption(seed.plan);
-      await region.getByLabel("Line list operator").fill("line-operator");
-      await region.getByLabel("Line list name").fill("Readout wiring");
-      await region.getByLabel("Physical lines, one per line").fill("Readout A\nReadout B");
-      await region.getByRole("button", { name: "Save line list", exact: true }).click();
-      await expect(region.getByRole("button", { name: "Prepare Readout A" })).toBeEnabled();
-      await expect(region.getByRole("button", { name: "Prepare Readout B" })).toBeDisabled();
+      await page.getByText("物理线路扫描", { exact: true }).click();
+      const region = page.getByRole("region", { name: "物理线路扫描", exact: true });
+      await region.getByText("创建线路清单", { exact: true }).click();
+      await region.getByLabel("测量模板").selectOption(seed.plan);
+      await region.getByLabel("线路清单操作者").fill("line-operator");
+      await region.getByLabel("线路清单名称").fill("Readout wiring");
+      await region.getByLabel("物理线路，每行一条").fill(`${firstLine}\nReadout B`);
+      await region.getByRole("button", { name: "保存线路清单", exact: true }).press("Enter");
+      await expect(region.getByRole("button", { name: `准备 ${firstLine}` })).toBeEnabled();
+      await expect(region.getByRole("button", { name: "准备 Readout B" })).toBeDisabled();
       const scan = new URL(page.url()).searchParams.get("line-scan")!;
       const view = async () =>
         await (await page.request.get(`${base}/api/v1/manual-line-scans/${scan}`)).json();
       const runIds: string[] = [];
-      for (const [index, label] of ["Readout A", "Readout B", "Readout A"].entries()) {
+      for (const [index, label] of [firstLine, "Readout B", firstLine].entries()) {
         await page.goto(
           `${base}/?workspace=${encodeURIComponent(seed.workspace)}&line-scan=${scan}#launch`,
         );
         await region
           .getByRole("button", {
-            name: `${index === 2 ? "Remeasure" : "Prepare"} ${label}`,
+            name: `${index === 2 ? "重新测量" : "准备"} ${label}`,
             exact: true,
           })
           .click();
-        await expect(page.getByText(`Physical line: ${label}`, { exact: false })).toBeVisible();
+        await expect(page.getByText(`物理线路：${label}`, { exact: false })).toBeVisible();
         await page.locator('input[aria-label="操作人"]').fill("measurement-operator");
         if (index > 0) await page.getByLabel("Amplitude", { exact: true }).fill("0.08");
         const submitted = page.waitForResponse((response) =>
@@ -102,8 +104,10 @@ for (const width of [1280, 390]) {
           await page.goto(
             `${base}/?workspace=${encodeURIComponent(seed.workspace)}&line-scan=${scan}#launch`,
           );
-          await expect(region.getByText("completed", { exact: true })).toBeVisible();
-          await expect(region.getByRole("button", { name: "Remeasure Readout A" })).toBeDisabled();
+          await expect(region.getByText("已完成", { exact: true })).toBeVisible();
+          await expect(
+            region.getByRole("button", { name: `重新测量 ${firstLine}` }),
+          ).toBeDisabled();
           expect((await (await page.request.get(`${base}/api/v1/runs`)).json()).items).toHaveLength(
             1,
           );
@@ -138,19 +142,19 @@ for (const width of [1280, 390]) {
       await page.goto(
         `${base}/?workspace=${encodeURIComponent(seed.workspace)}&line-scan=${scan}#launch`,
       );
-      await expect(region.getByText("completed", { exact: true })).toHaveCount(2);
-      await expect(region.getByRole("link", { name: "Curve and result" })).toHaveCount(3);
+      await expect(region.getByText("已完成", { exact: true })).toHaveCount(2);
+      await expect(region.getByRole("link", { name: "曲线与结果" })).toHaveCount(3);
       const retained = await view();
       expect(retained.lines.map((line: { attempts: unknown[] }) => line.attempts.length)).toEqual([
         2, 1,
       ]);
       expect(new Set(runIds).size).toBe(3);
-      await region.getByLabel("Compare this attempt").nth(0).check();
-      await region.getByLabel("Compare this attempt").nth(1).check();
-      await expect(region.getByRole("region", { name: "Line attempt comparison" })).toContainText(
+      await region.getByLabel("比较此次尝试").nth(0).check();
+      await region.getByLabel("比较此次尝试").nth(1).check();
+      await expect(region.getByRole("region", { name: "线路测量尝试比较" })).toContainText(
         "amplitude",
       );
-      await expect(region.getByRole("link", { name: "Compare retained curves" })).toHaveAttribute(
+      await expect(region.getByRole("link", { name: "比较已保留曲线" })).toHaveAttribute(
         "href",
         new RegExp(runIds[0]),
       );
@@ -161,7 +165,7 @@ for (const width of [1280, 390]) {
         path: testInfo.outputPath(`line-list-${width}.png`),
         fullPage: true,
       });
-      await region.getByRole("link", { name: "Compare retained curves" }).click();
+      await region.getByRole("link", { name: "比较已保留曲线" }).click();
       await expect(page.getByLabel("主 run", { exact: true })).toHaveValue(runIds[0]);
       await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(runIds[2]);
       const comparison = page.waitForResponse(

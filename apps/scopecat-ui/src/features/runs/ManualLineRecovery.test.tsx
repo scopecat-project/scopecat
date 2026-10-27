@@ -40,12 +40,12 @@ it("requires explicit wiring confirmation and preserves the original run referen
   vi.mocked(reconfirmManualLine).mockResolvedValue("recorded");
   show();
   await screen.findByDisplayValue("Alice");
-  expect(
-    screen.getByRole("button", { name: "Confirm wiring and continue" }).hasAttribute("disabled"),
-  ).toBe(true);
+  expect(screen.getByRole("button", { name: "确认接线并继续" }).hasAttribute("disabled")).toBe(
+    true,
+  );
   expect(reconfirmManualLine).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm wiring and continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认接线并继续" }));
   await waitFor(() => expect(reconfirmManualLine).toHaveBeenCalledTimes(1));
   expect(vi.mocked(reconfirmManualLine).mock.calls[0]).toEqual([
     "run-1",
@@ -59,18 +59,18 @@ it("retains uncertain actor and command across reopening, including an already q
   const first = show();
   await screen.findByDisplayValue("Alice");
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm wiring and continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认接线并继续" }));
   await screen.findByText("Response lost");
   const command = vi.mocked(reconfirmManualLine).mock.calls[0];
   first.unmount();
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });
   vi.mocked(reconfirmManualLine).mockResolvedValueOnce("recorded");
   show(true);
-  expect(screen.getByLabelText<HTMLInputElement>("Line confirmation operator").value).toBe("Alice");
-  expect(screen.getByLabelText("Line confirmation operator").hasAttribute("disabled")).toBe(true);
+  expect(screen.getByLabelText<HTMLInputElement>("线路确认操作者").value).toBe("Alice");
+  expect(screen.getByLabelText("线路确认操作者").hasAttribute("disabled")).toBe(true);
   expect(reconfirmManualLine).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Retry saved confirmation" }));
+  fireEvent.click(screen.getByRole("button", { name: "重试已保存的确认" }));
   await waitFor(() => expect(reconfirmManualLine).toHaveBeenCalledTimes(2));
   expect(vi.mocked(reconfirmManualLine).mock.calls[1]).toEqual(command);
 });
@@ -80,11 +80,11 @@ it("does not automatically renew an expired recorded confirmation", async () => 
   show();
   await screen.findByDisplayValue("Alice");
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm wiring and continue" }));
-  await screen.findByText(/earlier confirmation is retained but has expired/);
+  fireEvent.click(screen.getByRole("button", { name: "确认接线并继续" }));
+  await screen.findByText(/先前确认仍被保留，但已在重启后失效/);
   expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
-  expect(
-    screen.getByRole("button", { name: "Confirm wiring and continue" }).hasAttribute("disabled"),
-  ).toBe(true);
+  expect(screen.getByRole("button", { name: "确认接线并继续" }).hasAttribute("disabled")).toBe(
+    true,
+  );
   expect(reconfirmManualLine).toHaveBeenCalledTimes(1);
 });

@@ -112,7 +112,7 @@ it("never dispatches a changed or unknown child after reconfirmation", async () 
     }),
   );
   await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).rejects.toThrow(
-    "task changed",
+    "任务已变化",
   );
   expect(writes).toEqual(["/api/v1/runs/run-1/attention"]);
 });
