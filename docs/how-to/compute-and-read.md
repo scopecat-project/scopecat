@@ -60,15 +60,39 @@ assert mean_iq.eager(np.array([1 + 2j, 3 + 4j])) == 2 + 3j
 共享别名（例如 `type IQ = Annotated[complex, sc.Unit("ratio")]`）既可用于计算返回值，
 也可用于原生数据类读取器的字段。返回注解声明存储单位，历史结果读取器精确检查该单位。
 计算输入契约在消费边界对兼容单位做归一化，不会改写已存储的测量值。
-带单位的实数标量计算应使用 `Annotated[sc.Quantity, sc.Unit("V")]` 并返回 `sc.Quantity`；
-普通 `float` 返回类型仍表示无单位计算。数组计算还需用 `ArrayType` 显式声明维度，
+普通 `float` 返回类型表示无单位计算。数组计算还需用 `ArrayType` 显式声明维度，
 单独一个单位无法指定局部轴。原生数组读取器只需检查 dtype 和单位、不要求精确轴和长度时，
 可使用 `Annotated[NDArray[...], sc.Unit("V")]`。
 
-这里不需要单独的 `output_type` 或作者侧 `cast`。无单位时，返回注解可以直接写成 `-> complex`；
+上述 complex 标量推断不需要单独的 `output_type` 或作者侧 `cast`。无单位时，返回注解可以直接写成 `-> complex`；
 `bool`、`int`、`float` 和 `str` 也支持同样的推断。数组需要带有 dtype、单位和局部维度的
 `Annotated` `ArrayType`。原生类型必须与声明类型一致；实数数组注解搭配复数数组 schema
 会在构建时报错。
+
+主机侧返回 `Quantity` 时，使用显式输出 schema，并补充具体引用值类型：
+
+```python
+from typing import cast
+
+
+@sc.module
+def voltage_module(ctx: sc.ModuleContext) -> sc.ValueRef[sc.Quantity]:
+    voltage = cast(
+        "sc.ValueRef[sc.Quantity]",
+        ctx.compute(
+            fn=lambda: sc.Quantity(0.125, "V"),
+            output_type=sc.ScalarType(sc.QuantityType(unit="V")),
+        ),
+    )
+    return ctx.convert(voltage, "mV")
+```
+
+这个低层调用的静态返回类型是 `ValueRef[object]`；cast 补充 Quantity 类型，
+不会改变执行位置或转换运行时值。运行时构图也能读取
+`Annotated[Quantity, Unit("V")]` 返回注解，但当前 `@compute` 的静态结果约束
+不包含 Quantity，因此不能把它推荐为免 `output_type`／cast 的替代写法。
+改为返回 float 会改变原生值契约，不是等价重写。测量侧的 `ProductRef` 经
+`ctx.convert` 仍是 `ProductRef`，保留原生测量标量，不变成主机 Quantity 对象。
 
 `DataRef[T]` 表示执行时才会存在的 `T` 类型值。框架根据输入选择适当的计算位置；
 普通结果声明不必选择 `ValueRef` 或 `ProductRef`。直接调用支持可按位置或关键字传入的参数，
@@ -141,7 +165,7 @@ convert 改变引用单位，不移除它。
 它们补充作者契约，不替代 installed verifier 或真人使用验证。
 
 `experiment.compute(fn=ordinary_function, ...)` 仍可用于显式节点 ID、输出 schema、
-结构化结果束和轴继承。省略 `output_type` 时，它也会保留原生返回类型。
+结构化结果束和轴继承。对上述支持的标量推断，省略 `output_type` 时，它也会保留原生返回类型。
 在这里复用装饰后的函数，应传入 `fn=mean_iq.eager`。
 
 计算应返回数据，不应修改输入或控制设备。该装饰器不会追踪每个 Python 操作，
@@ -200,12 +224,17 @@ rows = session.run(run_id).result().rows_as(MeanResult[MeanIQ])
 
 ## 编辑与诊断 {#edit-and-diagnose}
 
-修改计算代码后，按[刷新作者代码](refresh-author-code.md)操作。刷新服务端源码不会替换
-Notebook 中已经导入的声明。使用 `experiment = authors.refresh(experiment)`，
-将类型化声明及其本地辅助函数显式重新绑定到新接受的修订。
+使用 `session = sc.notebook()` 时，默认 `live=True` 在每个单元格前选择已保存作者源码，
+并在创建新请求时再次检查。新请求使用当前声明，顶层模块别名重新绑定；
+已有请求、已准备实验和结果实例保留原来的身份。辅助函数别名和任意内核状态不会自动更新。
+
+显式 `project.authoring()` 会话则按[刷新作者代码](refresh-author-code.md#explicit-author-sessions)
+发布源码并重新绑定，例如 `experiment = authors.refresh(experiment)`；仅刷新服务端源码
+不会替换已导入的声明。默认 Notebook 与 `live=False` 的区别及辅助函数限制，见
+[Notebook 刷新路径](refresh-author-code.md#notebook-path)。
 
 ## 修复失败的计算 {#fixing-a-failed-computation}
 
 作者计算抛出异常时，Notebook 展示的运行失败会标明计算操作、异常类型和消息；完整 traceback
-保留在 worker 日志中。修复函数，调用 `experiment = session.refresh(experiment)`，再准备新请求。
+保留在 worker 日志中。修复并保存函数，按所用会话的上述刷新路径选择修订，再准备新请求。
 失败任务和先前成功的结果保留各自原来的身份；刷新不会重新提交失败的采集，也不会改写数据。

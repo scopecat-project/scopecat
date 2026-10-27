@@ -2,12 +2,14 @@
 
 import inspect
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, assert_type
+from typing import TYPE_CHECKING, Annotated, assert_type
 
 import numpy as np
 import pytest
 
 import scopecat as sc
+from scopecat.application.authoring import AuthorExperiment
+from scopecat.authoring.request_inputs import capture_request_inputs
 
 
 def test_request_creation_and_copy_capture_mutable_inputs() -> None:
@@ -108,3 +110,25 @@ def test_typed_fields_do_not_introduce_a_second_default_contract() -> None:
         probe().typed(WrongInputs)
     with pytest.raises(TypeError, match="dataclass"):
         probe().typed(dict)
+
+
+def test_capture_normalizes_edited_controls_without_mutating_request() -> None:
+    default = sc.Quantity(5, "MHz")
+
+    @sc.experiment
+    def probe(
+        ctx: sc.ExperimentContext,
+        frequency: Annotated[
+            sc.Input[sc.Quantity], sc.ControlSpec(scannable=True)
+        ] = default,
+    ) -> None:
+        raise AssertionError("capturing request inputs must not build")
+
+    request = probe()
+    declaration = AuthorExperiment.from_declaration(probe)
+    for edited in (5, sc.Quantity(5000, "kHz")):
+        request.values["frequency"] = edited
+        inputs, edits = capture_request_inputs(request, declaration.input_model)
+        assert inputs == {}
+        assert edits["frequency"].value == default
+        assert request.values["frequency"] == edited

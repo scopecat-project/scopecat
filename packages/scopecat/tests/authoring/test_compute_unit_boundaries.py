@@ -331,6 +331,16 @@ def test_defaults_and_explicit_numeric_magnitudes() -> None:
     assert _execute(compose_module(quantity_module.definition)) == 5.0
 
 
+def test_eager_keeps_native_quantity_without_consumer_normalization() -> None:
+    @sc.compute
+    def magnitude(x: MHzQuantity) -> float:
+        return x.value
+
+    source = sc.Quantity(5000, "kHz")
+    assert magnitude.eager(source) == 5000
+    assert magnitude.eager(source.to("MHz")) == 5
+
+
 def test_unitless_numbers_and_arrays_keep_native_types() -> None:
     def consume(x: float) -> float:
         assert type(x) is float
