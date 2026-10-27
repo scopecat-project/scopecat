@@ -26,7 +26,12 @@ export function EChartRuntime({
   height,
   option,
   onPoint,
+  interactionKey,
+  resetRange = 0,
 }: {
+  // Opt in only with a key covering the measurement domain, signal and axis units.
+  interactionKey?: string;
+  resetRange?: number;
   height: number;
   option: EChartsCoreOption;
   onPoint?: (point: { seriesId: string; dataIndex: number }) => void;
@@ -34,6 +39,12 @@ export function EChartRuntime({
   const elementRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
   const heightRef = useRef(height);
+  const retained = useRef<{
+    key?: string;
+    zoom?: Array<{ startValue: number; endValue: number } | undefined>;
+    selected?: Record<string, boolean>;
+  }>({});
+  const previousReset = useRef(resetRange);
 
   useEffect(() => {
     const element = elementRef.current;
@@ -65,8 +76,68 @@ export function EChartRuntime({
   }, []);
 
   useEffect(() => {
-    chartRef.current?.setOption(option, { notMerge: true });
-  }, [option]);
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (retained.current.key !== interactionKey) {
+      retained.current = { key: interactionKey };
+    }
+    if (previousReset.current !== resetRange) {
+      retained.current.zoom = undefined;
+      previousReset.current = resetRange;
+    }
+    const saved = retained.current;
+    chart.setOption(
+      interactionKey === undefined
+        ? option
+        : {
+            ...option,
+            dataZoom: Array.isArray(option.dataZoom)
+              ? option.dataZoom.map((zoom, index) =>
+                  saved.zoom?.[index]
+                    ? { ...zoom, ...saved.zoom[index], rangeMode: ["value", "value"] }
+                    : zoom,
+                )
+              : option.dataZoom,
+            legend: saved.selected
+              ? { ...((option.legend ?? {}) as Record<string, unknown>), selected: saved.selected }
+              : option.legend,
+          },
+      { notMerge: true },
+    );
+  }, [option, interactionKey, resetRange]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || interactionKey === undefined) return;
+    const zoom = () => {
+      const current = (chart.getOption().dataZoom ?? []) as Array<{
+        start: number;
+        end: number;
+        startValue: number;
+        endValue: number;
+      }>;
+      // Percentages drift as the source extent grows. Keep the resolved coordinates.
+      retained.current.zoom = current.map((range) =>
+        range.start === 0 && range.end === 100
+          ? undefined
+          : {
+              startValue: range.startValue,
+              endValue: range.endValue,
+            },
+      );
+    };
+    const legend = () => {
+      const current = chart.getOption().legend as Array<{ selected: Record<string, boolean> }>;
+      retained.current.selected = { ...current[0]?.selected };
+      zoom();
+    };
+    chart.on("datazoom", zoom);
+    chart.on("legendselectchanged", legend);
+    return () => {
+      chart.off("datazoom", zoom);
+      chart.off("legendselectchanged", legend);
+    };
+  }, [interactionKey]);
 
   useEffect(() => {
     const chart = chartRef.current;

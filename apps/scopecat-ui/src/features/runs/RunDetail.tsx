@@ -73,6 +73,7 @@ export function RunDetail({
   tracePreview,
   traceError,
   tracePending,
+  traceRefreshing,
   onTracePlanChange,
   onMeasurementEntitySelectionChange,
   measurementFixedAxisIndices,
@@ -115,6 +116,7 @@ export function RunDetail({
   tracePreview?: MeasurementTracePreview;
   traceError: Error | null;
   tracePending: boolean;
+  traceRefreshing?: boolean;
   onTracePlanChange: (planId: string) => void;
   onMeasurementEntitySelectionChange: (selection: MeasurementEntitySelection) => void;
   measurementFixedAxisIndices: Record<string, number>;
@@ -249,6 +251,7 @@ export function RunDetail({
 
       <div className="mt-2 grid min-w-0 gap-3">
         <DataCard
+          key={`measurement:${projectId}:${run.runId}`}
           notices={
             <>
               <RunAttentionNotice
@@ -303,6 +306,7 @@ export function RunDetail({
           tracePreview={tracePreview}
           traceError={traceError}
           tracePending={tracePending}
+          traceRefreshing={traceRefreshing}
           onTracePlanChange={onTracePlanChange}
           onMeasurementEntitySelectionChange={onMeasurementEntitySelectionChange}
           measurementFixedAxisIndices={measurementFixedAxisIndices}

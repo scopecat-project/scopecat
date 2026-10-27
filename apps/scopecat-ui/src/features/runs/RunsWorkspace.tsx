@@ -609,7 +609,8 @@ export function RunsWorkspace({
               selectedTracePlanId={selectedTracePlan?.id}
               tracePreview={measurementTraceQuery.data}
               traceError={measurementTraceQuery.error}
-              tracePending={measurementTraceQuery.isFetching}
+              tracePending={measurementTraceQuery.isPending}
+              traceRefreshing={measurementTraceQuery.isFetching && !measurementTraceQuery.isPending}
               onTracePlanChange={(planId) => {
                 setRequestedMeasurementTracePlan({
                   runId: selectedRunId!,

@@ -15,7 +15,11 @@ export function EChart({
   seriesLabels,
   seriesCount,
   onPoint,
+  interactionKey,
+  resetRange,
 }: {
+  interactionKey?: string;
+  resetRange?: number;
   ariaLabel: string;
   description?: string;
   height: number;
@@ -31,7 +35,13 @@ export function EChart({
     <>
       <div aria-describedby={descriptionId} aria-label={ariaLabel} role="img">
         <Suspense fallback={<div aria-hidden="true" style={{ height }} />}>
-          <EChartRuntime height={height} option={option} onPoint={onPoint} />
+          <EChartRuntime
+            height={height}
+            option={option}
+            onPoint={onPoint}
+            interactionKey={interactionKey}
+            resetRange={resetRange}
+          />
         </Suspense>
       </div>
       <span className="sr-only" id={descriptionId}>

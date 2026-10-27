@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { getInstanceByDom } from "echarts/core";
 import { getWaitingProcedures } from "./features/decisions/decision-api";
 vi.mock("./features/decisions/decision-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./features/decisions/decision-api")>()),
@@ -671,7 +672,9 @@ describe("config provenance navigation", () => {
     });
 
     renderApp();
-    expect(await screen.findByText(/2\+ records/)).toBeVisible();
+    expect(await screen.findByRole("region", { name: "测量数据摘要" })).toHaveTextContent(
+      "当前记录预览 2",
+    );
     expect(getMeasurementPreview).toHaveBeenCalledWith("run-1", expect.any(AbortSignal));
     expect(screen.getByTestId("measurement-preview")).toHaveTextContent(
       '"dataset_id": "dataset-b"',
@@ -693,11 +696,13 @@ describe("config provenance navigation", () => {
 
     renderApp();
     await waitFor(() => expect(getMeasurementLivePreview).toHaveBeenCalled());
-    expect(await screen.findByText(/^1\+ records/)).toBeVisible();
+    expect(await screen.findByRole("region", { name: "测量数据摘要" })).toHaveTextContent(
+      "当前记录预览 1",
+    );
     const progress = screen.getByRole("region", { name: "run 进度" });
     expect(progress).toHaveTextContent("已保存预览记录 1+");
     expect(progress).not.toHaveTextContent(/已接收记录 \d/);
-    expect(screen.queryByText(/Latest received data:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/最新接收记录（点索引/)).not.toBeInTheDocument();
   });
 
   it("shows the latest daemon-received record before it is durable", async () => {
@@ -732,8 +737,10 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    expect(await screen.findByText(/^1 records/)).toBeVisible();
-    expect(screen.getByText(/Latest received data: point index 0; not saved yet/)).toBeVisible();
+    expect(await screen.findByRole("region", { name: "测量数据摘要" })).toHaveTextContent(
+      "run 已接收 1",
+    );
+    expect(screen.getByText(/最新接收记录（点索引 0）尚未保存/)).toBeVisible();
     expect(screen.getByRole("region", { name: "run 进度" })).toHaveTextContent("已接收记录 1");
     expect(screen.getByRole("region", { name: "run 进度" })).toHaveTextContent("已保存记录 0");
     expect(screen.getByRole("region", { name: "run 进度" })).not.toHaveTextContent(
@@ -844,6 +851,129 @@ describe("config provenance navigation", () => {
         expect.any(AbortSignal),
       ),
     );
+  });
+
+  it("retains the mounted trace through measurement-event refreshes and resets a new query identity", async () => {
+    window.history.replaceState(null, "", "/?run=run-1");
+    const schema = traceDatasetSchema();
+    vi.mocked(getMeasurementPreview).mockResolvedValue({ schema, items: [] });
+    const original = tracePreview("magnitude");
+    original.series.push({
+      ...original.series[0]!,
+      point_index: 1,
+      logical_point_id: "point-1",
+      label: "Point 1",
+    });
+    original.returned_series_count = 2;
+    original.returned_sample_count = original.source_sample_count = 6;
+    vi.mocked(getMeasurementTracePreview).mockResolvedValue(original);
+    const client = createQueryClient();
+    renderApp(client);
+    const plot = await screen.findByRole("img", {
+      name: "S21 magnitude: |S21| [ratio] by Frequency [GHz]",
+    });
+    await waitFor(() =>
+      expect(getInstanceByDom(plot.firstElementChild as HTMLElement)).toBeDefined(),
+    );
+    const chart = getInstanceByDom(plot.firstElementChild as HTMLElement)!;
+    chart.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: 20, end: 60 });
+    chart.dispatchAction({ type: "legendToggleSelect", name: "Point 1" });
+    const range = () => {
+      const zoom = (
+        chart.getOption().dataZoom as Array<{ startValue: number; endValue: number }>
+      )[0]!;
+      return [zoom.startValue, zoom.endValue];
+    };
+    const expectedRange = range();
+    for (const response of [
+      original,
+      {
+        ...original,
+        returned_sample_count: 8,
+        source_sample_count: 8,
+        series: original.series.map((series) => ({
+          ...series,
+          x: [...series.x, 5.2],
+          y: [...series.y, 0.4],
+          available_sample_count: 4,
+          source_sample_count: 4,
+        })),
+      },
+    ]) {
+      let complete!: (value: typeof original) => void;
+      vi.mocked(getMeasurementTracePreview).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      );
+      act(() => emitProjectEvent("run-1", "measurements_sealed"));
+      await waitFor(() => expect(complete).toBeDefined());
+      expect(chart.isDisposed()).not.toBe(true);
+      await screen.findByText("正在刷新有界波形；图表显示上次成功读取的数据。");
+      expect(getInstanceByDom(plot.firstElementChild as HTMLElement)).toBe(chart);
+      await act(async () => complete(response));
+      await waitFor(() =>
+        expect(
+          screen.queryByText("正在刷新有界波形；图表显示上次成功读取的数据。"),
+        ).not.toBeInTheDocument(),
+      );
+      expect(getInstanceByDom(plot.firstElementChild as HTMLElement)).toBe(chart);
+      expect(range()).toEqual(expectedRange);
+      expect(chart.getOption().legend).toEqual([
+        expect.objectContaining({ selected: expect.objectContaining({ "Point 1": false }) }),
+      ]);
+    }
+    let completeSelection!: (value: typeof original) => void;
+    vi.mocked(getMeasurementTracePreview).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeSelection = resolve;
+        }),
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Measurement trace" }), {
+      target: { value: "trace:response:frequency:phase" },
+    });
+    await screen.findByText("正在读取有界波形预览…");
+    expect(
+      screen.queryByRole("img", { name: "S21 magnitude: |S21| [ratio] by Frequency [GHz]" }),
+    ).not.toBeInTheDocument();
+    expect(chart.isDisposed()).toBe(true);
+    await act(async () => completeSelection(tracePreview("phase")));
+    const phase = await screen.findByRole("img", {
+      name: "S21 phase: phase(S21) [rad] by Frequency [GHz]",
+    });
+    await waitFor(() =>
+      expect(getInstanceByDom(phase.firstElementChild as HTMLElement)).toBeDefined(),
+    );
+    expect(getInstanceByDom(phase.firstElementChild as HTMLElement)!.getOption().dataZoom).toEqual(
+      expect.arrayContaining([expect.objectContaining({ start: 0, end: 100 })]),
+    );
+    const phaseChart = getInstanceByDom(phase.firstElementChild as HTMLElement)!;
+    phaseChart.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: 20, end: 60 });
+    let completeRun!: (value: typeof original) => void;
+    vi.mocked(getMeasurementTracePreview).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeRun = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByTitle("Inspect run run-2"));
+    await screen.findByText("正在读取有界波形预览…");
+    await waitFor(() => expect(phaseChart.isDisposed()).toBe(true));
+    expect(
+      screen.queryByRole("img", { name: "S21 phase: phase(S21) [rad] by Frequency [GHz]" }),
+    ).not.toBeInTheDocument();
+    await act(async () => completeRun(original));
+    const nextRun = await screen.findByRole("img", {
+      name: "S21 magnitude: |S21| [ratio] by Frequency [GHz]",
+    });
+    await waitFor(() =>
+      expect(getInstanceByDom(nextRun.firstElementChild as HTMLElement)).toBeDefined(),
+    );
+    expect(
+      getInstanceByDom(nextRun.firstElementChild as HTMLElement)!.getOption().dataZoom,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ start: 0, end: 100 })]));
   });
 
   it("forwards entity chip selection to the bounded trace query", async () => {
