@@ -270,7 +270,7 @@ function AnalysisFigureView({
             )}
             {showMetadata && (
               <details>
-                <summary>Retained source and projection</summary>
+                <summary>保留的数据来源与投影</summary>
                 {layer.source.kind === "dataset" ? (
                   <p>
                     本发布中的数据集输出： <code>{layer.source.output_id}</code>
