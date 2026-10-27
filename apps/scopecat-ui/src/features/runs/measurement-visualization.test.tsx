@@ -1244,6 +1244,133 @@ describe("measurement visualization", () => {
     ).toBeVisible();
   });
 
+  it.each(
+    [0, 4096, 8192].flatMap((offset) =>
+      ["full", "sparse", "out-of-order"].map((order) => ({ offset, order })),
+    ),
+  )(
+    "plots only the labelled scalar window at $offset for $order records",
+    async ({ offset, order }) => {
+      const total = 9000;
+      const schema: MeasurementDatasetSchema = {
+        ...scalarSchema(),
+        dimensions: [{ id: "point", kind: "point", size: total }],
+        point_domain: {
+          kind: "product_grid",
+          axes: [
+            gridAxis(
+              "bias",
+              Array.from({ length: total }, (_, i) => scalar(100 + i / 4, "V")),
+            ),
+          ],
+        },
+        variables: [
+          ...scalarSchema().variables!,
+          {
+            id: "other",
+            label: "Other",
+            role: "observable",
+            dtype: "float64",
+            unit: "K",
+            dims: ["point"],
+          },
+        ],
+      };
+      const count = Math.min(4096, total - offset);
+      let items = Array.from({ length: count }, (_, i) =>
+        record(
+          offset + i,
+          { bias: scalar(100 + (offset + i) / 4, "V") },
+          {
+            signal: scalar((offset + i) * 2, "ratio"),
+            other:
+              i === 2
+                ? {
+                    kind: "unavailable",
+                    reason: "overload",
+                    dtype: "float64",
+                    unit: "K",
+                    shape: [],
+                    metadata: {},
+                  }
+                : scalar(-(offset + i), "K"),
+          },
+        ),
+      );
+      if (order === "sparse") items = items.filter((_, i) => i % 3 !== 1);
+      if (order === "out-of-order") items.reverse();
+      const slice = {
+        ...slicePreview(schema, items),
+        selectedPointCount: total,
+        offset,
+        windowPointCount: count,
+        truncated: true,
+        previousOffset: offset ? offset - 4096 : undefined,
+        nextOffset: offset + count < total ? offset + 4096 : undefined,
+      };
+      const props = {
+        preview: { schema, items: [], livePointIndex: 8999 },
+        slice,
+        sliceError: null,
+        slicePending: false,
+        fixedAxisIndices: {},
+        measurementAxes: { xAxisId: "bias" },
+        onFixedAxisIndexChange: vi.fn(),
+      };
+      const view = render(<MeasurementDataPreview {...props} />);
+      expect(screen.getByText(/CURRENT WINDOW · NOT FULL DATA/)).toBeVisible();
+      const runtime = vi.mocked(EChartRuntime);
+      await waitFor(() =>
+        expect(runtime.mock.lastCall?.[0].option.series).toEqual([
+          expect.objectContaining({
+            type: "scatter",
+            data: items.map((item) => [100 + item.point_index / 4, item.point_index * 2]),
+          }),
+        ]),
+      );
+      expect(screen.getByRole("button", { name: "Previous measurement window" })).toHaveProperty(
+        "disabled",
+        offset === 0,
+      );
+      expect(screen.getByRole("button", { name: "Next measurement window" })).toHaveProperty(
+        "disabled",
+        offset + count === total,
+      );
+      fireEvent.change(screen.getByLabelText("测量图表"), {
+        target: { value: "slice:other:value" },
+      });
+      await waitFor(() =>
+        expect(runtime.mock.lastCall?.[0].option.series).toEqual([
+          expect.objectContaining({
+            type: "scatter",
+            data: items
+              .filter((item) => item.observables.other?.kind !== "unavailable")
+              .map((item) => [100 + item.point_index / 4, -item.point_index]),
+          }),
+        ]),
+      );
+      const before = runtime.mock.lastCall?.[0].interactionKey;
+      view.rerender(<MeasurementDataPreview {...props} slicePending={true} />);
+      expect(screen.getByText(/正在读取当前切片，图表可能仍显示上次读取的数据/)).toBeVisible();
+      expect(runtime.mock.lastCall?.[0].interactionKey).toBe(before);
+      view.rerender(
+        <MeasurementDataPreview {...props} sliceError={new Error("window read failed")} />,
+      );
+      expect(
+        screen.getByText(/当前切片读取失败，数据可能已过时： window read failed/),
+      ).toBeVisible();
+      view.rerender(
+        <MeasurementDataPreview {...props} slice={{ ...slice, items: items.slice(0, -1) }} />,
+      );
+      expect(screen.queryByText(/window read failed/)).not.toBeInTheDocument();
+      expect(screen.getByLabelText("测量图表")).toHaveValue("slice:other:value");
+      view.rerender(<MeasurementDataPreview {...props} slice={{ ...slice, items: [] }} />);
+      expect(
+        screen.getByText(/CURRENT WINDOW · NOT FULL DATA. No saved scalar values/),
+      ).toBeVisible();
+    },
+  );
+
   it("navigates bounded logical-point windows for oversized slices", () => {
     const schema = threeDimensionalGridSchema();
     const items = slicedGridRecords([0]);
@@ -1270,6 +1397,8 @@ describe("measurement visualization", () => {
     );
 
     expect(screen.getByText(/Points 4,097–4,102 of 10,000/)).toBeVisible();
+    expect(screen.queryByText(/CURRENT WINDOW/)).not.toBeInTheDocument();
+    expect(screen.getByText(/The selected slice is too large for an automatic plot/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Previous measurement window" }));
     fireEvent.click(screen.getByRole("button", { name: "Next measurement window" }));
     expect(onSliceOffsetChange.mock.calls).toEqual([[0], [8192]]);
