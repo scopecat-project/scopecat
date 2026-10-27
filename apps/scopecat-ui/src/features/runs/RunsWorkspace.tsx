@@ -1,3 +1,4 @@
+import { measurementSelectionSchemaKey } from "./measurement-view-state";
 import * as Controls from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { RunAddressLabel } from "./RunAddressLabel";
@@ -38,6 +39,7 @@ import type {
 } from "../../types";
 import { useConfirmationDialog, type ConfirmationRequest } from "../../ui/ConfirmationDialog";
 import { classes, eyebrow, secondaryButton } from "../../ui/styles";
+import { MeasurementInteractionBoundary } from "./MeasurementWorkspace";
 import { RunHistoryList } from "./RunHistoryList";
 import { RunDetail } from "./RunDetail";
 import {
@@ -92,37 +94,26 @@ export function RunsWorkspace({
   const [olderRunHistory, setOlderRunHistory] = useState<OlderRunHistory>();
   const [requestedMeasurementAxes, setRequestedMeasurementAxes] = useState<{
     runId: string;
+    schemaKey: string;
     selection: MeasurementSliceSelection;
   }>();
   const [requestedMeasurementSlice, setRequestedMeasurementSlice] = useState<{
     runId: string;
+    schemaKey: string;
     fixedAxisIndices: Record<string, number>;
     offset: number;
     windowKey?: string;
   }>();
   const [requestedMeasurementTracePlan, setRequestedMeasurementTracePlan] = useState<{
     runId: string;
+    schemaKey: string;
     planId: string;
   }>();
   const [requestedMeasurementEntities, setRequestedMeasurementEntities] = useState<{
     runId: string;
+    schemaKey: string;
     selection: MeasurementEntitySelection;
   }>();
-  const handleMeasurementEntitySelectionChange = useCallback(
-    (selection: MeasurementEntitySelection) => {
-      if (!selectedRunId) return;
-      setRequestedMeasurementEntities((current) => {
-        if (
-          current?.runId === selectedRunId &&
-          JSON.stringify(current.selection) === JSON.stringify(selection)
-        ) {
-          return current;
-        }
-        return { runId: selectedRunId, selection };
-      });
-    },
-    [selectedRunId],
-  );
   const runsQuery = useQuery({
     queryKey: ["runs", health?.projectId],
     queryFn: ({ signal }) => getRuns(signal),
@@ -274,12 +265,40 @@ export function RunsWorkspace({
     }
     return [...items.values()];
   }, [runContentsQuery.data]);
+  const measurementSchemaKey = measurementSelectionSchemaKey(measurements?.schema);
+  const measurementSelectionReset = Boolean(
+    measurements?.schema &&
+    [requestedMeasurementAxes, requestedMeasurementSlice, requestedMeasurementTracePlan].some(
+      (selection) =>
+        selection?.runId === selectedRunId && selection?.schemaKey !== measurementSchemaKey,
+    ),
+  );
+  const handleMeasurementEntitySelectionChange = useCallback(
+    (selection: MeasurementEntitySelection) => {
+      if (!selectedRunId) return;
+      setRequestedMeasurementEntities((current) => {
+        if (
+          current?.runId === selectedRunId &&
+          current.schemaKey === measurementSchemaKey &&
+          JSON.stringify(current.selection) === JSON.stringify(selection)
+        ) {
+          return current;
+        }
+        return { runId: selectedRunId, schemaKey: measurementSchemaKey, selection };
+      });
+    },
+    [selectedRunId, measurementSchemaKey],
+  );
   const defaultSlicePlan = useMemo(
     () => measurementSlicePlan(measurements?.schema),
     [measurements?.schema],
   );
   const measurementAxes = useMemo(() => {
-    if (requestedMeasurementAxes && requestedMeasurementAxes.runId === selectedRunId)
+    if (
+      requestedMeasurementAxes &&
+      requestedMeasurementAxes.runId === selectedRunId &&
+      requestedMeasurementAxes.schemaKey === measurementSchemaKey
+    )
       return requestedMeasurementAxes.selection;
     if (!defaultSlicePlan?.numericAxes.length || !defaultSlicePlan.scalarObservableIds.length)
       return undefined;
@@ -287,7 +306,7 @@ export function RunsWorkspace({
       xAxisId: defaultSlicePlan.numericAxes[0]!.id,
       yAxisId: defaultSlicePlan.heatmap?.yAxis.id,
     };
-  }, [defaultSlicePlan, requestedMeasurementAxes, selectedRunId]);
+  }, [defaultSlicePlan, requestedMeasurementAxes, selectedRunId, measurementSchemaKey]);
   const slicePlan = useMemo(
     () => measurementSlicePlan(measurements?.schema, measurementAxes),
     [measurements?.schema, measurementAxes],
@@ -298,7 +317,8 @@ export function RunsWorkspace({
   );
   const requestedTracePlanId =
     requestedMeasurementTracePlan !== undefined &&
-    requestedMeasurementTracePlan.runId === selectedRunId
+    requestedMeasurementTracePlan.runId === selectedRunId &&
+    requestedMeasurementTracePlan.schemaKey === measurementSchemaKey
       ? requestedMeasurementTracePlan.planId
       : undefined;
   const selectedTracePlan =
@@ -308,25 +328,31 @@ export function RunsWorkspace({
       Object.fromEntries(
         (slicePlan?.fixedAxes ?? []).map((axis) => {
           const requested =
-            requestedMeasurementSlice?.runId === selectedRunId
+            requestedMeasurementSlice?.runId === selectedRunId &&
+            requestedMeasurementSlice?.schemaKey === measurementSchemaKey
               ? requestedMeasurementSlice?.fixedAxisIndices[axis.id]
               : undefined;
-          return [axis.id, requested !== undefined && requested < axis.size ? requested : 0];
+          return [
+            axis.id,
+            requested !== undefined && requested >= 0 && requested < axis.size ? requested : 0,
+          ];
         }),
       ),
-    [requestedMeasurementSlice, selectedRunId, slicePlan],
+    [requestedMeasurementSlice, selectedRunId, slicePlan, measurementSchemaKey],
   );
   const measurementSliceKey = JSON.stringify(measurementFixedAxisIndices);
   const measurementSliceOffset =
     requestedMeasurementSlice !== undefined &&
     requestedMeasurementSlice.runId === selectedRunId &&
+    requestedMeasurementSlice?.schemaKey === measurementSchemaKey &&
     (requestedMeasurementSlice.windowKey ??
       JSON.stringify(requestedMeasurementSlice.fixedAxisIndices)) === measurementSliceKey
       ? requestedMeasurementSlice.offset
       : 0;
   const currentMeasurementEntitySelection =
     requestedMeasurementEntities !== undefined &&
-    requestedMeasurementEntities.runId === selectedRunId
+    requestedMeasurementEntities.runId === selectedRunId &&
+    requestedMeasurementEntities.schemaKey === measurementSchemaKey
       ? requestedMeasurementEntities.selection
       : {};
   const selectedTraceEntityIndices = selectedTracePlan?.entityAxisId
@@ -607,116 +633,135 @@ export function RunsWorkspace({
           className="min-h-[620px] min-w-0 bg-panel p-3 max-[880px]:min-h-[580px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-3.5 max-[680px]:py-3"
           aria-label="选中 run 详情"
         >
-          {daemonUnavailable ? (
-            <DetailEmpty
-              icon={<Unplug />}
-              title="Connect to the local daemon"
-              detail="Project status and run data are read directly from the daemon. This console does not maintain an offline copy."
-            />
-          ) : selectedRun ? (
-            <RunDetail
-              onOpenRun={onSelectRun}
-              projectId={health?.projectId}
-              collectionNames={collectionNames}
-              run={selectedRun}
-              events={selectedEvents}
-              eventsError={selectedEventsQuery.error}
-              eventsPending={selectedEventsQuery.isPending}
-              executionSegments={executionSegmentsQuery.data}
-              executionSegmentsError={executionSegmentsQuery.error}
-              executionSegmentsPending={executionSegmentsQuery.isPending}
-              domainDecisions={runDomainDecisionsQuery.data}
-              domainDecisionsError={runDomainDecisionsQuery.error}
-              domainDecisionsPending={runDomainDecisionsQuery.isPending}
-              measurements={measurements}
-              measurementsError={measurementsQuery.error}
-              measurementsPending={measurementsQuery.isPending}
-              liveMeasurementsError={liveMeasurementsQuery.error}
-              measurementSlice={measurementSliceQuery.data}
-              measurementSliceError={measurementSliceQuery.error}
-              measurementSlicePending={measurementSliceQuery.isFetching}
-              tracePlans={tracePlans}
-              selectedTracePlanId={selectedTracePlan?.id}
-              tracePreview={measurementTraceQuery.data}
-              traceError={measurementTraceQuery.error}
-              tracePending={measurementTraceQuery.isPending}
-              traceRefreshing={measurementTraceQuery.isFetching && !measurementTraceQuery.isPending}
-              onTracePlanChange={(planId) => {
-                setRequestedMeasurementTracePlan({
-                  runId: selectedRunId!,
-                  planId,
-                });
-              }}
-              onMeasurementEntitySelectionChange={handleMeasurementEntitySelectionChange}
-              measurementAxes={measurementAxes}
-              onMeasurementAxesChange={(selection) => {
-                setRequestedMeasurementAxes({ runId: selectedRunId!, selection });
-                setRequestedMeasurementSlice((current) => ({
-                  runId: selectedRunId!,
-                  fixedAxisIndices: {
-                    ...(current && current.runId === selectedRunId ? current.fixedAxisIndices : {}),
-                    ...measurementFixedAxisIndices,
-                  },
-                  offset: 0,
-                }));
-              }}
-              measurementFixedAxisIndices={measurementFixedAxisIndices}
-              onMeasurementSliceOffsetChange={(offset) => {
-                setRequestedMeasurementSlice({
-                  runId: selectedRunId!,
-                  fixedAxisIndices: {
-                    ...(requestedMeasurementSlice?.runId === selectedRunId
-                      ? requestedMeasurementSlice?.fixedAxisIndices
-                      : undefined),
-                    ...measurementFixedAxisIndices,
-                  },
-                  windowKey: measurementSliceKey,
-                  offset,
-                });
-              }}
-              onMeasurementFixedAxisIndexChange={(axisId, index) => {
-                setRequestedMeasurementSlice({
-                  runId: selectedRunId!,
-                  fixedAxisIndices: {
-                    ...(requestedMeasurementSlice &&
-                    requestedMeasurementSlice.runId === selectedRunId
-                      ? requestedMeasurementSlice.fixedAxisIndices
-                      : {}),
-                    ...measurementFixedAxisIndices,
-                    [axisId]: index,
-                  },
-                  offset: 0,
-                });
-              }}
-              contentsError={runContentsQuery.error}
-              contentsPending={runContentsQuery.isPending}
-              contentsHasNextPage={runContentsQuery.hasNextPage}
-              contentsLoadingNextPage={runContentsQuery.isFetchingNextPage}
-              onLoadOlderContents={() => void runContentsQuery.fetchNextPage()}
-              attentionError={attentionMutation.error}
-              attentionPending={attentionMutation.isPending}
-              onResolveAttention={() => {
-                const confirmation = attentionConfirmation();
-                requestConfirmation({
-                  ...confirmation,
-                  onConfirm: () => attentionMutation.mutate(selectedRun.runId),
-                });
-              }}
-              onOpenSample={onOpenSample}
-            />
-          ) : runsQuery.isPending ? (
-            <DetailEmpty
-              icon={<LoaderCircle className="animate-spin" />}
-              title="Loading run details"
-              detail="The project run index is being read."
-            />
-          ) : (
-            <DetailEmpty
-              icon={<CircleDot />}
-              title="No run selected"
-              detail="Choose a run to inspect its progress, resource claims, events, and data contents."
-            />
-          )}
+          <MeasurementInteractionBoundary key={JSON.stringify([health?.projectId, selectedRunId])}>
+            {daemonUnavailable ? (
+              <DetailEmpty
+                icon={<Unplug />}
+                title="Connect to the local daemon"
+                detail="Project status and run data are read directly from the daemon. This console does not maintain an offline copy."
+              />
+            ) : selectedRun ? (
+              <RunDetail
+                onOpenRun={onSelectRun}
+                projectId={health?.projectId}
+                collectionNames={collectionNames}
+                run={selectedRun}
+                events={selectedEvents}
+                eventsError={selectedEventsQuery.error}
+                eventsPending={selectedEventsQuery.isPending}
+                executionSegments={executionSegmentsQuery.data}
+                executionSegmentsError={executionSegmentsQuery.error}
+                executionSegmentsPending={executionSegmentsQuery.isPending}
+                domainDecisions={runDomainDecisionsQuery.data}
+                domainDecisionsError={runDomainDecisionsQuery.error}
+                domainDecisionsPending={runDomainDecisionsQuery.isPending}
+                measurementSelectionReset={measurementSelectionReset}
+                measurements={measurements}
+                measurementsError={measurementsQuery.error}
+                measurementsPending={measurementsQuery.isPending}
+                liveMeasurementsError={liveMeasurementsQuery.error}
+                measurementSlice={measurementSliceQuery.data}
+                measurementSliceError={measurementSliceQuery.error}
+                measurementSlicePending={measurementSliceQuery.isFetching}
+                tracePlans={tracePlans}
+                selectedTracePlanId={selectedTracePlan?.id}
+                tracePreview={measurementTraceQuery.data}
+                traceError={measurementTraceQuery.error}
+                tracePending={measurementTraceQuery.isPending}
+                traceRefreshing={
+                  measurementTraceQuery.isFetching && !measurementTraceQuery.isPending
+                }
+                onTracePlanChange={(planId) => {
+                  setRequestedMeasurementTracePlan({
+                    runId: selectedRunId!,
+                    schemaKey: measurementSchemaKey,
+                    planId,
+                  });
+                }}
+                onMeasurementEntitySelectionChange={handleMeasurementEntitySelectionChange}
+                measurementAxes={measurementAxes}
+                onMeasurementAxesChange={(selection) => {
+                  setRequestedMeasurementAxes({
+                    runId: selectedRunId!,
+                    schemaKey: measurementSchemaKey,
+                    selection,
+                  });
+                  setRequestedMeasurementSlice((current) => ({
+                    runId: selectedRunId!,
+                    schemaKey: measurementSchemaKey,
+                    fixedAxisIndices: {
+                      ...(current &&
+                      current.runId === selectedRunId &&
+                      current.schemaKey === measurementSchemaKey
+                        ? current.fixedAxisIndices
+                        : {}),
+                      ...measurementFixedAxisIndices,
+                    },
+                    offset: 0,
+                  }));
+                }}
+                measurementFixedAxisIndices={measurementFixedAxisIndices}
+                onMeasurementSliceOffsetChange={(offset) => {
+                  setRequestedMeasurementSlice({
+                    runId: selectedRunId!,
+                    schemaKey: measurementSchemaKey,
+                    fixedAxisIndices: {
+                      ...(requestedMeasurementSlice?.runId === selectedRunId &&
+                      requestedMeasurementSlice?.schemaKey === measurementSchemaKey
+                        ? requestedMeasurementSlice?.fixedAxisIndices
+                        : undefined),
+                      ...measurementFixedAxisIndices,
+                    },
+                    windowKey: measurementSliceKey,
+                    offset,
+                  });
+                }}
+                onMeasurementFixedAxisIndexChange={(axisId, index) => {
+                  setRequestedMeasurementSlice({
+                    runId: selectedRunId!,
+                    schemaKey: measurementSchemaKey,
+                    fixedAxisIndices: {
+                      ...(requestedMeasurementSlice &&
+                      requestedMeasurementSlice.runId === selectedRunId &&
+                      requestedMeasurementSlice?.schemaKey === measurementSchemaKey
+                        ? requestedMeasurementSlice.fixedAxisIndices
+                        : {}),
+                      ...measurementFixedAxisIndices,
+                      [axisId]: index,
+                    },
+                    offset: 0,
+                  });
+                }}
+                contentsError={runContentsQuery.error}
+                contentsPending={runContentsQuery.isPending}
+                contentsHasNextPage={runContentsQuery.hasNextPage}
+                contentsLoadingNextPage={runContentsQuery.isFetchingNextPage}
+                onLoadOlderContents={() => void runContentsQuery.fetchNextPage()}
+                attentionError={attentionMutation.error}
+                attentionPending={attentionMutation.isPending}
+                onResolveAttention={() => {
+                  const confirmation = attentionConfirmation();
+                  requestConfirmation({
+                    ...confirmation,
+                    onConfirm: () => attentionMutation.mutate(selectedRun.runId),
+                  });
+                }}
+                onOpenSample={onOpenSample}
+              />
+            ) : runsQuery.isPending ? (
+              <DetailEmpty
+                icon={<LoaderCircle className="animate-spin" />}
+                title="Loading run details"
+                detail="The project run index is being read."
+              />
+            ) : (
+              <DetailEmpty
+                icon={<CircleDot />}
+                title="No run selected"
+                detail="Choose a run to inspect its progress, resource claims, events, and data contents."
+              />
+            )}
+          </MeasurementInteractionBoundary>
         </section>
       </div>
       {confirmationDialog}

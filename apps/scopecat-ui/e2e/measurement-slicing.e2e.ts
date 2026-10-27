@@ -143,6 +143,15 @@ test("browses independent dimensions and keeps a compatible signal across slices
     await expect(page.getByTestId("measurement-slice-summary")).toContainText("Mode = high");
     await expectSlice({ repeat: 1, mode: 1 }, 12);
     await expect(chart).toHaveValue(phase);
+    for (const destination of [/Analyses$/, /Samples$/]) {
+      await page.getByRole("button", { name: destination }).click();
+      await page.getByRole("button", { name: /Runs$/ }).click();
+      await expect(chart).toHaveValue(phase);
+      await expect(page.getByLabel("Horizontal axis")).toHaveValue(frequency);
+      await expect(page.getByLabel("Vertical axis")).toHaveValue(bias);
+      await expect(page.getByLabel("Mode slice", { exact: true })).toHaveValue("1");
+      await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 1");
+    }
     await page.screenshot({
       path: testInfo.outputPath("multidimensional-heatmap.png"),
       fullPage: true,
@@ -433,6 +442,9 @@ test("contains large-axis controls and multi-series plots in normal and focused 
     const runtime = page.locator("figure [role=img] [_echarts_instance_]");
     const instance = await runtime.getAttribute("_echarts_instance_");
     expect(instance).toBeTruthy();
+    const labels = () => runtime.locator("svg text").allTextContents();
+    const automaticLabels = await labels();
+    await runtime.scrollIntoViewIfNeeded();
     const plotBounds = (await runtime.boundingBox())!;
     await page.mouse.move(
       plotBounds.x + plotBounds.width / 2,
@@ -441,6 +453,10 @@ test("contains large-axis controls and multi-series plots in normal and focused 
     await page.keyboard.down("Shift");
     await page.mouse.wheel(0, -300);
     await page.keyboard.up("Shift");
+    await expect.poll(labels).not.toEqual(automaticLabels);
+    await page.mouse.move(0, 0);
+    await expect(runtime.locator("svg text").last()).toHaveText("Repeat 1");
+    const manualLabels = await labels();
     let finishRefresh: (() => void) | undefined;
     const traceRoute = "**/measurements/traces/query";
     await page.route(traceRoute, async (route) => {
@@ -478,6 +494,60 @@ test("contains large-axis controls and multi-series plots in normal and focused 
       await expect(runtime).toHaveAttribute("_echarts_instance_", instance!);
     } finally {
       finishRefresh?.();
+      await page.unroute(traceRoute);
+    }
+    // A real failed HTTP read removes the plot, then a native SSE-open handler
+    // resets queries. Hold the successful retry to observe the empty pending state.
+    await page.route(traceRoute, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "synthetic trace read failure" }),
+      }),
+    );
+    await page.evaluate((eventRunId) => {
+      const stream = (
+        globalThis as unknown as { measurementStreams: EventSource[] }
+      ).measurementStreams.find((source) => source.readyState !== EventSource.CLOSED)!;
+      stream.dispatchEvent(
+        new MessageEvent("project", {
+          data: JSON.stringify({
+            event_id: 1000000,
+            kind: "measurements_sealed",
+            run_id: eventRunId,
+            payload: {},
+          }),
+        }),
+      );
+    }, traceRunId);
+    await expect(page.getByText(/波形不可用：.*synthetic trace read failure/)).toBeVisible();
+    await expect(runtime).toHaveCount(0);
+    await page.unroute(traceRoute);
+    let finishRetry: (() => void) | undefined;
+    await page.route(traceRoute, async (route) => {
+      const response = await route.fetch();
+      await new Promise<void>((resolve) => {
+        finishRetry = resolve;
+      });
+      await route.fulfill({ response });
+    });
+    try {
+      await page.evaluate(() => {
+        const stream = (
+          globalThis as unknown as { measurementStreams: EventSource[] }
+        ).measurementStreams.find((source) => source.readyState !== EventSource.CLOSED)!;
+        stream.dispatchEvent(new Event("open"));
+      });
+      await expect(page.getByText("正在读取有界波形预览…", { exact: true })).toBeVisible();
+      await expect(runtime).toHaveCount(0);
+      await expect.poll(() => Boolean(finishRetry)).toBe(true);
+      finishRetry!();
+      await expect(runtime).toBeVisible();
+      await expect.poll(labels).toEqual(manualLabels);
+      await page.getByRole("button", { name: "恢复自动范围", exact: true }).click();
+      await expect.poll(labels).toEqual(automaticLabels);
+    } finally {
+      finishRetry?.();
       await page.unroute(traceRoute);
     }
     for (const width of [1280, 390]) {

@@ -409,17 +409,22 @@ export default function App() {
                 />
               </Suspense>
             </div>
-            {view === "runs" && !healthQuery.isPending && (
-              <RunsWorkspace
-                focused={focused}
-                selectedRunId={selectedRunId}
-                onSelectRun={selectRun}
-                health={healthQuery.data}
-                healthPending={healthQuery.isPending}
-                healthReachable={daemonReachable}
-                daemonUnavailable={daemonUnavailable}
-                onOpenSample={openRunSample}
-              />
+            {!healthQuery.isPending && (
+              <RetainedView
+                key={healthQuery.data?.projectId}
+                mode={view === "runs" ? "visible" : "hidden"}
+              >
+                <RunsWorkspace
+                  focused={focused}
+                  selectedRunId={selectedRunId}
+                  onSelectRun={selectRun}
+                  health={healthQuery.data}
+                  healthPending={healthQuery.isPending}
+                  healthReachable={daemonReachable}
+                  daemonUnavailable={daemonUnavailable}
+                  onOpenSample={openRunSample}
+                />
+              </RetainedView>
             )}
           </LaunchDraftProvider>
           {healthQuery.data?.projectId && (

@@ -10,6 +10,7 @@ import type {
   MeasurementValue,
 } from "../../api-contract";
 import { EChartRuntime } from "../../ui/EChartRuntime";
+import { MeasurementInteractionBoundary } from "./MeasurementWorkspace";
 import { MeasurementDataPreview } from "./MeasurementDataPreview";
 import {
   measurementEntityAxes,
@@ -287,6 +288,49 @@ describe("measurement visualization", () => {
     ];
 
     expect(measurementTable(items, scalarSchema()).rows[0]?.cells).toEqual(["0", "0.1", "2"]);
+  });
+
+  it("retains exact entity choices across unavailable content and isolates another run", () => {
+    const schema = entityScalarSchema();
+    const items = [record(0, { bias: scalar(0, "V") }, { readout: entityArray([1, 11], "ratio") })];
+    const content = (
+      <MeasurementDataPreview
+        preview={{ schema, items }}
+        slice={slicePreview(schema, items)}
+        sliceError={null}
+        slicePending={false}
+        fixedAxisIndices={{}}
+        onFixedAxisIndexChange={vi.fn()}
+      />
+    );
+    const view = render(
+      <MeasurementInteractionBoundary key="run-a">{content}</MeasurementInteractionBoundary>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Qubit Q1" }));
+    expect(screen.getByRole("button", { name: "Qubit Q1" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    view.rerender(
+      <MeasurementInteractionBoundary key="run-a">
+        <p role="alert">synthetic read error</p>
+      </MeasurementInteractionBoundary>,
+    );
+    expect(screen.queryByRole("button", { name: "Qubit Q1" })).not.toBeInTheDocument();
+    view.rerender(
+      <MeasurementInteractionBoundary key="run-a">{content}</MeasurementInteractionBoundary>,
+    );
+    expect(screen.getByRole("button", { name: "Qubit Q1" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    view.rerender(
+      <MeasurementInteractionBoundary key="run-b">{content}</MeasurementInteractionBoundary>,
+    );
+    expect(screen.getByRole("button", { name: "Qubit Q1" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   it("compares entity scalar values by default and filters them with identity chips", () => {
