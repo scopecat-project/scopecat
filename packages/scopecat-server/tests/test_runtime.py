@@ -1594,7 +1594,9 @@ def test_resource_rejection_rolls_back_terminal_state_if_close_fails(
         assert _control_run(runtime, contender.run_id).state == "closed"
 
 
-def test_run_coverage_is_contiguous_durable_and_retryable(tmp_path: Path) -> None:
+def test_run_coverage_is_contiguous_durable_and_retryable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     with LocalDaemonRuntime(
         tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
     ) as runtime:
@@ -1606,6 +1608,35 @@ def test_run_coverage_is_contiguous_durable_and_retryable(tmp_path: Path) -> Non
             ExecutorStartRequest(executor_id="notebook-1"),
         )
         executor = runtime.application.executor
+
+        append_event = SQLiteControlPlane.append_event_in_transaction
+
+        def fail_after_event(
+            control: SQLiteControlPlane,
+            connection: sqlite3.Connection,
+            event: DurableEventInput,
+        ) -> DurableEvent:
+            result = append_event(control, connection, event)
+            if event.kind == "run_coverage_advanced":
+                raise RuntimeError("coverage transaction failed")
+            return result
+
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                SQLiteControlPlane, "append_event_in_transaction", fail_after_event
+            )
+            with pytest.raises(RuntimeError, match="coverage transaction failed"):
+                executor.advance_run_coverage(
+                    admission.run_id,
+                    RunCoverageAdvanceCommand(
+                        lease_id=lease.lease_id, start_index=0, point_count=1
+                    ),
+                )
+        assert executor.run_coverage(admission.run_id).completed_point_count == 0
+        assert not any(
+            event.kind == "run_coverage_advanced"
+            for event in _events(runtime, run_id=admission.run_id).items
+        )
 
         initial = executor.run_coverage(admission.run_id)
         first = executor.advance_run_coverage(
@@ -1657,6 +1688,15 @@ def test_run_coverage_is_contiguous_durable_and_retryable(tmp_path: Path) -> Non
         assert retry == first
         assert completed.completed_point_count == 3
         assert historical_retry == completed
+        coverage_events = [
+            event
+            for event in _events(runtime, run_id=admission.run_id).items
+            if event.kind == "run_coverage_advanced"
+        ]
+        assert [event.payload for event in coverage_events] == [
+            {"completed_point_count": 1},
+            {"completed_point_count": 3},
+        ]
 
 
 def test_recovery_groups_are_sparse_idempotent_and_survive_restart(
