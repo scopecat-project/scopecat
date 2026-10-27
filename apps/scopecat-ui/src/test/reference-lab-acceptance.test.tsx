@@ -241,7 +241,7 @@ describe("shared reference-lab acceptance", () => {
       />,
     );
     fireEvent.click(screen.getByText(/Record table/));
-    expect(screen.getByText("0.02 K")).toBeVisible();
+    expect(await screen.findByText("0.02 K")).toBeVisible();
     expect(preview.items[0]?.acquisition_evidence?.events?.[0]?.instrument_id).toBe(
       "mixing-chamber",
     );
