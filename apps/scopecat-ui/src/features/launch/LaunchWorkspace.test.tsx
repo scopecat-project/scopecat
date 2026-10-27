@@ -842,9 +842,7 @@ it("reopens a pinned draft even when its experiment is absent from current code"
   expect(await screen.findByLabelText("Amplitude")).toHaveValue("0.72");
   expect(await screen.findByRole("link", { name: "Reopen this saved draft" })).toBeVisible();
   expect(revisions).toEqual(["sha256:historical-code"]);
-  expect(
-    screen.getByText(/This draft is pinned to author revision sha256:historical-code/),
-  ).toBeVisible();
+  expect(screen.getByText(/此草稿固定使用作者源码修订 sha256:historical-code/)).toBeVisible();
   expect(new URL(window.location.href).searchParams.get("draft")).toBe("pinned-b");
 });
 

@@ -387,9 +387,9 @@ export function LaunchWorkspace({
         />
         {codeRevision && (
           <div className="space-y-2">
-            <p>
-              This draft is pinned to author revision {codeRevision.content_hash}. Refresh prepares
-              the workspace's current code without changing this pinned plan.
+            <p className="[overflow-wrap:anywhere]">
+              此草稿固定使用作者源码修订 {codeRevision.content_hash}。刷新会准备工作区当前源码，
+              不会改变此固定版本计划。
             </p>
             <button
               type="button"
