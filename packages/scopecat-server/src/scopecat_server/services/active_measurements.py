@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Lock
+from time import monotonic
 
 from scopecat.daemon.views import MeasurementLivePreview
 from scopecat.records.measurement import (
@@ -18,6 +19,7 @@ from scopecat.records.measurement_recording import (
 
 MEASUREMENT_CHUNK_RECORD_LIMIT = 256
 MEASUREMENT_CHUNK_VALUE_BYTE_LIMIT = 8 * 1024 * 1024
+MEASUREMENT_CHUNK_INTERVAL_SECONDS = 0.1
 
 
 class ActiveMeasurementConflict(ValueError):
@@ -33,6 +35,7 @@ class _ActiveMeasurementDataset:
     pending: list[MeasurementRecord] = field(default_factory=list)
     pending_value_bytes: int = 0
     latest: MeasurementRecord | None = None
+    last_commit_at: float = field(default_factory=lambda: monotonic())
 
 
 class ActiveMeasurementStore:
@@ -95,6 +98,7 @@ class ActiveMeasurementStore:
         *,
         force: bool,
     ) -> tuple[MeasurementRecord, ...]:
+        """Select on ingest/explicit flush; elapsed time is not a background timer."""
         with self._lock:
             active = self._require(run_id)
             if not active.pending:
@@ -102,6 +106,8 @@ class ActiveMeasurementStore:
             if not force and (
                 len(active.pending) < self._record_limit
                 and active.pending_value_bytes < self._value_byte_limit
+                and monotonic() - active.last_commit_at
+                < MEASUREMENT_CHUNK_INTERVAL_SECONDS
             ):
                 return ()
             selected: list[MeasurementRecord] = []
@@ -131,6 +137,9 @@ class ActiveMeasurementStore:
                 _measurement_record_value_bytes(record) for record in records
             )
             active.durable_record_count += len(records)
+            # Start the next interval after the transaction succeeds, so slow
+            # storage itself does not consume the next batching interval.
+            active.last_commit_at = monotonic()
 
     def preview(
         self,
