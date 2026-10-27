@@ -311,7 +311,7 @@ test("finds the same run, sample and space publications from either direct input
       )
       .toBeGreaterThan(projectScroll - 100);
     await page.goForward();
-    await expect(page.getByRole("heading", { name: "Data", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "数据", exact: true })).toBeVisible();
     await page.goBack();
     await page.reload();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);

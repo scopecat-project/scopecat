@@ -116,7 +116,9 @@ test("repeats a retained ordinary analysis with its original source after author
     await expect(popup).toHaveURL(new RegExp(encodeURIComponent(seed.run)));
     await popup.close();
     const row = data.locator("li").filter({
-      has: page.locator(`a[href="/?run=${encodeURIComponent(seed.run)}"]`),
+      has: page.locator(
+        `a[href="/?${new URLSearchParams({ run: seed.run, focus: "run" }).toString()}#runs"]`,
+      ),
     });
     await expect(row).toHaveCount(1);
     await row.getByRole("button").first().click();
