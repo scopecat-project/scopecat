@@ -103,7 +103,7 @@ test("recovers directory loading and starts declared analyses from the retained 
     });
     await page.locator("summary").filter({ hasText: "分析此结果" }).click();
     await expect(
-      page.getByRole("status").filter({ hasText: "Could not load declared analyses" }),
+      page.getByRole("status").filter({ hasText: "无法加载已声明的分析" }),
     ).toBeVisible();
     expect(retainedWorkers(project)).toEqual([]);
     expect(posts).toBe(0);
