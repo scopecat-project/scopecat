@@ -140,10 +140,10 @@ test("Start prepares internally while cancelled and edited preparations never ac
     expect(await runs()).toHaveLength(0);
     await page.getByLabel("Gain", { exact: true }).fill("3");
     await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency start").fill("4.8");
-    await page.getByLabel("Frequency stop").fill("4.9");
-    await page.getByLabel("Frequency points").fill("2");
+    await page.getByLabel("Frequency 取值来源").selectOption("range");
+    await page.getByLabel("Frequency 起点").fill("4.8");
+    await page.getByLabel("Frequency 终点").fill("4.9");
+    await page.getByLabel("Frequency 点数").fill("2");
     const preview = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/preview"),
     );
@@ -175,7 +175,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await page.getByRole("link", { name: "返回准备", exact: true }).click();
     await expect(page.getByRole("region", { name: "准备实验", exact: true })).toBeFocused();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
-    await expect(page.getByLabel("Frequency points")).toHaveValue("2");
+    await expect(page.getByLabel("Frequency 点数")).toHaveValue("2");
     await expect(page.getByRole("region", { name: "当前执行", exact: true })).toBeHidden();
     await page.getByRole("button", { name: "监看", exact: true }).click();
     await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
@@ -197,13 +197,13 @@ test("Start prepares internally while cancelled and edited preparations never ac
       ),
     ).toBeVisible();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
-    await expect(page.getByLabel("Frequency points")).toHaveValue("2");
+    await expect(page.getByLabel("Frequency 点数")).toHaveValue("2");
     await page.getByLabel("Gain", { exact: true }).fill("4");
     await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "准备另一次采集", exact: true }).click();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("4");
-    await expect(page.getByLabel("Frequency points")).toHaveValue("2");
+    await expect(page.getByLabel("Frequency 点数")).toHaveValue("2");
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     expect(await runs()).toHaveLength(1);
     await page.screenshot({

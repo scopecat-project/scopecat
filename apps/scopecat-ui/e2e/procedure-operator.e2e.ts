@@ -332,11 +332,11 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await chooseReferenceContext(page);
     await page.getByLabel("样品 ID").fill("sample-navigation");
     await page.getByRole("textbox", { name: "操作人", exact: true }).fill("draft-author");
-    await page.getByLabel("Delay source").selectOption("range");
-    await page.getByLabel("Delay unit").selectOption("ns");
-    await page.getByLabel("Delay start").fill("16");
-    await page.getByLabel("Delay stop").fill("48");
-    await page.getByLabel("Delay points").fill("3");
+    await page.getByLabel("Delay 取值来源").selectOption("range");
+    await page.getByLabel("Delay 单位").selectOption("ns");
+    await page.getByLabel("Delay 起点").fill("16");
+    await page.getByLabel("Delay 终点").fill("48");
+    await page.getByLabel("Delay 点数").fill("3");
     for (const destination of [
       "参数与绑定 / Configuration",
       "设备与驱动 / Devices and drivers",
@@ -355,16 +355,16 @@ test("retains launch inputs across workspaces and invalidates previews without s
       await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
         "draft-author",
       );
-      await expect(page.getByLabel("Delay source")).toHaveValue("range");
-      await expect(page.getByLabel("Delay unit")).toHaveValue("ns");
-      await expect(page.getByLabel("Delay start")).toHaveValue("16");
-      await expect(page.getByLabel("Delay stop")).toHaveValue("48");
-      await expect(page.getByLabel("Delay points")).toHaveValue("3");
+      await expect(page.getByLabel("Delay 取值来源")).toHaveValue("range");
+      await expect(page.getByLabel("Delay 单位")).toHaveValue("ns");
+      await expect(page.getByLabel("Delay 起点")).toHaveValue("16");
+      await expect(page.getByLabel("Delay 终点")).toHaveValue("48");
+      await expect(page.getByLabel("Delay 点数")).toHaveValue("3");
     }
     expect(submissions).toBe(0);
     await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
-    await page.getByLabel("Delay points").fill("2");
+    await page.getByLabel("Delay 点数").fill("2");
     await expect(page.getByText("预览就绪", { exact: true })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "开始采集" })).toBeEnabled();
     expect(submissions).toBe(0);

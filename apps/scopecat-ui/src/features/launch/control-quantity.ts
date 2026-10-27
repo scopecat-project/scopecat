@@ -13,8 +13,7 @@ const prefixes = new Set(["G", "M", "k", "m", "u", "n"]);
 /** Only registry units; bare prefixes are relative to the unprefixed unit. */
 export function controlNumber(text: string, unit: string | null): number {
   const match = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([^\s]*)\s*$/.exec(text);
-  if (!match || !Number.isFinite(Number(match[1])))
-    throw new Error("Control values must be finite numbers.");
+  if (!match || !Number.isFinite(Number(match[1]))) throw new Error("控制值必须是有限数值。");
   const value = Number(match[1]);
   let suffix = match[2]!.replaceAll("µ", "u").replaceAll("μ", "u");
   if (!suffix) return value;
@@ -32,7 +31,7 @@ export function controlNumber(text: string, unit: string | null): number {
   )
     throw new Error(`未知或不兼容的单位：${match[2]}。`);
   const result = (value * source.scale) / target.scale;
-  if (!Number.isFinite(result)) throw new Error("Control values must be finite numbers.");
+  if (!Number.isFinite(result)) throw new Error("控制值必须是有限数值。");
   return result;
 }
 export function convertControlNumber(text: string, from: string | null, to: string | null): string {
@@ -49,6 +48,6 @@ export function convertControlNumber(text: string, from: string | null, to: stri
   )
     throw new Error("请选择兼容的单位。");
   const result = (value * source.scale) / target.scale;
-  if (!Number.isFinite(result)) throw new Error("Control values must be finite numbers.");
+  if (!Number.isFinite(result)) throw new Error("控制值必须是有限数值。");
   return String(result);
 }

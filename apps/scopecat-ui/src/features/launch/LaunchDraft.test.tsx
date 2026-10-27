@@ -288,11 +288,11 @@ it("retains the complete project draft across pages and resets explicitly withou
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "prepared note" } });
   fireEvent.change(screen.getByLabelText("样品 ID"), { target: { value: "sample-42" } });
   fireEvent.change(screen.getByLabelText("操作人"), { target: { value: "scientist" } });
-  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
-  fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
-  fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4700" } });
-  fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4900" } });
-  fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });
+  fireEvent.change(screen.getByLabelText("Frequency 取值来源"), { target: { value: "range" } });
+  fireEvent.change(screen.getByLabelText("Frequency 单位"), { target: { value: "MHz" } });
+  fireEvent.change(screen.getByLabelText("Frequency 起点"), { target: { value: "4700" } });
+  fireEvent.change(screen.getByLabelText("Frequency 终点"), { target: { value: "4900" } });
+  fireEvent.change(screen.getByLabelText("Frequency 点数"), { target: { value: "3" } });
   for (const page of ["configuration", "devices", "results"]) {
     fireEvent.click(screen.getByRole("button", { name: page }));
     await returnToLaunch();
@@ -300,11 +300,11 @@ it("retains the complete project draft across pages and resets explicitly withou
     expect(screen.getByLabelText("Note")).toHaveValue("prepared note");
     expect(screen.getByLabelText("样品 ID")).toHaveValue("sample-42");
     expect(screen.getByLabelText("操作人")).toHaveValue("scientist");
-    expect(screen.getByLabelText("Frequency source")).toHaveValue("range");
-    expect(screen.getByLabelText("Frequency unit")).toHaveValue("MHz");
-    expect(screen.getByLabelText("Frequency start")).toHaveValue("4700");
-    expect(screen.getByLabelText("Frequency stop")).toHaveValue("4900");
-    expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
+    expect(screen.getByLabelText("Frequency 取值来源")).toHaveValue("range");
+    expect(screen.getByLabelText("Frequency 单位")).toHaveValue("MHz");
+    expect(screen.getByLabelText("Frequency 起点")).toHaveValue("4700");
+    expect(screen.getByLabelText("Frequency 终点")).toHaveValue("4900");
+    expect(screen.getByLabelText("Frequency 点数")).toHaveValue("3");
     expect(screen.queryByText("预览就绪")).toBeNull();
   }
   expect(submissions).toHaveLength(0);
@@ -513,10 +513,10 @@ it("retains an unavailable experiment draft until its declaration returns", asyn
 it("retains a scan across helper and default revisions for explicit review", async () => {
   render(<Harness />);
   await selectPrepared();
-  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
-  fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4.7" } });
-  fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4.9" } });
-  fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });
+  fireEvent.change(screen.getByLabelText("Frequency 取值来源"), { target: { value: "range" } });
+  fireEvent.change(screen.getByLabelText("Frequency 起点"), { target: { value: "4.7" } });
+  fireEvent.change(screen.getByLabelText("Frequency 终点"), { target: { value: "4.9" } });
+  fireEvent.change(screen.getByLabelText("Frequency 点数"), { target: { value: "3" } });
   await previewReady();
   catalog = [catalog[0]!, { ...prepared, version: "helper-revision-2" }];
   await act(async () => {
@@ -525,8 +525,8 @@ it("retains a scan across helper and default revisions for explicit review", asy
   await screen.findByText(
     "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
   );
-  expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
-  expect(screen.getByLabelText("Frequency start")).toHaveValue("4.7");
+  expect(screen.getByLabelText("Frequency 点数")).toHaveValue("3");
+  expect(screen.getByLabelText("Frequency 起点")).toHaveValue("4.7");
   expect(screen.queryByText("预览就绪")).toBeNull();
   expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   catalog = [
@@ -566,8 +566,8 @@ it("retains a scan across helper and default revisions for explicit review", asy
       "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
     ),
   ).toBeVisible();
-  expect(screen.getByLabelText("Frequency start")).toHaveValue("4.7");
-  expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
+  expect(screen.getByLabelText("Frequency 起点")).toHaveValue("4.7");
+  expect(screen.getByLabelText("Frequency 点数")).toHaveValue("3");
   expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   expect(submissions).toHaveLength(0);
 });
@@ -1072,12 +1072,12 @@ it("reuses a matching optional preview without preparing a second time", async (
 it("reports invalid controls without retaining a preparation lock or submitting", async () => {
   render(<Harness />);
   await selectPrepared();
-  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "fixed" } });
+  fireEvent.change(screen.getByLabelText("Frequency 取值来源"), { target: { value: "fixed" } });
   fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "not a number" } });
   const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
-  await screen.findByText("Control values must be finite numbers.");
+  await screen.findByText("控制值必须是有限数值。");
   expect(submissions).toHaveLength(0);
   expect(manualEventId).toBe(0);
   fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4.8" } });

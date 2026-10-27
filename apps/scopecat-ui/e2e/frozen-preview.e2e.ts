@@ -44,10 +44,10 @@ test("frozen Preview A survives code and scan edits; late B cannot reopen its cl
     await panel.getByText("冻结的配置、setup 与扫描输入", { exact: true }).click();
     const baseline = await panel.locator("pre").first().textContent();
     await expect(panel.getByText(a.code_revision.content_hash, { exact: true })).toBeVisible();
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency start").fill("4.7");
-    await page.getByLabel("Frequency stop").fill("4.9");
-    await page.getByLabel("Frequency points").fill("3");
+    await page.getByLabel("Frequency 取值来源").selectOption("range");
+    await page.getByLabel("Frequency 起点").fill("4.7");
+    await page.getByLabel("Frequency 终点").fill("4.9");
+    await page.getByLabel("Frequency 点数").fill("3");
     await page.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-b");
     const sourcePath = join(project, "src/ui_author/signal.py");
     const source = await readFile(sourcePath, "utf8");

@@ -36,8 +36,7 @@ export function initialControlDrafts(controls: Control[]): ControlDrafts {
 }
 function number(value: string): number {
   const parsed = Number(value);
-  if (!value.trim() || !Number.isFinite(parsed))
-    throw new Error("Control values must be finite numbers.");
+  if (!value.trim() || !Number.isFinite(parsed)) throw new Error("控制值必须是有限数值。");
   return parsed;
 }
 function quantity(value: string, unit: string | null) {
@@ -125,7 +124,7 @@ export function ControlFields({
     <div className="space-y-3">
       {groups.map((group) => (
         <fieldset key={group} className="rounded-md border border-line p-3 space-y-3">
-          <legend>{group || "Controls"}</legend>
+          <legend>{group || "控制项"}</legend>
           {controls
             .filter((control) => control.group === group)
             .map((control) => {
@@ -135,8 +134,8 @@ export function ControlFields({
                   <div key={control.id}>
                     <strong>{control.title}</strong>
                     <p>
-                      {control.ownership === "derived" ? "Derived" : "Configuration-owned"} ·{" "}
-                      {control.provenance}. Resolved in preview.
+                      {control.ownership === "derived" ? "派生值" : "由配置提供"} ·{" "}
+                      {control.provenance}。在预览中解析。
                     </p>
                   </div>
                 );
@@ -173,20 +172,20 @@ export function ControlFields({
                 >
                   <strong>
                     {control.title}
-                    {control.default == null ? " (required)" : ""}
+                    {control.default == null ? "（必填）" : ""}
                   </strong>
                   {error && <Notice role="alert">{error}</Notice>}
                   <p className="text-xs text-text-dim sm:col-start-1">
                     {control.provenance}
                     {control.minimum != null || control.maximum != null
-                      ? ` · Allowed: ${control.minimum ?? "−∞"}–${control.maximum ?? "∞"} ${control.unit ?? ""}`
+                      ? ` · 允许范围： ${control.minimum ?? "−∞"}–${control.maximum ?? "∞"} ${control.unit ?? ""}`
                       : ""}
                   </p>
                   <div className="flex min-w-0 flex-wrap items-end gap-2 sm:col-start-2 sm:row-span-3 sm:row-start-1">
                     <Field>
-                      Source{" "}
+                      取值来源{" "}
                       <Select
-                        aria-label={`${control.title} source`}
+                        aria-label={`${control.title} 取值来源`}
                         value={draft.mode}
                         onChange={(event) =>
                           update(control.id, () =>
@@ -194,29 +193,27 @@ export function ControlFields({
                           )
                         }
                       >
-                        <option value="fixed">Fixed value</option>
-                        {control.default != null && (
-                          <option value="default">Declared default</option>
-                        )}
+                        <option value="fixed">固定值</option>
+                        {control.default != null && <option value="default">声明默认值</option>}
                         {control.scannable && (
                           <>
-                            <option value="values">Scan values</option>
-                            <option value="range">Scan range</option>
+                            <option value="values">扫描列表</option>
+                            <option value="range">扫描范围</option>
                           </>
                         )}
                       </Select>
                     </Field>
                     {draft.mode === "default" ? (
                       <p>
-                        {defaultNumber(control)} {control.unit} · Declared default
+                        {defaultNumber(control)} {control.unit} · 声明默认值
                       </p>
                     ) : (
                       <>
                         {draft.unit && (
                           <Field>
-                            Unit{" "}
+                            单位{" "}
                             <Select
-                              aria-label={`${control.title} unit`}
+                              aria-label={`${control.title} 单位`}
                               value={draft.unit}
                               onChange={(event) =>
                                 update(control.id, () => convertDraft(draft, event.target.value))
@@ -247,10 +244,10 @@ export function ControlFields({
                         )}
                         {draft.mode === "values" && (
                           <Controls.Field>
-                            Values{" "}
+                            数值列表{" "}
                             <Textarea
                               required
-                              aria-label={`${control.title} scan values`}
+                              aria-label={`${control.title} 扫描列表`}
                               value={draft.values}
                               onBlur={() =>
                                 update(control.id, () => convertDraft(draft, draft.unit))
@@ -261,8 +258,7 @@ export function ControlFields({
                               aria-invalid={Boolean(error)}
                             />
                             <span className="text-sm">
-                              Separate values with commas, spaces or newlines. Attach unit suffixes
-                              without spaces. A single value is still a scan.
+                              用逗号、空格或换行分隔数值。单位后缀紧接数值，不加空格。只有一个值也仍是扫描。
                             </span>
                           </Controls.Field>
                         )}
@@ -270,8 +266,8 @@ export function ControlFields({
                           <div className="flex w-full min-w-0 gap-2">
                             <Input
                               {...numeric}
-                              aria-label={`${control.title} start`}
-                              placeholder="Start"
+                              aria-label={`${control.title} 起点`}
+                              placeholder="起点"
                               value={draft.start}
                               onBlur={() =>
                                 update(control.id, () => ({
@@ -285,8 +281,8 @@ export function ControlFields({
                             />
                             <Input
                               {...numeric}
-                              aria-label={`${control.title} stop`}
-                              placeholder="Stop"
+                              aria-label={`${control.title} 终点`}
+                              placeholder="终点"
                               value={draft.stop}
                               onBlur={() =>
                                 update(control.id, () => ({
@@ -304,7 +300,7 @@ export function ControlFields({
                               min={2}
                               step={1}
                               required
-                              aria-label={`${control.title} points`}
+                              aria-label={`${control.title} 点数`}
                               value={draft.points}
                               onChange={(event) =>
                                 onChange(control.id, { ...draft, points: event.target.value })
@@ -318,7 +314,7 @@ export function ControlFields({
                   </div>
                   {draft.mode !== "default" && draft.unit && (
                     <p className="text-xs text-text-dim sm:col-start-2">
-                      Bare numbers use {draft.unit}; unit suffixes convert on blur.
+                      不带单位的数值使用 {draft.unit}；带单位后缀的输入在失去焦点时换算。
                     </p>
                   )}
                 </div>
@@ -328,11 +324,11 @@ export function ControlFields({
       ))}
       {controls.some((control) => control.scannable) && (
         <details className="text-xs text-text-dim">
-          <summary className="cursor-pointer">Source and validation details</summary>
+          <summary className="cursor-pointer">取值来源与校验说明</summary>
           <p>
-            Changing source replaces its values. Fixed value starts from the declared default.
-            Project constraints are checked during preview and before admission. Editing inputs does
-            not publish a parameter version.
+            Changing source replaces its values. 固定值 starts from the declared default. Project
+            constraints are checked during preview and before admission. Editing inputs does not
+            publish a parameter version.
           </p>
         </details>
       )}
@@ -345,18 +341,25 @@ function display(value: unknown): string {
     return `${String(value.value)} ${String(value.unit)}`;
   return JSON.stringify(value);
 }
+const controlStateLabels: Record<Value["state"], string> = {
+  fixed: "固定值",
+  scanned: "扫描",
+  derived: "派生值",
+  configuration: "由配置提供",
+};
+
 export function ControlSummary({ fields, values }: { fields: Control[]; values: Value[] }) {
   if (!values.length) return null;
   return (
     <section>
-      <h3 className="text-base font-semibold leading-6">Resolved controls</h3>
+      <h3 className="text-base font-semibold leading-6">已解析控制项</h3>
       <table className="w-full text-left">
         <thead>
           <tr>
-            <th>Control</th>
-            <th>Source</th>
-            <th>Value / axis</th>
-            <th>Provenance</th>
+            <th>控制项</th>
+            <th>取值来源</th>
+            <th>值 / 扫描轴</th>
+            <th>来源说明</th>
           </tr>
         </thead>
         <tbody>
@@ -368,12 +371,12 @@ export function ControlSummary({ fields, values }: { fields: Control[]; values: 
                 : source?.kind === "values"
                   ? source.values.map(display).join(", ")
                   : source?.kind === "range"
-                    ? `${display(source.start)}–${display(source.stop)} · ${source.points} points`
+                    ? `${display(source.start)}–${display(source.stop)} · ${source.points} 个点`
                     : "";
             return (
               <tr key={value.id}>
                 <td>{fields.find((field) => field.id === value.id)?.title ?? value.id}</td>
-                <td>{value.state}</td>
+                <td>{controlStateLabels[value.state] ?? value.state}</td>
                 <td>{text}</td>
                 <td>{value.provenance}</td>
               </tr>
