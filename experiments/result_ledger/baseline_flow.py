@@ -20,6 +20,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 import scopecat as sc
+import scopecat.execution.interpreter as baseline_interpreter
+import scopecat_server.storage.sqlite.execution as baseline_storage
+import scopecat_testkit.server.execution as baseline_testkit
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.planning.system import ExperimentSystem
 from scopecat.records.config import config_content_hash
@@ -72,9 +75,29 @@ def baseline_waveform(experiment: sc.ExperimentContext) -> dict[str, object]:
     }
 
 
-def run_baseline_flow(directory: Path) -> dict:
+def run_baseline_flow(directory: Path, baseline_repo: Path | None = None) -> dict:
     """Require a new directory, execute production planning, read persisted data."""
-    baseline_repo = Path(sc.__file__).resolve().parents[4]
+    imported_repo = Path(sc.__file__).resolve().parents[4]
+    baseline_repo = imported_repo if baseline_repo is None else baseline_repo.resolve()
+    sources = {
+        "core": Path(baseline_interpreter.__file__).resolve(),
+        "server": Path(baseline_storage.__file__).resolve(),
+        "testkit": Path(baseline_testkit.__file__).resolve(),
+    }
+    expected_roots = {
+        "core": baseline_repo / "packages/scopecat/src",
+        "server": baseline_repo / "packages/scopecat-server/src",
+        "testkit": baseline_repo / "testing/scopecat-testkit/src",
+    }
+    if imported_repo != baseline_repo or any(
+        not source.is_relative_to(expected_roots[name])
+        for name, source in sources.items()
+    ):
+        raise RuntimeError(
+            "baseline imports do not match --baseline-repo; use that checkout's "
+            "interpreter and unset conflicting PYTHONPATH. This option validates "
+            "sources; it does not reroute imports."
+        )
     if _git(baseline_repo, "rev-parse", "HEAD") != BASELINE_SHA:
         raise RuntimeError("baseline source imports must match the fixed main SHA")
     if _git(baseline_repo, "status", "--porcelain", "--untracked-files=no"):
@@ -128,6 +151,7 @@ def run_baseline_flow(directory: Path) -> dict:
     report = {
         "baseline_sha": BASELINE_SHA,
         "baseline_source": str(baseline_repo),
+        "module_paths": {name: str(source) for name, source in sources.items()},
         "run_id": manifest.run_id,
         "status": manifest.status,
         "points": len(observed),
@@ -151,8 +175,13 @@ def run_baseline_flow(directory: Path) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument(
+        "--baseline-repo",
+        type=Path,
+        help="Validate import checkout; does not change Python import routing",
+    )
     args = parser.parse_args(argv)
-    print(json.dumps(run_baseline_flow(args.directory), indent=2))
+    print(json.dumps(run_baseline_flow(args.directory, args.baseline_repo), indent=2))
     return 0
 
 

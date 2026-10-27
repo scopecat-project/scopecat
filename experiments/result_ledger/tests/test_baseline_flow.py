@@ -1,9 +1,12 @@
 """A real baseline author/compiler/interpreter control, not the port benchmark."""
 
-from experiments.result_ledger.baseline_flow import run_baseline_flow
 
+def test_baseline_compiles_and_executes_two_dimensional_waveforms(
+    tmp_path, pinned_baseline
+):
+    # Do not import production dependencies merely to collect the ordinary suite.
+    from experiments.result_ledger.baseline_flow import run_baseline_flow
 
-def test_baseline_compiles_and_executes_two_dimensional_waveforms(tmp_path):
     report = run_baseline_flow(tmp_path / "baseline")
     assert report["status"] == "completed"
     assert report["points"] == 4

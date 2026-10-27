@@ -35,7 +35,8 @@ def drain(
     No implicit membership closure, dynamic proposal, retry authorization or
     result-choice inference occurs here. Open groups can receive selected
     results but remain unpublished until an explicit closure. A newly closed
-    group with already selected results can be published without provider work.
+    group with already selected results, including a closed zero-member group,
+    can be published without provider work.
     """
     state = store.state()
     author = state.get("author_intent")
@@ -51,6 +52,18 @@ def drain(
     executed: list[str] = []
     published: list[str] = []
     first_publication = None
+
+    def observe_publications(snapshots: dict[str, str]) -> None:
+        nonlocal first_publication
+        for group_id, snapshot_id in snapshots.items():
+            published.append(group_id)
+            if first_publication is None:
+                first_publication = perf_counter() - started
+            if fault is not None:
+                fault("group-publish")
+            if on_publish is not None:
+                on_publish(group_id, snapshot_id)
+
     # This invocation handles this admitted extent only. Appends require a new
     # drain call, making the adaptive decision boundary visible to the caller.
     ordered_units = [unit["id"] for unit in state["units"]]
@@ -114,14 +127,16 @@ def drain(
                     store.select_result(fence, unit_id, bundle)
                     snapshots = _publish_ready(store, fence, groups)
                 executed.append(unit_id)
-        for group_id, snapshot_id in snapshots.items():
-            published.append(group_id)
-            if first_publication is None:
-                first_publication = perf_counter() - started
-            if fault is not None:
-                fault("group-publish")
-            if on_publish is not None:
-                on_publish(group_id, snapshot_id)
+        observe_publications(snapshots)
+    # Closure is a scientific commitment independent of work cardinality. A
+    # zero-proposal group has no unit through which the loop could publish it.
+    # Read current readiness so already-published groups cannot notify twice.
+    state = store.state()
+    for group in state["groups"]:
+        readiness = state["readiness"][group["id"]]
+        if readiness["ready"] and readiness["published_snapshot"] is None:
+            snapshot_id = store.publish_group(fence, group["id"])
+            observe_publications({group["id"]: snapshot_id})
     return {
         "executed_units": executed,
         "published_groups": published,

@@ -84,7 +84,11 @@ the original begin/save/select/publish chain. Recovery uses the admitted mode.
 | adaptive append / close | Persisted proposal; open / closed membership respectively | Same |
 
 Creation requires a new directory; existing data is never overwritten. Recovery
-requires an experiment ledger. Use fresh data after changing experimental schema;
+first validates the exact schema and admitted author intent using a private copy
+opened read-only, before opening the source for writing. The copy includes an
+existing crash WAL; rejected inputs retain their bytes, schema, journal policy and
+files. This simulator assumes no concurrently running producer during recovery.
+Use fresh data after changing experimental schema;
 there is deliberately no migration. No device discovery, remote service, runner
 installation or user project is involved. The provider audit is evidence, never a
 recovery oracle. Notification delivery is at least once, not hardware exactly once.
@@ -96,23 +100,68 @@ python -m pytest -q -n 0 -p no:cacheprovider experiments/result_ledger/tests
 ruff check experiments/result_ledger
 ruff format --check experiments/result_ledger
 python -m experiments.result_ledger.author_comparison
-python -m experiments.result_ledger.baseline_flow --directory /tmp/new-baseline-control
 python -m experiments.result_ledger benchmark --directory /tmp/new-result-benchmark \
-  --baseline-repo /path/to/clean-baseline --points 16 64 256 --samples 32
-# --comparison staged-atomic runs only the more comparable pair.
+  --comparison staged-atomic --points 16 64 256 --samples 32
 ```
 
 Browser tests use installed Playwright and a local `chromium`, otherwise explicitly
-skip; they never download a browser. Baseline controls require installed production
-packages, verify actual import paths and exact clean baseline SHA.
+skip; they never download a browser. The ordinary suite also explicitly skips the
+pinned production control. That skip is not a passing baseline verification, and
+the default tests do not require a second checkout.
+
+### Reproduce the separate pinned production control
+
+The production comparison requires **two checkouts and their own editable
+environments**. Run the ordinary tests above using the experiment checkout's
+environment. For the production control, install dependencies in the fixed
+baseline checkout, then invoke its interpreter **from the experiment checkout**:
+
+```sh
+# Start in the experiment checkout. Both directories must be new when created.
+git worktree add --detach ../scopecat-1344-baseline \
+  f2e514a1a1075b9de0c1bf5de697bba455a72aae
+uv sync --locked --project ../scopecat-1344-baseline
+baseline_checkout=$(cd ../scopecat-1344-baseline && pwd)
+
+env -u PYTHONPATH "$baseline_checkout/.venv/bin/python" -m pytest -q -n 0 \
+  -p no:cacheprovider experiments/result_ledger/tests/test_baseline_flow.py \
+  --run-pinned-baseline
+env -u PYTHONPATH "$baseline_checkout/.venv/bin/python" \
+  -m experiments.result_ledger.baseline_flow --directory /tmp/new-baseline-control \
+  --baseline-repo "$baseline_checkout"
+env -u PYTHONPATH "$baseline_checkout/.venv/bin/python" \
+  -m experiments.result_ledger benchmark --directory /tmp/new-baseline-comparison \
+  --baseline-repo "$baseline_checkout" --points 16 64 256 --samples 32
+```
+
+`--baseline-repo` validates the actual loaded sources; it does **not** reroute
+imports or switch interpreters. The control checks core/server/testkit paths,
+exact baseline SHA and clean tracked files. Opting in with experiment-head
+packages intentionally fails, rather than silently comparing the wrong revision.
+Keep its baseline-control result separate from the ordinary test count. The
+staged–atomic benchmark needs no baseline checkout; the baseline–atomic pair does.
 
 ## Evidence and decision
 
+Delivery review fixes: the current ordinary suite passes **94 tests, 1 explicit
+baseline-control skip** (15.22 s), including foreign/conflicting SQLite rejection
+without source mutation, crash-WAL recovery, zero-proposal group closure and a
+staged–atomic pair with no baseline checkout. The separate pinned production
+control passes **1 test**. An independent experiment checkout passed the ordinary
+suite before these added regression cases; opting into the baseline test with
+experiment-head production imports correctly failed source identity validation.
+Automated browser coverage starts at group publication; a separate real Chromium
+probe inspected physical unknown/history after explicitly authorized recovery.
+These are different evidence paths. The new tiny CLI pair is a dependency check,
+not a replacement performance measurement.
+
 Measured implementation: `09d84696252cf943dc5e9ee411074f2e69859be2` (clean).
-**78 tests passed, 14.28 s**; real Chromium, controlled/hard exits, both commit
+Historical run using the pinned baseline editable environment: **78 tests passed,
+14.28 s**; real Chromium, controlled/hard exits, both commit
 modes, transaction rollback, lost-response replay, stale fencing, binary64
 precision, duplicate coordinates, coarser groups and source-bound append/close
-recovery. Ruff and whitespace checks pass.
+recovery. Ruff and whitespace checks passed. This historical total includes the
+production control that is now explicit opt-in; it is not the default-suite count.
 
 An independent agent performed two read-only source reviews. Fixed findings:
 numeric labels that did not enforce representation, missing adaptive source

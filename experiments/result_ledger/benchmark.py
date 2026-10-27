@@ -726,7 +726,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument(
-        "--baseline-repo", type=Path, default=Path("/workspace/scopecat")
+        "--baseline-repo", type=Path, help="Required only for baseline comparisons"
     )
     parser.add_argument("--points", type=int, nargs="+", default=[16, 64, 256])
     parser.add_argument("--samples", type=int, default=32)
@@ -751,7 +751,15 @@ def main(argv=None) -> int:
         or not 1 <= args.repeats <= 4
     ):
         parser.error("even points 4..1024, samples 2..256, repeats 1..4 required")
-    root, repo = args.directory.resolve(), args.baseline_repo.resolve()
+    requires_baseline = (
+        args.worker == "baseline"
+        if args.worker
+        else args.comparison in {"all", "baseline-atomic"}
+    )
+    if requires_baseline and args.baseline_repo is None:
+        parser.error("--baseline-repo is required for baseline comparisons")
+    root = args.directory.resolve()
+    repo = args.baseline_repo.resolve() if requires_baseline else None
     root.mkdir(parents=True, exist_ok=False)
     if args.worker:
         payload = _payload(args.points[0], args.samples)
@@ -797,13 +805,13 @@ def main(argv=None) -> int:
                     side,
                     "--directory",
                     str(root / name),
-                    "--baseline-repo",
-                    str(repo),
                     "--points",
                     str(points),
                     "--samples",
                     str(args.samples),
                 ]
+                if repo is not None:
+                    command.extend(["--baseline-repo", str(repo)])
                 environment = os.environ.copy()
                 environment.update(
                     {
@@ -844,13 +852,17 @@ def main(argv=None) -> int:
     summary = {
         "protocol": "result-ledger-publication-component",
         "version": 2,
-        "baseline_sha": BASELINE_SHA,
+        "baseline_sha": BASELINE_SHA if requires_baseline else None,
         "experiment_sha": _git(ROOT, "rev-parse", "HEAD"),
         "experiment_dirty": bool(_git(ROOT, "status", "--porcelain")),
         "python": platform.python_version(),
         "platform": platform.platform(),
         "sqlite": sqlite3.sqlite_version,
-        "uv_lock_sha256": hashlib.sha256((repo / "uv.lock").read_bytes()).hexdigest(),
+        "uv_lock_sha256": (
+            hashlib.sha256((repo / "uv.lock").read_bytes()).hexdigest()
+            if repo is not None
+            else None
+        ),
         "limits": [
             "Not safe-prefix v1 (interpreter/workload/protocol differ)",
             (

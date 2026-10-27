@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -20,7 +21,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .authoring import Axis, Intent
-from .core import Store
+from .core import _SCHEMA, Store
 from .execution import drain
 
 BOUNDARIES = (
@@ -295,12 +296,14 @@ def execute(
     commit_mode: str = "atomic",
 ) -> dict:
     start = time.perf_counter()
+    intent = declaration()
+    if recover:
+        _preflight_recovery(directory / "ledger.sqlite3", intent)
     with Store(directory / "ledger.sqlite3") as store:
-        intent = declaration()
         if not recover:
             intent.initialize(store, commit_mode=commit_mode)
         else:
-            intent.verify(store)
+            _verify_recovery_identity(store, intent)
         fence = store.acquire("synthetic-cli")
         if recover:
             store.reconcile_unknowns(fence)
@@ -372,6 +375,74 @@ def execute(
         result["invocation_seconds"] = time.perf_counter() - start
         result["first_sparse_group_seconds"] = first_readable
         return result
+
+
+def _recovery_schema(connection: sqlite3.Connection) -> list[tuple]:
+    return [
+        tuple(row)
+        for row in connection.execute(
+            "SELECT type,name,tbl_name,sql FROM sqlite_master "
+            "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' "
+            "ORDER BY type,name"
+        )
+    ]
+
+
+def _verify_recovery_identity(store: Store, intent: Intent) -> None:
+    """Require this exact experiment format and admitted author declaration."""
+    reference = sqlite3.connect(":memory:")
+    try:
+        reference.executescript(_SCHEMA)
+        if _recovery_schema(store.connection) != _recovery_schema(reference):
+            raise ValueError("experiment ledger schema does not match this version")
+    finally:
+        reference.close()
+    rows = store.connection.execute("SELECT id,initial_intent FROM run").fetchall()
+    if len(rows) != 1:
+        raise ValueError("experiment ledger must contain one admitted run")
+    admitted = json.loads(rows[0]["initial_intent"])
+    if not isinstance(admitted, dict):
+        raise ValueError("experiment ledger has an invalid admitted intent")
+    authored = admitted.get("author_intent")
+    if not isinstance(authored, dict):
+        raise ValueError("experiment ledger lacks its author identity")
+    expected = intent.compile(commit_mode=authored.get("commit_mode"))
+    if rows[0]["id"] != intent.run_id or admitted != expected:
+        raise ValueError("experiment ledger author identity does not match this demo")
+    intent.verify(store)
+
+
+def _preflight_recovery(path: Path, intent: Intent) -> None:
+    """Read source files without SQLite opening or changing an unverified ledger.
+
+    SQLite mode=ro can still create WAL shared-memory sidecars. A private copy
+    lets the read-only inspection include a committed crash WAL while leaving
+    rejected source databases, journal policy and directory contents untouched.
+    Recovery assumes no concurrently running producer, as does the simulator's
+    explicit fence takeover; identity is checked again before taking that fence.
+    """
+    try:
+        if not path.is_file():
+            raise ValueError("experiment ledger does not exist")
+        with tempfile.TemporaryDirectory(prefix="result-ledger-preflight-") as tmp:
+            copied = Path(tmp) / "ledger.sqlite3"
+            shutil.copyfile(path, copied)
+            wal = path.with_name(path.name + "-wal")
+            if wal.is_file():
+                shutil.copyfile(wal, copied.with_name(copied.name + "-wal"))
+            with Store(copied, readonly=True) as reader:
+                _verify_recovery_identity(reader, intent)
+    except (
+        OSError,
+        sqlite3.Error,
+        ValueError,
+        TypeError,
+        KeyError,
+        RuntimeError,
+    ) as error:
+        raise ValueError(
+            f"refusing recovery: not a matching result-ledger experiment ({error})"
+        ) from error
 
 
 def inspect(directory: Path, *, store: Store | None = None) -> dict:

@@ -195,3 +195,102 @@ def test_coarser_analysis_group_waits_for_all_derived_units(tmp_path):
             ),
         )
         assert observations == [("high", 2), ("low", 2)]
+
+
+@pytest.mark.parametrize("mode", ["atomic", "staged"])
+def test_closed_zero_proposal_group_publishes_without_phantom_work(tmp_path, mode):
+    path = tmp_path / "empty-group.db"
+    with Store(path) as store:
+        intent().initialize(store, commit_mode=mode)
+        fence = store.acquire("initial")
+        drain(store, fence, provider)
+        before = store.state()
+        assert not store.readiness("adaptive")["ready"]
+        assert store.readiness("adaptive")["published_snapshot"] is None
+        store.close_group(fence, "adaptive")
+
+    def no_provider(*_args):
+        raise AssertionError("closing an empty group must not invoke a provider")
+
+    with Store(path) as store:
+        fence = store.acquire("reopened")
+        callbacks = []
+        completed = drain(
+            store,
+            fence,
+            no_provider,
+            fault=lambda boundary: callbacks.append(("fault", boundary)),
+            on_publish=lambda group, snapshot: callbacks.append(
+                ("published", group, snapshot)
+            ),
+        )
+        snapshot_id = store.readiness("adaptive")["published_snapshot"]
+        assert completed["executed_units"] == []
+        assert completed["published_groups"] == ["adaptive"]
+        assert completed["first_publication_seconds"] is not None
+        assert callbacks == [
+            ("fault", "group-publish"),
+            ("published", "adaptive", snapshot_id),
+        ]
+        snapshot = store.snapshot(snapshot_id)
+        for name in ("units", "points", "selection", "bundles"):
+            assert snapshot[name] == []
+        after = store.state()
+        for name in ("units", "points", "attempts", "results", "selections"):
+            assert after[name] == before[name]
+        events = [
+            event
+            for event in store.events()
+            if event["payload"]["group_id"] == "adaptive"
+        ]
+        assert len(events) == 1
+        assert events[0]["payload"]["snapshot_id"] == snapshot_id
+        callbacks.clear()
+        repeated = drain(
+            store,
+            fence,
+            no_provider,
+            fault=lambda boundary: callbacks.append(boundary),
+            on_publish=lambda group, snapshot: callbacks.append((group, snapshot)),
+        )
+        assert repeated["published_groups"] == []
+        assert repeated["first_publication_seconds"] is None
+        assert callbacks == []
+        assert store.state() == after
+
+
+@pytest.mark.parametrize("mode", ["atomic", "staged"])
+def test_empty_group_publication_fault_leaves_replayable_durable_event(tmp_path, mode):
+    path = tmp_path / "empty-group-fault.db"
+    with Store(path) as store:
+        intent().initialize(store, commit_mode=mode)
+        fence = store.acquire("initial")
+        drain(store, fence, provider)
+        store.close_group(fence, "adaptive")
+        notifications = []
+
+        def fail_after_commit(boundary):
+            assert boundary == "group-publish"
+            assert store.readiness("adaptive")["published_snapshot"] is not None
+            raise RuntimeError("lost publication response")
+
+        with pytest.raises(RuntimeError, match="lost publication response"):
+            drain(
+                store,
+                fence,
+                provider,
+                fault=fail_after_commit,
+                on_publish=lambda group, snapshot: notifications.append(
+                    (group, snapshot)
+                ),
+            )
+        assert notifications == []
+        events = store.events()
+        assert events[-1]["payload"]["group_id"] == "adaptive"
+
+    with Store(path) as store:
+        fence = store.acquire("reopened")
+        assert drain(store, fence, provider)["published_groups"] == []
+        assert store.events() == events
+        snapshot = store.snapshot(events[-1]["payload"]["snapshot_id"])
+        assert snapshot["units"] == snapshot["points"] == snapshot["bundles"] == []
