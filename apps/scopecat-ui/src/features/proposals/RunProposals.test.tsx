@@ -39,9 +39,10 @@ describe("RunProposals", () => {
     );
     renderProposals();
 
-    expect(await screen.findByText("Approval recorded")).toBeVisible();
+    expect(await screen.findByText("已记录批准")).toBeVisible();
+    expect(screen.getByText(/候选不等于已验证，批准记录不等于发布/)).toBeVisible();
     expect(screen.getAllByText("selected-fit")).toHaveLength(2);
-    expect(screen.getAllByText("For authors: reopen this candidate")).toHaveLength(2);
+    expect(screen.getAllByText("作者操作：重新打开此候选")).toHaveLength(2);
     expect(screen.getByText(/session.config.candidate\("run-1", "new-fit"\)/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept as default" })).not.toBeInTheDocument();
   });
@@ -80,15 +81,17 @@ describe("RunProposals", () => {
     renderProposals();
     expect(await screen.findByText("drive[qubit=q0].frequency")).toBeVisible();
     expect(screen.getByText("drive[qubit=q0].label")).toBeVisible();
+    expect(screen.getByText("物理值改动")).toBeVisible();
+    expect(screen.getByText("新增")).toBeVisible();
     expect(screen.queryByText(longValue)).toBeNull();
-    const valueDetails = screen.getByText("View full value").closest("details")!;
+    const valueDetails = screen.getByText("查看完整值").closest("details")!;
     valueDetails.open = true;
     fireEvent(valueDetails, new Event("toggle"));
     expect(await screen.findByText(longValue)).toBeVisible();
     expect(screen.queryByText(/q1/)).toBeNull();
-    fireEvent.click(screen.getByText("For authors: reopen this candidate"));
-    expect(screen.getByText(/Collect independent verification/)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Publish to a parameter branch" })).toHaveAttribute(
+    fireEvent.click(screen.getByText("作者操作：重新打开此候选"));
+    expect(screen.getByText(/在作者会话中按实验室策略取得独立验证/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "发布到参数分支" })).toHaveAttribute(
       "href",
       "https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/",
     );
@@ -105,17 +108,17 @@ describe("RunProposals", () => {
       ),
     );
     renderProposals();
-    const summary = await screen.findByText("View full value");
+    const summary = await screen.findByText("查看完整值");
     expect(screen.queryByText(full)).toBeNull();
     const details = summary.closest("details")!;
     details.open = true;
     fireEvent(details, new Event("toggle"));
-    const value = await screen.findByLabelText("Full parameter value");
+    const value = await screen.findByLabelText("完整参数值");
     expect(value.textContent).toBe(full);
     expect(value).toHaveClass("max-h-48", "overflow-auto");
     details.open = false;
     fireEvent(details, new Event("toggle"));
-    expect(screen.queryByLabelText("Full parameter value")).toBeNull();
+    expect(screen.queryByLabelText("完整参数值")).toBeNull();
   });
 
   it("distinguishes an empty cell diff from an atomic value change", async () => {
@@ -130,7 +133,7 @@ describe("RunProposals", () => {
       ),
     );
     renderProposals();
-    expect(await screen.findByText("No changed keyed cells")).toBeVisible();
+    expect(await screen.findByText("无键控单元格改动")).toBeVisible();
     expect(screen.getByText("[1,2]")).toBeVisible();
     expect(screen.getByText("[2,1]")).toBeVisible();
     expect(screen.getByText("scalar")).toBeVisible();
@@ -148,7 +151,7 @@ describe("RunProposals", () => {
     );
     renderProposals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Load older proposals" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早的候选" }));
 
     expect(await screen.findByText("older-proposal")).toBeVisible();
     expect(getOlderRunParameterProposals).toHaveBeenCalledWith(
@@ -167,7 +170,7 @@ describe("RunProposals", () => {
     );
     renderProposals();
 
-    const links = await screen.findAllByRole("link", { name: "View source analysis" });
+    const links = await screen.findAllByRole("link", { name: "查看来源分析" });
     expect(links[0]).toHaveAttribute(
       "href",
       "?run=run%2Fa%20%26%20b&run-analysis=fit%2Folder%231#runs",

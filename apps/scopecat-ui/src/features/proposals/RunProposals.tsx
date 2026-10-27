@@ -27,11 +27,7 @@ export function RunProposals({ runId }: { runId: string }) {
     refetchInterval: 5_000,
   });
   if (!health.data?.projectId)
-    return (
-      <p role="status">
-        {health.error ? errorMessage(health.error) : "Reading application identity…"}
-      </p>
-    );
+    return <p role="status">{health.error ? errorMessage(health.error) : "正在读取应用身份…"}</p>;
   return (
     <ProjectRunProposals
       key={health.data.projectId}
@@ -74,9 +70,9 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
           <GitCompareArrows size={17} />
         </span>
         <div>
-          <h3 className="m-0 text-sm">Parameter proposals</h3>
+          <h3 className="m-0 text-sm">参数候选</h3>
           <p className="mt-[3px] mb-0 text-xs text-text-dim">
-            Review proposed changes and test a candidate before publishing it to a parameter branch.
+            先审阅候选改动并完成验证，再发布到参数分支。候选不等于已验证，批准记录不等于发布。
           </p>
         </div>
         <span className={countBadge}>
@@ -88,21 +84,21 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
       {proposalsQuery.isPending ? (
         <ProposalMessage
           icon={<LoaderCircle className="animate-spin" />}
-          title="Reading proposals"
-          detail="Loading retained parameter changes and approval records."
+          title="正在读取候选"
+          detail="正在加载已保留的参数改动与批准记录。"
         />
       ) : proposalsQuery.isError && proposalsQuery.data === undefined ? (
         <ProposalMessage
           icon={<XCircle />}
-          title="Proposals unavailable"
+          title="候选暂不可用"
           detail={errorMessage(proposalsQuery.error)}
           warning
         />
       ) : proposals.length === 0 ? (
         <ProposalMessage
           icon={<CircleDot />}
-          title="No parameter proposals"
-          detail="Analysis-generated changes for this run will appear here."
+          title="暂无参数候选"
+          detail="本次运行经分析生成的参数改动将显示在这里。"
         />
       ) : (
         <div className="grid gap-2.5 p-3">
@@ -123,7 +119,7 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                           : "border-line bg-yellow-soft text-yellow",
                       )}
                     >
-                      {proposal.approval ? "Approval recorded" : "Candidate"}
+                      {proposal.approval ? "已记录批准" : "候选"}
                     </span>
                     <h4 className="m-0 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap">
                       {proposal.id}
@@ -135,11 +131,11 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                       className="mt-2 inline-block text-xs text-accent underline"
                       href={`?run=${encodeURIComponent(proposal.sourceRunId)}&run-analysis=${encodeURIComponent(proposal.analysisRecordId)}#runs`}
                     >
-                      View source analysis
+                      查看来源分析
                     </a>
                     {proposal.evidenceOutputIds.length > 0 && (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-text-dim">
-                        <span className="font-extrabold tracking-[0.05em] uppercase">Evidence</span>
+                        <span className="font-extrabold tracking-[0.05em] uppercase">依据</span>
                         {proposal.evidenceOutputIds.map((outputId) => (
                           <code
                             className="rounded border border-line bg-bg px-1.5 py-0.5 text-text-soft"
@@ -153,13 +149,13 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                   </div>
                   <div className="grid content-start justify-items-end gap-[5px] text-xs text-text-dim max-[680px]:grid-cols-[auto_minmax(0,1fr)] max-[680px]:justify-items-start">
                     {proposal.confidence !== undefined && (
-                      <span>{Math.round(proposal.confidence * 100)}% confidence</span>
+                      <span>{Math.round(proposal.confidence * 100)}% 置信度</span>
                     )}
                     <code
                       className="max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap"
                       title={proposal.baseContentHash}
                     >
-                      Base {shorten(proposal.baseConfigId, 18)}
+                      基线 {shorten(proposal.baseConfigId, 18)}
                     </code>
                   </div>
                 </header>
@@ -191,9 +187,7 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
               ) : (
                 <ChevronDown size={14} aria-hidden="true" />
               )}
-              {proposalsQuery.isFetchingNextPage
-                ? "Loading older proposals…"
-                : "Load older proposals"}
+              {proposalsQuery.isFetchingNextPage ? "正在加载更早的候选…" : "加载更早的候选"}
             </button>
           ) : null}
         </div>
@@ -204,11 +198,10 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
 
 function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
   return (
-    <section className="px-3.5 py-3 text-xs leading-relaxed" aria-label="Candidate adoption">
+    <section className="px-3.5 py-3 text-xs leading-relaxed" aria-label="候选验证与发布">
       <p>
-        Collect independent verification using your laboratory's policy in an author session, then
-        explicitly publish to the reviewed parameter branch. Only that branch advances; existing
-        runs and prepared experiments keep their original inputs.
+        在作者会话中按实验室策略取得独立验证，再明确发布到已审阅的参数分支。
+        仅该分支前进；已有运行和已准备实验仍使用原始输入。
       </p>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-accent underline">
         <a
@@ -216,22 +209,21 @@ function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
           target="_blank"
           rel="noreferrer"
         >
-          Verify a candidate
+          验证候选
         </a>
         <a
           href="https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/"
           target="_blank"
           rel="noreferrer"
         >
-          Publish to a parameter branch
+          发布到参数分支
         </a>
       </div>
       <details className="mt-3">
-        <summary className="cursor-pointer text-accent">For authors: reopen this candidate</summary>
+        <summary className="cursor-pointer text-accent">作者操作：重新打开此候选</summary>
         <p className="mt-2">
-          In a connected author session named <code>session</code>, reopen this saved proposal. The
-          guides above explain how to prepare an independent verification experiment, supply its
-          retained policy result and capture the destination branch.
+          在已连接的作者会话 <code>session</code> 中重新打开已保存的候选。
+          上述指南说明如何准备独立验证实验、提供已保留的策略判定结果，并记录目标分支。
         </p>
         <pre className="mt-2 max-h-40 overflow-auto rounded border border-line bg-bg p-3">
           <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})`}</code>
@@ -249,11 +241,11 @@ function ProposalValue({ value }: { value: unknown }) {
     <div className="min-w-0">
       <span className="block max-h-16 overflow-hidden">{text.slice(0, 120)}…</span>
       <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
-        <summary className="mt-1 cursor-pointer font-sans text-accent">View full value</summary>
+        <summary className="mt-1 cursor-pointer font-sans text-accent">查看完整值</summary>
         {expanded && (
           <pre
             className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]"
-            aria-label="Full parameter value"
+            aria-label="完整参数值"
           >
             {text}
           </pre>
@@ -273,10 +265,10 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
         className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line bg-panel px-[11px] py-[9px] text-xs font-extrabold tracking-[0.07em] text-text-dim uppercase max-[680px]:min-w-[650px]"
         role="row"
       >
-        <span role="columnheader">Parameter</span>
-        <span role="columnheader">Before</span>
+        <span role="columnheader">参数</span>
+        <span role="columnheader">原始值</span>
         <span aria-hidden="true" />
-        <span role="columnheader">Proposed</span>
+        <span role="columnheader">拟议值</span>
       </div>
       {proposal.deltas
         .flatMap<{
@@ -292,9 +284,9 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
                   .join(", ")}].${cell.field}`,
                 before: cell.before,
                 after: cell.after,
-                changeKind: cell.change_kind,
+                changeKind: changeKindLabel(cell.change_kind),
               }))
-            : [{ ...delta, changeKind: delta.cells ? "No changed keyed cells" : undefined }],
+            : [{ ...delta, changeKind: delta.cells ? "无键控单元格改动" : undefined }],
         )
         .map((delta) => (
           <div
@@ -334,13 +326,13 @@ function ProposalApproval({ proposal }: { proposal: ParameterProposal }) {
     <div className="mx-3.5 mt-3 grid grid-cols-[120px_minmax(0,1fr)] gap-2.5 rounded-[8px] border border-line bg-panel-soft p-2.5 max-[680px]:grid-cols-[minmax(0,1fr)]">
       <div className="flex items-center gap-1.5 text-xs font-[750] text-text-dim">
         <History size={14} aria-hidden="true" />
-        <span>Operator approval</span>
+        <span>操作人批准记录</span>
       </div>
       <ol className="m-0 grid list-none gap-1.5 p-0">
         <li className="grid grid-cols-[7px_auto_minmax(0,1fr)_auto] items-baseline gap-[7px] text-xs text-text-dim">
           <span className="size-[7px] rounded-full bg-accent" />
-          <strong className="text-xs text-text-soft">Approved</strong>
-          <span>by {approval.actor}</span>
+          <strong className="text-xs text-text-soft">已批准</strong>
+          <span>操作人：{approval.actor}</span>
           {approval.note && (
             <p className="col-[2/-1] m-0 leading-[1.45] text-text-soft">{approval.note}</p>
           )}
@@ -403,4 +395,14 @@ function formatParameterValue(value: unknown): string {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) return "—";
   return serialized;
+}
+
+function changeKindLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    physical: "物理值改动",
+    representation: "表示方式改动",
+    added: "新增",
+    removed: "移除",
+  };
+  return Object.hasOwn(labels, kind) ? labels[kind]! : kind;
 }
