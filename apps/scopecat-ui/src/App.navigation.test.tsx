@@ -1017,7 +1017,8 @@ describe("config provenance navigation", () => {
       "当前记录预览 2",
     );
     expect(getMeasurementPreview).toHaveBeenCalledWith("run-1", expect.any(AbortSignal));
-    expect(screen.getByTestId("measurement-preview")).toHaveTextContent(
+    fireEvent.click(screen.getByText("Raw records", { exact: true }));
+    expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
       '"dataset_id": "dataset-b"',
     );
   });
@@ -1108,7 +1109,7 @@ describe("config provenance navigation", () => {
       renderApp(queryClient);
       await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(1));
       fireEvent.click(screen.getByText("Raw records", { exact: true }));
-      expect(screen.getByTestId("measurement-preview")).toBeVisible();
+      expect(await screen.findByTestId("measurement-preview")).toBeVisible();
       expect(projectEventListener).toBeDefined();
       queryClient.setQueryData(["measurements", "run-2"], {
         items: [measurementRecord(9, 9)],
@@ -1142,7 +1143,7 @@ describe("config provenance navigation", () => {
         emitProjectEvent("run-1", kind);
       });
       await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(2));
-      expect(screen.getByTestId("measurement-preview")).toBeVisible();
+      expect(await screen.findByTestId("measurement-preview")).toBeVisible();
       expect(vi.mocked(getMeasurementPreview).mock.calls.map(([runId]) => runId)).toEqual([
         "run-1",
         "run-1",

@@ -10,7 +10,11 @@ import { classes } from "../../ui/styles";
 import { MeasurementRecordTable } from "./MeasurementRecordTable";
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { LoaderCircle } from "lucide-react";
-import type { MeasurementTracePreview } from "../../api-contract";
+import type {
+  MeasurementTracePreview,
+  MeasurementDatasetSchema,
+  MeasurementRecord,
+} from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
 import type { MeasurementPreview, MeasurementSlicePreview } from "../../types";
 import { EChart } from "../../ui/EChart";
@@ -201,15 +205,9 @@ export function MeasurementDataPreview({
     preview.schema?.point_domain,
     preview.schema?.dimensions,
   ]);
-  const table = useMemo(
-    () =>
-      measurementTable(
-        slicePlan ? (slice?.items ?? []) : preview.items,
-        slicePlan ? chartSchema : preview.schema,
-        entitySelection,
-      ),
-    [chartSchema, entitySelection, preview.items, preview.schema, slice, slicePlan],
-  );
+  const [tableOpen, setTableOpen] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
+  const tableRecords = slicePlan ? (slice?.items ?? []) : preview.items;
   const selectAllEntities = (axisId: string) => {
     setSelectedEntityIdentities((current) => {
       const next = { ...current };
@@ -657,31 +655,64 @@ export function MeasurementDataPreview({
       )}
 
       <details
+        onToggle={(event) => setTableOpen(event.currentTarget.open)}
         className={classes("border-t border-line text-xs text-text-soft", focused && "hidden")}
       >
         <summary className="cursor-pointer px-3 py-2 font-semibold">
-          Record table · {table.rows.length} rows in this view
+          Record table · {tableRecords.length} rows in this view
         </summary>
-        <div className="max-h-80 overflow-auto">
-          <MeasurementRecordTable table={table} />
-        </div>
+        {tableOpen && !focused && (
+          <DeferredRecordTable
+            records={tableRecords}
+            schema={slicePlan ? chartSchema : preview.schema}
+            entitySelection={entitySelection}
+          />
+        )}
       </details>
 
       <details
+        onToggle={(event) => setRawOpen(event.currentTarget.open)}
         className={classes("border-t border-line text-xs text-text-dim", focused && "hidden")}
       >
         <summary className="cursor-pointer px-3 py-2 font-bold hover:text-text-soft">
           <span>Raw records</span>
           <span className="ml-1 font-medium text-text-dim">in preview</span>
         </summary>
-        <pre
-          className="m-0 max-h-[320px] overflow-auto border-t border-line bg-panel-soft p-3 text-xs leading-[1.5] text-text-soft"
-          data-testid="measurement-preview"
-        >
-          {JSON.stringify(preview.items, null, 2)}
-        </pre>
+        {rawOpen && !focused && <DeferredRawRecords records={preview.items} />}
       </details>
     </div>
+  );
+}
+
+function DeferredRecordTable({
+  records,
+  schema,
+  entitySelection,
+}: {
+  records: MeasurementRecord[];
+  schema?: MeasurementDatasetSchema;
+  entitySelection: MeasurementEntitySelection;
+}) {
+  const table = useMemo(
+    () => measurementTable(records, schema, entitySelection),
+    [records, schema, entitySelection],
+  );
+  return (
+    <div className="max-h-80 overflow-auto">
+      <MeasurementRecordTable table={table} />
+    </div>
+  );
+}
+
+function DeferredRawRecords({ records }: { records: MeasurementRecord[] }) {
+  const json = useMemo(() => JSON.stringify(records, null, 2), [records]);
+  return (
+    <pre
+      className="m-0 max-h-[320px] overflow-auto border-t border-line bg-panel-soft p-3 text-xs leading-[1.5] text-text-soft"
+      data-testid="measurement-preview"
+    >
+      {json}
+    </pre>
   );
 }
 
