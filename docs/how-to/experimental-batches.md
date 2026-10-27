@@ -1,24 +1,25 @@
-# Keep cooldowns and other experimental batches distinct
+# 区分降温等实验批次 {#keep-cooldowns-and-other-experimental-batches-distinct}
 
-An experimental batch identifies one physical event, such as a cooldown or
-mounting. It is independent of chip identity, parameter branch, record collection
-and code directory. Create a new batch when those physical conditions change;
-renaming a label does not change the scope of retained evidence.
+实验批次标识一次物理事件，例如一次降温或装样。它独立于芯片身份、参数分支、记录集和代码目录。
+物理条件变化时创建新批次；只重命名标签不会改变已有证据的适用范围。
+手动线路列表记录依次切换哪些线路及各次尝试，不能代替实验批次。
+
+以下示例使用已连接原作者目录的 `session`（如 `sc.notebook()`），以及已有样品 `chip`。
 
 ```python
-batch = session.create_experimental_batch("Chip A · cooldown 3")
+batch = session.create_experimental_batch("芯片 A · 第三次降温")
 ```
 
-Use `session.experimental_batches()` to browse retained batches and
-`session.experimental_batch(batch_id)` to reopen one. Names need not be unique;
-IDs are stable. The catalog provides bounded pages and optimistic metadata edits,
-like [record collections](record-collections.md). Batches have no delete operation.
-The workbench provides batch selection in
-[Measurement context](select-session-context.md#select-context-in-the-workbench).
+用 `session.experimental_batches()` 浏览保留的批次，
+用 `session.experimental_batch(batch_id)` 读取指定批次。同名可以共存，ID 稳定。
+目录支持有限分页和乐观元数据编辑，类似[记录集](record-collections.md)；批次不提供删除操作。
+GUI 在**实验 → 本页测量上下文 → 浏览样品、批次与记录集**中选择，
+详见[测量上下文](select-session-context.md#select-context-in-the-workbench)。
+创建或读取批次只是元数据操作，不启动测量。
 
-## Select parameters and batch independently
+## 分别选择参数与批次 {#select-parameters-and-batch-independently}
 
-Given an existing sample `chip` and parameter branch `chip-a/daily`:
+使用已有样品 `chip` 和参数分支 `chip-a/daily`：
 
 ```python
 session.use(
@@ -29,44 +30,45 @@ session.use(
 params = session.params
 ```
 
-A branch stores parameter versions; it does not own a sample or certify values
-for a cooldown. You may select the same saved values for another batch without
-copying a working point. Those values are starting estimates until appropriate
-measurements establish their validity. To keep subsequent trial edits separate,
-fork a branch with `params.save("chip-a/cooldown-3-trial")`, then explicitly select
-that branch. See [parameter branches](parameter-branches.md).
+分支保存参数版本，不拥有样品，也不证明参数适用于某次降温。
+另一批次可以选择同一组保存值，无需复制工作点；在相应测量验证前，这些值只是初始估计。
+若需分开保存后续试调，用 `params.save("chip-a/cooldown-3-trial")` 派生分支，
+再显式选择它，见[参数分支](parameter-branches.md)。
 
-Selecting a new sample starts a new scientific scope. Supply the intended batch
-and parameter branch alongside it, as above. Changing only the batch preserves
-the current parameter selection:
+选新样品会开始新的科学范围，应像上例那样同时指定批次及参数分支。
+只改批次会保留当前参数选择：
 
 ```python
-next_batch = session.create_experimental_batch("Chip A · cooldown 4")
+next_batch = session.create_experimental_batch("芯片 A · 第四次降温")
 session.use(batch=next_batch.id)
 ```
 
-The laboratory's executable setup is a separate choice. Preview validates the
-selected equipment and inputs; selecting a batch or saving parameters does not
-activate equipment or prove calibration applicability.
+实验室的可执行配置（setup）另行选择。预览检查设备与输入是否兼容；
+选择批次或保存参数不激活设备，也不证明校准适用。
 
-## Prepare and retain the actual scope
+## 准备并保留实际范围 {#prepare-and-retain-the-actual-scope}
+
+先选已有 setup，再准备本次实验并保存计划。`signal` 是作者目录中已登记的实验：
 
 ```python
-collection = session.create_record_collection("Continuous chip study")
+collection = session.create_record_collection("芯片长期研究")
 session.use(batch=batch.id, collection=collection.id)
 prepared = session.prepare("signal")
-plan = prepared.save_plan("Cooldown 3 signal", saved_by="operator")
+plan = prepared.save_plan("第三次降温信号", saved_by="operator")
+```
+
+以上尚未采集。检查预览并决定开始后，再显式执行：
+
+```python
 run = prepared.run().wait().result()
 assert run.samples[0].batch_id == batch.id
 ```
 
-Changing the session later does not relabel this preparation or its result.
-Changing batch also does not reset numbering; select another collection if you
-want a new sequence. Names and folder paths do not infer these choices.
+以后修改会话不会重标记这次准备或结果。换批次也不重置编号；若要独立编号，另选记录集。
+名称和目录路径都不会自动推断这些选择。
 
-An independent parameter editor supplies values while retaining the session's
-subject and batch. It can also be combined with an explicit sample/batch for one
-preparation. A saved plan instead keeps its frozen scientific scope:
+独立参数编辑器提供数值，同时继承会话的样品和批次；也可在一次准备中显式指定样品/批次。
+保存的计划则保留冻结的科学范围：
 
 ```python
 session.use(batch=next_batch.id)
@@ -74,25 +76,20 @@ reopened = session.prepare_plan(plan.ref)
 assert reopened.request.selection.batch.id == batch.id
 ```
 
-An explicit conflicting `batch=next_batch.id` on `prepare_plan` is rejected.
-Likewise, a candidate retains its source evidence's sample and batch; it cannot be
-relabelled for another cooldown. Preparing with a candidate selects that retained
-scope, and direct run admission rejects a conflicting sample/batch selector.
-To explore new conditions, select independent parameter estimates and acquire new
-evidence. None of these operations retroactively changes old results.
+此处只是重新预览，不会再次执行。向 `prepare_plan` 显式传入冲突的
+`batch=next_batch.id` 会被拒绝。candidate 同样保留来源证据的样品及批次，
+不能重标记到另一降温：使用 candidate 准备会选择该保留范围，
+直接运行接纳也拒绝冲突的样品/批次选择。
+探索新条件时，应选择独立参数估计并取得新证据；不会追溯改写旧结果。
 
-## Calibration evidence and history
+## 校准证据与历史 {#calibration-evidence-and-history}
 
-Calibration checks assess exact measurement inputs, including parameter or
-candidate identity, subject, setup and execution scenario. Batch information in
-the retained sample binding is part of that evidence scope. A branch name or a
-successful save is not a reusable calibration result. Use the check/applicability
-and publication workflow described in
-[automated parameter calibration](automate-parameter-calibration.md); changing a
-batch label does not create fresh evidence. Operator attribution is separate from
-execution authorization.
+校准检查评估精确测量输入，包括参数或 candidate 身份、对象、setup 和执行场景。
+样品绑定中保留的批次属于证据范围。分支名或成功保存不是可复用的校准结果。
+检查适用性与发布流程见[自动参数校准](automate-parameter-calibration.md)；
+改批次标签不会创建新证据。操作者归属与执行授权也各自独立。
 
-To filter retained runs without changing their addresses:
+按批次过滤保留运行，不改变运行地址：
 
 ```python
 from scopecat.records.research_project import RunHistoryFilter
@@ -100,8 +97,8 @@ from scopecat.records.research_project import RunHistoryFilter
 page = session.list_runs(history=RunHistoryFilter(batch_id=batch.id))
 ```
 
-The current format retains the batch catalog and run/batch association. Unspecified
-batches stay unspecified; none is guessed from a branch name, directory or time.
-Current-format [backup/restore](backup-and-restore.md) retains this evidence.
-Earlier development stores have no supported migration or read path in new builds;
-see the [data policy](../development/data-compatibility.md).
+当前格式保留批次目录及运行/批次关联。未指定的批次仍未指定，不从分支名、目录或时间猜测。
+[当前格式备份与恢复](backup-and-restore.md)保留这些证据。
+旧格式只支持明确的 **115→116** 显式升级，具体操作与限制以
+[数据兼容策略](../development/data-compatibility.md#what-remains-supported-now)为准；
+这不新增其他旧格式迁移或读取承诺，也不保证旧环境可重执行。
