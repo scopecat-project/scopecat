@@ -91,9 +91,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await saved();
     url = restart();
     await page.goto(`${url}/?workspace=${prepared.workspace}#launch`);
-    await expect(page.getByLabel("Position 扫描列表", { exact: true })).toHaveValue(
-      "-1, nope, 1",
-    );
+    await expect(page.getByLabel("Position 扫描列表", { exact: true })).toHaveValue("-1, nope, 1");
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("-");
     await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
       "Recovery tester",
@@ -131,9 +129,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByLabel("Position 扫描列表", { exact: true })).toHaveValue(
-      "-1, nope, 1",
-    );
+    await expect(page.getByLabel("Position 扫描列表", { exact: true })).toHaveValue("-1, nope, 1");
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("0.25");
     await page.getByLabel("Position 扫描列表", { exact: true }).fill("-1, 0, 1");
     await page.getByLabel("Center", { exact: true }).fill("0");
