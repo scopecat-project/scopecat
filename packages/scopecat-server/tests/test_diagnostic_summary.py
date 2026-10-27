@@ -1,7 +1,13 @@
 """Bounded projection of existing CI evidence, including an interrupted call."""
 
+import html
+import os
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from scripts.summarize_test_diagnostics import summarize
 
 
@@ -23,7 +29,7 @@ def test_interrupted_worker_and_observed_daemon_exit(tmp_path: Path) -> None:
     )
     result = summarize(tmp_path)
     assert "gw1 PID 123: pytest session status=unknown" in result
-    assert "last phase=call start test_demo.py::test_exit" in result
+    assert "last phase=call start test_demo.py::test_exit" in html.unescape(result)
     assert "pytest session status=unknown" in result
     assert "pytest session status=1" in result
     assert "daemon PID 456, observer gw1 PID 123: returncode=7" in result
@@ -52,3 +58,38 @@ def test_missing_malformed_and_bounded_material(tmp_path: Path) -> None:
     assert "File limit reached" in result
     assert result.count("<code>") <= 32
     assert len(result) < 40000
+
+
+def test_command_text_is_inert_and_scan_is_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nodeid = "test_demo.py::test_exit[##[warning]injected ::error::injected]"
+    path = tmp_path / "gw0-1.log"
+    path.write_text(
+        f"2026-10-27T07:00:00+00:00 call start {nodeid}\n", encoding="utf-8"
+    )
+    consumed = 0
+    closed = False
+
+    def entries() -> Iterator[SimpleNamespace]:
+        nonlocal consumed
+        for _ in range(300):
+            consumed += 1
+            yield SimpleNamespace(path=str(path))
+
+    @contextmanager
+    def scan(_directory: Path) -> Generator[Iterator[SimpleNamespace]]:
+        nonlocal closed
+        try:
+            yield entries()
+        finally:
+            closed = True
+
+    monkeypatch.setattr(os, "scandir", scan)
+    result = summarize(tmp_path)
+    assert consumed == 257  # 256 inspected entries plus one truncation probe.
+    assert closed
+    assert "File limit reached" in result
+    assert "##[" not in result
+    assert "::" not in result
+    assert nodeid in html.unescape(result)

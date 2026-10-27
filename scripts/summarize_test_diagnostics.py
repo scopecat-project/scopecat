@@ -31,7 +31,10 @@ def _tail(path: Path) -> str:
 
 
 def _safe(value: str) -> str:
-    return html.escape("".join(c if c.isprintable() else " " for c in value)[:512])
+    escaped = html.escape("".join(c if c.isprintable() else " " for c in value)[:512])
+    # Runner command parsing precedes HTML rendering, including legacy inline ##[.
+    # Entities preserve the rendered evidence without emitting command delimiters.
+    return escaped.replace("##[", "&#35;#[").replace("::", "&#58;:")
 
 
 def _worker_row(path: Path, worker: str, pid: str) -> str:
@@ -83,7 +86,8 @@ def summarize(directory: Path) -> str:
         "### Existing pytest diagnostics",
         "",
         (
-            "Bounded projection: scan at most 256 entries, show at most 32 files, "
+            "Bounded projection: inspect 256 entries plus one limit probe, "
+            "show at most 32 files, "
             "last 64 KiB per file, 512 characters per record. "
             "Pytest session status is not an OS worker exit code; "
             "daemon returncode is a separate process. "
@@ -94,7 +98,9 @@ def summarize(directory: Path) -> str:
     ]
     try:
         # Cap traversal too: directory ordering is intentionally not chronological.
-        entries = list(islice(directory.iterdir(), 257))
+        # Path.iterdir eagerly lists scandir in CPython 3.15; slice scandir itself.
+        with os.scandir(directory) as iterator:
+            entries = [Path(entry.path) for entry in islice(iterator, 257)]
     except OSError as error:
         lines.append(f"- Diagnostics unavailable ({type(error).__name__}).")
         return "\n".join(lines) + "\n"
