@@ -275,11 +275,29 @@ class ExecutorService:
                 raise ExecutionStateConflict(
                     "recovery group commit requires an executor lease"
                 )
+            measurements = SQLiteMeasurementDatasetRepository(self._runs, run_id=run_id)
+            previous_count = measurements.measurement_record_count_in_transaction(
+                connection
+            )
             committed = groups.append_in_transaction(
                 connection,
                 command.groups,
                 segment_id=lease.segment_id,
             )
+            projected_count = measurements.measurement_record_count_in_transaction(
+                connection
+            )
+            if projected_count > previous_count:
+                # Sparse readable rows can change without advancing the contiguous
+                # prefix. Publish their watermark atomically with the projection.
+                self._control.append_event_in_transaction(
+                    connection,
+                    DurableEventInput(
+                        run_id=run_id,
+                        kind="measurement_projection_advanced",
+                        payload={"projected_record_count": projected_count},
+                    ),
+                )
         return RunRecoveryGroupCommitReceipt(run_id=run_id, items=committed)
 
     def domain_job_transitions(
