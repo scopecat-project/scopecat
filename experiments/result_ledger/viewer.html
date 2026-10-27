@@ -35,7 +35,7 @@ details { margin-top:16px } pre { white-space:pre-wrap; overflow-wrap:anywhere }
   <div id="legend"></div>
   <p id="availability" class="muted small"></p>
 </div>
-<div class="panel"><h2>Attempt history</h2><p class="muted small">A permitted retry retains the earlier unknown attempt. A saved result does not by itself publish a scientific group.</p><table><thead><tr><th>Work unit</th><th>Attempt</th><th>Status</th><th>Reason</th></tr></thead><tbody id="attempts"></tbody></table></div>
+<div class="panel"><h2>Attempt history</h2><p class="muted small">Physical status, lifecycle and retry authorization are separate facts. A successful retry does not resolve the earlier attempt's physical uncertainty. No hardware exactly-once guarantee is claimed; a saved result does not by itself publish a scientific group.</p><table><thead><tr><th>Work unit</th><th>Attempt</th><th>Physical status</th><th>Lifecycle</th><th>Uncertainty reason</th><th>Retry authorization</th></tr></thead><tbody id="attempts"></tbody></table></div>
 <div class="panel"><h2>Exact-input analysis</h2><div id="analysis"></div><details><summary>Current immutable inputs and delivery state</summary><pre id="evidence"></pre></details></div>
 <p id="connection" class="muted small" aria-live="polite">Connecting…</p>
 <script>
@@ -76,6 +76,7 @@ function render() {
       }traces.push({name:output.point_ids[p],values,unit:output.unit,xunit:output.coordinates.sample?.unit||'point'});
     }
   }
+  function drawChart() {
   if(!traces.length){svg('text',{x:510,y:165,'text-anchor':'middle',fill:'#58677a'},'Waiting for a published group');}
   else {
     const all=traces.flatMap(trace=>trace.values), xs=all.map(v=>v.x);
@@ -88,8 +89,11 @@ function render() {
     traces.forEach((trace,i)=>{let segment=[];function flush(){if(segment.length)svg('polyline',{points:segment.join(' '),fill:'none',stroke:palette[i%palette.length],'stroke-width':2});segment=[];}
       for(const value of trace.values){if(value.y===null||value.x<xmin||value.x>xmax){flush();continue;}segment.push(xp(value.x)+','+yp(value.y));svg('circle',{cx:xp(value.x),cy:yp(value.y),r:2.5,fill:palette[i%palette.length]});}flush();const label=textNode('span',trace.name);label.style.color=palette[i%palette.length];$('legend').append(label);});
   }
+  }
+  // A local chart-input error must never suppress newly observed attempt state.
+  drawChart();
   $('availability').textContent=`${total-missing} / ${total} samples available; ${missing} explicitly unavailable. Gaps are retained. Manual x range survives live refresh.`;
-  $('attempts').replaceChildren(...state.attempts.map(attempt=>{const tr=document.createElement('tr');for(const value of [attempt.unit_id,attempt.id,attempt.status,attempt.reason||'—'])tr.append(textNode('td',value));if(['unknown','retry_authorized'].includes(attempt.status))tr.className='warning';return tr;}));
+  $('attempts').replaceChildren(...state.attempts.map(attempt=>{const tr=document.createElement('tr');const authorization=attempt.retry_reason?attempt.retry_reason+' · '+attempt.retry_authorized_by+' · fence '+attempt.retry_authorized_fence:'—';for(const value of [attempt.unit_id,attempt.id,attempt.physical_status,attempt.status,attempt.uncertainty_reason||attempt.reason||'—',authorization])tr.append(textNode('td',value));if(attempt.physical_status==='unknown')tr.className='warning';return tr;}));
   const analysis=state.analyses.find(item=>item.snapshot_id===snapshot?.id);$('analysis').replaceChildren();
   if(analysis){const table=document.createElement('table'),head=document.createElement('tr');for(const title of ['Point','Channel','Mean','Available','Unit'])head.append(textNode('th',title));table.append(head);for(const row of analysis.rows){const tr=document.createElement('tr');for(const value of [row.point_id,row.channel,row.mean===null?'unavailable':row.mean.toFixed(6),row.available_samples+'/'+row.expected_samples,row.unit])tr.append(textNode('td',value));table.append(tr);}$('analysis').append(table,textNode('p','Exact input hash: '+analysis.input_sha256,{className:'small muted'}));}
   else $('analysis').append(textNode('p','No completed exact-input analysis for this group.'));

@@ -74,7 +74,11 @@ CREATE TABLE IF NOT EXISTS members (
 );
 CREATE TABLE IF NOT EXISTS attempts (
  id TEXT PRIMARY KEY, unit_id TEXT NOT NULL REFERENCES units(id),
- fence INTEGER NOT NULL, status TEXT NOT NULL, reason TEXT, bundle_hash TEXT
+ fence INTEGER NOT NULL, status TEXT NOT NULL,
+ physical_status TEXT NOT NULL DEFAULT 'unconfirmed'
+   CHECK(physical_status IN ('unconfirmed','unknown','result_observed')),
+ reason TEXT, bundle_hash TEXT, retry_reason TEXT,
+ retry_authorized_by TEXT, retry_authorized_fence INTEGER
 );
 CREATE TABLE IF NOT EXISTS bundles (
  hash TEXT PRIMARY KEY, attempt_id TEXT NOT NULL UNIQUE REFERENCES attempts(id),
@@ -317,7 +321,7 @@ class Store:
                 )
             ]
             self.connection.execute(
-                "UPDATE attempts SET status='unknown', "
+                "UPDATE attempts SET status='unknown', physical_status='unknown', "
                 "reason='executor ownership changed before result commit' "
                 "WHERE status='running' AND fence<?",
                 (fence,),
@@ -328,13 +332,18 @@ class Store:
         _text(reason, "retry authorization reason")
         with self._write(fence):
             attempt = self._get("attempts", attempt_id)
-            if attempt["status"] == "retry_authorized" and attempt["reason"] == reason:
+            if (
+                attempt["status"] == "retry_authorized"
+                and attempt["retry_reason"] == reason
+            ):
                 return
             if attempt["status"] != "unknown":
                 raise Conflict("only an unknown attempt can be authorized for retry")
             self.connection.execute(
-                "UPDATE attempts SET status='retry_authorized',reason=? WHERE id=?",
-                (reason, attempt_id),
+                "UPDATE attempts SET status='retry_authorized',retry_reason=?, "
+                "retry_authorized_by=(SELECT owner FROM run), "
+                "retry_authorized_fence=? WHERE id=?",
+                (reason, fence, attempt_id),
             )
 
     def save_result(
@@ -365,7 +374,8 @@ class Store:
                 (digest, attempt_id, attempt["unit_id"], _json(payload)),
             )
             self.connection.execute(
-                "UPDATE attempts SET status='result_saved',bundle_hash=? WHERE id=?",
+                "UPDATE attempts SET status='result_saved', "
+                "physical_status='result_observed',bundle_hash=? WHERE id=?",
                 (digest, attempt_id),
             )
             return digest

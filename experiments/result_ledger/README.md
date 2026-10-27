@@ -20,6 +20,8 @@ invent those capabilities. It tests a different completion protocol.
   with a running attempt leaves physical execution **unknown**. Restart does not
   infer that hardware did nothing and never automatically repeats unknown work.
   A recorded retry authorization is necessary to start a new attempt.
+  Authorization never resolves the earlier physical unknown: it retains the
+  original reason plus the authorizing owner/fence and a separate retry reason.
 - Saved results are immutable candidates. Selection is an explicit step. Closed
   groups become ready from selected member units, without a global prefix.
   Publication freezes the selected inputs and emits its notification in the same
@@ -94,6 +96,8 @@ are rejected rather than guessed; the core exposes explicit selection.
 Never point this experiment at a user project. Creation refuses an existing
 path. Recovery and reader commands require an existing experiment ledger.
 Nothing discovers devices, installs services or contacts a remote endpoint.
+The experimental schema is disposable: use a fresh directory after changing
+commits; this branch supplies no migration of earlier experimental databases.
 
 With the repository development environment:
 

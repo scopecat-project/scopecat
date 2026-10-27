@@ -66,6 +66,9 @@ def test_reader_retains_selection_range_and_last_readable_data(tmp_path: Path) -
                 "4 explicitly unavailable" in page.locator("#availability").inner_text()
             )
             assert page.locator("#chart polyline").count() == 2
+            # Invalid chart controls must not suppress fresh execution evidence.
+            page.fill("#xmax", "1")
+            page.locator("#xmax").dispatch_event("change")
             recovered = subprocess.run(
                 [*command, "recover", "--directory", str(directory)],
                 capture_output=True,
@@ -77,6 +80,12 @@ def test_reader_retains_selection_range_and_last_readable_data(tmp_path: Path) -
                 "document.querySelector('#analysis').textContent"
                 ".includes('Exact input hash')"
             )
+            page.wait_for_function(
+                "document.querySelectorAll('#attempts tr').length === 3"
+            )
+            assert "minimum must be less" in page.locator("#chart").text_content()
+            page.fill("#xmax", "12")
+            page.locator("#xmax").dispatch_event("change")
             page.reload()
             page.wait_for_function("document.querySelector('#chart polyline') !== null")
             assert page.locator("#group").input_value() == "high"
