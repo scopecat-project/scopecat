@@ -244,3 +244,98 @@ its sum is not unique physical memory. Checkpoints do not capture transient
 validation candidates, process peaks, long-session leaks or active-request shutdown.
 See [worker residency](../docs/development/author-performance.md#worker-residency-and-revision-churn)
 for interpretation and current measurements. Raw results belong outside Git.
+
+## Safe-prefix publication cost
+
+`safe-prefix` is a component benchmark of producer batching, daemon measurement
+commits and continuous coverage checkpoints. It retains the synthetic scalar
+workload used to investigate #1328 without a browser, actual instrument calls,
+HTTP transport, or a different persistence policy. It calls the production
+execution ports against a real local daemon database; the instrument endpoint
+is the testkit's synthetic endpoint. It does not measure complete-screen latency.
+
+The controller checkout owns the benchmark protocol and fixture. Each worker
+uses the selected target checkout's **own Python 3.15.1 environment**, installed
+with `uv sync --locked`. Git and the locked default development dependencies are
+required; no extra benchmark dependency or Library file is needed. The worker
+checks that core and server modules actually resolve inside the target checkout.
+It does not substitute an old execution module into a newer runtime.
+
+Every record includes the common identity (`case_id=safe-prefix`,
+`case_version=1`, `kind=component`), `benchmark.sha`, `target.sha`, separate dirty
+flags and lockfile hashes, Python version, platform, and a caller-supplied label.
+The common `revision` is the benchmark revision. Use clean, fixed commits for
+comparisons. This protocol is validated with baseline
+`b18731ea55ce4b1c40c68ecf5055115147de020c` and the final fix
+`9d9db1098418053bcfd70d0f73e8e77ac7cc5973`; future incompatible internal ports
+should fail visibly or require a new protocol version.
+
+For example, in PowerShell, start in the fixed benchmark checkout and create
+separate target worktrees (choose new locations). Run `uv sync --locked` in each
+target before returning to the benchmark checkout:
+
+```powershell
+git worktree add --detach ../prefix-baseline b18731ea55ce4b1c40c68ecf5055115147de020c
+git worktree add --detach ../prefix-fixed 9d9db1098418053bcfd70d0f73e8e77ac7cc5973
+uv sync --locked --project ../prefix-baseline
+uv sync --locked --project ../prefix-fixed
+uv sync --locked
+```
+
+Run one sample at a time, with no concurrent tests/typechecks. Set `$storage` to
+an existing, dedicated synthetic benchmark parent directory on the target disk;
+each `--data-root` below must not exist. Capture stdout outside that data root.
+
+```powershell
+$baseline = (Resolve-Path ../prefix-baseline).Path
+$fixed = (Resolve-Path ../prefix-fixed).Path
+$storage = (Resolve-Path ./synthetic-benchmark-data).Path
+$targets = @($baseline, $fixed, $fixed, $baseline)
+$labels = @('A1', 'B1', 'B2', 'A2')
+for ($i = 0; $i -lt 4; $i++) {
+  $target = $targets[$i]
+  $label = $labels[$i]
+  uv run --locked python -m benchmarks run safe-prefix --target-repo $target --target-python "$target/.venv/Scripts/python.exe" --data-root "$storage/$label" --points 1024 --label $label > "$storage/$label.jsonl"
+  if ($LASTEXITCODE -ne 0) { throw "safe-prefix $label failed; inspect retained data" }
+}
+```
+
+On Unix use the same CLI with `<target>/.venv/bin/python`. The controller performs
+one run per invocation; ABBA order is explicit in the labels, not an implicit
+warmup or averaging policy. The workload accepts 1–4096 scalar points, defaults
+to 1024, transfers pending measurements every 64 points, reads live/durable
+previews and renews the lease every 128 points (and at the final point), then
+flushes the pending continuous prefix. It checks final durable count and coverage
+against the requested point count. Setup, final metric collection and cleanup
+are outside `seconds`; the timed loop includes those scheduled reads, lease
+renewals and the final flush. No terminal/seal operation is included.
+
+Metric meanings:
+
+- `write_transactions`: successful `SQLiteDatabase.write_transaction` exits
+  during the timed loop and tail flush, including lease renewals. Setup/header
+  commits are excluded; failed or read-only transactions are not counted.
+- `measurement_transactions`: committed `measurements_appended` events, one per
+  measurement append transaction in this workload. `coverage_events` counts
+  committed `run_coverage_advanced` events; old versions can correctly report zero.
+- `encoded_append_bytes`: sum of logical encoded bytes referenced by committed
+  measurement appends, including encoding overhead. This is **not physical disk
+  write traffic**, WAL/fsync cost, or unique object-store allocation.
+- `observed_project_bytes`: sum of file sizes under the synthetic project after
+  the final flush while the runtime is open, including SQLite/WAL/object files.
+  It is a point-in-time footprint, not cumulative bytes written.
+- `stages`: sampled produced/received/durable counts and preview item counts;
+  these are API observations, not rendered-screen evidence. Reading does not
+  trigger publication.
+
+The data root is exclusively created. On success the worker closes the runtime
+and the controller removes only that newly created root. On failure it retains
+the directory for diagnosis; it never cleans or reuses an existing data root.
+There is a cooperative 600-second check between points and a post-run 250 MiB
+footprint check. Neither is a hard resource cap: a blocked filesystem call can
+outlast the time check, and the byte check runs after writes. Use an external
+process-tree watchdog/resource limit if a hard cap is needed; interrupted runs
+may leave synthetic data for explicit inspection and cleanup. No physical HDD
+qualification or statistically significant performance claim follows from a
+small ABBA comparison. Results from this full-checkout protocol are distinct
+from the earlier temporary mixed-module probe and must be labeled accordingly.
