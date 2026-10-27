@@ -40,6 +40,7 @@ test("reviews an exact candidate and recovers adoption after a lost committed re
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
+  page.setDefaultTimeout(10_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-adoption-"));
   let passed = false;
   try {
@@ -47,7 +48,17 @@ test("reviews an exact candidate and recovers adoption after a lost committed re
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -56,13 +67,33 @@ test("reviews an exact candidate and recovers adoption after a lost committed re
       verification: string;
     };
     await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(seed.run)}#runs`);
-    await page.getByRole("button", { name: "Review adoption and records" }).click();
-    await page.getByLabel("Target parameter branch").selectOption("chip/daily");
-    await expect(page.getByText("Matches original")).toBeVisible();
-    await page.getByLabel("Independent verification").selectOption(`${seed.verification}/decision`);
+    await page.getByRole("button", { name: "审阅发布与记录" }).click();
+    await page.getByLabel("目标参数分支").selectOption("chip/daily");
+    await expect(page.getByText("与原始值一致")).toBeVisible();
+    await page.getByLabel("独立验证").selectOption(`${seed.verification}/decision`);
     await page
-      .getByLabel("Adoption review", { exact: true })
+      .getByLabel("发布审阅", { exact: true })
       .screenshot({ path: testInfo.outputPath("adoption-review.png") });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const review = page.getByLabel("发布审阅", { exact: true });
+      await expect(review.getByRole("columnheader", { name: "原始值", exact: true })).toBeVisible();
+      await expect(
+        review.getByRole("columnheader", { name: "当前分支", exact: true }),
+      ).toBeVisible();
+      await expect(review.getByRole("columnheader", { name: "候选值", exact: true })).toBeVisible();
+      await page.getByLabel("独立验证").focus();
+      await page.keyboard.press("Tab");
+      await expect(review.getByRole("link").filter({ hasText: "decision" })).toBeFocused();
+      expect(
+        await page.locator("html").evaluate((element) => element.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await review.screenshot({ path: testInfo.outputPath(`adoption-review-${width}.png`) });
+    }
+    await page
+      .getByLabel("发布审阅", { exact: true })
+      .getByLabel("操作人", { exact: true })
+      .fill("browser-author");
     const submissions: unknown[] = [];
     await page.route("**/api/v1/parameters/branch-publications", async (route) => {
       submissions.push(route.request().postDataJSON());
@@ -71,14 +102,12 @@ test("reviews an exact candidate and recovers adoption after a lost committed re
       if (submissions.length === 1) await route.abort("failed");
       else await route.fulfill({ response: result });
     });
-    await page.getByRole("button", { name: "Adopt verified candidate into chip/daily" }).click();
+    await page.getByRole("button", { name: "将已验证候选发布到 chip/daily" }).click();
     await expect(page.getByText("The local daemon did not respond.")).toBeVisible();
     await page.reload();
-    await page.getByRole("button", { name: "Review adoption and records" }).click();
-    await page.getByRole("button", { name: "Recover original adoption" }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Adopted into chip/daily" }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "审阅发布与记录" }).click();
+    await page.getByRole("button", { name: "恢复原发布请求" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "已发布到 chip/daily" })).toBeVisible();
     expect(submissions).toHaveLength(2);
     expect(submissions[1]).toEqual(submissions[0]);
     const history = await (
@@ -87,23 +116,23 @@ test("reviews an exact candidate and recovers adoption after a lost committed re
     expect(history.items).toHaveLength(2);
     expect(history.items[0].generation).toBe(2);
     await page.reload();
-    await page.getByRole("button", { name: "Review adoption and records" }).click();
-    await page.getByLabel("Target parameter branch").selectOption("chip/daily");
-    await expect(page.getByText("Already matches candidate")).toBeVisible();
+    await page.getByRole("button", { name: "审阅发布与记录" }).click();
+    await page.getByLabel("目标参数分支").selectOption("chip/daily");
+    await expect(page.getByText("已与候选值一致")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Adopt verified candidate into chip/daily" }),
+      page.getByRole("button", { name: "将已验证候选发布到 chip/daily" }),
     ).toBeDisabled();
     await testInfo.attach("adoption-record", {
       body: await page
-        .getByLabel("Adoption review", { exact: true })
+        .getByLabel("发布审阅", { exact: true })
         .screenshot({ path: testInfo.outputPath("adoption-record.png") }),
       contentType: "image/png",
     });
-    await page.getByRole("link", { name: "Open adopted verification" }).click();
+    await page.getByRole("link", { name: "查看发布所用验证" }).click();
     await expect(page).toHaveURL(new RegExp(`analysis=${seed.verification}#analyses`));
     passed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (passed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved candidate project", {

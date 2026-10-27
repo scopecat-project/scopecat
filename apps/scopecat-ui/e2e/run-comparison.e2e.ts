@@ -180,8 +180,8 @@ test("compares retained signals, saves independent results and starts edited sug
     await adoptionLink.click();
     const proposals = page.getByTestId("run-proposals-card");
     await expect(proposals).toBeVisible();
-    await expect(proposals.getByText(/Collect independent verification/)).toBeVisible();
-    await expect(proposals.getByRole("link", { name: "Verify a candidate" })).toBeVisible();
+    await expect(proposals.getByText(/在作者会话中按实验室策略取得独立验证/)).toBeVisible();
+    await expect(proposals.getByRole("link", { name: "验证候选" })).toBeVisible();
     await proposals.screenshot({ path: testInfo.outputPath("candidate-adoption-steps.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     await proposals.evaluate((element) => {
@@ -192,7 +192,7 @@ test("compares retained signals, saves independent results and starts edited sug
       await page.locator("html").evaluate((element) => element.scrollWidth),
     ).toBeLessThanOrEqual(390);
     await page.setViewportSize({ width: 1280, height: 720 });
-    const sourceAnalysis = page.getByRole("link", { name: "View source analysis", exact: true });
+    const sourceAnalysis = page.getByRole("link", { name: "查看来源分析", exact: true });
     await expect(sourceAnalysis).toHaveAttribute(
       "href",
       `?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(candidate.analysis_id!)}#runs`,
@@ -343,8 +343,8 @@ with ScientificExchange(sys.argv[1]) as capture:
     });
     await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(primary)}#runs`);
     const longProposals = page.getByTestId("run-proposals-card");
-    await longProposals.getByText("View full value", { exact: true }).click();
-    const fullValue = longProposals.getByLabel("Full parameter value");
+    await longProposals.getByText("查看完整值", { exact: true }).click();
+    const fullValue = longProposals.getByLabel("完整参数值");
     await expect(fullValue).toHaveText(JSON.stringify(longRows));
     expect(await fullValue.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(192);
     expect(await fullValue.evaluate((element) => element.scrollHeight)).toBeGreaterThan(192);

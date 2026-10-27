@@ -20,7 +20,7 @@ export function CandidateAdoption({
   return (
     <section className="px-3.5 py-3 text-sm">
       <button className={secondaryButton} onClick={() => setOpen(!open)} aria-expanded={open}>
-        {open ? "Hide adoption review" : "Review adoption and records"}
+        {open ? "收起发布审阅" : "审阅发布与记录"}
       </button>
       {open && (
         <AdoptionReview
@@ -64,14 +64,9 @@ function AdoptionReview({
           })
         : undefined;
       if (stored && (stored.projectId !== projectId || !equal(stored.candidate, candidateIdentity)))
-        throw new Error(
-          "Stored adoption belongs to a different data space or candidate. Reopen its original data space to recover it.",
-        );
+        throw new Error("已保存的发布请求属于其他数据空间或候选。请重新打开原数据空间以恢复请求。");
       const command = stored?.command;
-      if (stored && !command)
-        throw new Error(
-          "Original adoption request is unreadable. Inspect branch history before continuing.",
-        );
+      if (stored && !command) throw new Error("无法读取原发布请求。请先检查分支历史再继续。");
       if (
         command &&
         (command.run_id !== proposal.sourceRunId ||
@@ -82,9 +77,7 @@ function AdoptionReview({
           !command.name ||
           !Number.isInteger(command.expected_generation))
       )
-        throw new Error(
-          "Original adoption request is unreadable. Inspect branch history before continuing.",
-        );
+        throw new Error("无法读取原发布请求。请先检查分支历史再继续。");
       return { command, error: undefined };
     } catch (failure) {
       return { command: undefined, error: errorMessage(failure) };
@@ -165,9 +158,7 @@ function AdoptionReview({
       // Freeze and retain the original request before the first side effect.
       const identity = await getHealth();
       if (identity.projectId !== projectId)
-        throw new Error(
-          "Application data space changed. Reopen the candidate before adopting; the original request is preserved.",
-        );
+        throw new Error("应用数据空间已变化。请重新打开候选后再发布；原请求已保留。");
       sessionStorage.setItem(
         storageKey,
         JSON.stringify({ projectId, candidate: candidateIdentity, command: body }),
@@ -182,9 +173,7 @@ function AdoptionReview({
         result.publication.proposal_id !== body.proposal_id ||
         !equal(result.publication.verification, body.verification)
       )
-        throw new ApiError(
-          "The adoption response could not be verified. Recover the original request.",
-        );
+        throw new ApiError("无法核实发布响应。请恢复原发布请求。");
       setReceipt(result);
       sessionStorage.removeItem(storageKey);
       setAttempt(undefined);
@@ -207,16 +196,13 @@ function AdoptionReview({
     }
   };
   return (
-    <div className="mt-3 grid gap-3" aria-label="Adoption review">
-      <p>
-        Adoption publishes this exact candidate to one reviewed branch after independent
-        verification. Existing runs and prepared experiments keep their original inputs.
-      </p>
+    <div className="mt-3 grid gap-3" aria-label="发布审阅">
+      <p>独立验证后，将此精确候选发布到一个已审阅分支。已有运行和已准备实验仍使用原始输入。</p>
       <Controls.Field>
-        Target parameter branch
+        目标参数分支
         <Controls.Select
           className="block"
-          aria-label="Target parameter branch"
+          aria-label="目标参数分支"
           value={name}
           disabled={busy || !!attempt || !!receipt}
           onChange={(event) => {
@@ -225,53 +211,47 @@ function AdoptionReview({
             setError(undefined);
           }}
         >
-          <option value="">Choose a branch</option>
+          <option value="">选择分支</option>
           {items.map((item) => (
             <option key={item.name} value={item.name}>
-              {item.name} · generation {item.generation}
+              {item.name} · 代次 {item.generation}
             </option>
           ))}
         </Controls.Select>
       </Controls.Field>
       {heads.hasNextPage && (
         <Controls.Button disabled={heads.isFetching} onClick={() => void heads.fetchNextPage()}>
-          Load more branches
+          加载更多分支
         </Controls.Button>
       )}
       {head && (
         <p>
-          Reviewed branch: {head.name} · generation {head.generation} · {head.revision.revision_id}
+          已审阅分支： {head.name} · 代次 {head.generation} · {head.revision.revision_id}
         </p>
       )}
       {head && !compatible && run.isSuccess && (
         <p role="alert">
-          This branch is not at the candidate's exact baseline. Adoption is blocked; review the
-          branch in Configuration. No automatic merge or rebase is performed.
+          此分支与候选的精确基线不一致，无法发布。请在配置页审阅分支；不会自动合并或变基。
         </p>
       )}
-      {moved && (
-        <p role="alert">
-          The branch has moved since review. Adoption with the captured version will be rejected.
-        </p>
-      )}
+      {moved && <p role="alert">分支自审阅后已前进。使用已记录版本的发布请求将被拒绝。</p>}
       {currentHead && (
         <p>
-          Current branch version: {currentHead.revision.revision_id} · generation{" "}
-          {currentHead.generation}
+          当前分支版本： {currentHead.revision.revision_id} · 代次 {currentHead.generation}
         </p>
       )}
       {current.data && (
         <div className="max-h-80 overflow-auto">
           <table className="w-full text-left text-xs">
-            <caption>Candidate baseline, reviewed branch and proposed values</caption>
+            <caption>候选基线、已审阅分支与拟议值</caption>
             <thead>
               <tr>
-                <th>Parameter</th>
-                <th>Original</th>
-                <th>Current branch</th>
-                <th>Candidate</th>
-                <th>Comparison</th>
-                {draft.data && <th>Working input (raw, not adopted)</th>}
+                <th>参数</th>
+                <th>原始值</th>
+                <th>当前分支</th>
+                <th>候选值</th>
+                <th>对比</th>
+                {draft.data && <th>工作输入（原始内容，不随候选发布）</th>}
               </tr>
             </thead>
             <tbody>
@@ -323,10 +303,10 @@ function AdoptionReview({
                     <td className="p-2">{format(cell.after)}</td>
                     <td>
                       {equal(cell.current, cell.before)
-                        ? "Matches original"
+                        ? "与原始值一致"
                         : equal(cell.current, cell.after)
-                          ? "Already matches candidate"
-                          : "Changed since candidate"}
+                          ? "已与候选值一致"
+                          : "相对候选基线已变化"}
                     </td>
                     {draft.data && (
                       <td className="p-2 whitespace-pre-wrap">{format(cell.working)}</td>
@@ -339,19 +319,19 @@ function AdoptionReview({
       )}
       {name && (
         <p>
-          Working edits on {name} remain in their working table. After publication, review the new
-          branch head there before checkpointing. Publication does not adopt or discard those edits.{" "}
+          {name}{" "}
+          的工作改动仍保留在工作表中。发布后，请先在那里审阅新的分支头，再保存检查点。发布不会采纳或丢弃这些改动。{" "}
           <a className="underline" href="#configuration">
-            Open Configuration
+            打开配置
           </a>
         </p>
       )}
       {draft.data && (
         <details>
-          <summary>Retained working table for {name} (raw input)</summary>
+          <summary>{name} 已保留的工作表（原始输入）</summary>
           <p>
-            Draft {draft.data.draft.draft_id} · revision {draft.data.head_revision}. Unacknowledged
-            editor input is not included here.
+            草稿 {draft.data.draft.draft_id} · 修订 {draft.data.head_revision}
+            。此处不含尚未确认保存的编辑器输入。
           </p>
           <pre className="max-h-48 overflow-auto">
             {JSON.stringify(draft.data.draft.input.values, null, 2)}
@@ -359,15 +339,15 @@ function AdoptionReview({
         </details>
       )}
       <Controls.Field>
-        Independent verification
+        独立验证
         <Controls.Select
           className="block"
-          aria-label="Independent verification"
+          aria-label="独立验证"
           value={decision}
           disabled={busy || !!attempt || !!receipt}
           onChange={(event) => setDecision(event.target.value)}
         >
-          <option value="">Choose a retained verification</option>
+          <option value="">选择已有验证记录</option>
           {checks.map((item) => (
             <option
               key={`${item.reference.analysis_record_id}/${item.reference.output_id}`}
@@ -375,7 +355,7 @@ function AdoptionReview({
               disabled={!!item.unavailable_reason}
             >
               {item.title} · {item.reference.analysis_record_id} · {item.reference.output_id}
-              {item.unavailable_reason ? " (unavailable)" : ""}
+              {item.unavailable_reason ? "（不可用）" : ""}
             </option>
           ))}
         </Controls.Select>
@@ -396,18 +376,16 @@ function AdoptionReview({
           disabled={evidence.isFetching}
           onClick={() => void evidence.fetchNextPage()}
         >
-          Load older verification records
+          加载更早的验证记录
         </Controls.Button>
       )}
       {evidence.isSuccess && !checks.some((item) => !item.unavailable_reason) && (
         <p>
-          No eligible verification in the loaded records. Keep this candidate pending verification:
-          collect independent data using this exact candidate and retain your laboratory's
-          acceptance decision. Reanalysis of old data is insufficient.
+          已加载记录中没有符合条件的验证。此候选仍待验证：请使用此精确候选采集独立数据，并保留实验室的验收判定。仅重新分析旧数据不足以完成验证。
         </p>
       )}
       <Controls.Field>
-        Operator
+        操作人
         <Controls.Input
           className="block"
           value={actor}
@@ -416,7 +394,7 @@ function AdoptionReview({
         />
       </Controls.Field>
       <Controls.Field>
-        Adoption note
+        发布备注
         <Controls.Input
           className="block"
           value={note}
@@ -430,12 +408,11 @@ function AdoptionReview({
       {attempt ? (
         <>
           <p>
-            Original adoption: {attempt.name} · expected generation {attempt.expected_generation} ·
-            revision {attempt.revision_id}. Its outcome may be unknown. Retry only this exact
-            request to recover its receipt.
+            原发布请求：{attempt.name} · 预期代次 {attempt.expected_generation} · 修订{" "}
+            {attempt.revision_id}。结果可能未知。仅重试此精确请求以恢复其收据。
           </p>
           <button className={secondaryButton} disabled={busy} onClick={() => void send(attempt)}>
-            Recover original adoption
+            恢复原发布请求
           </button>
         </>
       ) : (
@@ -472,14 +449,13 @@ function AdoptionReview({
               })
             }
           >
-            Adopt verified candidate into {name || "selected branch"}
+            将已验证候选发布到 {name || "所选分支"}
           </button>
         )
       )}
       {receipt && (
         <p role="status">
-          Adopted into {receipt.name} · generation {receipt.generation} ·{" "}
-          {receipt.revision.revision_id}
+          已发布到 {receipt.name} · 代次 {receipt.generation} · {receipt.revision.revision_id}
         </p>
       )}
       <button
@@ -494,35 +470,29 @@ function AdoptionReview({
           }
         }}
       >
-        Refresh evidence and records
+        刷新依据与记录
       </button>
-      <h4>Adoption records for {name || "selected branch"}</h4>
+      <h4>发布记录： {name || "所选分支"}</h4>
       {publicationRecords.map((item) => (
         <div key={item.generation}>
           <p>
-            {item.name} · generation {item.generation} · {item.revision.revision_id} · {item.actor}
+            {item.name} · 代次 {item.generation} · {item.revision.revision_id} · {item.actor}
           </p>
           <p>{item.note}</p>
           <a
             className="underline"
             href={`?analysis=${encodeURIComponent(item.publication!.verification.analysis_record_id)}#analyses`}
           >
-            Open adopted verification
+            查看发布所用验证
           </a>
         </div>
       ))}
-      {records.isSuccess && !publicationRecords.length && (
-        <p>No adoption of this candidate recorded on this branch.</p>
-      )}
+      {records.isSuccess && !publicationRecords.length && <p>此分支尚无该候选的发布记录。</p>}
     </div>
   );
 }
 function format(value: unknown): string {
-  return value === undefined
-    ? "Missing"
-    : typeof value === "string"
-      ? value
-      : JSON.stringify(value);
+  return value === undefined ? "缺失" : typeof value === "string" ? value : JSON.stringify(value);
 }
 function equal(left: unknown, right: unknown): boolean {
   if (left === right) return true;

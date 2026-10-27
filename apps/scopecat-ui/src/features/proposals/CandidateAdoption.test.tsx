@@ -80,26 +80,24 @@ function mount(projectId = "space-a", currentProposal = proposal) {
   return { ...view, switchProject: (id: string) => view.rerender(content(id)) };
 }
 async function select() {
-  fireEvent.click(screen.getByText("Review adoption and records"));
+  fireEvent.click(screen.getByText("审阅发布与记录"));
   await screen.findByRole("option", { name: /daily/ });
-  fireEvent.change(screen.getByLabelText("Target parameter branch"), {
+  fireEvent.change(screen.getByLabelText("目标参数分支"), {
     target: { value: "daily" },
   });
-  await screen.findByText("Matches original");
-  fireEvent.change(screen.getByLabelText("Independent verification"), {
+  await screen.findByText("与原始值一致");
+  fireEvent.change(screen.getByLabelText("独立验证"), {
     target: { value: "verified/decision" },
   });
   await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Adopt verified candidate into daily" }),
-    ).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "将已验证候选发布到 daily" })).toBeEnabled(),
   );
 }
 it("retains the original request across unmount and rejects an unverified response", async () => {
   vi.mocked(api.publish).mockRejectedValueOnce(new ApiError("lost response"));
   const first = mount();
   await select();
-  fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+  fireEvent.click(screen.getByText("将已验证候选发布到 daily"));
   await screen.findByText("lost response");
   const command = vi.mocked(api.publish).mock.calls[0]![0];
   expect(command).toMatchObject({
@@ -110,12 +108,10 @@ it("retains the original request across unmount and rejects an unverified respon
   });
   first.unmount();
   mount();
-  fireEvent.click(screen.getByText("Review adoption and records"));
+  fireEvent.click(screen.getByText("审阅发布与记录"));
   vi.mocked(api.publish).mockResolvedValueOnce({} as api.Branch);
-  fireEvent.click(await screen.findByText("Recover original adoption"));
-  await screen.findByText(
-    "The adoption response could not be verified. Recover the original request.",
-  );
+  fireEvent.click(await screen.findByText("恢复原发布请求"));
+  await screen.findByText("无法核实发布响应。请恢复原发布请求。");
   expect(api.publish).toHaveBeenNthCalledWith(2, command, "space-a");
   vi.mocked(api.publish).mockResolvedValueOnce({
     ...head,
@@ -123,7 +119,7 @@ it("retains the original request across unmount and rejects an unverified respon
     revision: { ...base, revision_id: command.revision_id },
     publication: { run_id: "run", proposal_id: "carrier", verification: reference },
   });
-  fireEvent.click(screen.getByText("Recover original adoption"));
+  fireEvent.click(screen.getByText("恢复原发布请求"));
   await screen.findByRole("status");
   expect(api.publish).toHaveBeenNthCalledWith(3, command, "space-a");
   expect(sessionStorage.length).toBe(0);
@@ -137,15 +133,13 @@ it("keeps the reviewed generation fixed while refreshing current branch conflict
   vi.mocked(api.revision).mockResolvedValue({
     parameters: { values: [{ id: "frequency", shape: "scalar", value: 6 }] },
   } as Awaited<ReturnType<typeof api.revision>>);
-  fireEvent.click(screen.getByText("Refresh evidence and records"));
-  await screen.findByText("Changed since candidate");
-  expect(screen.getByText(/Reviewed branch: daily · generation 4/)).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "Adopt verified candidate into daily" }),
-  ).toBeDisabled();
+  fireEvent.click(screen.getByText("刷新依据与记录"));
+  await screen.findByText("相对候选基线已变化");
+  expect(screen.getByText(/已审阅分支： daily · 代次 4/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "将已验证候选发布到 daily" })).toBeDisabled();
   expect(api.publish).not.toHaveBeenCalled();
 });
-it("keeps ineligible verification unavailable and reads only the selected branch draft", async () => {
+it("keeps ineligible verification unavailable and reads only the 所选分支 draft", async () => {
   vi.mocked(api.verifications).mockResolvedValue({
     items: [
       {
@@ -156,15 +150,13 @@ it("keeps ineligible verification unavailable and reads only the selected branch
     ],
   });
   mount();
-  fireEvent.click(screen.getByText("Review adoption and records"));
+  fireEvent.click(screen.getByText("审阅发布与记录"));
   await screen.findByRole("option", { name: /daily/ });
-  fireEvent.change(screen.getByLabelText("Target parameter branch"), {
+  fireEvent.change(screen.getByLabelText("目标参数分支"), {
     target: { value: "daily" },
   });
   expect(await screen.findByText("Independent candidate acquisition required")).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "Adopt verified candidate into daily" }),
-  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "将已验证候选发布到 daily" })).toBeDisabled();
   expect(api.workingTable).toHaveBeenCalledWith("daily");
   expect(api.workingTable).toHaveBeenCalledTimes(1);
   expect(api.publish).not.toHaveBeenCalled();
@@ -181,10 +173,10 @@ it("shows raw working edits separately without adding them to publication", asyn
   mount();
   await select();
   expect(
-    screen.getByRole("columnheader", { name: "Working input (raw, not adopted)" }),
+    screen.getByRole("columnheader", { name: "工作输入（原始内容，不随候选发布）" }),
   ).toBeVisible();
   expect(screen.getByRole("cell", { name: '{"text":"1e","unit":"GHz"}' })).toBeVisible();
-  fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+  fireEvent.click(screen.getByText("将已验证候选发布到 daily"));
   await screen.findByText("conflict");
   expect(api.publish).toHaveBeenCalledTimes(1);
   expect(api.publish).toHaveBeenCalledWith(
@@ -198,14 +190,14 @@ it("isolates recovery and query caches when the data space changes at the same o
   vi.mocked(api.publish).mockRejectedValue(new ApiError("lost response"));
   const view = mount();
   await select();
-  fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+  fireEvent.click(screen.getByText("将已验证候选发布到 daily"));
   await screen.findByText("lost response");
   const key = sessionStorage.key(0)!;
   const saved = sessionStorage.getItem(key);
   view.switchProject("space-b");
-  await screen.findByLabelText("Target parameter branch");
-  expect(screen.queryByText("Recover original adoption")).toBeNull();
-  expect(screen.getByLabelText("Target parameter branch")).toHaveValue("");
+  await screen.findByLabelText("目标参数分支");
+  expect(screen.queryByText("恢复原发布请求")).toBeNull();
+  expect(screen.getByLabelText("目标参数分支")).toHaveValue("");
   await waitFor(() => expect(api.branches).toHaveBeenCalledTimes(2));
   expect(sessionStorage.getItem(key)).toBe(saved);
   expect(api.publish).toHaveBeenCalledTimes(1);
@@ -217,7 +209,7 @@ it("ignores legacy unscoped requests instead of migrating them into the current 
   );
   mount();
   await select();
-  expect(screen.queryByText("Recover original adoption")).toBeNull();
+  expect(screen.queryByText("恢复原发布请求")).toBeNull();
   expect(api.publish).not.toHaveBeenCalled();
   expect(sessionStorage.length).toBe(1);
 });
@@ -227,7 +219,7 @@ it.each(["space", "candidate"])(
     vi.mocked(api.publish).mockRejectedValue(new ApiError("lost response"));
     const view = mount();
     await select();
-    fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+    fireEvent.click(screen.getByText("将已验证候选发布到 daily"));
     await screen.findByText("lost response");
     const key = sessionStorage.key(0)!;
     const stored = JSON.parse(sessionStorage.getItem(key)!);
@@ -236,9 +228,9 @@ it.each(["space", "candidate"])(
     sessionStorage.setItem(key, JSON.stringify(stored));
     view.unmount();
     mount();
-    fireEvent.click(screen.getByText("Review adoption and records"));
-    await screen.findByText(/Stored adoption belongs to a different data space or candidate/);
-    expect(screen.queryByText("Recover original adoption")).toBeNull();
+    fireEvent.click(screen.getByText("审阅发布与记录"));
+    await screen.findByText(/已保存的发布请求属于其他数据空间或候选/);
+    expect(screen.queryByText("恢复原发布请求")).toBeNull();
     expect(api.publish).toHaveBeenCalledTimes(1);
   },
 );
@@ -246,7 +238,7 @@ it("rechecks current space before recovery and preserves the request on a server
   vi.mocked(api.publish).mockRejectedValueOnce(new ApiError("lost response"));
   mount();
   await select();
-  fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+  fireEvent.click(screen.getByText("将已验证候选发布到 daily"));
   await screen.findByText("lost response");
   const saved = sessionStorage.getItem(sessionStorage.key(0)!);
   vi.mocked(getHealth).mockResolvedValueOnce({
@@ -256,14 +248,14 @@ it("rechecks current space before recovery and preserves the request on a server
     projectRoot: "/b",
     details: {},
   });
-  fireEvent.click(screen.getByText("Recover original adoption"));
-  await screen.findByText(/Application data space changed. Reopen the candidate/);
+  fireEvent.click(screen.getByText("恢复原发布请求"));
+  await screen.findByText(/应用数据空间已变化。请重新打开候选/);
   expect(api.publish).toHaveBeenCalledTimes(1);
   expect(sessionStorage.getItem(sessionStorage.key(0)!)).toBe(saved);
   vi.mocked(api.publish).mockRejectedValueOnce(
     new ApiError("Application data space changed; reopen the candidate before adopting", 409),
   );
-  fireEvent.click(screen.getByText("Recover original adoption"));
+  fireEvent.click(screen.getByText("恢复原发布请求"));
   await screen.findByText("Application data space changed; reopen the candidate before adopting");
   expect(api.publish).toHaveBeenCalledTimes(2);
   expect(api.publish).toHaveBeenLastCalledWith(JSON.parse(saved!).command, "space-a");
