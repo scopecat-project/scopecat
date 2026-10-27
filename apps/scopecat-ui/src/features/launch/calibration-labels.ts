@@ -74,5 +74,7 @@ const reasons: Record<string, string> = {
   dependency_values_changed: "依赖参数值已变化。",
   declared_dependencies_unchanged: "声明的依赖未变化。",
 };
-export const calibrationStatusLabel = (value: string) => statuses[value] ?? value;
-export const calibrationReasonLabel = (value: string) => reasons[value] ?? value;
+export const calibrationStatusLabel = (value: string) =>
+  Object.hasOwn(statuses, value) ? statuses[value]! : value;
+export const calibrationReasonLabel = (value: string) =>
+  Object.hasOwn(reasons, value) ? reasons[value]! : value;

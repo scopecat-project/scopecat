@@ -9,3 +9,10 @@ it("translates known verdicts and dependency reasons without rewriting unknown v
   expect(calibrationStatusLabel("future_state")).toBe("future_state");
   expect(calibrationReasonLabel("author_custom_reason")).toBe("author_custom_reason");
 });
+
+it("preserves inherited object keys as unknown raw values", () => {
+  for (const value of ["constructor", "toString", "__proto__"]) {
+    expect(calibrationStatusLabel(value)).toBe(value);
+    expect(calibrationReasonLabel(value)).toBe(value);
+  }
+});
