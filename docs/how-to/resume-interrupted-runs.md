@@ -26,7 +26,7 @@ Notebook 或执行器退出后，先在原运行详情中检查状态、资源�
 
 procedure 的 `context.run(...)` 会保留尚未启动的子运行，使父 procedure 回到
 `ready` 并记录 `resource_wait`，占用期间 worker 退出。
-GUI 管理的 procedure 在资源可用时自动唤醒，复用原子运行和步骤尝试；
+GUI 管理的 procedure 在资源可用时自动唤醒，复用原来的子运行和步骤尝试；
 没有后台宿主的 Python 调用者需显式恢复 procedure。
 取消父 procedure 会同时取消其等待中的未启动子运行。
 等待不授权重放已启动的子运行，被隔离的占用者仍需先核实处理。
