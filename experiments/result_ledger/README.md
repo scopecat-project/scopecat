@@ -1,234 +1,192 @@
 # Result ledger experiment — #1344
 
-An isolated, disposable replacement of the acquisition-to-analysis path. This is
-not a production backend, an adopted migration, or a hardware implementation.
-Round 2 specifically tests single-source author intent and atomic post-provider
-completion; the original milestone `698fda92725e7359a016cea8af1a2816d2dd6100`
-and its negative/cost evidence remain preserved below.
-All demonstration data and provider actions are synthetic.
+A runnable, disposable alternative acquisition-to-analysis chain using synthetic
+providers only. It is not adopted, deployed, or a migration. Public baseline:
+`f2e514a1a1075b9de0c1bf5de697bba455a72aae`.
 
-Baseline: public main `f2e514a1a1075b9de0c1bf5de697bba455a72aae`.
-The baseline already has invocation intents, execution evidence, sparse recovery
-groups, output hashes, acquisition/projection separation, exact analysis slices,
-and atomic sparse projection notifications. This experiment does not claim to
-invent those capabilities. It tests a different completion protocol.
+**Round-2 result:** single-source author intent and fewer post-provider commits
+are demonstrated for the bounded scene. Throughput/memory superiority and full
+production equivalence are not demonstrated. Retain this as a replacement
+candidate for independent adoption review; do not replace main.
 
-## Decisions being tested
-
-- A scientific work unit names stable points and required outputs. One result
-  bundle can contain multiple array blocks spanning several points; a point is
-  neither an attempt nor a storage record. Coordinates and dimension identities
-  remain explicit, including units, unavailable samples and provenance.
-- An attempt is recorded before invoking the synthetic provider. A process loss
-  with a running attempt leaves physical execution **unknown**. Restart does not
-  infer that hardware did nothing and never automatically repeats unknown work.
-  A recorded retry authorization is necessary to start a new attempt.
-  Authorization never resolves the earlier physical unknown: it retains the
-  original reason plus the authorizing owner/fence and a separate retry reason.
-- Saved results are immutable candidates. Selection is an explicit step. Closed
-  groups become ready from selected member units, without a global prefix.
-  Publication freezes the selected inputs and emits its notification in the same
-  SQLite transaction. In atomic mode, saving the returned result and recording
-  its declared selection share this transaction; staged mode remains available. Acknowledging a notification is separate; delivery is at
-  least once and consumers deduplicate durable event IDs.
-- An open group admits additional work and must be closed explicitly. Its closed
-  membership is the completeness contract. Readiness means inputs are fixed,
-  not that all samples are valid or an analysis is scientifically successful.
-- SQLite remains the persistence engine. The experiment does not introduce a
-  general DAG, service fleet, universal event log, or data migration layer.
-
-The separate durable facts are work membership, attempt/evidence history,
-immutable results, explicit selections, and frozen publication/outbox. Completion
-counts and prefix summaries are derived. This does not make state disappear:
-provider execution still lies outside the database transaction, and consumers
-still maintain a delivery cursor. Those boundaries are intentional.
-
-## Current architecture and public boundary
+## Architecture and scientific boundary
 
 `Intent/Axis → compile/initialize → drain(provider) → Store → snapshot/outbox → analysis/viewer`.
-The declaration names ordered coordinate axes, output contracts, `work_by`,
-`group_by`, traversal direction and closure. It never lists points or member IDs.
-The compiler derives those identities by axis indices (including duplicate-value
-points), separately from execution order. Grouping by index is explicit and is
-not the production analysis rule that can combine equal coordinate values.
 
-- `Intent.initialize/verify/extend`: persist a single admitted intent; extension
-  binds a proposal ID, exact source snapshot and rule. Extension never closes a
-  group. `Store.close_group` is the author's explicit membership commitment.
-- `drain`: interpret admitted work order and declared `sole_candidate` policy,
-  without scenario IDs, guessed closure, or implicit authorization to retry.
-- `Store.begin_attempt`: persist the pre-provider external-effect boundary.
-  Attempt lifecycle, physical certainty and retry authorization remain distinct.
-- `Store.complete_attempt`: validate/save the result, audit the declared choice,
-  and freeze requested ready closed groups with their outbox in one fenced commit.
-  The result cannot be partially saved by failure inside this operation.
-- `save_result`, `select_result`, `select_and_publish`: retain candidate-only and
-  explicit later-choice paths; an ambiguous candidate set is never guessed.
-- `snapshot/events/state`: immutable exact inputs, publication notifications,
-  and one coherent derived readiness view. There is no mutable prefix authority.
+One declaration names ordered coordinate axes, output contracts, acquisition and
+analysis partitions, traversal direction, selection policy and closure. It does
+not list point IDs or repeat memberships. The compiler derives stable identities
+by axis indices, independently from physical execution order. Duplicate values
+remain distinct. **Axis-index grouping is explicit**, unlike production analysis
+that may combine equal coordinate values.
 
-State responsibilities are membership/intent, execution attempts/evidence,
-immutable bundles, explicit selection history, frozen snapshots and outbox.
-The numerical contract rejects unsupported narrow floats and integer components
-that cannot be exactly represented by the declared float64/complex128 type.
+Core facts and public APIs:
 
-The new author DSL is deliberately bounded: `group_by` must be a subset of
-`work_by`, so a work unit cannot straddle analysis groups. Raw-core overlapping
-groups are not exposed by this DSL. All result blocks still require a point axis
-and every required output must cover the unit's points; point-free work-level
-aggregates are not implemented. `state()`/GUI eagerly materialize a small run,
-not a streaming long-run query interface.
+- `Intent.initialize/verify/extend`: admitted intent and fingerprint; derived
+  membership; idempotent accepted proposals with exact source snapshot and rule.
+  Extension leaves a group open. `Store.close_group` fixes final membership.
+- `drain`: bounded interpreter for persisted work order and the author's explicit
+  `sole_candidate` policy; no scenario IDs, inferred closure or implicit retry.
+- `Store.begin_attempt`: durable pre-provider boundary. Attempt lifecycle,
+  physical certainty and retry authorization are independent. An authorized retry
+  never changes the earlier attempt's physical `unknown` to success.
+- `Store.complete_attempt`: one fenced transaction saves a returned result,
+  audits the declared choice and publishes requested ready closed groups, frozen
+  input manifests and outbox. No partially saved result survives rollback.
+- `save_result/select_result/select_and_publish`: candidate-only and later-choice
+  paths remain. Ambiguous choices are rejected; published selections are frozen.
+- `snapshot/events/state`: hash-verified exact inputs, durable publication events,
+  and one coherent derived readiness view. No mutable prefix is authoritative.
 
-## Scope and adoption boundary
+Result blocks span multiple points and outputs, retaining dimensions, units,
+coordinates, availability and provenance. Required outputs must cover every unit
+point, and every block still needs a point axis: work-level point-free aggregates
+are not supported. Unsupported narrow floats and integer components not exactly
+representable by their declared float64/complex128 type are explicitly rejected.
 
-| Capability | Experiment intent | Baseline relationship |
-| --- | --- | --- |
-| 2D coordinates, duplicate-value-safe identity | Stable point IDs and explicit axes | Preserve |
-| Full waveform and channel provenance | Multi-point, multi-output blocks; synthetic common acquisition | Preserve this fixture; no physical synchronization qualification |
-| Units, shapes, per-sample availability | Validate and retain; analysis reports valid/missing counts | Preserve selected subset |
-| Sparse completion and retry history | Explicit selection; no global-prefix publication gate | Preserve with a different protocol |
-| Frozen analysis inputs and outbox notification | Content identity and atomic publication | Preserve |
-| Adaptive append/restart and open-group closure | Persist membership; resume from durable facts | New exploration, not claimed baseline parity |
-| GUI selection/manual ranges | Minimal read-only local viewer | Preserve key reading behavior, not full UI parity |
-| Arbitrary dtype, ragged/entity/cohort contracts | Numeric types and fixed contracts; split blocks only in deferred-schema mode | Incomplete; no general cohort/all-or-nothing policy or declared ragged dimensions |
-| Production adaptive proposal ledger, region budgets, operator queue | Demo only persists one observation-derived append | Uncovered; not equivalent to the production optimizer |
-| Real providers, compiler/lowering, device recovery | Not implemented | Uncovered |
-| Calibration, procedure orchestration, exports, all existing UI | Not implemented | Uncovered |
+The 2D demo executes high bias before low bias, returns two-channel waveforms plus
+a diagnostic, preserves partial Q samples, and derives one adaptive addition from
+an exact published analysis. Static groups are explicitly closed; the adaptive
+group is appended then explicitly closed. The viewer retains selections/manual
+ranges through refresh, reload and disconnection and displays old unknowns after
+successful retries. Simulation provenance does not prove physical synchronization.
 
-A successful slice reduces author/protocol burden while retaining these tested
-scientific and failure semantics. Unknown execution being silently replayed,
-frozen input drift, dropped availability/provenance, or simplification achieved
-only by removing required capability is a failure. Timing improvements alone do
-not justify adoption. Whole adoption, partial absorption and discarding the
-experiment all remain valid outcomes.
+## Run and test
 
-## Reproduction and measured evidence
-
-Run from the repository root with Python 3.14+ (the demo itself uses only the
-standard library). Use a new synthetic directory for each demo:
+From the repository root, Python 3.14+; demo/core use the standard library:
 
 ```sh
-python -m experiments.result_ledger demo --directory /tmp/result-demo
-python -m experiments.result_ledger inspect --directory /tmp/result-demo
-python -m experiments.result_ledger serve --directory /tmp/result-demo --port 8765
-```
+python -m experiments.result_ledger demo --directory /tmp/new-result-demo
+python -m experiments.result_ledger inspect --directory /tmp/new-result-demo
+python -m experiments.result_ledger serve --directory /tmp/new-result-demo --port 8765
+# Read-only viewer: http://127.0.0.1:8765
 
-The read-only viewer is at `http://127.0.0.1:8765`. It reads published snapshots;
-saved but unselected/unpublished candidates are shown in counts and history.
-Manual range and selection survive polling, reload and temporary disconnection.
-The minimal viewer intentionally handles only this demo's declared tensor layout.
-
-```sh
-python -m experiments.result_ledger demo --directory /tmp/result-fault \
+python -m experiments.result_ledger demo --directory /tmp/new-result-fault \
   --crash-at provider-return --hard-crash
-# Expected exit 75, including when Python/context-manager shutdown is bypassed.
-python -m experiments.result_ledger recover --directory /tmp/result-fault
-# Expected exit 3: physical result unknown; no provider action repeated.
-python -m experiments.result_ledger recover --directory /tmp/result-fault \
+# Expected exit 75, bypassing Python/context-manager shutdown.
+python -m experiments.result_ledger recover --directory /tmp/new-result-fault
+# Expected exit 3; no repeated provider action without explicit authorization.
+python -m experiments.result_ledger recover --directory /tmp/new-result-fault \
   --authorize-retry
 ```
 
-Other boundaries are `result-save`, `group-publish`, `notification`,
-`adaptive-append` and `adaptive-close`. Omit
-`--hard-crash` for controlled exception exit. Every recovery is driven by the
-ledger; the provider audit is inspection evidence, never a recovery oracle.
-Default `--commit-mode atomic` saves/selects/publishes in one transaction;
-`--commit-mode staged` preserves the four-commit first-round path. Recovery uses
-the admitted mode. An atomic `result-save` fault is **inside** the transaction:
-it rolls back and leaves physical execution unknown. A staged `result-save` fault
-is **after** durable candidate saving and needs no repeated provider action.
-The sole-candidate selection policy is explicit in the demo. Multiple candidates
-are rejected rather than guessed; the core exposes explicit selection.
+Other boundaries: `result-save`, `group-publish`, `notification`, `adaptive-append`,
+`adaptive-close`. Omit `--hard-crash` for controlled exception exit. Default
+`--commit-mode atomic` uses begin + completion; `--commit-mode staged` preserves
+the original begin/save/select/publish chain. Recovery uses the admitted mode.
 
-Never point this experiment at a user project. Creation refuses an existing
-path. Recovery and reader commands require an existing experiment ledger.
-Nothing discovers devices, installs services or contacts a remote endpoint.
-The experimental schema is disposable: use a fresh directory after changing
-commits; this branch supplies no migration of earlier experimental databases.
+| Interruption | Atomic | Staged |
+| --- | --- | --- |
+| provider-return | Result absent; physical unknown on recovery | Same |
+| result-save | Inside transaction: rollback; physical unknown | After candidate commit: reuse saved result |
+| group-publish | Result, choice, snapshot and event committed together | All four stages already committed |
+| notification | Durable event redelivery, deduplicated effects | Same |
+| adaptive append / close | Persisted proposal; open / closed membership respectively | Same |
 
-With the repository development environment:
+Creation requires a new directory; existing data is never overwritten. Recovery
+requires an experiment ledger. Use fresh data after changing experimental schema;
+there is deliberately no migration. No device discovery, remote service, runner
+installation or user project is involved. The provider audit is evidence, never a
+recovery oracle. Notification delivery is at least once, not hardware exactly once.
+
+With repository development dependencies:
 
 ```sh
 python -m pytest -q -n 0 -p no:cacheprovider experiments/result_ledger/tests
 ruff check experiments/result_ledger
 ruff format --check experiments/result_ledger
-python -m experiments.result_ledger benchmark --directory /tmp/result-benchmark \
+python -m experiments.result_ledger.author_comparison
+python -m experiments.result_ledger.baseline_flow --directory /tmp/new-baseline-control
+python -m experiments.result_ledger benchmark --directory /tmp/new-result-benchmark \
   --baseline-repo /path/to/clean-baseline --points 16 64 256 --samples 32
+# --comparison staged-atomic runs only the more comparable pair.
 ```
 
-The browser test requires installed Playwright and a local `chromium` executable;
-it skips explicitly if unavailable and never downloads a browser. The benchmark
-requires the baseline's installed development packages, verifies their actual
-import paths and exact SHA, and refuses dirty tracked baseline files. The demo
-and core do not import those production packages.
+Browser tests use installed Playwright and a local `chromium`, otherwise explicitly
+skip; they never download a browser. Baseline controls require installed production
+packages, verify actual import paths and exact clean baseline SHA.
 
-`benchmark.py` implements a separately versioned component protocol inspired by
-safe-prefix, not a claim of rerunning safe-prefix v1. It uses subprocess ABBA,
-untimed serialization warmup, setup outside timing, real baseline daemon storage
-ports, identical scientific values/masks/coordinates, and no changed durability
-policy. Both sides use WAL/NORMAL. It records all samples and retained databases.
-The baseline publishes per-point Arrow records and recovery proofs; the
-experiment publishes multi-point JSON bundles and audits attempts/selections.
-These are deliberately different protocols, not an end-to-end speed contest.
-First-readable is a storage read, not rendered GUI latency. Tracemalloc omits
-native allocations and prebuilt payloads. File growth is retained footprint,
-not physical device write amplification. No portable threshold is claimed.
+## Evidence and decision
 
+Measured implementation: `09d84696252cf943dc5e9ee411074f2e69859be2` (clean).
+**78 tests passed, 14.28 s**; real Chromium, controlled/hard exits, both commit
+modes, transaction rollback, lost-response replay, stale fencing, binary64
+precision, duplicate coordinates, coarser groups and source-bound append/close
+recovery. Ruff and whitespace checks pass.
 
-## Round 1 evidence and decision (preserved)
+An independent agent performed two read-only source reviews. Fixed findings:
+numeric labels that did not enforce representation, missing adaptive source
+identity, duplicate readiness logic, and missing dynamic-boundary fault coverage.
+No additional blocking atomicity/fencing/frozen-selection issue remained.
 
-Measured implementation: `cd4874f7a8bf959341319b898785585c79963ebc` (clean).
-Baseline: `f2e514a1a1075b9de0c1bf5de697bba455a72aae` (clean).
-Python 3.14.7, SQLite 3.53.1, Linux x86_64; each row contains the two raw
-observations in one ABBA cycle, 2 channels × 32 samples, 2 points per group.
-Both settings: WAL, synchronous=NORMAL, foreign_keys=ON, page_size=4096,
-wal_autocheckpoint=1000. These are local component observations, not adoption
-thresholds or a comparison of equivalent end-to-end feature sets.
+**Author hypothesis established for the same scene.** `author_comparison.py` runs
+the unchanged first milestone from Git in an isolated directory and the current
+scene. Logical coordinate order, units, work/group membership, output contracts,
+waveforms, availability and publication order match; each yields 6 points,
+3 units/results/snapshots. Three handwritten member structures and a fixed
+unit-ID traversal become one declaration: 53 → 35 author source lines. The
+important reduction is repeated information, not LOC. New compiler/interpreter
+code was added, so this is not evidence of a smaller whole system.
 
-| Points | Path | Publication seconds | First sparse read ms | Write transactions | Timed Python peak KiB | Footprint growth / scientific JSON bytes |
-| ---: | --- | --- | --- | ---: | --- | --- |
-| 16 | baseline | 0.48 / 0.47 | 80.32 / 79.40 | 16 | 297.93 / 297.73 | 71.12 / 71.12 |
-| 16 | experiment | 0.02 / 0.02 | 3.79 / 4.46 | 32 | 35.25 / 35.25 | 44.73 / 44.73 |
-| 64 | baseline | 2.53 / 2.64 | 100.75 / 99.79 | 64 | 422.20 / 424.04 | 75.83 / 75.83 |
-| 64 | experiment | 0.08 / 0.09 | 4.24 / 4.27 | 128 | 43.34 / 43.34 | 43.45 / 43.45 |
-| 256 | baseline | 23.59 / 25.30 | 214.42 / 223.39 | 256 | 1002.26 / 1004.56 | 25.03 / 25.11 |
-| 256 | experiment | 0.35 / 0.31 | 5.87 / 3.94 | 512 | 58.51 / 58.51 | 18.97 / 19.04 |
+**Commit hypothesis established with an explicit tradeoff.** Atomic success uses
+2 writes per two-point closed group versus staged 4, with the same success-scene
+attempt/result/selection/snapshot/outbox facts. Begin before the provider remains
+separate. Atomic result-save failure loses the uncommitted candidate and requires
+unknown handling; candidate-only saving remains available. Open-group append and
+close, later choices, analysis publication and consumer acknowledgement are
+additional commitments outside this count.
 
-All 12 samples independently reopened persisted scientific values, availability
-masks, units and coordinates and matched the same scientific-value hash. The
-experimental path is faster in this fixture, but uses **4 write transactions per
-group versus 2** for baseline publication. The additional attempts and selections
-are durable facts, not free simplification. Arrow/daemon validation and standalone
-JSON SQLite have different responsibilities. Neither measured path prices complete application responsibilities;
-missing experimental features cannot be priced by these figures. Do not
-extrapolate an end-to-end speedup.
-Physical I/O write amplification and process RSS were not measured.
+Protocol v2 uses subprocess ABBA, untimed serialization warmup, setup outside
+measurement, 2 channels × 32 samples and unchanged WAL/NORMAL/4096-byte pages/
+1000-page checkpoint policy. The staged↔atomic pair isolates the experiment's
+completion protocol more closely than the separate baseline↔atomic pair:
 
-Author burden is **not yet improved**: the demo explicitly declares points,
-work/group membership and output contracts (53 source lines across `point`,
-`unit`, `declaration`), then drives a 111-line fixture orchestration function.
-The existing `workflow_fixtures.load_invocation` is a 16-line grid declaration
-backed by the production DSL; it is a simpler workload, so these counts describe
-interfaces, not an equivalent LOC contest. The experiment removes the separate
-pending-record/group/coverage handshakes from its execution chain, but still has
-begin/save/select/publish plus a consumer cursor. It has no generic ergonomic
-replacement for the existing author DSL, compiler, analysis framework or GUI.
+| Points | Mode | Publication seconds (two samples) | First sparse read ms | Write transactions | Timed Python peak KiB | Footprint growth / scientific JSON bytes |
+| ---: | --- | --- | --- | ---: | ---: | --- |
+| 16 | staged | .0358 / .0167 | 9.19 / 3.58 | 32 | 35.50 | 44.73 / 44.73 |
+| 16 | atomic | .0208 / .0205 | 4.50 / 3.87 | 16 | 38.96 | 41.71 / 41.71 |
+| 64 | staged | .0726 / .0738 | 3.26 / 3.38 | 128 | 43.45 | 43.53 / 43.53 |
+| 64 | atomic | .0682 / .0842 | 3.60 / 3.73 | 64 | 49.01 | 40.37 / 40.37 |
+| 256 | staged | .2549 / .2862 | 3.48 / 3.51 | 512 | 58.62 | 19.02 / 18.98 |
+| 256 | atomic | .2737 / .2815 | 3.50 / 3.53 | 256 | 62.50 | 19.45 / 19.42 |
 
-Validation: **33 tests passed** (8.27 s), including real Chromium, four fault
-boundaries with both controlled exit and `os._exit`, stale-fence rejection,
-publication/outbox rollback, scientific-contract rejection and frozen snapshots.
-Provider-return loss blocks recovery without authorization; authorized recovery
-retains four attempts and three results, including the old physical unknown.
-Other boundaries need only three provider calls. Notification replay increments
-delivery attempts without duplicating publications or changing analysis inputs.
-Ruff check/format and diff whitespace checks pass. Arbitrary instruction-level
-SIGKILL, real devices, production distributed leases, native-memory scale and
-complete product feature parity remain untested.
+All 24 v2 samples passed persisted scientific-value equality and audit-count
+checks. Timing ranges overlap, atomic allocation peak is slightly higher, and
+256-point footprint is slightly higher. **Fewer commits is not proven speed,
+memory or physical-write superiority.** Tracemalloc excludes native allocations
+and prebuilt payloads; file growth is retained footprint, not physical write
+amplification. First-readable is a storage read, not rendered GUI latency.
 
-**Round 1 recommendation: partial absorption, not wholesale adoption.** The executable
-slice supports multi-point result bundles and explicit closed-group readiness
-without a global prefix, including an open group's persisted extension. It also
-shows why attempt certainty and retry permission need independent state. The
-experiment has not met the author-burden or fewer-durable-protocol goals, and
-missing production capabilities rule out replacing main. Preserve these concrete
-findings; do not treat positive fixture timings as a migration mandate.
+Baseline↔atomic remains unequal-responsibility component evidence: production
+Arrow/daemon checks versus standalone JSON SQLite; forced per-group publication
+bypasses production interpreter batching, and its two commits exclude the
+experiment's unconditional attempt audit. This is not safe-prefix v1 (different
+interpreter/workload/protocol) or end-to-end performance evidence.
+
+`baseline_flow.py` separately verifies the genuine production author → compiler/
+planner → interpreter → SQLite → dataset path: 4-point 2D, 2×8 waveform, checked
+units/shapes/values. Its all-valid host-compute substitute is not full-scene parity.
+Three existing baseline core cases also passed for adaptive optimizer, queued
+operator work and sparse recovery.
+
+First-round commit `698fda92725e7359a016cea8af1a2816d2dd6100` and its full README
+and cost/failure conclusions are unchanged in Git. Preserved local evidence is in
+`.benchmarks/result-ledger/cd4874f7/`; round-2 raw samples, author comparison and
+baseline-flow report are in `.benchmarks/result-ledger/round2-09d84696/`. Raw results
+are intentionally ignored by Git; all checks have reproducible commands above.
+
+**GO:** retain this complete alternative chain as a viable replacement candidate
+for independent adoption review: both scoped round-2 hypotheses now have
+executable evidence, with the GUI/fault chain intact. **NO-GO:** replace main or
+claim complete feature/performance superiority. This round stops because its two
+questions have been answered, not because a time/LOC budget expired.
+
+Uncovered/adoption blockers: the DSL requires `group_by ⊆ work_by`, unlike the
+raw core's arbitrary/overlapping groups; axis-index grouping differs from
+value-grouping; point-free aggregates, declared ragged dimensions and general
+cohort/all-or-nothing rules are absent. Real providers, production distributed
+leases, full optimizer proposal/region/operator semantics, calibration,
+compiler/lowering breadth, exports and full product GUI remain outside the slice.
+`state()`/GUI eagerly load a small run; long-run streaming/native-memory scale and
+arbitrary instruction-level kills are unqualified. No omitted capability may be
+silently removed during a future adoption decision.
