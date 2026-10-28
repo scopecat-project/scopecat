@@ -1288,6 +1288,14 @@ def _coverage_operations(
             if scheduled_local_effects is None
             else scheduled_local_effects.effect_operations
         )
+        # Pure computation has no physical batch to keep together. Publish each
+        # completed point at its existing group checkpoint before computing the
+        # next one, rather than withholding progress for up to 256 slow kernels.
+        # Keep domain jobs and host-effect scheduling on their stable regions.
+        if not has_domain_calls and (
+            local_effects is None or not any(local_effects.effect_operations)
+        ):
+            regions = tuple((ordinal,) for region in regions for ordinal in region)
         batch_region_point_count = 0
         for region in regions:
             yield from (

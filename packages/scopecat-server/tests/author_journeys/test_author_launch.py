@@ -81,7 +81,8 @@ def author_daemon(
         "-> sc.Input[float]:\n"
         "    return level\n"
     )
-    # Hold a later compute batch until the observer has read the first one.
+    # Hold the second point until the observer has read the first one. A local
+    # preparation batch must not hide already completed point checkpoints.
     source += f"""
 
 def preview_value(frequency: sc.Quantity) -> float:
@@ -617,7 +618,7 @@ def test_author_reads_ongoing_preview_after_reconnect(
             )
             job = author.prepare(
                 "preview_signal",
-                scans={"frequency": [*np.linspace(4.7, 4.74, 32), 4.8]},
+                scans={"frequency": [4.7, *np.linspace(4.8, 4.9, 39)]},
             ).run()
             receipt = job.receipt
         with AuthorProject(
@@ -632,9 +633,9 @@ def test_author_reads_ongoing_preview_after_reconnect(
                 assert time.monotonic() < deadline, preview.progress
                 time.sleep(0.2)
             assert preview.provisional
-            assert 0 <= preview.latest.point_index < 32
+            assert preview.latest.point_index == 0
             assert preview.live is not None
-            assert 1 <= preview.live.received_record_count <= 32
+            assert preview.live.received_record_count == 1
             assert (
                 0
                 <= preview.live.durable_record_count
@@ -649,14 +650,14 @@ def test_author_reads_ongoing_preview_after_reconnect(
             assert step.step_key == child.step_key == "experiment"
             assert step.attempt == 1
             assert child.run.snapshot.outcome is None
-            assert child.run.control.completed_point_count <= 32
+            assert child.run.control.completed_point_count <= 1
             with pytest.raises(RuntimeError, match="no retained acquisition"):
                 reopened.result()
             release.touch()
             reopened.wait(timeout=60)
             assert reopened.result().id == child.run.run_id
             assert (
-                len(reopened.result().measurements()["result"].require_values()) == 33
+                len(reopened.result().measurements()["result"].require_values()) == 40
             )
             final = reopened.preview()
             assert final.progress.state == "succeeded"

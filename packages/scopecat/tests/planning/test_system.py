@@ -750,6 +750,44 @@ def test_recorded_compute_runs_without_an_instrument_provider() -> None:
     )
 
 
+@pytest.mark.parametrize("point_count", [40, 300])
+@pytest.mark.parametrize("grouped", [False, True])
+def test_compute_only_scan_checkpoints_at_each_declared_group_boundary(
+    point_count: int,
+    grouped: bool,
+) -> None:
+    coordinate = sc.coordinate("index", sc.ScalarType(sc.IntType()))
+
+    @sc.experiment
+    def definition(experiment: sc.ExperimentContext) -> None:
+        experiment.grid(sc.axis(coordinate, tuple(range(point_count))))
+        if grouped:
+            experiment.group_points("whole-scan", varying=(coordinate,))
+        score = experiment.compute(
+            "score", fn=lambda: 2.5, output_type=sc.ScalarType(sc.FloatType())
+        )
+        experiment.alias(score)
+
+    bound = bind_program(
+        compile_invocation(definition.build()).program,
+        build_config_environment(load_config()),
+    )
+    plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)
+    pending: list[int] = []
+    completed: list[int] = []
+    for operation in plan.coverage:
+        if isinstance(operation, RunCoverageEffect):
+            if not grouped:
+                assert not pending, "completed point must reach its checkpoint first"
+            pending.append(operation.point_index)
+        elif isinstance(operation, RunCoverageCheckpoint):
+            assert tuple(pending) == operation.point_indices
+            completed.extend(pending)
+            pending.clear()
+    assert completed == list(range(point_count))
+    assert not pending
+
+
 def test_array_compute_results_are_ordered_and_recordable() -> None:
     observed: list[list[float]] = []
 
