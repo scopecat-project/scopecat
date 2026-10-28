@@ -164,6 +164,20 @@ class ExitDrain:
                                 }
                             )
                         )
+                elif run.state == "leased" and workers.process_exited(identity):
+                    blockers.append(
+                        item.model_copy(
+                            update={
+                                "reason": (
+                                    "Worker exited without procedure closure; "
+                                    "retained steps require review. Inspect the child "
+                                    "run's saved data and interruption before explicit "
+                                    "disposition; closing that run does not complete "
+                                    "this procedure."
+                                )
+                            }
+                        )
+                    )
                 elif (
                     worker := workers.snapshot(identity)
                 ).management == "paused" or worker.failure is not None:

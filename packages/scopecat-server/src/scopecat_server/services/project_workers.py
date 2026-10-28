@@ -108,6 +108,15 @@ class ProjectProcedureWorkers:
         with self._lock:
             return self._process_settled(procedure_id)
 
+    def process_exited(self, procedure_id: str) -> bool:
+        """Observe a registered worker's absence, not successful cleanup."""
+        with self._lock:
+            known = (
+                procedure_id in self._children
+                or (self._worker_dir(procedure_id) / "process.json").exists()
+            )
+            return known and self._process_settled(procedure_id)
+
     def _process_settled(self, procedure_id: str) -> bool:
         child = self._children.get(procedure_id)
         if child is not None and child.poll() is None:

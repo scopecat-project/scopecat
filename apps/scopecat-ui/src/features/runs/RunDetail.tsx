@@ -261,6 +261,7 @@ export function RunDetail({
               )}
               <RunAttentionNotice
                 run={run}
+                durableRecordCount={measurements?.durableRecordCount}
                 onResolve={onResolveAttention}
                 pending={attentionPending}
                 error={attentionError}
