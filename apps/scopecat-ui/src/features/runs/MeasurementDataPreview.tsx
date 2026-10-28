@@ -711,6 +711,7 @@ export function MeasurementDataPreview({
         </summary>
         {tableOpen && !focused && (
           <DeferredRecordTable
+            key={viewScope}
             records={tableRecords}
             schema={slicePlan ? chartSchema : preview.schema}
             entitySelection={entitySelection}
@@ -741,14 +742,61 @@ function DeferredRecordTable({
   schema?: MeasurementDatasetSchema;
   entitySelection: MeasurementEntitySelection;
 }) {
+  const pageSize = 100;
+  const [page, setPage] = useState(0);
+  const lastPage = Math.max(0, Math.ceil(records.length / pageSize) - 1);
+  const currentPage = Math.min(page, lastPage);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  if (page > lastPage) setPage(lastPage);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [currentPage]);
+  const pageRecords = useMemo(
+    () => records.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
+    [records, currentPage],
+  );
   const table = useMemo(
-    () => measurementTable(records, schema, entitySelection),
-    [records, schema, entitySelection],
+    () => measurementTable(pageRecords, schema, entitySelection),
+    [pageRecords, schema, entitySelection],
   );
   return (
-    <div className="max-h-80 overflow-auto">
-      <MeasurementRecordTable table={table} />
-    </div>
+    <>
+      {records.length > pageSize && (
+        <nav aria-label="当前窗口记录分页" className="flex flex-wrap items-center gap-2 px-3 py-2">
+          <span>
+            当前窗口记录 {currentPage * pageSize + 1}–
+            {Math.min((currentPage + 1) * pageSize, records.length)} / {records.length}
+          </span>
+          <button type="button" disabled={currentPage === 0} onClick={() => setPage(0)}>
+            首页记录
+          </button>
+          <button
+            type="button"
+            disabled={currentPage === 0}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            上一页记录
+          </button>
+          <button
+            type="button"
+            disabled={currentPage === lastPage}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            下一页记录
+          </button>
+          <button
+            type="button"
+            disabled={currentPage === lastPage}
+            onClick={() => setPage(lastPage)}
+          >
+            末页记录
+          </button>
+        </nav>
+      )}
+      <div ref={scrollRef} className="max-h-80 overflow-auto">
+        <MeasurementRecordTable table={table} />
+      </div>
+    </>
   );
 }
 

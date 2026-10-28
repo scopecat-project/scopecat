@@ -1732,10 +1732,31 @@ describe("measurement visualization", () => {
       expect(screen.getByText("Record table · 4096 rows in this view")).toBeVisible();
       fireEvent.click(screen.getByText(/Record table/));
       await screen.findByTestId("measurement-table");
-      expect(table).toHaveBeenLastCalledWith(items, schema, {});
+      expect(table).toHaveBeenLastCalledWith(items.slice(0, 100), schema, {});
       expect(screen.getByTestId("measurement-table").querySelectorAll("tbody tr")).toHaveLength(
-        4096,
+        100,
       );
+      const points: string[] = [];
+      for (let page = 0; page < 41; page += 1) {
+        points.push(
+          ...Array.from(
+            screen.getByTestId("measurement-table").querySelectorAll("tbody th"),
+            (cell) => cell.textContent ?? "",
+          ),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "下一页记录" }));
+      }
+      expect(points).toEqual(items.map((item) => String(item.point_index)));
+      expect(screen.getByRole("button", { name: "下一页记录" })).toBeDisabled();
+      expect(table).toHaveBeenLastCalledWith(items.slice(4000), schema, {});
+      view.rerender(viewFor(next));
+      expect(table).toHaveBeenLastCalledWith(next.slice(4000), schema, {});
+      view.rerender(viewFor(items.slice(0, 205)));
+      expect(table).toHaveBeenLastCalledWith(items.slice(200, 205), schema, {});
+      view.rerender(viewFor(items));
+      expect(table).toHaveBeenLastCalledWith(items.slice(200, 300), schema, {});
+      fireEvent.click(screen.getByRole("button", { name: "末页记录" }));
+      expect(table).toHaveBeenLastCalledWith(items.slice(4000), schema, {});
       fireEvent.click(screen.getByText("Raw records", { exact: true }));
       expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
         '"point_index": 4095',
@@ -1752,7 +1773,7 @@ describe("measurement visualization", () => {
       expect(stringify.mock.calls.some(([value]) => value === next)).toBe(false);
       fireEvent.click(screen.getByRole("button", { name: "退出聚焦，查看 run 详情" }));
       await screen.findByTestId("measurement-table");
-      expect(table).toHaveBeenLastCalledWith(next, schema, {});
+      expect(table).toHaveBeenLastCalledWith(next.slice(0, 100), schema, {});
       expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
         '"logical_point_id": "new-4095"',
       );
