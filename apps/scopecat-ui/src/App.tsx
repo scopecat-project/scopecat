@@ -187,18 +187,22 @@ export default function App() {
     const events = new EventSource(`/api/v1/events/stream?after=${eventCursor.current}`);
     let refreshTimer: number | undefined;
     const measurementRunsToRefresh = new Set<string>();
+    let canonicalRefreshRequired = false;
     const measurementRefresh = measurementEventRefresh(queryClient);
-    const invalidateCanonicalQueries = () => {
+    const invalidateRunQueries = () => {
       void queryClient.invalidateQueries({ queryKey: ["runs"] });
       void queryClient.invalidateQueries({ queryKey: ["research", "runs"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["run"] });
+      void queryClient.invalidateQueries({ queryKey: ["run-contents"] });
+      void queryClient.invalidateQueries({ queryKey: ["run-content"] });
+    };
+    const invalidateCanonicalQueries = () => {
+      invalidateRunQueries();
       void queryClient.invalidateQueries({ queryKey: ["analyses"] });
       void queryClient.invalidateQueries({ queryKey: ["samples"] });
       void queryClient.invalidateQueries({ queryKey: ["sample"] });
       void queryClient.invalidateQueries({ queryKey: ["sample-revisions"] });
-      void queryClient.invalidateQueries({ queryKey: ["run-contents"] });
-      void queryClient.invalidateQueries({ queryKey: ["run-content"] });
       void queryClient.invalidateQueries({ queryKey: ["config"] });
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
       void queryClient.invalidateQueries({ queryKey: ["reviews"] });
@@ -221,13 +225,19 @@ export default function App() {
       const measurementRunId = measurementEventRunId(event);
       if (measurementRunId !== undefined) {
         measurementRunsToRefresh.add(measurementRunId);
+      } else {
+        canonicalRefreshRequired = true;
       }
       if (refreshTimer !== undefined) return;
       refreshTimer = window.setTimeout(() => {
         refreshTimer = undefined;
         const measurementRunsToRefreshNow = [...measurementRunsToRefresh];
         measurementRunsToRefresh.clear();
-        invalidateCanonicalQueries();
+        // Pure measurement events change run data, not project configuration or samples.
+        // A mixed/unknown event batch still uses the complete canonical refresh.
+        if (canonicalRefreshRequired) invalidateCanonicalQueries();
+        else invalidateRunQueries();
+        canonicalRefreshRequired = false;
         for (const runId of measurementRunsToRefreshNow) {
           measurementRefresh.invalidate(runId);
         }

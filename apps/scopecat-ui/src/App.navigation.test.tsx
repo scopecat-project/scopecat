@@ -1190,6 +1190,41 @@ describe("config provenance navigation", () => {
     },
   );
 
+  it.each([false, true])(
+    "keeps unrelated caches fresh only for pure measurement batches (mixed=%s)",
+    async (mixed) => {
+      window.history.replaceState(null, "", "/?run=run-1");
+      const client = createQueryClient();
+      renderApp(client);
+      await waitFor(() => expect(projectEventListener).toBeDefined());
+      const unrelated = [
+        ["samples", "sentinel"],
+        ["config", "sentinel"],
+        ["reviews", "sentinel"],
+        ["analyses", "sentinel"],
+      ];
+      const related = [
+        ["runs", "sentinel"],
+        ["research", "runs", "sentinel"],
+        ["events", "sentinel"],
+        ["run-contents", "sentinel"],
+      ];
+      for (const key of [...unrelated, ...related]) client.setQueryData(key, { retained: true });
+      act(() => {
+        emitProjectEvent("run-1", "measurements_appended");
+        if (mixed) emitProjectEvent("run-1", "sample_revision_created");
+      });
+      await waitFor(() => expect(client.getQueryState(related[0]!)?.isInvalidated).toBe(true));
+      for (const key of related) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      for (const key of unrelated) expect(client.getQueryState(key)?.isInvalidated).toBe(mixed);
+      // A real connection-open reset must still invalidate all canonical categories.
+      act(() => emitSseOpen());
+      await waitFor(() => {
+        for (const key of unrelated) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      });
+    },
+  );
+
   it("queries only the selected bounded trace mode and authored slice", async () => {
     window.history.replaceState(null, "", "/?run=run-1");
     const schema = traceDatasetSchema();
