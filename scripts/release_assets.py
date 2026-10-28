@@ -148,9 +148,8 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
     ):
         raise ValueError("Preview release identity mismatch")
     ui_version = preview.get("ui_version")
-    ui_suffix = f"-scopecat.{identity.version.replace('-', '.')}.g{commit[:12]}"
-    if not isinstance(ui_version, str) or not ui_version.endswith(ui_suffix):
-        raise ValueError("UI release provenance mismatch")
+    if ui_version != identity.javascript_package_version():
+        raise ValueError("UI release identity mismatch")
     packages = _object(preview.get("packages"))
     if set(packages) != set(PACKAGES):
         raise ValueError("Release requires all seven public packages")

@@ -95,7 +95,7 @@ def build(
         ui_project = ui / "package.json"
         ui_metadata = cast("dict[str, str]", json.loads(ui_project.read_text()))
         ui_version = (
-            identity.javascript_package_version(ui_metadata["version"], commit)
+            identity.javascript_package_version()
             if release
             else f"{ui_metadata['version']}-dev.{timestamp}.g{commit[:12]}"
         )

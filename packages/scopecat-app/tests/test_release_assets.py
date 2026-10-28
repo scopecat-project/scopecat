@@ -130,7 +130,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
             "release_version": "0.3.0-rc.1",
             "build_number": 9,
             "channel": "release",
-            "ui_version": f"0.1.0-scopecat.0.3.0.rc.1.g{SHA[:12]}",
+            "ui_version": "0.3.0-rc.1",
             "packages": dict.fromkeys(assets.PACKAGES, version),
             "files": files,
         },
@@ -254,7 +254,11 @@ def test_wrong_commit_and_corrupt_hash_fail(release: tuple[Path, Path]) -> None:
 
 @pytest.mark.parametrize(
     "field,value",
-    [("release_version", "0.4.0"), ("build_number", 10), ("channel", "preview")],
+    [
+        ("release_version", "0.4.0"),
+        ("build_number", 10),
+        ("channel", "preview"),
+    ],
 )
 def test_wrong_preview_identity_fails(
     release: tuple[Path, Path], field: str, value: object
@@ -266,6 +270,27 @@ def test_wrong_preview_identity_fails(
     write_json(path, document)
     with pytest.raises(ValueError, match="identity mismatch"):
         assets.assemble(root, SHA, config)
+
+
+@pytest.mark.parametrize(
+    "ui_version", ["0.4.0", None, f"0.1.0-scopecat.0.3.0.rc.1.g{SHA[:12]}"]
+)
+def test_ui_release_identity_rejected_before_asset_assembly(tmp_path: Path, ui_version):
+    config = tmp_path / "release.toml"
+    config.write_text('version="0.3.0-rc.1"\nbuild_number=9\n')
+    write_json(
+        tmp_path / "preview.json",
+        {
+            "format": 1,
+            "commit": SHA,
+            "release_version": "0.3.0-rc.1",
+            "build_number": 9,
+            "channel": "release",
+            "ui_version": ui_version,
+        },
+    )
+    with pytest.raises(ValueError, match="UI release identity mismatch"):
+        assets.inventory(tmp_path, SHA, config)
 
 
 @pytest.mark.parametrize(
@@ -384,9 +409,7 @@ def test_fixture_contract_matches_repository_producers() -> None:
     assert identity.python_package_version(SHA, "1770000000", release=True) == (
         "0.3.0rc1"
     )
-    assert identity.javascript_package_version("0.1.0", SHA) == (
-        f"0.1.0-scopecat.0.3.0.rc.1.g{SHA[:12]}"
-    )
+    assert identity.javascript_package_version() == "0.3.0-rc.1"
     target = target_identity()
     assert target["platform"] in {"darwin", "win32", "linux"}
     assert all(isinstance(value, str) for value in target.values())

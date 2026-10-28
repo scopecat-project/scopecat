@@ -30,9 +30,7 @@ def test_public_version_conversions(public, python):
     assert identity.python_package_version("a" * 40, "123", release=True) == python
     assert Version(wheel).is_devrelease
     assert wheel == f"{python}.dev123+g{'a' * 40}"
-    assert identity.javascript_package_version("0.1.0", "a" * 40).startswith(
-        "0.1.0-scopecat.0.3.0"
-    )
+    assert identity.javascript_package_version() == public
 
 
 @pytest.mark.parametrize(
@@ -75,8 +73,12 @@ def test_historical_source_without_release_file_only_allows_preview(tmp_path: Pa
         read_source_identity(missing, release=True)
 
 
-def test_preview_build_archives_historical_commit_without_release_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "public,release",
+    [(None, False), ("0.3.0", False), ("0.3.0", True), ("0.3.0-rc.1", True)],
+)
+def test_build_ui_version_and_independent_source_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, public: str | None, release: bool
 ):
     import importlib.util
     import json
@@ -95,6 +97,10 @@ def test_preview_build_archives_historical_commit_without_release_file(
     (ui / "dist").mkdir(parents=True)
     (ui / "package.json").write_text('{"version":"0.1.0"}')
     (ui / "dist/index.html").write_text("historical GUI")
+    if public is not None:
+        (repository / "release.toml").write_text(
+            f'version="{public}"\nbuild_number=9\n'
+        )
     for arguments in (
         ["init"],
         ["add", "."],
@@ -118,8 +124,14 @@ def test_preview_build_archives_historical_commit_without_release_file(
         )
     original_run = module.subprocess.run
 
+    built_versions = []
+
     def run(command, **kwargs):
         if command[0] == "pnpm":
+            if command[1:] == ["run", "build"]:
+                built_versions.append(
+                    json.loads((kwargs["cwd"] / "package.json").read_text())["version"]
+                )
             return subprocess.CompletedProcess(command, 0)
         return original_run(command, **kwargs)
 
@@ -130,10 +142,16 @@ def test_preview_build_archives_historical_commit_without_release_file(
     monkeypatch.setattr(module, "prepare", lambda *_: nullcontext(Path(sys.executable)))
     monkeypatch.setattr(module, "PACKAGES", ())
     monkeypatch.setattr(module.subprocess, "run", run)
-    manifest = module.build(repository, tmp_path / "preview")
+    manifest = module.build(repository, tmp_path / "preview", release=release)
     metadata = json.loads(manifest.read_text())
-    assert metadata["release_version"] == "0.0.0"
-    assert metadata["channel"] == "preview"
+    assert metadata["release_version"] == (public or "0.0.0")
+    assert metadata["channel"] == ("release" if release else "preview")
+    assert built_versions == [metadata["ui_version"]]
+    if release:
+        assert metadata["ui_version"] == public
+    else:
+        assert metadata["ui_version"].startswith("0.1.0-dev.")
+        assert metadata["ui_version"].endswith(f".g{metadata['commit'][:12]}")
     assert "scopecat-ui.zip" in metadata["files"]
     import zipfile
 
@@ -142,8 +160,9 @@ def test_preview_build_archives_historical_commit_without_release_file(
             "source_commit": metadata["commit"],
             "ui_version": metadata["ui_version"],
         }
-    with pytest.raises(FileNotFoundError):
-        module.build(repository, tmp_path / "release", release=True)
+    if public is None:
+        with pytest.raises(FileNotFoundError):
+            module.build(repository, tmp_path / "release", release=True)
 
 
 @pytest.mark.parametrize(
