@@ -3,7 +3,12 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { chooseAuthorContext, copyAuthorWorkspace, prepareAuthorContexts } from "./author-context";
+import {
+  chooseAuthorContext,
+  copyAuthorWorkspace,
+  prepareAuthorContexts,
+  reviewRetainedExperiment,
+} from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -72,6 +77,7 @@ def voltage(experiment: sc.ExperimentContext, *,
     await page.goto(`${base_url}${reopen}`);
     await expect(page.getByLabel("amplitude value", { exact: true })).toHaveValue("2500");
     await expect(page.getByLabel("amplitude unit", { exact: true })).toHaveValue("mV");
+    await reviewRetainedExperiment(page);
     const runs = async () =>
       (await (await page.request.get(`${base_url}/api/v1/runs`)).json()).items;
     expect(await runs()).toHaveLength(0);

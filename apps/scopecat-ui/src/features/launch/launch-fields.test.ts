@@ -37,7 +37,7 @@ describe("strict Quantity fields", () => {
       '{"value":2,"unit":"Hz"}',
       '{"value":4000,"unit":"mV"}',
     ])
-      expect(() => quantityInput(raw, field)).toThrow();
+      expect(() => quantityInput(raw, field)).toThrow(/有限数值|显式单位|声明范围/);
     expect(quantityDraft('{"value":"2e","unit":"mV"}')).toEqual({ value: "2e", unit: "mV" });
   });
 });
