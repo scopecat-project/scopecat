@@ -102,6 +102,13 @@ interface DraftContext {
   copyHistoricalConfiguration: (
     runId: string,
     source: HistoricalConfiguration,
+    candidateDraft?: {
+      entry: LaunchCatalogEntry;
+      workspaceId: string;
+      selection: ScientificSelection;
+      codeRevision: LaunchDraft["codeRevision"];
+      isIntended?: () => boolean;
+    },
   ) => Promise<{ target: DraftRecord["target"]; selected: boolean }>;
 
   copyDraft: () => Promise<void>;
@@ -596,51 +603,71 @@ function ProjectDraft({
           setOpenFrozenPreview(id);
         },
         projectId,
-        copyHistoricalConfiguration: async (runId, source) => {
+        copyHistoricalConfiguration: async (runId, source, candidateDraft) => {
           const configuration = historicalConfiguration(source);
           const original = latest.current;
-          if (!original?.experiment) throw new Error("Choose an experiment in the editor first.");
+          if (!candidateDraft && !original?.experiment)
+            throw new Error("Choose an experiment in the editor first.");
           if (
             launchCloseBlocked() ||
             configurationCopyBusy.current ||
             submitting.current ||
-            original.pending ||
+            original?.pending ||
             preparationToken.current ||
             !mayLeave()
           )
             throw new Error("Finish saving the current draft before creating another.");
-          const identity = JSON.stringify(rawInput(original));
+          const identity = original?.definition ? JSON.stringify(rawInput(original)) : undefined;
           const intended = () =>
             !launchCloseBlocked() &&
             alive.current &&
+            (candidateDraft?.isIntended?.() ?? true) &&
             latest.current === original &&
             !submitting.current &&
             !preparationToken.current &&
-            latest.current?.draftId === original.draftId &&
-            latest.current?.workspaceId === original.workspaceId &&
-            latest.current?.revision === original.revision &&
-            JSON.stringify(rawInput(latest.current)) === identity;
+            latest.current?.draftId === original?.draftId &&
+            latest.current?.workspaceId === original?.workspaceId &&
+            latest.current?.revision === original?.revision &&
+            (latest.current?.definition ? JSON.stringify(rawInput(latest.current)) : undefined) ===
+              identity;
           const key = JSON.stringify([
-            original.workspaceId,
-            original.experiment,
-            original.draftId,
-            original.revision,
+            original?.workspaceId,
+            original?.experiment,
+            original?.draftId,
+            original?.revision,
+            candidateDraft,
             identity,
             runId,
             source,
           ]);
           configurationCopyBusy.current = true;
           try {
-            await recovery.flush();
+            const candidateOperator = candidateDraft
+              ? (await readOperatorSettings()).operator
+              : undefined;
+            if (original?.experiment) await recovery.flush();
             if (!intended())
               throw new Error("The editor changed. Keep its current input and try again.");
             if (configurationCopy.current?.key !== key) {
               const next = invalidateDraft(
-                structuredClone(original),
+                candidateDraft
+                  ? initialDraft(
+                      candidateDraft.entry,
+                      (original?.revision ?? 0) + 1,
+                      candidateDraft.workspaceId,
+                    )
+                  : structuredClone(original!),
                 "Historical configuration copied. Review these new inputs before starting.",
               );
               next.draftId = crypto.randomUUID();
               next.draftName = `Configuration from ${runId}`.slice(0, 200);
+              if (candidateDraft) {
+                next.actor = candidateOperator!;
+                next.defaultActor = candidateOperator;
+                next.selection = candidateDraft.selection;
+                next.codeRevision = candidateDraft.codeRevision;
+                next.sourceBaseline = candidateDraft.codeRevision;
+              }
               next.selection = { ...next.selection, configuration };
               next.workingInput = undefined;
               next.plan = undefined;
@@ -683,7 +710,9 @@ function ProjectDraft({
                 attemptGeneration.current += 1;
                 setAttempt(undefined);
               }
-              const restored = restoreDraft(result.saved, original.revision + 1);
+              currentWorkspace.current = result.saved.target.workspace_id;
+              setWorkspaceId(result.saved.target.workspace_id);
+              const restored = restoreDraft(result.saved, (original?.revision ?? 0) + 1);
               setDraft(restored);
               retainDraftLocation(restored);
             }

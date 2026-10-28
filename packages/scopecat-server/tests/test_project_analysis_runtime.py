@@ -2030,3 +2030,94 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
     restore_snapshot(archive, restored)
     with LocalDaemonRuntime(restored) as recovered:
         assert recovered.application.calibration_tasks.dispatch(command) == bound
+
+
+@pytest.mark.parametrize("bound", [False, True])
+def test_candidate_launch_selection_retains_source_and_rejects_missing_candidate(
+    tmp_path: Path,
+    bound: bool,
+) -> None:
+    with (
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        submission = _submission(runtime, "candidate-editor")
+        batch_id = None
+        if bound:
+            client = _daemon_client(transport)
+            batch_id = client.create_experimental_batch("Candidate batch").id
+            lab = LabClient(client)
+            sample = lab.samples.create(
+                "candidate-sample",
+                kind="synthetic",
+                content=SampleRevisionDraft(display_name="Candidate sample"),
+            )
+            submission = submission.model_copy(
+                update={
+                    "request": RunRequest(
+                        experiment_id="scratch",
+                        samples=(
+                            SampleSelector(sample_id=sample.id, batch_id=batch_id),
+                        ),
+                    )
+                }
+            )
+        baseline_id = _complete_signal_run(
+            runtime,
+            submission_id="candidate-editor",
+            signal=0.8,
+            submission=submission,
+        )
+        proposal = _analysis_proposal(baseline_id)
+        runtime.application.runs.save_run_analysis(
+            baseline_id, _analysis_command(proposal)
+        )
+        proposal = runtime.application.runs.get_parameter_proposal(
+            baseline_id, proposal.id
+        ).proposal
+        route = f"/api/v1/runs/{baseline_id}/parameter-proposals"
+        response = transport.get(f"{route}/{proposal.id}/launch-selection")
+        assert response.status_code == 200, response.text
+        selection = response.json()
+        source = selection["configuration"]["source"]
+        assert selection["configuration"]["kind"] == "candidate"
+        assert source["source_run_id"] == baseline_id
+        assert source["analysis_record_id"] == proposal.analysis_record_id
+        assert source["proposal_id"] == proposal.id
+        assert source["base_config_content_hash"] == proposal.base_config_content_hash
+        snapshot = runtime.application.runs.get_run(baseline_id).snapshot
+        assert source["content_hash"] != snapshot.config_content_hash
+        assert snapshot.execution_setup is not None
+        assert source["setup"] == snapshot.execution_setup.model_dump(mode="json")
+        if bound:
+            assert selection["subject"] == {
+                "kind": "sample",
+                "sample_id": "candidate-sample",
+                "revision": 1,
+            }
+            assert selection["batch"] == {"kind": "declared", "id": batch_id}
+        else:
+            assert selection["subject"] == {"kind": "unbound"}
+            assert selection["batch"] == {"kind": "unscoped"}
+        assert transport.get(f"{route}/missing/launch-selection").status_code == 404
+
+        from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+
+        from scopecat_server.services.candidate_resolution import (
+            resolve_candidate_input,
+        )
+
+        exact = AnalysisCandidateRunConfigSource.model_validate(source)
+        for change in (
+            {"content_hash": "sha256:" + "0" * 64},
+            {"base_config_content_hash": "sha256:" + "0" * 64},
+            {"analysis_record_id": "other"},
+            {"setup": None},
+        ):
+            with pytest.raises(BackendConflict):
+                resolve_candidate_input(
+                    exact.model_copy(update=change),
+                    runtime.application.runs._services,
+                )

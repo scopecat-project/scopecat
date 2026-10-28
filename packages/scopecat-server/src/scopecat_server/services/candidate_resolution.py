@@ -16,6 +16,15 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.scientific_scope import DeclaredBatch, UnscopedBatch
+from scopecat.records.scientific_selection import (
+    CandidateConfiguration,
+    RegisteredTargetChoice,
+    SampleSubjectChoice,
+    ScientificSelection,
+    UnboundSubjectChoice,
+    require_selection_binding,
+)
 from scopecat.runs.refs import record_content_ref
 
 from scopecat_server.errors import BackendConflict
@@ -94,3 +103,54 @@ def _analysis_references_proposal(
         ):
             return True
     return False
+
+
+def candidate_launch_selection(
+    run_id: str, proposal_id: str, services: ProjectStateServices
+) -> ScientificSelection:
+    """Reopen an exact saved candidate without admission or publication."""
+    proposal = load_parameter_change_proposal(
+        run_id=run_id,
+        selector=proposal_id,
+        services=services,
+    )
+    baseline = services.runs.read_snapshot(run_id)
+    resolved = resolve_candidate_config_snapshot(
+        CandidateConfig(parameter_proposal=proposal),
+        services=services,
+    )
+    source = AnalysisCandidateRunConfigSource(
+        source_run_id=run_id,
+        proposal_id=proposal_id,
+        analysis_record_id=proposal.analysis_record_id,
+        base_config_content_hash=proposal.base_config_content_hash,
+        content_hash=config_content_hash(resolved),
+        setup=baseline.execution_setup,
+    )
+    resolve_candidate_input(source, services)
+    binding = baseline.scientific_binding
+    subject = binding.subject
+    if subject.kind == "registered_target":
+        choice = RegisteredTargetChoice(ref=subject.ref)
+    elif subject.kind == "inline_samples":
+        if len(subject.samples) != 1 or subject.samples[0].role != "subject":
+            raise BackendConflict(
+                "candidate subject cannot be represented by the experiment editor"
+            )
+        sample = subject.samples[0]
+        choice = SampleSubjectChoice(
+            sample_id=sample.sample_id, revision=sample.revision
+        )
+    else:
+        choice = UnboundSubjectChoice()
+    batch_id = binding.samples[0].batch_id if binding.samples else None
+    selection = ScientificSelection(
+        subject=choice,
+        configuration=CandidateConfiguration(source=source),
+        batch=DeclaredBatch(id=batch_id) if batch_id else UnscopedBatch(),
+    )
+    try:
+        require_selection_binding(selection, binding)
+    except ValueError as error:
+        raise BackendConflict(str(error)) from error
+    return selection

@@ -1,3 +1,4 @@
+import { CandidateLaunch } from "./CandidateLaunch";
 import { CandidateAdoption } from "./CandidateAdoption";
 import { useMemo, useState, type ReactNode } from "react";
 import { getHealth } from "../../data/project-api";
@@ -163,6 +164,7 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                 <ProposalDiff proposal={proposal} />
                 <ProposalApproval proposal={proposal} />
 
+                <CandidateLaunch proposal={proposal} projectId={projectId} />
                 <CandidateAdoption proposal={proposal} projectId={projectId} />
                 <CandidateNextSteps proposal={proposal} />
               </section>

@@ -881,3 +881,105 @@ it("retains an explicit current-source choice during initial recovery instead of
   expect(state.draft?.codeRevision).toBeUndefined();
   expect((await readDraft("legacy", "signal")).head).toEqual(original);
 });
+
+it("creates candidate input from the chosen experiment without copying the old editor's recipe", async () => {
+  await configurationCopyFixture();
+  const source = {
+    kind: "analysis_candidate" as const,
+    source_run_id: "run-A",
+    proposal_id: "fit-result",
+    analysis_record_id: "fit",
+    base_config_content_hash: "sha256:base",
+    content_hash: "sha256:exact",
+    setup: historicalSource.setup,
+  };
+  const selection = {
+    configuration: { kind: "candidate" as const, source },
+    subject: { kind: "sample" as const, sample_id: "original", revision: 2 },
+    batch: { kind: "declared" as const, id: "batch-A" },
+  };
+  await act(async () => {
+    await state.copyHistoricalConfiguration("run-A", source, {
+      entry,
+      workspaceId: "candidate-workspace",
+      selection,
+      codeRevision: undefined,
+    });
+  });
+  expect(state.workspaceId).toBe("candidate-workspace");
+  expect(state.draft?.workspaceId).toBe("candidate-workspace");
+  expect(state.draft?.values).toEqual({});
+  expect(state.draft?.selection).toEqual(selection);
+  expect(state.draft?.needsReview).toBe(true);
+  expect(state.draft?.pending).toBe(false);
+});
+
+it("creates a first candidate draft from the run page without an existing editor", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  const transport = globalThis.fetch;
+  vi.stubGlobal("fetch", (request: Request) =>
+    request.url.endsWith("/operator-settings")
+      ? Promise.resolve(Response.json({ revision: 1, operator: "Candidate scientist" }))
+      : transport(request),
+  );
+  mount();
+  expect(state.draft).toBeUndefined();
+  const source = {
+    kind: "analysis_candidate" as const,
+    source_run_id: "run-A",
+    proposal_id: "candidate",
+    analysis_record_id: "fit",
+    base_config_content_hash: "sha256:base",
+    content_hash: "sha256:exact",
+    setup: historicalSource.setup,
+  };
+  const selection = {
+    ...defaultSelection(),
+    configuration: { kind: "candidate" as const, source },
+  };
+  await act(async () => {
+    await state.copyHistoricalConfiguration("run-A", source, {
+      entry,
+      workspaceId: "legacy",
+      selection,
+      codeRevision: undefined,
+    });
+  });
+  expect(state.draft?.experiment).toBe("signal");
+  expect(state.draft?.actor).toBe("Candidate scientist");
+  expect(state.draft?.selection).toEqual(selection);
+});
+
+it("creates a candidate after switching workspaces before choosing an experiment", async () => {
+  await configurationCopyFixture();
+  act(() => state.selectWorkspace("other-workspace"));
+  expect(state.draft?.definition).toBe("");
+  const source = {
+    kind: "analysis_candidate" as const,
+    source_run_id: "run-A",
+    proposal_id: "candidate",
+    analysis_record_id: "fit",
+    base_config_content_hash: "sha256:base",
+    content_hash: "sha256:exact",
+    setup: historicalSource.setup,
+  };
+  const selection = {
+    ...defaultSelection(),
+    configuration: { kind: "candidate" as const, source },
+  };
+  await act(async () => {
+    await state.copyHistoricalConfiguration("run-A", source, {
+      entry,
+      workspaceId: "other-workspace",
+      selection,
+      codeRevision: undefined,
+    });
+  });
+  expect(state.workspaceId).toBe("other-workspace");
+  expect(state.draft?.selection).toEqual(selection);
+  expect(state.draft?.experiment).toBe("signal");
+});
