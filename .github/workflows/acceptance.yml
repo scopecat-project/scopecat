@@ -166,7 +166,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       PYTHONFAULTHANDLER: "1"
     steps:
@@ -191,21 +191,24 @@ jobs:
           git rev-parse HEAD > test-diagnostics/inventory.txt
           sha256sum uv.lock >> test-diagnostics/inventory.txt
           uv run --locked python -c 'import sys,sysconfig,platform,sqlite3,faulthandler,importlib.metadata as m; print(sys.version); print(platform.platform()); print(sysconfig.get_config_var("CONFIG_ARGS")); print("SQLite",sqlite3.sqlite_version,"threadsafety",sqlite3.threadsafety); print("fatal_handler",faulthandler.is_enabled()); print("\n".join(sorted(d.metadata["Name"]+"=="+d.version for d in m.distributions())))' >> test-diagnostics/inventory.txt
-      - name: Run at most three sequential pairs, stop at first failure
+      - name: Bounded pure Python frame sampling controls
         shell: bash
         run: |
-          for attempt in 1 2 3; do
-            export SCOPECAT_TEST_DIAGNOSTICS="$PWD/test-diagnostics/pair-$attempt"
-            uv run --locked pytest -n 0 -v -p scripts.pytest_diagnostics \
-              --junitxml="test-diagnostics/pair-$attempt.xml" \
-              testing/reference_lab/tests/test_flux_spectroscopy.py::test_flux_spectroscopy_worker_retains_science_and_exact_inputs \
-              packages/scopecat-server/tests/test_author_environments.py::test_retained_tasks_use_their_environment_after_selection_and_restart
-          done
-      - name: Retain complete daemon stderr where available
+          python scripts/run_frame_probes.py
+      - name: Capture native stack with existing debugger only
         if: always()
         shell: bash
         run: |
-          uv run --locked python scripts/collect_bounded_daemon_logs.py
+          if command -v gdb >/dev/null 2>&1; then
+            PROBE_SAMPLE=1 PROBE_TRACE="$PWD/test-diagnostics/gdb.trace" \
+              timeout 15s gdb --batch \
+                -ex 'set pagination off' -ex 'set disable-randomization off' \
+                -ex run -ex 'thread apply all bt' \
+                --args python scripts/diagnose_frame_probe.py \
+                > test-diagnostics/gdb.txt 2>&1
+          else
+            echo 'GDB not preinstalled; no installation attempted' > test-diagnostics/gdb.txt
+          fi
       - name: Retain diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
