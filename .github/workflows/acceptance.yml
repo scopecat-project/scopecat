@@ -225,6 +225,7 @@ jobs:
       - name: Run selected tests
         env:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
+          PYTHONFAULTHANDLER: "1"
         shell: bash
         run: |
           uv run --locked python -m scopecat_testkit.check "${{ matrix.group.suite }}" \
