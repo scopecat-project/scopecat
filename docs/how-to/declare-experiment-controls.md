@@ -1,13 +1,13 @@
-# Declare experiment controls once
+# 统一声明实验控制项 {#declare-experiment-controls-once}
 
-Ordinary authors should start with [input-owned control metadata](managed-author-session.md#declare-controls-next-to-their-inputs).
-This page covers the explicit maintained control contract, ownership and project validators.
+普通实验作者先使用[紧邻输入的控制元数据](managed-author-session.md#declare-controls-next-to-their-inputs)：
+在实验输入旁声明控制信息，由正常作者发现路径提供界面与执行入口。
+本页面向维护显式 `ControlSet` 契约的作者，说明默认值、值的归属和项目校验器；不要求普通实验另写启动适配器。
 
-`sc.Control` describes a maintained numeric control: its default, unit, bounds,
-label, group, ownership, and provenance. Attach its `sc.ControlSet` explicitly
-with `@sc.experiment(controls=controls)`. It supplies the same defaults to
-immutable Python invocations and the typed launch catalog. For example, with an
-explicitly resolved `config` from your author session:
+`sc.Control` 描述维护型数值控制项的默认值、单位、边界、标签、分组、归属和来源。
+通过 `@sc.experiment(controls=controls)` 显式附加 `sc.ControlSet`，
+不可变 Python 调用与结构化启动目录使用同一组默认值。
+以下 `config` 已从作者会话显式解析：
 
 ```python
 import scopecat as sc
@@ -33,96 +33,67 @@ scanned = CONTROLS.apply(
 restored_default = CONTROLS.apply(scanned, config=config, reset=("frequency",))
 ```
 
-A scannable control has one coordinate/axis source. A scalar edit creates a
-single-value `AxisSpec` with `mode="fixed"`; an explicit axis has `mode="scan"`,
-even when it contains one point. Replacing that axis removes its old values.
-Returning to a scalar requires a value or the declared default; the prior scalar
-is not kept behind a scan. Each edit returns a new invocation. Persisted run
-requests include fixed mode; historical scan records omit the default scan mode
-and retain their existing JSON/content identity.
+可扫描控制项只有一个坐标轴来源。标量编辑生成 `mode="fixed"` 的单值 `AxisSpec`；
+显式轴使用 `mode="scan"`，即使只有一个点。替换轴会移除旧轴值；回到固定值需要提供值或采用声明默认值，
+不会在扫描后面暗存此前标量。每次编辑返回新调用，不修改原调用。
+持久运行请求包含 fixed 模式；历史扫描记录省略默认 scan 模式，保留既有 JSON 和内容身份。
 
-For a non-scannable control, declare an ordinary `sc.Input` of the matching type
-and put its default only on the `Control`. Use `experiment.bind()` to construct
-an invocation using those defaults, or bind explicit scalar inputs as usual.
-The declaration rejects a mismatched input type or a duplicate function default.
-Real scalar and real `Quantity` controls are supported; this is not a general
-form schema or a new scan language. Forms support existing values and range
-axes, without overlays or around-config axes.
+不可扫描控制项应声明类型匹配的普通 `sc.Input`，默认值只放在 `Control` 上。
+用 `experiment.bind()` 构造采用这些默认值的调用，也可像平时一样绑定显式标量输入。
+声明会拒绝不匹配的输入类型或重复的函数默认值。
+支持实数标量与实数 `Quantity`，不构成通用表单 schema 或新扫描语言。
+表单支持现有值和范围轴，不支持叠加轴或围绕配置值构造的轴。
 
-## Project validation and ownership
+## 项目校验与值的归属 {#project-validation-and-ownership}
 
-A `ControlSet` may receive a project-owned validator taking
-`sc.ControlValidationContext`. Its invocation, frozen configuration and axis
-specifications describe the edited plan. The validator runs after control edits
-and again in the normal planning/admission entry, including direct `.with_axis`
-and `.bind` edits. Validate per-axis bounds or extrema and cross-field rules;
-do not enumerate a Cartesian scan merely to validate it.
+`ControlSet` 可接收项目自己的校验器，参数为 `sc.ControlValidationContext`。
+其中的调用、冻结配置和轴规格描述编辑后的计划。控制编辑后会运行校验器，
+正常规划/接纳入口也会再次运行，包括直接 `.with_axis` 和 `.bind` 编辑。
+可检查每条轴的边界、极值及跨字段规则；不要为了校验而枚举扫描笛卡尔积。
 
-A configuration-owned control can read a value from the explicitly selected
-parameter revision; a derived control can compute an offset from that value and
-the edited axis. The shared `testing/fixtures/retained-signal` example uses one
-signal center for this purpose. Both values display their provenance. Resolver
-outputs are normalized and checked against declared units/bounds before display;
-they cannot be edited through the control interface. Project-specific limits are
-not global framework scan limits.
+配置拥有的控制项可读取显式所选参数修订中的值；派生控制项可根据该值与编辑后的轴计算偏移。
+共享示例 `testing/fixtures/retained-signal` 使用同一个信号中心演示这两种情况，并显示来源。
+解析器输出在显示前按声明单位归一化并检查边界，不能通过控制界面编辑。
+项目专属限制不等于框架的全局扫描限制。
 
-For an ordinary one-experiment author path, the [discovery adapter](write-an-experiment.md)
-automatically supplies these launch projections and single-run execution,
-including a declared control validator. Maintained multi-stage workflows can use
-the same helpers inside their explicit provider.
+普通单实验路径的[发现适配器](write-an-experiment.md) 自动提供这些启动投影和单次运行，
+也执行已声明的控制校验器。维护型多阶段流程可在自己的显式 provider 中使用同一组辅助函数。
 
-## How discovery uses the declaration
+## 发现机制如何使用声明 {#how-discovery-uses-the-declaration}
 
-`control_catalog(controls)` produces `LaunchCatalogEntry.controls`.
+`control_catalog(controls)` 生成 `LaunchCatalogEntry.controls`。
 `edit_controls(controls, invocation, config=..., edits=request.control_edits)`
-converts the typed `ControlEdit` source into the same immutable edit operations.
-`control_values(...)` supplies `LaunchPreview.controls` with explicit
-fixed/scanned/derived/configuration states and provenance. Authored discovery
-uses all three with the normal scientific binding and configuration fences,
-manual preview checks, and managed procedure admission; single-run experiments
-do not need a separate launch adapter.
+把结构化 `ControlEdit` 来源转换为相同的不可变编辑操作。
+`control_values(...)` 为 `LaunchPreview.controls` 提供明确的固定、扫描、派生或配置状态与来源。
+作者发现路径将这三者与正常科学绑定、配置检查、手动预览检查和托管过程接纳一起使用；
+单次实验不需要另写启动适配器。
 
-A `ControlEdit` chooses exactly one source: `fixed` plus `value`, `scan` plus an
-existing axis record, or `default` with neither. Unknown or owned fields are
-rejected. The common launch worker validates nonempty edits against the project
-catalog before calling its action; direct Python provider implementations must
-call `validate_launch_control_edits`. Empty edits
-retain the existing request hash for providers without controls.
+`ControlEdit` 必须恰选一个来源：`fixed` 加 `value`、`scan` 加现有轴记录，
+或不带两者的 `default`。未知字段和非可编辑归属的字段会被拒绝。
+公共启动 worker 在调用动作前对照项目目录检查非空编辑；直接用 Python 实现 provider 时，
+须调用 `validate_launch_control_edits`。没有控制项的 provider 使用空编辑时保留原请求哈希。
 
-The GUI renders labels/groups, declared bounds, readonly ownership and resolved
-provenance from these models. A source edit invalidates the old preview and
-submission hash. Switching linear units converts the active values; nonlinear
-or unknown units retain only their declared unit. The server remains the
-unit/constraint authority. No device or accepted configuration is modified by
-previewing an experiment.
+GUI 根据这些模型显示标签、分组、声明边界、只读归属和解析来源。
+改变来源会使旧预览和提交哈希失效。在线性单位间切换会转换当前值；非线性或未知单位仅保留声明单位。
+服务端仍是单位与约束的最终校验方，预览不修改设备或已接受的配置。
 
-## Keep a launch draft while inspecting the project
+## 查看项目时保留启动草稿 {#keep-a-launch-draft-while-inspecting-the-project}
 
-GUI 实验输入按注册作者工作区、实验和草稿保存在应用数据中。确认已保存的字段、控制项
-取值来源和单位、科学选择、操作人及记录集合可在导航、页面刷新或应用重启后恢复。
-尚未完成的无效文本也会保留；保存输入不等于验证通过。这与 Notebook kernel 中临时的
-`session.selection` 不同，详见[选择实验上下文](select-session-context.md)。
+实验输入按登记作者工作区和实验保存在应用数据中。确认已保存的字段、控制来源和单位、科学选择及操作人
+可跨页面导航、刷新和应用重启恢复。中间状态的无效文本也会保留，保存输入不代表验证通过。
+关闭前等待保存成功；未确认或失败的保存无法保证在进程丢失后恢复，应保持窗口打开并重试保存。
 
-关闭前应等待“实验输入已保存到应用数据。”。未确认或失败的保存不能承诺在进程丢失后
-恢复，请保持窗口打开并重试。跨窗口编辑冲突会保留独立副本，需要明确选择并保存；
-恢复不会静默覆盖另一窗口的已保存输入。
+声明变化后保留编辑供审阅。新字段采用当前默认值；被移除或变为不可编辑的字段保持待解决状态，
+直到明确移除。**重置实验草稿** 用声明默认值保存新修订，旧版本和冲突副本仍留在输入历史中。
+恢复输入后需要审阅和重新准备，不恢复执行资格。
 
-声明变化会保留改动供核实。新字段采用当前默认值；移除或不再可编辑的字段在明确移除前
-仍需处理。重置实验草稿会保存采用声明默认值的新修订，早期版本和冲突副本仍在输入历史中。
-恢复输入始终需要核实及重新准备，不恢复执行许可。比较已提交请求 A 与当前草稿 B 仅作
-描述性展示，不预览、不执行，也不表示 B 就是最初提交的草稿；默认值和未完整输入不会判同。
+输入编辑、声明变化以及参数/setup 修订变化都会使预览失效。
+暂时无法读取配置时阻止提交，直到能核实上下文；不会因此丢弃保留输入。
 
-Input edits, changed declarations, and changed parameter/setup revisions
-invalidate the preview. A temporary failure to read configuration blocks
-submission until the context can be verified without discarding retained inputs.
-
-If a submission response is lost, its original payload and request key remain
-separate from the editable draft. **核实原始提交** reads retained
-procedures by that key; **查看已提交任务** opens the confirmed ID and
-does not dispatch it. Confirmation requires one matching procedure whose public
-launch intent retains the exact `request_hash` and `config_source` binding from
-the request. Providers without this evidence, missing matches, or multiple
-matches remain explicitly unconfirmed. An explicit retry uses the original
-payload and key only while its declaration and configuration are still verified.
-Changing the context or resetting inputs never silently resubmits an unknown
-request or replaces its pending-confirmation entry.
+提交响应丢失时，原始载荷与请求 key 独立于可编辑草稿保留。
+**核实原始提交** 按该 key 查询保留过程；**查看已提交任务** 打开已确认 ID，不派发过程。
+确认要求恰有一个匹配过程，且其公开启动意图保留请求的精确 `request_hash` 与 `config_source` 绑定。
+缺少这些证据的 provider、没有匹配或多个匹配均保持未确认。
+当前界面只核实原始提交，不提供原请求重试。**准备新的 run（独立采集）** 表示新的采集意图，
+不能用来掩盖原请求的未知结果。
+改变上下文或重置输入不会暗中重提未知请求，也不会替换其待确认记录。
