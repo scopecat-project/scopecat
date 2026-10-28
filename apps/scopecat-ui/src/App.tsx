@@ -1,3 +1,4 @@
+import { projectEventStream } from "./data/project-event-stream";
 import { measurementEventRefresh } from "./features/runs/measurement-event-refresh";
 import {
   WorkspaceNavigation,
@@ -184,7 +185,6 @@ export default function App() {
 
   useEffect(() => {
     if (!healthQuery.isSuccess) return;
-    const events = new EventSource(`/api/v1/events/stream?after=${eventCursor.current}`);
     let refreshTimer: number | undefined;
     const measurementRunsToRefresh = new Set<string>();
     let canonicalRefreshRequired = false;
@@ -243,14 +243,15 @@ export default function App() {
         }
       }, 100);
     };
-    events.addEventListener("open", refreshAfterConnection);
-    events.addEventListener("project", refresh);
+    const disconnect = projectEventStream(
+      () => `/api/v1/events/stream?after=${eventCursor.current}`,
+      refreshAfterConnection,
+      refresh,
+    );
     return () => {
       measurementRefresh.dispose();
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
-      events.removeEventListener("open", refreshAfterConnection);
-      events.removeEventListener("project", refresh);
-      events.close();
+      disconnect();
     };
   }, [healthQuery.isSuccess, queryClient]);
 
