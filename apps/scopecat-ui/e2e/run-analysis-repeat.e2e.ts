@@ -102,13 +102,15 @@ test("repeats a retained ordinary analysis with its original source after author
     await expect(data.getByLabel("起始时间（本地）")).toHaveValue("2020-01-01T00:00");
     await data.getByText("研究项目管理", { exact: true }).click();
     await data.getByLabel("项目名称", { exact: true }).fill("Retained comparison");
-    await data.getByRole("button", { name: "Create project", exact: true }).click();
+    await data.getByRole("button", { name: "创建项目", exact: true }).click();
     await expect(data.getByLabel("研究项目", { exact: true })).not.toHaveValue("");
     await data.getByLabel("显示项目外的 run 以供关联").check();
     await data.getByRole("button", { name: "关联 run", exact: true }).click();
     await data.getByText("研究项目管理", { exact: true }).click();
     await expect(data.getByRole("button", { name: "关联 run", exact: true })).toBeHidden();
-    await expect(data.getByText("Showing runs across all projects for association.")).toBeVisible();
+    await expect(
+      data.getByText("正在显示所有项目的 run，以供关联；其他筛选仍生效。"),
+    ).toBeVisible();
     const selectedProject = await data.getByLabel("研究项目", { exact: true }).inputValue();
     const popupPromise = page.waitForEvent("popup");
     await data.getByRole("link", { name: "在新标签页或窗口打开结果" }).click();

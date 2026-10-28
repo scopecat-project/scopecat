@@ -76,7 +76,7 @@ it("filters retained runs and removes only their project association", async () 
   );
   await screen.findByRole("option", { name: "Alpha" });
   fireEvent.change(screen.getByLabelText("研究项目"), { target: { value: "alpha" } });
-  fireEvent.change(screen.getByLabelText("Sample", { exact: true }), { target: { value: "chip" } });
+  fireEvent.change(screen.getByLabelText("样品", { exact: true }), { target: { value: "chip" } });
   await waitFor(() =>
     expect(
       requests.some((request) => {
@@ -112,9 +112,9 @@ it("filters retained runs and removes only their project association", async () 
   fireEvent.click(screen.getByLabelText("显示项目外的 run 以供关联"));
   fireEvent.click(screen.getByText("研究项目管理"));
   await waitFor(() => expect(screen.queryByRole("button", { name: "移除 run 关联" })).toBeNull());
-  expect(screen.getByText("Showing runs across all projects for association.")).toBeVisible();
+  expect(screen.getByText("正在显示所有项目的 run，以供关联；其他筛选仍生效。")).toBeVisible();
   expect(screen.getByLabelText("研究项目")).toHaveValue("alpha");
-  expect(screen.getByLabelText("Sample", { exact: true })).toHaveValue("chip");
+  expect(screen.getByLabelText("样品", { exact: true })).toHaveValue("chip");
   expect(
     requests.some(
       (request) =>

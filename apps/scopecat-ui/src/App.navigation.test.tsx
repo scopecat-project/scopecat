@@ -1865,7 +1865,7 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(screen.getByText("研究项目管理").parentElement).not.toHaveAttribute("open");
   fireEvent.click(screen.getByText("研究项目管理"));
   expect(screen.getByLabelText("项目名称")).toHaveValue("");
-  expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "创建项目" })).toBeDisabled();
   await screen.findByText("来源：space-b");
   expect(screen.queryByText("来源：space-a")).toBeNull();
   expect(requests.every((request) => request.method === "GET")).toBe(true);
