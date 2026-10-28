@@ -4,11 +4,13 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 root = Path("test-diagnostics")
 results = []
-for mode in ("0", "1"):
+for mode in ("off", "old", "new"):
     tag = f"frame-sample-{mode}"
+    started = time.monotonic()
     with (root / f"{tag}.stderr").open("w") as stderr:
         run = subprocess.run(
             [sys.executable, "scripts/diagnose_frame_probe.py"],
@@ -16,7 +18,12 @@ for mode in ("0", "1"):
                  "PROBE_TRACE": str(root / f"{tag}.trace")},
             stdout=subprocess.PIPE, stderr=stderr, text=True, timeout=10,
         )
-    result = {"mode": mode, "returncode": run.returncode, "stdout": run.stdout}
+    trace = (root / f"{tag}.trace").read_text()
+    result = {"mode": mode, "returncode": run.returncode, "stdout": run.stdout,
+              "elapsed_seconds": time.monotonic() - started,
+              "samples": trace.count("Timeout (") + trace.count("Python timer sample"),
+              "invalid_frames": trace.count("<invalid frame>"),
+              "trace_bytes": len(trace.encode())}
     results.append(result)
     print(json.dumps(result), flush=True)
 (root / "probe-results.json").write_text(json.dumps(results, indent=2))

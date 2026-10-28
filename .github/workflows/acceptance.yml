@@ -195,20 +195,6 @@ jobs:
         shell: bash
         run: |
           python scripts/run_frame_probes.py
-      - name: Capture native stack with existing debugger only
-        if: always()
-        shell: bash
-        run: |
-          if command -v gdb >/dev/null 2>&1; then
-            PROBE_SAMPLE=1 PROBE_TRACE="$PWD/test-diagnostics/gdb.trace" \
-              timeout 15s gdb --batch \
-                -ex 'set pagination off' -ex 'set disable-randomization off' \
-                -ex run -ex 'thread apply all bt' \
-                --args python scripts/diagnose_frame_probe.py \
-                > test-diagnostics/gdb.txt 2>&1
-          else
-            echo 'GDB not preinstalled; no installation attempted' > test-diagnostics/gdb.txt
-          fi
       - name: Retain diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
