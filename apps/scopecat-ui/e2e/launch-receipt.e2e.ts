@@ -46,6 +46,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
+    await page.getByLabel("操作人", { exact: true }).fill("Browser operator");
     await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.route("**/api/v1/experiment-launcher/submit", async (route) => {
