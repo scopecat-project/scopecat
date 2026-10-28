@@ -25,7 +25,7 @@ on:
         type: string
         default: ""
 
-run-name: Acceptance (${{ inputs.profile }}) @ ${{ github.ref_name }}
+run-name: Bounded daemon diagnostics (not acceptance) @ ${{ github.ref_name }}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ inputs.profile }}-${{ github.ref }}
@@ -162,35 +162,58 @@ jobs:
 
   service-lifecycle:
     if: inputs.profile == 'service-lifecycle'
-    name: Service lifecycle (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Bounded daemon SIGSEGV diagnostics
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      PYTHONFAULTHANDLER: "1"
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - name: Check out diagnostic branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up original Python version
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version-file: .python-version
-      - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install locked uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
         with:
           version-file: uv.lock
           enable-cache: true
-      - name: Verify service recovery and process ownership
-        run: >-
-          uv run --locked pytest -q -n 0
-          packages/scopecat-app/tests/test_application_runtime.py
-          packages/scopecat-app/tests/test_data_reset.py
-          packages/scopecat-app/tests/test_desktop_session.py
-          packages/scopecat-app/tests/test_desktop_install.py
-          packages/scopecat-app/tests/test_teaching_delivery.py
-          packages/scopecat-server/tests/test_practice_workers.py
-          packages/scopecat-server/tests/test_practice_lifecycle.py
+      - name: Sync exact lock and retain runtime inventory
+        shell: bash
+        run: |
+          mkdir -p test-diagnostics
+          uv sync --locked
+          git rev-parse HEAD > test-diagnostics/inventory.txt
+          sha256sum uv.lock >> test-diagnostics/inventory.txt
+          uv run --locked python -c 'import sys,sysconfig,platform,sqlite3,faulthandler,importlib.metadata as m; print(sys.version); print(platform.platform()); print(sysconfig.get_config_var("CONFIG_ARGS")); print("SQLite",sqlite3.sqlite_version,"threadsafety",sqlite3.threadsafety); print("fatal_handler",faulthandler.is_enabled()); print("\n".join(sorted(d.metadata["Name"]+"=="+d.version for d in m.distributions())))' >> test-diagnostics/inventory.txt
+      - name: Run at most three sequential pairs, stop at first failure
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            export SCOPECAT_TEST_DIAGNOSTICS="$PWD/test-diagnostics/pair-$attempt"
+            uv run --locked pytest -n 0 -v -p scripts.pytest_diagnostics \
+              --junitxml="test-diagnostics/pair-$attempt.xml" \
+              testing/reference_lab/tests/test_flux_spectroscopy.py::test_flux_spectroscopy_worker_retains_science_and_exact_inputs \
+              packages/scopecat-server/tests/test_author_environments.py::test_retained_tasks_use_their_environment_after_selection_and_restart
+          done
+      - name: Retain complete daemon stderr where available
+        if: always()
+        shell: bash
+        run: |
+          uv run --locked python scripts/collect_bounded_daemon_logs.py
+      - name: Retain diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: bounded-daemon-sigsegv
+          path: test-diagnostics/
+          include-hidden-files: true
+          retention-days: 7
 
   python-tests:
     if: inputs.profile == 'full'
