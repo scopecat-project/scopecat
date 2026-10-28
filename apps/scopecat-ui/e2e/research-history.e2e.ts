@@ -1,23 +1,71 @@
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { spawn, type ChildProcess } from "node:child_process";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { expect, test, type TestInfo } from "@playwright/test";
-import { ROOT, startProject, stopProject, uv } from "./daemon";
+import { join, resolve } from "node:path";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { ROOT, uv } from "./daemon";
 
 test("Chinese research management preserves identities, associations and conflict fencing", async ({
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-research-"));
-  let started = false;
+  let daemon: ChildProcess | undefined;
+  let exited = false;
+  let logs = "";
+  let base = "";
   let passed = false;
   try {
     for (const name of ["src", "scopecat.toml"])
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    const base = await startProject(project);
-    started = true;
+    // Own the foreground child so Node reaps it; detached start/stop leaves an
+    // exited non-child with container PID 1, whose wait policy is outside this test.
+    const python = uv(["python", "-c", "import sys; print(sys.executable)"]);
+    daemon = spawn(
+      python,
+      [
+        "-m",
+        "scopecat_server.cli",
+        "serve",
+        project,
+        "--port",
+        "0",
+        "--static-dir",
+        resolve("dist"),
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    daemon.stdout!.on("data", (chunk) => {
+      logs += String(chunk);
+    });
+    daemon.stderr!.on("data", (chunk) => {
+      logs += String(chunk);
+    });
+    daemon.once("exit", () => {
+      exited = true;
+    });
+    daemon.once("error", (error) => {
+      logs += String(error);
+      exited = true;
+    });
+    await expect
+      .poll(
+        async () => {
+          if (exited) throw new Error(logs);
+          try {
+            base = JSON.parse(
+              await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
+            ).base_url;
+            return (await page.request.get(`${base}/api/v1/health`)).ok();
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000 },
+      )
+      .toBe(true);
     const runId = uv([
       "python",
       "-c",
@@ -108,17 +156,34 @@ with project.connect() as lab:
     });
     passed = true;
   } finally {
-    if (started) await stopFixture(project, passed, testInfo);
+    if (daemon) await stopFixture(daemon, () => exited, base, page, passed, testInfo, logs);
     if (passed) await rm(project, { recursive: true, force: true });
   }
 });
 
-async function stopFixture(project: string, passed: boolean, testInfo: TestInfo) {
+async function stopFixture(
+  daemon: ChildProcess,
+  exited: () => boolean,
+  base: string,
+  page: Page,
+  passed: boolean,
+  testInfo: TestInfo,
+  logs: string,
+) {
   try {
-    stopProject(project);
+    daemon.kill("SIGTERM");
+    await expect.poll(exited, { timeout: 10_000 }).toBe(true);
+    expect(daemon.exitCode === 0 || daemon.signalCode === "SIGTERM").toBe(true);
+    if (base) {
+      const alive = await page.request.get(`${base}/api/v1/health`, { timeout: 1000 }).then(
+        () => true,
+        () => false,
+      );
+      expect(alive).toBe(false);
+    }
   } catch (error) {
     await testInfo.attach("Daemon cleanup failure", {
-      body: String(error),
+      body: `${String(error)}\n${logs}`,
       contentType: "text/plain",
     });
     // Preserve the original assertion failure; cleanup still fails an otherwise successful test.
