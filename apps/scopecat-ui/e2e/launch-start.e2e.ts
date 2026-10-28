@@ -83,7 +83,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
       "no overrides",
     );
     await expect(page.getByRole("region", { name: "本次 run 的输入", exact: true })).toContainText(
-      "does not publish a parameter version",
+      "编辑输入不会发布参数版本。",
     );
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("region", { name: "预览与开始", exact: true }).scrollIntoViewIfNeeded();
@@ -117,7 +117,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
       await page.getByRole("button", { name: "开始采集", exact: true }).click();
       await received;
       await expect(page.getByRole("button", { name: "正在准备采集…" })).toBeDisabled();
-      await expect(page.getByText(/Acquisition has not been submitted/)).toBeVisible();
+      await expect(page.getByText(/尚未提交采集/)).toBeVisible();
       if (action === "cancel") {
         await page.screenshot({ path: testInfo.outputPath("preparing-start.png") });
         await page.getByRole("button", { name: "取消准备" }).click();
@@ -171,7 +171,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await page.screenshot({ path: testInfo.outputPath("current-data.png"), fullPage: true });
     await writeFile(releasePath, "release");
     // The current view receives the completed batch without reopening or collecting again.
-    await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
+    await expect(page.getByTestId("data-card").getByText(/^当前记录预览 2 条记录$/)).toBeVisible();
     await page.getByRole("link", { name: "返回准备", exact: true }).click();
     await expect(page.getByRole("region", { name: "准备实验", exact: true })).toBeFocused();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
@@ -188,13 +188,15 @@ test("Start prepares internally while cancelled and edited preparations never ac
     ).toBe(runId);
     await saved.click();
     await expect(page.getByTestId("run-status")).toHaveText("已完成");
-    await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
+    await expect(page.getByTestId("data-card").getByText(/^当前记录预览 2 条记录$/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("historical-data.png"), fullPage: true });
     await page.getByRole("link", { name: "返回准备", exact: true }).click();
+    await page
+      .locator("summary")
+      .filter({ hasText: /^当前草稿$/ })
+      .click();
     await expect(
-      page.getByText(
-        "Showing your current editable inputs. Returning from a run does not load its historical inputs.",
-      ),
+      page.getByText("这里显示当前可编辑输入。从 run 返回不会载入历史输入。"),
     ).toBeVisible();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(page.getByLabel("Frequency 点数")).toHaveValue("2");

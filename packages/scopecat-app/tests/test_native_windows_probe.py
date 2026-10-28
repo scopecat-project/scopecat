@@ -107,6 +107,34 @@ def reset_host_function(name: str) -> ast.FunctionDef:
 
 
 @pytest.mark.parametrize(
+    ("loaded", "url", "expected"),
+    [
+        (False, "http://localhost/", False),
+        (True, None, False),
+        (True, "about:blank", False),
+        (True, "http://localhost/", True),
+    ],
+)
+def test_reset_navigation_waits_for_loaded_event(loaded, url, expected):
+    function = reset_host_function("backend_navigation_ready")
+    code = compile(
+        ast.Module(body=[function], type_ignores=[]), "reset-navigation", "exec"
+    )
+    scope = {}
+    exec(code, scope)  # noqa: S102 - repository-owned readiness predicate
+
+    def current_url():
+        assert loaded, "must not call the blocking API before the loaded event"
+        return url
+
+    window = SimpleNamespace(
+        events=SimpleNamespace(loaded=SimpleNamespace(is_set=lambda: loaded)),
+        get_current_url=current_url,
+    )
+    assert scope["backend_navigation_ready"](window) is expected
+
+
+@pytest.mark.parametrize(
     ("connection", "loading", "expected"),
     [
         (None, False, False),

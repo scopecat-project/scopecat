@@ -33,6 +33,7 @@ import httpx2
 import numpy as np
 import psutil
 from fastapi.testclient import TestClient
+from numpy.typing import NDArray
 from pydantic import JsonValue
 
 import scopecat as sc
@@ -1710,12 +1711,25 @@ def _multiqubit_result_call(
     )
 
 
-def _classify_iq_shots(*, iq_shots: object) -> np.ndarray:
+type MultiqubitIqShots = Annotated[
+    NDArray[np.complex128],
+    sc.ArrayType(
+        dtype="complex128",
+        unit="ratio",
+        dimensions=(
+            sc.ArrayDimension("entity", None, kind="entity"),
+            sc.ArrayDimension("shot", None, kind="shot", unit="count"),
+        ),
+    ),
+]
+
+
+def _classify_iq_shots(*, iq_shots: MultiqubitIqShots) -> np.ndarray:
     values = np.asarray(iq_shots, dtype=np.complex128)
     return np.asarray(values.real >= 0.0, dtype=np.bool_)
 
 
-def _summarize_iq_shots(*, iq_shots: object) -> np.ndarray:
+def _summarize_iq_shots(*, iq_shots: MultiqubitIqShots) -> np.ndarray:
     values = np.asarray(iq_shots, dtype=np.complex128)
     if values.ndim != 2:
         raise ValueError("multiqubit IQ summary requires [entity, shot] values")

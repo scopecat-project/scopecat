@@ -320,7 +320,9 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await expect(page).toHaveURL((url) => url.searchParams.get("procedure") === procedureB);
     await writeFile(release, "");
     await expect(resultA.getByTestId("run-status")).toHaveText("已完成");
-    await expect(resultA.getByTestId("data-card").getByText(/^3 records/)).toBeVisible();
+    await expect(
+      resultA.getByTestId("data-card").getByText(/^当前记录预览 3 条记录$/),
+    ).toBeVisible();
     expect(new URL(resultA.url()).searchParams.get("run")).toBe(runA);
     const finishedA = await readA();
     expect(finishedA.control.admission).toEqual(acceptedA.control.admission);

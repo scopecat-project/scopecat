@@ -7,13 +7,19 @@ import sqlite3
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 from typing import cast
 
 import pytest
 
-from benchmarks.e2e.scan_execution import ScanScenario, _scopecat_invocation
+from benchmarks.e2e.scan_execution import (
+    ScanScenario,
+    _scopecat_invocation,
+    run_scopecat,
+)
 from scopecat.compiler.frontend.resolution import compile_invocation
+from scopecat.daemon import execution as daemon_execution
 from scopecat.program.expressions import PointColumnScalarExpr
 from scopecat.program.logical import LogicalDomainExecution, LogicalEnsureState
 from scopecat.records.costs import RunOperationCost
@@ -99,43 +105,23 @@ def test_fixed_program_lo_sweep_keeps_the_scan_value_outside_domain_inputs() -> 
 
 def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     point_count = 33
     work_dir = tmp_path / "fixed-program-lo-sweep"
-    completed = subprocess.run(  # noqa: S603
-        (
-            sys.executable,
-            "-m",
-            "benchmarks",
-            "run",
-            "scan-execution",
-            "--worker",
-            "scopecat",
-            "--point-count",
-            str(point_count),
-            "--qubit-count",
-            "1",
-            "--profile",
-            "lo-sweep",
-            "--host-label",
-            "test",
-            "--work-dir",
-            str(work_dir),
-        ),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert completed.returncode == 0, completed.stderr
-    result_line = next(
-        line
-        for line in completed.stdout.splitlines()
-        if line.startswith("BENCHMARK_RESULT=")
-    )
-    result = cast(
-        "dict[str, object]",
-        json.loads(result_line.removeprefix("BENCHMARK_RESULT=")),
+    # This checks count-based coalescing, not elapsed-time flushing. Keep only
+    # the transport clock fixed so runner speed cannot alter durable chunks;
+    # benchmark timing, device execution and the real daemon remain unchanged.
+    monkeypatch.setattr(daemon_execution, "monotonic", lambda: 0.0)
+    result = asdict(
+        run_scopecat(
+            ScanScenario(
+                point_count=point_count,
+                profile="fixed_program_host_lo_sweep",
+            ),
+            work_dir,
+            host_label="test",
+        )
     )
     scenario = cast("dict[str, object]", result["scenario"])
     database = next(work_dir.rglob("control.sqlite3"))

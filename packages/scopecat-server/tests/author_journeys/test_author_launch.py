@@ -158,7 +158,9 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
     assert authors is not None and provider is not None
     selected = authors.get("copied_signal")
     with (
-        fixture.application.connect(fixture.url) as lab,
+        fixture.application.connect(
+            fixture.url, workspace_id=source_workspace_id(fixture.url)
+        ) as lab,
         httpx2.Client(base_url=fixture.url, timeout=30, trust_env=False) as http,
     ):
         catalog = http.get(

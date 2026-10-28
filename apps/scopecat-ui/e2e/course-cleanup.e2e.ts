@@ -112,9 +112,11 @@ test("course Data and explicit cleanup remain readable and keyboard accessible",
       await preview.click();
       await expect(confirm).toBeEnabled();
       await expect(
-        page.getByRole("checkbox", { name: /Also delete this course/ }),
+        page.getByRole("checkbox", { name: /同时删除此课程的已编辑代码和本地 Python 目录/ }),
       ).not.toBeChecked();
-      await page.getByRole("checkbox", { name: /Also delete this course/ }).focus();
+      await page
+        .getByRole("checkbox", { name: /同时删除此课程的已编辑代码和本地 Python 目录/ })
+        .focus();
       await page.keyboard.press("Tab");
       await expect(confirm).toBeFocused();
       expect(

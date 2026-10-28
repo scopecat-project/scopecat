@@ -28,7 +28,17 @@ test("reopens a lost launch receipt after context changes without a second submi
   let submissions = 0;
   try {
     await copyAuthorWorkspace(project);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -36,6 +46,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
+    await page.getByLabel("操作人", { exact: true }).fill("Browser operator");
     await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.route("**/api/v1/experiment-launcher/submit", async (route) => {
@@ -97,7 +108,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
     throw error;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     // Preserve failed project state and logs for diagnosis.
     if (!failed) await rm(project, { recursive: true, force: true });
   }
