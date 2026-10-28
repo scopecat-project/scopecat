@@ -1,3 +1,4 @@
+import { lastMeasurementWindowOffset } from "./measurement-window";
 import { measurementSelectionSchemaKey } from "./measurement-view-state";
 import { Field, Select, Input, Notice } from "../../ui/Controls";
 import {
@@ -166,6 +167,10 @@ export function MeasurementDataPreview({
     slicePlan.scalarObservableIds.length > 0 &&
     slicePlan.numericAxes.some((axis) => axis.id === slicePlan.varyingAxes[0]?.id),
   );
+  const lastWindowOffset =
+    scalarWindow && slicePlan?.fixedAxes.length === 0 && slice
+      ? lastMeasurementWindowOffset(slice.selectedPointCount)
+      : undefined;
   const charts = useMemo(() => {
     if (!slicePlan) {
       return planMeasurementCharts(preview.items, preview.schema, undefined, entitySelection);
@@ -493,6 +498,23 @@ export function MeasurementDataPreview({
                   >
                     Next
                   </button>
+                  {lastWindowOffset !== undefined && (
+                    <button
+                      aria-label="查看末窗口"
+                      title="按逻辑点总数定位，不代表最新到达的记录"
+                      className="rounded border border-line bg-panel px-2 py-1 font-bold text-text-soft disabled:opacity-35"
+                      disabled={
+                        slicePending ||
+                        Boolean(sliceError) ||
+                        slice.offset === lastWindowOffset ||
+                        !onSliceOffsetChange
+                      }
+                      onClick={() => onSliceOffsetChange?.(lastWindowOffset)}
+                      type="button"
+                    >
+                      末窗口
+                    </button>
+                  )}
                 </span>
               )}
             </div>
