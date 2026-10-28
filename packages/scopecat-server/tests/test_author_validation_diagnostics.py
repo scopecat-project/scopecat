@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import faulthandler
 import importlib
 import json
 import subprocess
@@ -10,12 +9,13 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import psutil
 import pytest
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 
+from scopecat_server import _timed_diagnostics
 from scopecat_server.validation_process import terminate_validation_process_tree
 from scopecat_server.worker_diagnostics import DIAGNOSTIC_LIMIT, diagnostic_excerpt
 
@@ -36,7 +36,7 @@ def test_helper_import_does_not_schedule_or_emit_validation_diagnostics(
 ) -> None:
     from scopecat_server import author_worker
 
-    with patch.object(faulthandler, "dump_traceback_later") as timer:
+    with patch.object(_timed_diagnostics, "schedule") as timer:
         importlib.reload(author_worker)
         timer.assert_not_called()
     assert capsys.readouterr().err == ""
@@ -56,8 +56,8 @@ def test_validation_cancels_timer_on_success_and_failure(
     # their endpoint regardless of test order or shard assignment.
     monkeypatch.setenv(DAEMON_URL_ENV, "http://validation-fixture.invalid")
     with (
-        patch.object(faulthandler, "dump_traceback_later") as timer,
-        patch.object(faulthandler, "cancel_dump_traceback_later") as cancel,
+        patch.object(_timed_diagnostics, "schedule") as timer,
+        patch.object(_timed_diagnostics, "cancel") as cancel,
         patch("scopecat.project.Project.load_application") as load,
     ):
         load.return_value = SimpleNamespace(authors=None)
@@ -68,6 +68,26 @@ def test_validation_cancels_timer_on_success_and_failure(
         with pytest.raises(ValueError, match="invalid synthetic"):
             author_worker.validate(project.root, project.root)
         assert cancel.call_count == 2
+
+
+def test_validation_worker_cancels_sample_when_early_import_fails() -> None:
+    from scopecat_server import validation_worker
+
+    failure = RuntimeError("synthetic early worker failure")
+    with (
+        patch.object(sys, "argv", ["worker", "root", "--validate-serve"]),
+        patch.object(sys, "stdin", Mock()),
+        patch.object(sys, "stdout", Mock()),
+        patch.object(sys, "stderr", Mock()),
+        patch.object(_timed_diagnostics, "schedule") as schedule,
+        patch.object(_timed_diagnostics, "cancel") as cancel,
+        patch.object(validation_worker, "report_stage", side_effect=failure),
+        pytest.raises(RuntimeError) as caught,
+    ):
+        validation_worker.main()
+    assert caught.value is failure
+    schedule.assert_called_once()
+    cancel.assert_called_once()
 
 
 def test_timeout_cleanup_includes_launcher_descendants(tmp_path: Path) -> None:
