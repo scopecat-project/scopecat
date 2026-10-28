@@ -2587,6 +2587,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/parameter-proposals/{proposal_id}/launch-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Candidate Launch Selection */
+        get: operations["candidate_launch_selection_api_v1_runs__run_id__parameter_proposals__proposal_id__launch_selection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/parameter-proposals/{proposal_id}/verifications": {
         parameters: {
             query?: never;
@@ -18868,6 +18885,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterProposalPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    candidate_launch_selection_api_v1_runs__run_id__parameter_proposals__proposal_id__launch_selection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScientificSelection-Output"];
                 };
             };
             /** @description Validation Error */

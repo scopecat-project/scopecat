@@ -100,6 +100,7 @@ from scopecat.records.measurement import (
 from scopecat.records.measurement_recording import MeasurementDatasetAppend
 from scopecat.records.practice import PracticeResource
 from scopecat.records.research_project import RunHistoryFilter
+from scopecat.records.scientific_selection import ScientificSelection
 from scopecat.runs.attachments import attach_run_artifact
 from scopecat.runs.data import (
     RunArtifactJsonResult,
@@ -934,6 +935,16 @@ class RunService:
                 ),
                 next_cursor=page.next_cursor,
             )
+
+    def candidate_launch_selection(
+        self, run_id: str, proposal_id: str
+    ) -> ScientificSelection:
+        from scopecat_server.services.candidate_resolution import (
+            candidate_launch_selection,
+        )
+
+        with self._config_errors():
+            return candidate_launch_selection(run_id, proposal_id, self._services)
 
     def get_parameter_proposal(
         self,

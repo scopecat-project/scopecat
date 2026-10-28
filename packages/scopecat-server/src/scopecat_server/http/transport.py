@@ -379,6 +379,7 @@ from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
     SampleArtifactPage,
 )
+from scopecat.records.scientific_selection import ScientificSelection
 from scopecat.records.setup import (
     SetupDefinitionRevision,
     SetupRevision,
@@ -2899,6 +2900,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             limit=limit,
             before=before,
         )
+
+    @app.get(
+        f"{_API_PREFIX}/runs/{{run_id}}/parameter-proposals/{{proposal_id}}/launch-selection"
+    )
+    def candidate_launch_selection(
+        run_id: str, proposal_id: str
+    ) -> ScientificSelection:
+        return application.runs.candidate_launch_selection(run_id, proposal_id)
 
     @app.get(
         f"{_API_PREFIX}/runs/{{run_id}}/parameter-proposals/{{proposal_id}}/verifications"
