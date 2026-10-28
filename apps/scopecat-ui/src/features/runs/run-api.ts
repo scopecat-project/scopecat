@@ -1,3 +1,4 @@
+import { MEASUREMENT_WINDOW_LIMIT } from "./measurement-window";
 import type {
   DurableEvent,
   EventPage,
@@ -276,7 +277,7 @@ export async function getMeasurementSlice(
       body: {
         fixed_axis_indices: fixedAxisIndices,
         include_schema: false,
-        limit: 4096,
+        limit: MEASUREMENT_WINDOW_LIMIT,
         offset,
         variable_ids: variableIds,
       },

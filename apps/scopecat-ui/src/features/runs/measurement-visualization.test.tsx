@@ -1,3 +1,4 @@
+import { lastMeasurementWindowOffset } from "./measurement-window";
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
@@ -1308,7 +1309,9 @@ describe("measurement visualization", () => {
         previousOffset: offset ? offset - 4096 : undefined,
         nextOffset: offset + count < total ? offset + 4096 : undefined,
       };
+      const onSliceOffsetChange = vi.fn();
       const props = {
+        onSliceOffsetChange,
         preview: { schema, items: [], livePointIndex: 8999 },
         slice,
         sliceError: null,
@@ -1318,6 +1321,12 @@ describe("measurement visualization", () => {
         onFixedAxisIndexChange: vi.fn(),
       };
       const view = render(<MeasurementDataPreview {...props} />);
+      expect(onSliceOffsetChange).not.toHaveBeenCalled();
+      const lastWindow = screen.getByRole("button", { name: "查看末窗口" });
+      expect(lastWindow).toHaveProperty("disabled", offset === 8192);
+      fireEvent.click(lastWindow);
+      expect(onSliceOffsetChange.mock.calls).toEqual(offset === 8192 ? [] : [[8192]]);
+      onSliceOffsetChange.mockClear();
       expect(screen.getByText(/当前窗口，非全量数据/)).toBeVisible();
       const runtime = vi.mocked(EChartRuntime);
       await waitFor(() =>
@@ -1351,6 +1360,7 @@ describe("measurement visualization", () => {
       );
       const before = runtime.mock.lastCall?.[0].interactionKey;
       view.rerender(<MeasurementDataPreview {...props} slicePending={true} />);
+      expect(screen.getByRole("button", { name: "查看末窗口" })).toBeDisabled();
       expect(screen.getByText(/正在读取当前切片，图表可能仍显示上次读取的数据/)).toBeVisible();
       expect(runtime.mock.lastCall?.[0].interactionKey).toBe(before);
       view.rerender(
@@ -1359,10 +1369,13 @@ describe("measurement visualization", () => {
       expect(
         screen.getByText(/当前切片读取失败，数据可能已过时： window read failed/),
       ).toBeVisible();
+      expect(screen.getByRole("button", { name: "查看末窗口" })).toBeDisabled();
       view.rerender(
         <MeasurementDataPreview {...props} slice={{ ...slice, items: items.slice(0, -1) }} />,
       );
       expect(screen.queryByText(/window read failed/)).not.toBeInTheDocument();
+      // Receipt order and changing saved records never navigate the reader automatically.
+      expect(onSliceOffsetChange).not.toHaveBeenCalled();
       expect(screen.getByLabelText("测量图表")).toHaveValue("slice:other:value");
       view.rerender(<MeasurementDataPreview {...props} slice={{ ...slice, items: [] }} />);
       expect(
@@ -2440,3 +2453,18 @@ function entityMatrix(
         : undefined,
   };
 }
+
+it.each([
+  [1, 0],
+  [4096, 0],
+  [4097, 4096],
+  [8192, 4096],
+  [9000, 8192],
+  [0, undefined],
+  [-1, undefined],
+  [Infinity, undefined],
+  [1.5, undefined],
+  [Number.MAX_SAFE_INTEGER + 1, undefined],
+])("locates the logical last window for %s points", (count, offset) => {
+  expect(lastMeasurementWindowOffset(count)).toBe(offset);
+});
