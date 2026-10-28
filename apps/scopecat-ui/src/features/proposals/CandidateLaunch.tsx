@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { ParameterProposal } from "../../data/parameter-proposals/types";
@@ -51,6 +51,25 @@ function CandidatePreparation({
   const [experiment, setExperiment] = useState("");
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
+  const alive = useRef(false);
+  const intentGeneration = useRef(0);
+  useEffect(() => {
+    alive.current = true;
+    // Activity can hide this form while its request finishes. Reopening must
+    // release the old busy state without reviving that request's navigation.
+    if (!saving.current) setBusy(false);
+    const revokeIntent = () => {
+      intentGeneration.current += 1;
+    };
+    window.addEventListener("hashchange", revokeIntent);
+    window.addEventListener("popstate", revokeIntent);
+    return () => {
+      alive.current = false;
+      revokeIntent();
+      window.removeEventListener("hashchange", revokeIntent);
+      window.removeEventListener("popstate", revokeIntent);
+    };
+  }, []);
   const [error, setError] = useState<string>();
   const [savedLink, setSavedLink] = useState<string>();
   const available = sources.data?.items.filter((item) => item.available) ?? [];
@@ -145,6 +164,8 @@ function CandidatePreparation({
           setBusy(true);
           setError(undefined);
           const origin = window.location.href;
+          const generation = ++intentGeneration.current;
+          const isCurrent = () => alive.current && intentGeneration.current === generation;
           try {
             const result = await editor.copyHistoricalConfiguration(
               proposal.sourceRunId,
@@ -154,9 +175,10 @@ function CandidatePreparation({
                 workspaceId,
                 selection: selection.data,
                 codeRevision: catalog.data?.code_revision ?? undefined,
-                isIntended: () => window.location.href === origin,
+                isIntended: () => isCurrent() && window.location.href === origin,
               },
             );
+            if (!isCurrent()) return;
             const url = draftLocation({
               workspaceId: result.target.workspace_id,
               experiment: result.target.experiment,
@@ -176,10 +198,10 @@ function CandidatePreparation({
             )
               navigate(url);
           } catch (failure) {
-            setError(failure instanceof Error ? failure.message : String(failure));
+            if (isCurrent()) setError(failure instanceof Error ? failure.message : String(failure));
           } finally {
             saving.current = false;
-            setBusy(false);
+            if (alive.current) setBusy(false);
           }
         }}
       >

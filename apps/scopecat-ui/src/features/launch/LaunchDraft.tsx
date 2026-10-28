@@ -714,7 +714,9 @@ function ProjectDraft({
               setWorkspaceId(result.saved.target.workspace_id);
               const restored = restoreDraft(result.saved, (original?.revision ?? 0) + 1);
               setDraft(restored);
-              retainDraftLocation(restored);
+              // Candidate callers own navigation after checking their live operation.
+              // Do not emit an intermediate location change that revokes that intent.
+              if (!candidateDraft) retainDraftLocation(restored);
             }
             configurationCopy.current = undefined;
             return { target: result.saved.target, selected };
