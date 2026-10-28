@@ -458,8 +458,8 @@
             "metadata": {},
             "unit": "ratio",
             "value": {
-              "imag": 2.060851489460447e-15,
-              "real": 0.75
+              "imag": 1.8943180357666733e-15,
+              "real": 0.7500000000000003
             }
           }
         },
@@ -536,7 +536,7 @@
             "metadata": {},
             "unit": "ratio",
             "value": {
-              "imag": 1.0364972768961422e-14,
+              "imag": 1.0347625534201654e-14,
               "real": 0.6250000000000054
             }
           }
@@ -1692,6 +1692,7 @@
     "experiment_id": "reference_lab.temperature_diagnostic",
     "experiment_kind": "temperature_diagnostic",
     "heartbeat_interval_seconds": 5.0,
+    "latest_request": null,
     "latest_result": {
       "completed_at": "2026-09-01T00:00:00Z",
       "error": null,
@@ -1821,7 +1822,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:1983e7ad2f4e06cb41da2b99e48d2166239f69d7d6cbdde239da8312edd669a9",
+        "config_source_hash": "sha256:d9a842c6b14386c6f60c38adf29ed2d75c514974b672984a68a35311a1572081",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1963,8 +1964,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:dbd0514898b8678845636f3667a63d2a1356c9b3ffc2146e8a7cbc47db9d5a4d",
-          "revision_id": "resolved:dbd0514898b8678845636f3667a63d2a1356c9b3ffc2146e8a7cbc47db9d5a4d"
+          "content_hash": "sha256:0b5679006c4392e95f767249b53050e62db1f18151b563536985bb0fc6e1effe",
+          "revision_id": "resolved:0b5679006c4392e95f767249b53050e62db1f18151b563536985bb0fc6e1effe"
         }
       }
     },

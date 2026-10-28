@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from scopecat_app import bundle
+from scopecat_testkit.project_loading import isolated_project_imports
 
 
 @pytest.fixture
@@ -26,7 +27,10 @@ def notebook_imports(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyP
     }
     finders = list(sys.meta_path)
     try:
-        yield monkeypatch
+        # A Notebook represents a fresh author kernel. Other tests in this
+        # worker may have loaded a scaffold's process-scoped project modules.
+        with isolated_project_imports():
+            yield monkeypatch
     finally:
         sys.meta_path[:] = finders
         for name in tuple(sys.modules):

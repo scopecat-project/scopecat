@@ -785,7 +785,10 @@ def probe(home: Path) -> None:
                         "main selection changes without changing the secondary run"
                     )
                     wait_for(
-                        lambda: "1 records" in text_content(second.window, "data-card"),
+                        lambda: (
+                            "当前记录预览 1 条记录"
+                            in text_content(second.window, "data-card")
+                        ),
                         "Live first record did not render",
                     )
                     assert (

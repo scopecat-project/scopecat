@@ -50,6 +50,15 @@ def wait(check, label):
         time.sleep(0.05)
 
 
+def backend_navigation_ready(window):
+    # get_current_url blocks for up to 20 seconds before raising if loaded is
+    # unset. Poll readiness under our existing bounded observer deadline first.
+    if not window.events.loaded.is_set():
+        return False
+    url = window.get_current_url()
+    return bool(url and url.startswith("http://"))
+
+
 def workspace_ready(window):
     state = window.evaluate_js(
         "({mounted: Boolean(window.pywebview?.api && "
@@ -190,10 +199,7 @@ def observe():
             )
             answer(True)
         wait(
-            lambda: (
-                window.get_current_url()
-                and window.get_current_url().startswith("http://")
-            ),
+            lambda: backend_navigation_ready(window),
             "in-place backend navigation",
         )
         runtime = ApplicationRuntime(paths.state)

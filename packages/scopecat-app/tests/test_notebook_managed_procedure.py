@@ -1,12 +1,22 @@
 """The public Notebook session submits ordinary work without a local executor."""
 
 import importlib
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from IPython.core.interactiveshell import InteractiveShell
 
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
+from scopecat_testkit.project_loading import isolated_project_imports
+
+
+@pytest.fixture(autouse=True)
+def prior_project_import(tmp_path: Path) -> Iterator[None]:
+    """Model a prior test loading a different scaffold in this pytest worker."""
+    with isolated_project_imports():
+        initialize_project(tmp_path / "previous-project").load_bootstrap()
+        yield
 
 
 def test_notebook_managed_procedure(

@@ -6,9 +6,11 @@ import os
 import stat
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx2
 import psutil
@@ -633,8 +635,15 @@ def test_default_start_waits_past_old_budget_with_progress(
 
     monkeypatch.setattr("scopecat_server.lifecycle.subprocess.Popen", spawn)
     monkeypatch.setattr("scopecat_server.lifecycle.inspect_daemon", inspect)
-    monkeypatch.setattr("scopecat_server.lifecycle.time.monotonic", lambda: next(clock))
-    monkeypatch.setattr("scopecat_server.lifecycle.time.sleep", sleep)
+    # Keep the finite startup clock local; Windows file locks also use time.
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle.time",
+        SimpleNamespace(
+            monotonic=lambda: next(clock),
+            monotonic_ns=time.monotonic_ns,
+            sleep=sleep,
+        ),
+    )
     assert (
         start_project(
             project,
