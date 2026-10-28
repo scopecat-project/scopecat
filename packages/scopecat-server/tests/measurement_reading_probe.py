@@ -10,6 +10,14 @@ history/back journey, then POST /probe/finish. The second scene starts only afte
 the first finishes. /probe/status reports counts and producer stages. Ctrl-C
 cancels this session's child only. Retained files belong to this synthetic session;
 no desktop window is opened or closed by this command.
+
+The validation journey is read-only chart/history navigation. Import, export,
+upload, artifact and download operations are excluded. Byte sampling is an
+operational stop threshold with headroom, not a filesystem quota. Stage timestamps
+report producer/commit returns, not observed GUI visibility. --interaction-pacing
+uses a two-second inter-batch pause for manual interaction (about one to two
+minutes per scene), not an unpaced throughput comparison. This HTTP entry does
+not qualify an installed or native application shell.
 """
 
 from __future__ import annotations
@@ -19,6 +27,7 @@ import json
 import multiprocessing
 import os
 import socket
+import tempfile
 import time
 from contextlib import suppress
 from multiprocessing.process import BaseProcess
@@ -228,7 +237,22 @@ def _require_byte_budget(directory: Path) -> None:
         raise RuntimeError("aggregate session byte budget reached")
 
 
-def _serve_scene(scene: Scene, directory: Path, static_dir: Path) -> None:
+def _isolate_temp(directory: Path) -> Path:
+    temporary = directory / "tmp"
+    temporary.mkdir(exist_ok=False)
+    for name in ("TEMP", "TMP", "TMPDIR"):
+        os.environ[name] = str(temporary)
+    # Reset any cached selection made while importing the owned child module.
+    tempfile.tempdir = None
+    if Path(tempfile.gettempdir()).resolve() != temporary.resolve():
+        raise RuntimeError("owned child did not select its local temp directory")
+    return temporary
+
+
+def _serve_scene(
+    scene: Scene, directory: Path, static_dir: Path, interaction_pacing: bool
+) -> None:
+    _isolate_temp(directory)
     # Locator registration is also session-local on Windows and Unix.
     os.environ["SCOPECAT_LOCATOR_HOME"] = str(directory / "locator")
     project = directory / "project"
@@ -243,6 +267,9 @@ def _serve_scene(scene: Scene, directory: Path, static_dir: Path) -> None:
         "completed_records": 0,
         "batches": [],
     }
+    pause = 2.0 if interaction_pacing else 0.05
+    state["mode"] = "interaction-paced" if interaction_pacing else "unpaced"
+    state["inter_batch_pause_seconds"] = pause
     stop = Event()
     producer: Thread | None = None
     start_lock = Lock()
@@ -353,10 +380,10 @@ def _serve_scene(scene: Scene, directory: Path, static_dir: Path) -> None:
                             ),
                         ),
                     )
-                    timing["queryable_ms"] = time.time() * 1000
+                    timing["projection_commit_return_ms"] = time.time() * 1000
                     batches.append(timing)
                     state["completed_records"] = offset + len(batch)
-                    if stop.wait(0.05):
+                    if stop.wait(pause):
                         return
                 state["done"] = True
             except Exception as error:
@@ -443,25 +470,47 @@ def _serve_scene(scene: Scene, directory: Path, static_dir: Path) -> None:
             )
 
 
+def _wait_descendants(owned: list[psutil.Process], timeout: float) -> None:
+    _, alive = psutil.wait_procs(owned, timeout=max(0, timeout))
+    if alive:
+        raise RuntimeError(
+            "captured owned descendants have not exited: "
+            f"{[child.pid for child in alive]}"
+        )
+
+
 def _cancel(process: BaseProcess, directory: Path, deadline: float) -> None:
-    # This marker is confined to the newly created session, never an existing home.
+    # Capture ownership before allowing the direct child to exit/reparent children.
+    owned: list[psutil.Process] = []
+    if process.pid is not None:
+        with suppress(psutil.NoSuchProcess):
+            owned = psutil.Process(process.pid).children(recursive=True)
     (directory / "cancel").touch()
     process.join(timeout=max(0, min(8, deadline - time.monotonic())))
     if process.is_alive():
-        owned: list[psutil.Process] = []
         if process.pid is not None:
             with suppress(psutil.NoSuchProcess):
-                owned = psutil.Process(process.pid).children(recursive=True)
+                for child in psutil.Process(process.pid).children(recursive=True):
+                    if child not in owned:
+                        owned.append(child)
         process.kill()
-        for child in owned:
-            with suppress(psutil.NoSuchProcess):
-                child.kill()
         process.join(timeout=2)
+    # psutil Process objects retain identity checks; never discover by name or
+    # target descendants of a reused pid after the owned parent has exited.
+    for child in owned:
+        with suppress(psutil.NoSuchProcess):
+            child.kill()
+    _wait_descendants(owned, timeout=2)
     if process.is_alive():
         raise RuntimeError("owned probe process did not terminate")
 
 
-def run_session(session: Path, static_dir: Path, seconds_per_scene: int) -> None:
+def run_session(
+    session: Path,
+    static_dir: Path,
+    seconds_per_scene: int,
+    interaction_pacing: bool = False,
+) -> None:
     if not 15 <= seconds_per_scene <= MAX_SCENE_SECONDS:
         raise ValueError("seconds-per-scene must be between 15 and 900")
     if not (static_dir / "index.html").is_file():
@@ -474,7 +523,7 @@ def run_session(session: Path, static_dir: Path, seconds_per_scene: int) -> None
         directory.mkdir(exist_ok=False)
         deadline = min(session_deadline, time.monotonic() + seconds_per_scene)
         process = context.Process(
-            target=_serve_scene, args=(scene, directory, static_dir)
+            target=_serve_scene, args=(scene, directory, static_dir, interaction_pacing)
         )
         process.start()
         try:
@@ -509,9 +558,17 @@ def main() -> None:
         "--static-dir", type=Path, default=ROOT / "apps/scopecat-ui/dist"
     )
     parser.add_argument("--seconds-per-scene", type=int, default=600)
+    parser.add_argument(
+        "--interaction-pacing",
+        action="store_true",
+        help="2-second batch pauses for manual interaction, not throughput measurement",
+    )
     args = parser.parse_args()
     run_session(
-        args.session.resolve(), args.static_dir.resolve(), args.seconds_per_scene
+        args.session.resolve(),
+        args.static_dir.resolve(),
+        args.seconds_per_scene,
+        args.interaction_pacing,
     )
 
 

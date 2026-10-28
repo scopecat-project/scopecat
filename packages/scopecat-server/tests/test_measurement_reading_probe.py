@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
+import tempfile
 import time
 from pathlib import Path
 
+import psutil
 import pytest
 from scopecat.measurements.recording_arrow import encode_measurement_append
 from scopecat.records.measurement_recording import MeasurementDatasetAppend
@@ -12,6 +15,8 @@ from .measurement_reading_probe import (
     MAX_APPEND_BYTES,
     Scene,
     _cancel,
+    _isolate_temp,
+    _wait_descendants,
     directory_bytes,
     run_session,
     workload,
@@ -91,3 +96,36 @@ def test_cancellation_stops_owned_process_without_stopping_another(tmp_path: Pat
                 process.kill()
             process.join(timeout=5)
             process.close()
+
+
+def test_temp_files_are_included_in_the_session_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("TEMP", "TMP", "TMPDIR"):
+        monkeypatch.setenv(name, "prior-value")
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    temporary = _isolate_temp(tmp_path)
+    assert all(os.environ[name] == str(temporary) for name in ("TEMP", "TMP", "TMPDIR"))
+    with tempfile.NamedTemporaryFile() as file:
+        assert Path(file.name).parent == temporary
+        assert file.write(b"synthetic") == 9
+        file.flush()
+        assert directory_bytes(tmp_path) == 9
+
+
+def test_unexited_captured_descendants_are_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only the waiting result is simulated; the helper must never kill this process.
+    retained = psutil.Process()
+
+    def unexited(
+        _procs: list[psutil.Process], *, timeout: float
+    ) -> tuple[list[psutil.Process], list[psutil.Process]]:
+        return [], [retained]
+
+    monkeypatch.setattr(psutil, "wait_procs", unexited)
+    with pytest.raises(
+        RuntimeError, match="captured owned descendants have not exited"
+    ):
+        _wait_descendants([retained], 0)
