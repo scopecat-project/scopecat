@@ -14,7 +14,7 @@ import { ImportedCaptures } from "./ImportedCaptures";
 import { CourseData } from "./CourseData";
 import { navigate, useLocationUrl } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, apiData } from "../../api-client";
+import { ApiError, apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 
 type Project = components["schemas"]["ResearchProject"];
@@ -197,7 +197,19 @@ function ResearchRecords({
       <h2 className={pageTitle}>数据</h2>
       {course && <CourseData scopeId={course} unavailable={daemonUnavailable} />}
 
-      {error && <Notice role="alert">{error.message}</Notice>}
+      {error && (
+        <Notice role="alert">
+          <p>
+            {error instanceof ApiError && error.status === 409
+              ? "项目更新冲突。请刷新页面并重新选择项目，核对最新内容后再保存。"
+              : "研究历史操作失败。请查看诊断；若写入结果未知，先核实已有项目或关联再重试。"}
+          </p>
+          <details>
+            <summary>原始诊断</summary>
+            <p>{error.message}</p>
+          </details>
+        </Notice>
+      )}
       {!course && (
         <>
           <div className={`${detailCard} flex flex-wrap items-start gap-3`}>
@@ -249,7 +261,7 @@ function ResearchRecords({
                   setName(project?.name ?? "");
                 }}
               >
-                <option value="">All projects</option>
+                <option value="">所有研究项目</option>
                 {projects.data?.pages
                   .flatMap((page) => page.items)
                   .map((project) => (
@@ -260,17 +272,17 @@ function ResearchRecords({
               </Select>
             </Field>
             {projects.hasNextPage && (
-              <Button onClick={() => void projects.fetchNextPage()}>More projects</Button>
+              <Button onClick={() => void projects.fetchNextPage()}>更多研究项目</Button>
             )}
 
             <Field>
-              Sample{" "}
+              样品{" "}
               <Select
-                aria-label="Sample"
+                aria-label="样品"
                 value={sample}
                 onChange={(event) => setSample(event.target.value)}
               >
-                <option value="">All samples</option>
+                <option value="">所有样品</option>
                 {samples.data?.pages
                   .flatMap((page) => page.items)
                   .map((item) => (
@@ -281,7 +293,7 @@ function ResearchRecords({
               </Select>
             </Field>
             {samples.hasNextPage && (
-              <Button onClick={() => void samples.fetchNextPage()}>More samples</Button>
+              <Button onClick={() => void samples.fetchNextPage()}>更多样品</Button>
             )}
             <Field>
               起始时间（本地）{" "}
@@ -302,11 +314,10 @@ function ResearchRecords({
           </ActionRow>
           <details className={detailCard}>
             <summary className="cursor-pointer">
-              高级来源筛选{workingPoint || bench ? " · active" : ""}
+              高级来源筛选{workingPoint || bench ? " · 已启用" : ""}
             </summary>
             <p className="text-sm text-text-dim">
-              Exact working-point context ID and deployment ID; these do not describe scientific
-              conditions.
+              按精确工作点上下文 ID 和部署 ID 筛选；这些标识本身不描述科学条件。
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
               <Field>
@@ -325,14 +336,14 @@ function ResearchRecords({
         </>
       )}
       <div className={detailCard}>
-        <h3 className={sectionTitle}>Retained runs</h3>
+        <h3 className={sectionTitle}>已保留的 run</h3>
         {!course && allRuns && selected && (
-          <Notice role="status">Showing runs across all projects for association.</Notice>
+          <Notice role="status">正在显示所有项目的 run，以供关联；其他筛选仍生效。</Notice>
         )}
         {daemonUnavailable ? (
-          <Notice role="status">Data unavailable while the application service is offline.</Notice>
+          <Notice role="status">应用服务离线，暂时无法读取数据。</Notice>
         ) : runs.isPending ? (
-          <p>Loading history…</p>
+          <p>正在加载历史…</p>
         ) : (
           <ul className="space-y-3">
             {runs.data?.pages
@@ -370,7 +381,7 @@ function ResearchRecords({
                     {run.snapshot.samples
                       ?.map(
                         (binding) =>
-                          `${binding.display_name} / ${binding.context_id ?? "no working point"}`,
+                          `${binding.display_name} / ${binding.context_id ?? "无工作点"}`,
                       )
                       .join(", ")}
                   </span>
@@ -412,7 +423,10 @@ function ResearchRecords({
           >
             <summary className="cursor-pointer font-semibold">研究项目管理</summary>
             <p className="text-sm text-text-dim">
-              Manage {selected?.name ?? "a research project"}.
+              {selected ? `管理研究项目：${selected.name}` : "创建研究项目，或先选择已有项目。"}
+            </p>
+            <p className="text-sm text-text-dim">
+              解除关联只改变项目组织，不删除样品或测量；名称变化不改变稳定 ID。
             </p>
             <form
               className="mt-3 flex flex-wrap gap-2"
@@ -429,12 +443,12 @@ function ResearchRecords({
                 <Input required value={name} onChange={(event) => setName(event.target.value)} />
               </Field>
               <Button variant="primary" disabled={pending || !name.trim()}>
-                {selected ? "Rename project" : "Create project"}
+                {selected ? "重命名项目" : "创建项目"}
               </Button>
             </form>
             {!course && selected && (
               <div className="mt-3 space-y-2">
-                <p>Associated samples (membership does not automatically add their runs):</p>
+                <p>已关联样品（不会自动关联这些样品的历史或未来 run）：</p>
                 {members.data?.pages
                   .flatMap((page) => page.ids)
                   .map((id) => (
