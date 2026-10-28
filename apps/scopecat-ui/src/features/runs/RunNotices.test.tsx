@@ -7,6 +7,27 @@ import { RunCancellationNotice } from "./RunCancellationNotice";
 
 afterEach(cleanup);
 
+it("explains interrupted saved data and explicit close without claiming workflow completion", () => {
+  const close = vi.fn();
+  const props = {
+    run: { status: "attention_required" as const, attentionReason: "daemon_shutting_down" },
+    onResolve: close,
+    pending: false,
+    error: null,
+  };
+  const view = render(<RunAttentionNotice {...props} durableRecordCount={34} />);
+  expect(screen.getByRole("alert")).toHaveTextContent("已保存 34 条记录");
+  expect(screen.getByRole("alert")).toHaveTextContent("不会自动重新采集");
+  expect(screen.getByRole("alert")).toHaveTextContent("失败且结果不确定");
+  expect(screen.getByRole("alert")).toHaveTextContent("不代表所属工作流已完成");
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "关闭且不继续" }));
+  expect(close).toHaveBeenCalledTimes(1);
+  view.rerender(<RunAttentionNotice {...props} />);
+  expect(screen.getByRole("alert")).toHaveTextContent("已保存记录数尚未读取");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("已保存 0 条");
+});
+
 it("keeps raw attention reasons and does not imply closure makes hardware safe", () => {
   const close = vi.fn();
   const props = {

@@ -9,6 +9,7 @@ export function RunAttentionNotice({
   onResolve,
   pending,
   error,
+  durableRecordCount,
 }: {
   run: Pick<ProjectRun, "status" | "attentionReason"> &
     Partial<
@@ -17,6 +18,7 @@ export function RunAttentionNotice({
   onResolve: () => void;
   pending: boolean;
   error: Error | null;
+  durableRecordCount?: number;
 }) {
   const focused = useMeasurementFocus();
   if (run.status !== "attention_required") return null;
@@ -31,6 +33,16 @@ export function RunAttentionNotice({
         <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
           {run.attentionReason ?? "服务尚未报告需要核对处理的原因。"}
         </p>
+        {(run.attentionReason === "daemon_shutting_down" ||
+          run.attentionReason === "daemon_restarted") && (
+          <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
+            服务关闭或重启中断了实验，尚无确定的实验结果。
+            {durableRecordCount === undefined
+              ? "已保存记录数尚未读取，请查看数据区。"
+              : `已保存 ${durableRecordCount} 条记录，可在数据区检查。`}
+            不会自动重新采集。可保留此记录待核对；核对后选择“关闭且不继续”，会保留数据并记录失败且结果不确定，不会继续实验，也不代表所属工作流已完成。
+          </p>
+        )}
         {!focused &&
           run.attentionReason === "manual_line_confirmation_expired" &&
           run.manualLineConfirmation &&

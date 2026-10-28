@@ -123,6 +123,70 @@ def _checkpoint(tmp_path: Path):
     return service, workers, wait
 
 
+@pytest.mark.parametrize("draining", [False, True])
+def test_exited_leased_worker_needs_review_without_rewriting_history(
+    tmp_path: Path, draining: bool
+) -> None:
+    service, _ = _service(tmp_path)
+    run = service.submit(
+        ProcedureSubmitCommand(
+            definition=_definition(), request_key="interrupted", intent={}
+        )
+    ).run
+    lease = service.acquire_lease(
+        ProcedureWorkerLeaseAcquireCommand(
+            procedure_run_id=run.procedure_run_id,
+            worker_id="fixture",
+            expected_run_revision=run.revision,
+        )
+    )
+    step = service.begin_step(
+        ProcedureStepBeginCommand(
+            procedure_run_id=run.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=lease.run.revision,
+            step_key="child",
+            operation="run",
+            intent_hash="sha256:" + "a" * 64,
+        )
+    )
+    workers = _workers(tmp_path)
+    rounds = BackgroundRounds()
+    rounds.drain(draining)
+    sqlite = SQLiteDatabase(tmp_path / "control.sqlite3")
+    drain = ExitDrain(sqlite)
+    # No receipt is not evidence that an independently managed worker exited.
+    assert drain.report(workers, rounds, 0).finishing
+    directory = workers._worker_dir(run.procedure_run_id)
+    directory.mkdir(parents=True)
+    receipt = directory / "process.json"
+    process = psutil.Process()
+    receipt.write_text(
+        WorkerProcess(pid=process.pid, created=process.create_time()).model_dump_json()
+    )
+    assert drain.report(workers, rounds, 0).finishing
+    receipt.write_text(WorkerProcess(pid=2_000_000_000, created=1.0).model_dump_json())
+    # Reopen with no Popen handle and no successful-exit receipt.
+    report = drain.report(_workers(tmp_path), rounds, 0)
+    assert not report.finishing
+    assert not report.ready
+    assert len(report.blockers) == 1
+    assert "Worker exited without procedure closure" in report.blockers[0].reason
+    assert "does not complete this procedure" in report.blockers[0].reason
+    assert service.get(run.procedure_run_id) == step.run
+    assert step.run.state == "leased"
+    assert step.run.closure is None
+    assert service.step_attempts(
+        run.procedure_run_id, Mock(limit=50, cursor=None)
+    ).items == (step.step,)
+    with sqlite.read_connection() as connection:
+        assert (
+            connection.execute("SELECT COUNT(*) FROM procedure_leases").fetchone()[0]
+            == 1
+        )
+    sqlite.close()
+
+
 def test_exact_checkpoint_survives_reopen_without_completion(tmp_path: Path) -> None:
     service, workers, wait = _checkpoint(tmp_path)
     rounds = BackgroundRounds()

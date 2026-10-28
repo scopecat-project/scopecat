@@ -4023,10 +4023,12 @@ def test_restart_quarantines_executor_until_operator_reconciles(
 @pytest.mark.parametrize(
     "segmented,restart", [(False, False), (True, False), (True, True)]
 )
-def test_continuation_appends_measurements_in_a_new_segment_fragment(
+@pytest.mark.parametrize("close_only", [False, True])
+def test_interrupted_measurements_close_or_continue_without_losing_saved_records(
     tmp_path: Path,
     segmented: bool,
     restart: bool,
+    close_only: bool,
 ) -> None:
     with ExitStack() as stack:
         runtime = stack.enter_context(
@@ -4201,6 +4203,32 @@ def test_continuation_appends_measurements_in_a_new_segment_fragment(
             runtime.application.executor._control.mark_executor_unknown(
                 run_id, token=first_lease.lease_id, reason="executor_disconnected"
             )
+        if close_only:
+            with TestClient(runtime.app()) as client:
+                url = f"/api/v1/runs/{run_id}"
+                before = client.get(f"{url}/measurements/preview").json()
+                assert before["items"]
+                assert _snapshot(runtime, run_id).outcome is None
+                segments = runtime.application.executor.execution_segments(run_id)
+                response = client.post(
+                    f"{url}/attention", json={"disposition": "close"}
+                )
+                assert response.status_code == 200, response.text
+                assert response.json()["state"] == "closed"
+                assert client.get(f"{url}/measurements/preview").json() == before
+                outcome = _snapshot(runtime, run_id).outcome
+                assert outcome is not None
+                assert outcome.result == "failed"
+                assert outcome.certainty == "indeterminate"
+                assert outcome.problems[0].code == "daemon.executor_loss_reconciled"
+                assert (
+                    runtime.application.executor.execution_segments(run_id) == segments
+                )
+                with pytest.raises(BackendConflict, match="not ready to start"):
+                    runtime.application.executor.start_executor(
+                        run_id, ExecutorStartRequest(executor_id="must-not-restart")
+                    )
+            return
         runtime.application.resolve_attention(
             run_id,
             AttentionResolutionCommand.continue_run(
