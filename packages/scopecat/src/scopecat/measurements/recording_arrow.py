@@ -1342,6 +1342,10 @@ def _encode_json(value: object) -> bytes:
 def _decode_json(value: object) -> JsonMetadata:
     if not isinstance(value, bytes):
         raise MeasurementArrowCodecError("measurement Arrow metadata is invalid")
+    # Empty record/value metadata is common in scalar chunks. Return a fresh
+    # object without repeatedly parsing and validating the canonical empty JSON.
+    if value == b"{}":
+        return {}
     try:
         decoded = cast("object", json.loads(value))
     except (UnicodeError, json.JSONDecodeError) as error:

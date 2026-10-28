@@ -376,6 +376,58 @@ def test_measurement_arrow_rejects_non_ipc_payloads() -> None:
         decode_measurement_append(b'{"records": []}', _schema())
 
 
+@pytest.mark.parametrize("column", ["__scopecat.record_metadata", "metadata:estimate"])
+@pytest.mark.parametrize(
+    "payload,valid",
+    [
+        (b"{}", True),
+        (b" { } ", True),
+        (b'{"nested":{"value":1}}', True),
+        (b"{}garbage", False),
+        (b"[]", False),
+        (b'{"value":NaN}', False),
+        (b"", False),
+        (b"\xff", False),
+    ],
+)
+def test_selected_arrow_reads_validate_empty_and_nonempty_metadata(
+    column: str, payload: bytes, *, valid: bool
+) -> None:
+    import json
+
+    schema = _schema()
+    content = encode_measurement_append(_append(), schema)
+    batch = pa.ipc.open_file(pa.BufferReader(content)).get_batch(0)
+    index = batch.schema.get_field_index(column)
+    batch = batch.set_column(
+        index, batch.schema.field(index), pa.array([payload], type=pa.large_binary())
+    )
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_file(sink, batch.schema) as writer:
+        writer.write_batch(batch)
+    changed = sink.getvalue().to_pybytes()
+
+    if not valid:
+        with pytest.raises(MeasurementArrowCodecError, match="metadata"):
+            decode_measurement_record_indices(
+                changed, schema, (0,), variable_ids=("estimate",)
+            )
+        return
+
+    [record] = decode_measurement_record_indices(
+        changed, schema, (0,), variable_ids=("estimate",)
+    )
+    metadata = (
+        record.metadata
+        if column == "__scopecat.record_metadata"
+        else record.observables["estimate"].metadata
+    )
+    assert metadata == json.loads(payload)
+    assert record.observables["estimate"] == _append().records[0].observables[
+        "estimate"
+    ].model_copy(update={"metadata": metadata if column == "metadata:estimate" else {}})
+
+
 @pytest.mark.parametrize(
     "dtype,values",
     [
