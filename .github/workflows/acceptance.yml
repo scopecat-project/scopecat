@@ -171,10 +171,10 @@ jobs:
       PYTHONFAULTHANDLER: "1"
       SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
     steps:
-      - name: Check out exact reviewed candidate
+      - name: Check out exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 0f7935c6cd529b0aab5357b121a77b212339b489
+          ref: 6b6cdd4ee8413002ec935d7476153cdd28596c92
           persist-credentials: false
       - name: Set up locked Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
