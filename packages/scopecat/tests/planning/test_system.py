@@ -775,16 +775,19 @@ def test_compute_only_scan_checkpoints_at_each_declared_group_boundary(
     plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)
     pending: list[int] = []
     completed: list[int] = []
+    checkpoint_count = 0
     for operation in plan.coverage:
         if isinstance(operation, RunCoverageEffect):
             if not grouped:
                 assert not pending, "completed point must reach its checkpoint first"
             pending.append(operation.point_index)
         elif isinstance(operation, RunCoverageCheckpoint):
+            checkpoint_count += 1
             assert tuple(pending) == operation.point_indices
             completed.extend(pending)
             pending.clear()
     assert completed == list(range(point_count))
+    assert checkpoint_count == (1 if grouped else point_count)
     assert not pending
 
 
