@@ -83,7 +83,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
       "no overrides",
     );
     await expect(page.getByRole("region", { name: "本次 run 的输入", exact: true })).toContainText(
-      "does not publish a parameter version",
+      "编辑输入不会发布参数版本。",
     );
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("region", { name: "预览与开始", exact: true }).scrollIntoViewIfNeeded();

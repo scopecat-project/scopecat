@@ -28,7 +28,17 @@ test("reopens a lost launch receipt after context changes without a second submi
   let submissions = 0;
   try {
     await copyAuthorWorkspace(project);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -97,7 +107,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
     throw error;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     // Preserve failed project state and logs for diagnosis.
     if (!failed) await rm(project, { recursive: true, force: true });
   }

@@ -177,7 +177,7 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     snippets.push({ kind: "run", runId: saved.runId, code: runCode! });
 
     const old = page
-      .getByRole("region", { name: "Analyses", exact: true })
+      .getByRole("region", { name: "分析结果", exact: true })
       .locator("details")
       .filter({ has: page.locator("summary").getByText("Saved run version 1", { exact: true }) });
     await old.locator("summary").click();
