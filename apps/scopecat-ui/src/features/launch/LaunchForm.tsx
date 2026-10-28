@@ -17,7 +17,13 @@ import {
 import { MeasurementContext, type MeasurementContextChange } from "./MeasurementContext";
 import { PlanSave } from "./PlanSave";
 import { PreflightSummary } from "./PreflightSummary";
-import { canRenderField, type FormField } from "./launch-fields";
+import {
+  canRenderField,
+  isQuantityField,
+  quantityDraft,
+  quantityInput,
+  type FormField,
+} from "./launch-fields";
 
 export function LaunchForm({
   entry,
@@ -176,13 +182,15 @@ export function LaunchForm({
         .filter(([, value]) => value !== "")
         .map(([name, value]) => [
           name,
-          ["number", "integer"].includes(fieldsByName.get(name)?.type ?? "string")
-            ? Number(value)
-            : fieldsByName.get(name)?.type === "array"
-              ? value.split("\n").filter(Boolean)
-              : fieldsByName.get(name)?.type === "boolean"
-                ? value === "true"
-                : value,
+          isQuantityField(fieldsByName.get(name) ?? false)
+            ? quantityInput(value, fieldsByName.get(name)!)
+            : ["number", "integer"].includes(fieldsByName.get(name)?.type ?? "string")
+              ? Number(value)
+              : fieldsByName.get(name)?.type === "array"
+                ? value.split("\n").filter(Boolean)
+                : fieldsByName.get(name)?.type === "boolean"
+                  ? value === "true"
+                  : value,
         ]),
     );
   }
@@ -378,7 +386,38 @@ export function LaunchForm({
             {fields.map(([name, field]) => (
               <Field key={name} className="flex-col">
                 {field.title ?? name}
-                {field.type === "array" && field.items?.enum ? (
+                {isQuantityField(field) ? (
+                  <span className="flex gap-2">
+                    <Input
+                      aria-label={`${field.title ?? name} value`}
+                      inputMode="decimal"
+                      value={quantityDraft(values[name] ?? "").value}
+                      onChange={(event) =>
+                        change(
+                          name,
+                          JSON.stringify({
+                            ...quantityDraft(values[name] ?? ""),
+                            value: event.target.value,
+                          }),
+                        )
+                      }
+                    />
+                    <Input
+                      aria-label={`${field.title ?? name} unit`}
+                      placeholder="Unit"
+                      value={quantityDraft(values[name] ?? "").unit}
+                      onChange={(event) =>
+                        change(
+                          name,
+                          JSON.stringify({
+                            ...quantityDraft(values[name] ?? ""),
+                            unit: event.target.value,
+                          }),
+                        )
+                      }
+                    />
+                  </span>
+                ) : field.type === "array" && field.items?.enum ? (
                   <Select
                     multiple
                     size={5}
