@@ -10,7 +10,7 @@ from typing import TextIO
 
 import pytest
 
-from scopecat_server import _timed_diagnostics  # noqa: TID251
+import scopecat_server._timed_diagnostics as _timed_diagnostics  # noqa: TID251
 
 _stream: TextIO | None = None
 

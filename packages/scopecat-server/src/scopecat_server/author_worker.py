@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 from scopecat.author_workspaces import author_workspace_id, local_author_workspaces
 from scopecat.runtime_binding import load_runtime_binding
 
-from scopecat_server import _timed_diagnostics
+import scopecat_server._timed_diagnostics as _timed_diagnostics
 from scopecat_server.worker_diagnostics import report_stage
 
 if TYPE_CHECKING:

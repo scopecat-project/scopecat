@@ -10,7 +10,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Literal, TextIO
 
-from scopecat_server import _timed_diagnostics
+import scopecat_server._timed_diagnostics as _timed_diagnostics
 
 _stream: TextIO | None = None
 _started = time.monotonic()

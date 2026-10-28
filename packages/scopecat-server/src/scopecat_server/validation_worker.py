@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from scopecat_server import _timed_diagnostics
+import scopecat_server._timed_diagnostics as _timed_diagnostics
 from scopecat_server.worker_diagnostics import report_stage, report_validation_error
 
 if TYPE_CHECKING:
