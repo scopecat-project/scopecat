@@ -42,7 +42,8 @@ def voltage_value(amplitude: sc.Quantity) -> float:
 
 @sc.experiment
 def voltage(experiment: sc.ExperimentContext, *,
-    amplitude: Annotated[sc.Input[sc.Quantity], sc.QuantityType(dimension="voltage")] = sc.Quantity(2000, "mV")
+    amplitude: Annotated[sc.Input[sc.Quantity], sc.QuantityType(dimension="voltage")] = sc.Quantity(2000, "mV"),
+    duration: Annotated[sc.Input[sc.Quantity], sc.QuantityType(unit="ns", minimum=1000, maximum=2000)] = sc.Quantity(1, "us")
 ):
     return experiment.compute(fn=voltage_value, amplitude=amplitude)
 `,
@@ -86,6 +87,21 @@ def voltage(experiment: sc.ExperimentContext, *,
     await expect(page.getByText("请输入兼容的显式单位。", { exact: true })).toBeVisible();
     expect(await runs()).toHaveLength(0);
     await page.getByLabel("amplitude unit", { exact: true }).fill("mV");
+    const check = async () => {
+      const response = page.waitForResponse(
+        (r) => r.url().endsWith("/experiment-launcher/preview") && r.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "预览", exact: true }).click();
+      return response;
+    };
+    // Equivalent endpoints must pass, while the immediately adjacent values fail.
+    expect((await check()).ok()).toBe(true);
+    for (const value of ["0.9999999999999999", "2.0000000000000004"]) {
+      await page.getByLabel("duration value", { exact: true }).fill(value);
+      expect((await check()).ok()).toBe(false);
+      expect(await runs()).toHaveLength(0);
+    }
+    await page.getByLabel("duration value", { exact: true }).fill("2");
     const preview = page.waitForResponse(
       (r) => r.url().endsWith("/experiment-launcher/preview") && r.request().method() === "POST",
     );
@@ -94,6 +110,7 @@ def voltage(experiment: sc.ExperimentContext, *,
     expect(checked.status()).toBe(200);
     expect(checked.request().postDataJSON().inputs).toEqual({
       amplitude: { value: 2500, unit: "mV" },
+      duration: { value: 2, unit: "us" },
     });
     expect(await runs()).toHaveLength(0);
     const submitted = page.waitForResponse(
@@ -104,6 +121,7 @@ def voltage(experiment: sc.ExperimentContext, *,
     expect(admitted.status()).toBe(200);
     expect(admitted.request().postDataJSON().inputs).toEqual({
       amplitude: { value: 2500, unit: "mV" },
+      duration: { value: 2, unit: "us" },
     });
     await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
   } finally {

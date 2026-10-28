@@ -24,7 +24,7 @@ describe("strict Quantity fields", () => {
       canRenderField({ ...field, properties: { ...field.properties, other: { type: "string" } } }),
     ).toBe(false);
   });
-  it("retains explicit units and checks converted bounds", () => {
+  it("retains explicit units and leaves converted bounds to preview", () => {
     expect(quantityInput('{"value":"2000","unit":"mV"}', field)).toEqual({
       value: 2000,
       unit: "mV",
@@ -35,9 +35,14 @@ describe("strict Quantity fields", () => {
       '{"value":"","unit":"V"}',
       '{"value":"NaN","unit":"V"}',
       '{"value":2,"unit":"Hz"}',
-      '{"value":4000,"unit":"mV"}',
     ])
       expect(() => quantityInput(raw, field)).toThrow(/有限数值|显式单位|声明范围/);
+    const time = { ...field, "x-scopecat-quantity": { unit: "ns", minimum: 1000, maximum: 2000 } };
+    for (const value of [1, 2, 0.9999999999999999, 2.0000000000000004])
+      expect(quantityInput(JSON.stringify({ value, unit: "us" }), time)).toEqual({
+        value,
+        unit: "us",
+      });
     expect(quantityDraft('{"value":"2e","unit":"mV"}')).toEqual({ value: "2e", unit: "mV" });
   });
 });

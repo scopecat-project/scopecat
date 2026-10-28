@@ -67,11 +67,8 @@ export function quantityInput(raw: string, field: FormField): { value: number; u
   const expected = marker.dimension ?? (marker.unit ? units[marker.unit]?.kind : undefined);
   if (!units[unit] || (expected && units[unit].kind !== expected))
     throw new Error("请输入兼容的显式单位。");
-  const bounded = marker.unit ? controlNumber(`${value} ${unit}`, marker.unit) : value;
-  if (
-    (marker.minimum != null && bounded < marker.minimum) ||
-    (marker.maximum != null && bounded > marker.maximum)
-  )
-    throw new Error("数值超出声明范围。");
+  // Converted bounds are checked by the backend during preview/start. Its
+  // Decimal conversion is authoritative; binary float conversion here can
+  // incorrectly reject exact boundaries (for example 1 us == 1000 ns).
   return { value, unit };
 }

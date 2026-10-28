@@ -43,6 +43,8 @@ def voltage_input(
 
 该输入的 JSON 是 `{"amplitude": {"value": 2000, "unit": "mV"}}`。
 作者发现校验默认值；准备时拒绝裸数、错误量纲、非有限值及超出声明边界的值。
+该 JSON 作者表面要求 `QuantityType(finite=True)`（默认值），发现时明确拒绝
+`finite=False` 声明；kernel 的非有限值语义不变。
 表单、已保存草稿和预览保留显式单位，执行按声明校验并在需要时换算单位。
 这仅支持 `Input[Quantity]`，不开放任意对象表单，也不改变 `ControlSpec` 的数值输入语义。
 扫描仍通过显式声明 `scannable=True` 的控制项和 `.over(...)` 使用。

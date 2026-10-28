@@ -58,6 +58,12 @@ def _quantity_annotation(metadata: tuple[object, ...]) -> object:
         (item for item in declared if isinstance(item, QuantityType)), QuantityType()
     )
 
+    if not constraint.finite:
+        raise TypeError(
+            "author Quantity inputs require finite=True for JSON round trips; "
+            "finite=False declarations are not supported by the author form"
+        )
+
     def validate(value: Quantity) -> Quantity:
         # Validate converted bounds without replacing the explicitly entered unit.
         coerce_literal(Scalar(constraint), value)
