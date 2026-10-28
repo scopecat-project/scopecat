@@ -191,7 +191,10 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await expect(page.getByTestId("data-card").getByText(/^当前记录预览 2 条记录$/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("historical-data.png"), fullPage: true });
     await page.getByRole("link", { name: "返回准备", exact: true }).click();
-    await page.locator("summary").filter({ hasText: /^当前草稿$/ }).click();
+    await page
+      .locator("summary")
+      .filter({ hasText: /^当前草稿$/ })
+      .click();
     await expect(
       page.getByText("这里显示当前可编辑输入。从 run 返回不会载入历史输入。"),
     ).toBeVisible();
