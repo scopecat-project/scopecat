@@ -25,7 +25,7 @@ on:
         type: string
         default: ""
 
-run-name: Acceptance (${{ inputs.profile }}) @ ${{ github.ref_name }}
+run-name: Fixed-head journey-2 diagnostic (not full acceptance)
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ inputs.profile }}-${{ github.ref }}
@@ -162,35 +162,71 @@ jobs:
 
   service-lifecycle:
     if: inputs.profile == 'service-lifecycle'
-    name: Service lifecycle (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    name: Fixed-head Ubuntu journey-2 (one attempt)
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONFAULTHANDLER: "1"
+      SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - name: Check out exact reviewed candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0f7935c6cd529b0aab5357b121a77b212339b489
+          persist-credentials: false
+      - name: Set up locked Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version-file: .python-version
-      - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install locked uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
         with:
           version-file: uv.lock
           enable-cache: true
-      - name: Verify service recovery and process ownership
-        run: >-
-          uv run --locked pytest -q -n 0
-          packages/scopecat-app/tests/test_application_runtime.py
-          packages/scopecat-app/tests/test_data_reset.py
-          packages/scopecat-app/tests/test_desktop_session.py
-          packages/scopecat-app/tests/test_desktop_install.py
-          packages/scopecat-app/tests/test_teaching_delivery.py
-          packages/scopecat-server/tests/test_practice_workers.py
-          packages/scopecat-server/tests/test_practice_lifecycle.py
+      - name: Record exact source and runtime
+        shell: bash
+        run: |
+          mkdir -p test-diagnostics
+          git rev-parse HEAD > test-diagnostics/inventory.txt
+          git status --porcelain >> test-diagnostics/inventory.txt
+          sha256sum uv.lock >> test-diagnostics/inventory.txt
+          uv sync --locked
+          uv run --locked python -c 'import sys,sysconfig,sqlite3,faulthandler,importlib.metadata as m; print(sys.version); print(sysconfig.get_config_var("CONFIG_ARGS")); print("SQLite",sqlite3.sqlite_version); print("fatal_handler",faulthandler.is_enabled()); print("\n".join(sorted(d.metadata["Name"]+"=="+d.version for d in m.distributions())))' >> test-diagnostics/inventory.txt
+      - name: Run original journey shard once with two worksteal workers
+        shell: bash
+        run: |
+          uv run --locked python -m scopecat_testkit.check journey \
+            --shard 2/2 -- --maxprocesses=2 -p scripts.pytest_diagnostics
+      - name: Summarize retained evidence
+        if: always()
+        shell: bash
+        run: |
+          uv run --locked python scripts/summarize_test_diagnostics.py test-diagnostics
+          uv run --locked python - <<'PYTHON'
+          import json
+          import shutil
+          from pathlib import Path
+          from scopecat.runtime_binding import load_runtime_binding
+          for lifetime in Path("test-diagnostics").glob("daemon-lifetime-*.jsonl"):
+              row = json.loads(lifetime.read_text().splitlines()[0])
+              root = Path(row["project_root"])
+              if root.exists():
+                  source = load_runtime_binding(root).coordination_root / "daemon.log"
+                  if source.is_file():
+                      shutil.copyfile(source, lifetime.with_suffix(".full-stderr.log"))
+          PYTHON
+      - name: Upload evidence without rerunning tests
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: fixed-head-ubuntu-journey-2
+          path: |
+            .test-results/
+            test-diagnostics/
+          include-hidden-files: true
+          retention-days: 7
 
   python-tests:
     if: inputs.profile == 'full'
