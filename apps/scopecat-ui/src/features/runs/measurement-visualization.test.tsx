@@ -1324,10 +1324,8 @@ describe("measurement visualization", () => {
       expect(onSliceOffsetChange).not.toHaveBeenCalled();
       const lastWindow = screen.getByRole("button", { name: "查看末窗口" });
       expect(lastWindow).toHaveProperty("disabled", offset === 8192);
-      if (offset !== 8192) {
-        fireEvent.click(lastWindow);
-        expect(onSliceOffsetChange).toHaveBeenLastCalledWith(8192);
-      }
+      fireEvent.click(lastWindow);
+      expect(onSliceOffsetChange.mock.calls).toEqual(offset === 8192 ? [] : [[8192]]);
       onSliceOffsetChange.mockClear();
       expect(screen.getByText(/当前窗口，非全量数据/)).toBeVisible();
       const runtime = vi.mocked(EChartRuntime);
@@ -2468,5 +2466,5 @@ it.each([
   [1.5, undefined],
   [Number.MAX_SAFE_INTEGER + 1, undefined],
 ])("locates the logical last window for %s points", (count, offset) => {
-  expect(lastMeasurementWindowOffset(count!)).toBe(offset);
+  expect(lastMeasurementWindowOffset(count)).toBe(offset);
 });
