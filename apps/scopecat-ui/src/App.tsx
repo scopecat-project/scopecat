@@ -1,3 +1,4 @@
+import { measurementEventRefresh } from "./features/runs/measurement-event-refresh";
 import {
   WorkspaceNavigation,
   projectViewLabel,
@@ -186,6 +187,7 @@ export default function App() {
     const events = new EventSource(`/api/v1/events/stream?after=${eventCursor.current}`);
     let refreshTimer: number | undefined;
     const measurementRunsToRefresh = new Set<string>();
+    const measurementRefresh = measurementEventRefresh(queryClient);
     const invalidateCanonicalQueries = () => {
       void queryClient.invalidateQueries({ queryKey: ["runs"] });
       void queryClient.invalidateQueries({ queryKey: ["research", "runs"] });
@@ -208,6 +210,7 @@ export default function App() {
       });
     };
     const refreshAfterConnection = () => {
+      measurementRefresh.reset();
       void queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
       invalidateCanonicalQueries();
       void queryClient.resetQueries({ queryKey: ["measurements"] });
@@ -226,26 +229,14 @@ export default function App() {
         measurementRunsToRefresh.clear();
         invalidateCanonicalQueries();
         for (const runId of measurementRunsToRefreshNow) {
-          void queryClient.invalidateQueries({
-            queryKey: ["measurements", runId],
-            exact: true,
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["measurements", "live", runId],
-            exact: true,
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["measurement-slice", runId],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["measurement-trace", runId],
-          });
+          measurementRefresh.invalidate(runId);
         }
       }, 100);
     };
     events.addEventListener("open", refreshAfterConnection);
     events.addEventListener("project", refresh);
     return () => {
+      measurementRefresh.dispose();
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       events.removeEventListener("open", refreshAfterConnection);
       events.removeEventListener("project", refresh);

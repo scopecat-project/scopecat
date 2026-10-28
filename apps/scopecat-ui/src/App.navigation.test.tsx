@@ -1091,6 +1091,45 @@ describe("config provenance navigation", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
+  it("finishes an in-flight measurement read before one trailing notification refresh", async () => {
+    window.history.replaceState(null, "", "/?run=run-1");
+    let finish!: () => void;
+    let pendingSignal: AbortSignal | undefined;
+    let reads = 0;
+    vi.mocked(getMeasurementPreview).mockImplementation(async (_runId, signal) => {
+      reads += 1;
+      if (reads === 2) {
+        pendingSignal = signal;
+        await new Promise<void>((resolve, reject) => {
+          finish = resolve;
+          signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      }
+      return { items: [measurementRecord(reads, reads)], truncated: false };
+    });
+    const client = createQueryClient();
+    renderApp(client);
+    await waitFor(() => expect(reads).toBe(1));
+    act(() => emitProjectEvent("run-1", "measurement_projection_advanced"));
+    await waitFor(() => expect(reads).toBe(2));
+    for (let notification = 0; notification < 3; notification += 1) {
+      await act(async () => {
+        emitProjectEvent("run-1", "measurement_projection_advanced");
+        await new Promise((resolve) => setTimeout(resolve, 130));
+      });
+    }
+    expect(pendingSignal?.aborted).toBe(false);
+    expect(reads).toBe(2);
+    await act(async () => finish());
+    await waitFor(() => expect(reads).toBe(3));
+    expect(client.getQueryData(["measurements", "run-1"])).toEqual({
+      items: [measurementRecord(3, 3)],
+      truncated: false,
+    });
+  });
+
   it.each([
     "measurement_dataset_initialized",
     "measurements_sealed",
