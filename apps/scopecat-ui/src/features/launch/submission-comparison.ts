@@ -5,7 +5,7 @@ import type { LaunchDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
 import type { SubmissionRequest } from "./launch-submission";
 import { controlEdits, type ControlDraft } from "./ControlFields";
-import { canRenderField } from "./launch-fields";
+import { canRenderField, isQuantityField, quantityInput } from "./launch-fields";
 import { normalizeSelection, subjectLabel } from "./scientific-selection";
 import { formatCoordinateValue } from "../inspections/coordinate-codec";
 
@@ -74,7 +74,13 @@ function currentField(raw: string | undefined, name: string, entry?: LaunchCatal
       : unknown("当前默认值 · 需要预览");
   if (!field || !canRenderField(field)) return unknown(`${raw} · 字段声明不可用`);
   let value: unknown = raw;
-  if (field.type === "number" || field.type === "integer") {
+  if (isQuantityField(field)) {
+    try {
+      value = quantityInput(raw, field);
+    } catch {
+      return incomplete(raw);
+    }
+  } else if (field.type === "number" || field.type === "integer") {
     try {
       value = controlNumber(raw, null);
     } catch {

@@ -25,6 +25,30 @@
 可以不设默认值，由启动表单或 `authors.prepare(..., inputs={...})` 提供。
 不归控制项管理的标量 `sc.Input[T]` 运行时输入也适用。没有数值控制项的实验无需 `ControlSet`。
 
+严格带单位输入也可直接显示数值和单位两个字段，例如：
+
+```python
+from typing import Annotated
+
+
+@sc.experiment
+def voltage_input(
+    experiment: sc.ExperimentContext,
+    amplitude: Annotated[
+        sc.Input[sc.Quantity], sc.QuantityType(dimension="voltage")
+    ] = sc.Quantity(2000, "mV"),
+) -> None:
+    pass
+```
+
+该输入的 JSON 是 `{"amplitude": {"value": 2000, "unit": "mV"}}`。
+作者发现校验默认值；准备时拒绝裸数、错误量纲、非有限值及超出声明边界的值。
+该 JSON 作者表面要求 `QuantityType(finite=True)`（默认值），发现时明确拒绝
+`finite=False` 声明；kernel 的非有限值语义不变。
+表单、已保存草稿和预览保留显式单位，执行按声明校验并在需要时换算单位。
+这仅支持 `Input[Quantity]`，不开放任意对象表单，也不改变 `ControlSpec` 的数值输入语义。
+扫描仍通过显式声明 `scannable=True` 的控制项和 `.over(...)` 使用。
+
 命名标量别名也可用于这些输入。例如 `type Target = Literal["q0", "q1"]` 配合
 `target: Target`，可共享可读契约，并在启动表单保留相同选项。
 

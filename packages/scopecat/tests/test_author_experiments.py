@@ -438,3 +438,142 @@ def test_result_contract_survives_unloading_the_declaration_module(
     invocation = author.declaration.bind()
     assert invocation.definition.result_fields[0].path == ("signals", "0", "value")
     assert invocation.definition.result_fields[0].variable_id == "signal"
+
+
+@pytest.mark.parametrize(
+    "constraint", ['dimension="voltage"', 'unit="V", minimum=0, maximum=3']
+)
+def test_author_quantity_discovery_and_roundtrip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, constraint: str
+) -> None:
+    from pydantic import ValidationError
+
+    from scopecat import Quantity
+
+    name = "quantity_author_bounded" if "maximum" in constraint else "quantity_author"
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "from typing import Annotated\nimport scopecat as sc\n"
+        "@sc.experiment\n"
+        "def voltage(ctx: sc.ExperimentContext, *, "
+        f"amplitude: Annotated[sc.Input[sc.Quantity], sc.QuantityType({constraint})] "
+        '= sc.Quantity(2000, "mV")):\n    return None\n'
+    )
+    try:
+        author = AuthorExperiments.discover(name).experiments[0]
+        field = author.entry.request.model_dump(mode="json")["properties"]["amplitude"]
+        assert field["type"] == "object"
+        assert field["default"] == {"value": 2000.0, "unit": "mV"}
+        assert "x-scopecat-quantity" in field
+        model = author.input_model
+        for payload in (
+            {},
+            {"amplitude": Quantity(2000, "mV")},
+            {"amplitude": {"value": 2000, "unit": "mV"}},
+        ):
+            validated = model.model_validate(payload)
+            assert model.model_validate_json(validated.model_dump_json()) == validated
+            assert validated.model_dump()["amplitude"] == {
+                "value": 2000.0,
+                "unit": "mV",
+            }
+            author.declaration.bind(**validated.model_dump())
+        for invalid in (
+            2,
+            {"value": 2, "unit": "Hz"},
+            {"value": float("inf"), "unit": "V"},
+            {"value": True, "unit": "V"},
+            {"value": 2},
+            {"value": "2", "unit": "V"},
+        ):
+            with pytest.raises(ValidationError):
+                model.model_validate({"amplitude": invalid})
+        if "maximum" in constraint:
+            with pytest.raises(ValidationError):
+                model.model_validate({"amplitude": {"value": 4000, "unit": "mV"}})
+    finally:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+
+
+@pytest.mark.parametrize(
+    "default", ["2", 'sc.Quantity(2, "Hz")', 'sc.Quantity(float("inf"), "V")']
+)
+def test_author_quantity_invalid_default_fails_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, default: str
+) -> None:
+    name = "invalid_quantity_" + str(abs(hash(default)))
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "from typing import Annotated\nimport scopecat as sc\n"
+        "@sc.experiment\n"
+        "def voltage(ctx: sc.ExperimentContext, *, "
+        'amplitude: Annotated[sc.Input[sc.Quantity], sc.QuantityType(unit="V")] '
+        f"= {default}):\n    return None\n"
+    )
+    try:
+        with pytest.raises((ValueError, TypeError)):
+            AuthorExperiments.discover(name)
+    finally:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+
+
+@pytest.mark.parametrize(
+    "default", ["", ' = sc.Quantity(2, "V")', ' = sc.Quantity(float("inf"), "V")']
+)
+def test_author_quantity_rejects_nonfinite_contract_at_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, default: str
+) -> None:
+    name = "nonfinite_quantity_" + str(abs(hash(default)))
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "from typing import Annotated\nimport scopecat as sc\n"
+        "@sc.experiment\n"
+        "def voltage(ctx: sc.ExperimentContext, *, "
+        "amplitude: Annotated[sc.Input[sc.Quantity], "
+        'sc.QuantityType(dimension="voltage", finite=False)]'
+        f"{default}):\n    return None\n"
+    )
+    try:
+        with pytest.raises(
+            ValueError, match="author Quantity inputs require finite=True"
+        ):
+            AuthorExperiments.discover(name)
+    finally:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+
+
+def test_author_quantity_converted_bounds_use_exact_decimal_ratio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import math
+
+    from pydantic import ValidationError
+
+    name = "bounded_time_quantity"
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "from typing import Annotated\nimport scopecat as sc\n"
+        "@sc.experiment\n"
+        "def timing(ctx: sc.ExperimentContext, *, "
+        "duration: Annotated[sc.Input[sc.Quantity], "
+        'sc.QuantityType(unit="ns", minimum=1000, maximum=2000)]'
+        ' = sc.Quantity(1, "us")):\n    return None\n'
+    )
+    try:
+        author = AuthorExperiments.discover(name).experiments[0]
+        model = author.input_model
+        assert model.model_validate({}).model_dump()["duration"] == {
+            "value": 1.0,
+            "unit": "us",
+        }
+        for value in (1.0, 2.0):
+            validated = model.model_validate(
+                {"duration": {"value": value, "unit": "us"}}
+            )
+            assert model.model_validate_json(validated.model_dump_json()) == validated
+            author.declaration.bind(**validated.model_dump())
+        for value in (math.nextafter(1.0, 0), math.nextafter(2.0, math.inf)):
+            with pytest.raises(ValidationError):
+                model.model_validate({"duration": {"value": value, "unit": "us"}})
+    finally:
+        monkeypatch.delitem(sys.modules, name, raising=False)
