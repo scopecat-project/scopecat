@@ -66,8 +66,10 @@ class ReleaseIdentity:
             )
         return f"{self.pep440}.dev{timestamp}+g{commit}"
 
-    def javascript_package_version(self, base: str, commit: str) -> str:
-        return f"{base}-scopecat.{self.version.replace('-', '.')}.g{commit[:12]}"
+    def javascript_package_version(self) -> str:
+        """Use the public version; build-info.json retains source provenance."""
+        self.require_release()
+        return self.version
 
 
 def read_release(path: Path, *, require_release: bool = False) -> ReleaseIdentity:
