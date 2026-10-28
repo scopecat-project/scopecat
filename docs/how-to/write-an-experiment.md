@@ -30,6 +30,7 @@
 ```python
 from typing import Annotated
 
+
 @sc.experiment
 def voltage_input(
     experiment: sc.ExperimentContext,
