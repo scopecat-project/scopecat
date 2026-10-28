@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import faulthandler
 import json
 import os
 import sys
@@ -15,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 from scopecat.author_workspaces import author_workspace_id, local_author_workspaces
 from scopecat.runtime_binding import load_runtime_binding
 
+import scopecat_server._timed_diagnostics as _timed_diagnostics
 from scopecat_server.worker_diagnostics import report_stage
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ def validate(
 ) -> LabApplication:
     # Start before framework imports so a slow import is observable too. One
     # stack dump fits inside the unchanged parent deadline; no retry is implied.
-    faulthandler.dump_traceback_later(30, file=sys.stderr)
+    _timed_diagnostics.schedule(30, file=sys.stderr)
     try:
         report_stage("framework imports")
         from scopecat.daemon.endpoint import DAEMON_URL_ENV
@@ -137,7 +137,7 @@ def validate(
         )
         return application
     finally:
-        faulthandler.cancel_dump_traceback_later()
+        _timed_diagnostics.cancel()
 
 
 def analyze(

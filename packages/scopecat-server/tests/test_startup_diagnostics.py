@@ -1,13 +1,12 @@
 """Automatic sampling policy is independent of service import/startup timing."""
 
-import faulthandler
 import io
 from pathlib import Path
 from typing import Literal, TextIO, override
 
 import pytest
 
-from scopecat_server import _startup_diagnostics
+from scopecat_server import _startup_diagnostics, _timed_diagnostics
 
 
 @pytest.mark.parametrize(("process", "delay"), [("daemon", 8), ("instrument", 5)])
@@ -24,10 +23,10 @@ def test_startup_schedules_and_cancels_automatic_sample(
         scheduled.append((timeout, file))
 
     monkeypatch.setenv("SCOPECAT_STARTUP_DIAGNOSTICS", str(tmp_path))
-    monkeypatch.setattr(faulthandler, "dump_traceback_later", schedule)
+    monkeypatch.setattr(_timed_diagnostics, "schedule", schedule)
     monkeypatch.setattr(
-        faulthandler,
-        "cancel_dump_traceback_later",
+        _timed_diagnostics,
+        "cancel",
         lambda: cancelled.append(True),
     )
     try:
@@ -53,7 +52,7 @@ def test_shutdown_does_not_schedule_without_opt_in(
     def unexpected(*args: object, **kwargs: object) -> None:
         pytest.fail("shutdown sampling must remain opt-in")
 
-    monkeypatch.setattr(faulthandler, "dump_traceback_later", unexpected)
+    monkeypatch.setattr(_timed_diagnostics, "schedule", unexpected)
     _startup_diagnostics.observe_shutdown()
 
 
@@ -72,9 +71,7 @@ def test_shutdown_write_and_close_failures_preserve_original_error(
 
     cancelled: list[bool] = []
     monkeypatch.setattr(_startup_diagnostics, "_stream", BrokenStream())
-    monkeypatch.setattr(
-        faulthandler, "cancel_dump_traceback_later", lambda: cancelled.append(True)
-    )
+    monkeypatch.setattr(_timed_diagnostics, "cancel", lambda: cancelled.append(True))
     original = RuntimeError("original shutdown failure")
     with pytest.raises(RuntimeError) as caught:
         try:

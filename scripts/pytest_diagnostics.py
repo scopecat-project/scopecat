@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import faulthandler
 import os
 from collections.abc import Generator
 from datetime import UTC, datetime
@@ -10,6 +9,8 @@ from pathlib import Path
 from typing import TextIO
 
 import pytest
+
+import scopecat_server._timed_diagnostics as _timed_diagnostics  # noqa: TID251
 
 _stream: TextIO | None = None
 
@@ -36,7 +37,7 @@ def pytest_sessionstart() -> None:
         "w", encoding="utf-8", buffering=1
     )
     _record("session start")
-    faulthandler.dump_traceback_later(120, repeat=True, file=_stream)
+    _timed_diagnostics.schedule(120, repeat=True, file=_stream)
 
 
 @pytest.hookimpl(wrapper=True)
@@ -79,7 +80,7 @@ def pytest_runtest_makereport(
 def pytest_sessionfinish(exitstatus: int) -> None:
     global _stream
     _capture_daemons("session_finish")
-    faulthandler.cancel_dump_traceback_later()
+    _timed_diagnostics.cancel()
     _record(f"session finish {exitstatus}")
     if _stream is not None:
         _stream.close()

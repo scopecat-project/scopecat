@@ -30,6 +30,12 @@ python -m scopecat_server.cli diagnose --output diagnostics-first -- python -c "
 父进程生命周期记录包含启动器和端点的进程身份、观察到的子进程、关闭请求接纳及等待/终止超时阶段。
 这些观察不改变关闭期限或清理策略，也不在快照中包含端点 URL 或关闭令牌。
 
+定时线程栈由 Python 线程调用同步 `faulthandler.dump_traceback` 采集，避免原生
+watchdog 在解释器并发修改或释放栈帧时遍历它们。取消采样会等待正在进行的输出结束，
+然后才关闭诊断文件。它是尽力而为的阶段采样：若 C 扩展长期持有 GIL，采样线程可能
+无法按时运行，因此没有样本不能证明进程健康。fatal-signal 诊断独立于定时采样；
+CI 诊断通过 `PYTHONFAULTHANDLER=1` 为子进程保留它，但并非每种 native 崩溃都能输出完整栈。
+
 工作负载可向诊断目录中的 `events.jsonl` 追加 JSON 对象：
 
 ```python
