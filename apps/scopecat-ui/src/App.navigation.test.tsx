@@ -958,7 +958,7 @@ describe("config provenance navigation", () => {
 
     await screen.findByRole("region", { name: "run 进度" });
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
-    expect(await screen.findByText(/0 个点已有持久化执行证据/)).toBeVisible();
+    expect(await screen.findByText(/连续完成前缀 未知 个逻辑点/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
@@ -1001,7 +1001,7 @@ describe("config provenance navigation", () => {
     const progress = await screen.findByRole("region", { name: "run 进度" });
     expect(progress).toHaveTextContent("3 accepted points · plan open");
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
-    expect(await screen.findByText(/2 个点已有持久化执行证据/)).toBeVisible();
+    expect(await screen.findByText(/连续完成前缀 2 个逻辑点/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 

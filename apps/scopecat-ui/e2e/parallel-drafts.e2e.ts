@@ -154,7 +154,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const current = page.getByRole("link", { name: /查看当前结果:/ });
     await expect(current).toBeVisible();
-    await expect(page.getByText("执行中 · 1 个已完成点", { exact: true })).toBeVisible();
+    await expect(page.getByText("执行中 · 1 个已完成逻辑点", { exact: true })).toBeVisible();
     await captureWorkbench("monitor-selected-running");
     await page.screenshot({
       path: testInfo.outputPath("monitor-selected-running-full.png"),
