@@ -1,85 +1,70 @@
-# Share saved configuration from the desktop
+# 从桌面分享已保存配置 {#share-saved-configuration-from-the-desktop}
 
-In **Configuration → Share and import configuration**, export one saved parameter
-version with its definitions. Values are included by default as initial inputs;
-turn them off to share definitions with unknown values. No acquired run is needed.
-Save any edits in the ordinary editor before exporting.
+在**配置 → 分享与导入配置**中点击**导出配置…**，选择一个已保存的**参数版本**，
+连同参数定义一起导出。默认**包含当前数值作为初始输入（不转移校准资格）**；
+取消勾选后只分享定义，数值为未知。不需要已有采集记录。
 
-You can include a saved setup and the active retained revision of an author code
-folder. The latter is the retained revision, not unsaved disk edits. If no revision
-is available, prepare the trusted source through Experiments first. Export does
-not run it. Review custom setup fields and source files before sharing; they may
-contain information entered by the author.
+先按[编辑实验参数](manage-configuration.md)完成编辑，再明确**保存参数版本**。
+仅有“草稿已保存到应用数据”或“将工作输入用于下次实验”，都不会创建可供这里导出的固定版本。
 
-Review the selection, then save `configuration.json`. The desktop opens its normal
-Save dialog and reports the chosen path or cancellation. In a browser, check the
-browser's download destination. The file contains existing parameter, setup and
-source records, not a database clone, run evidence or an executable plan. This
-first slice exports the whole selected parameter version, not a subset of fields.
+可以附带已保存的 **setup（可选）** 和作者代码目录的活动**保留源码（可选）**。
+源码取自保留版本，不读取尚未纳入该版本的磁盘修改。没有保留版本时，先在实验页准备可信作者代码，
+无需采集数据；导出本身不会执行代码。设备连接地址和 SDK 安装不会作为设备绑定导出，
+但自定义 setup 字段和源码仍可能含作者写入的信息，分享前应检查。
 
-## Receive and create your own copy
+填写**文件标签**，点击**核对导出内容**，确认后**保存配置文件**，得到 `configuration.json`。
+桌面打开系统保存对话框，并报告选定路径或取消；浏览器中请查看下载位置。
+文件包含已有参数、setup 和源码记录，不是数据库副本、运行证据或可执行计划。
+当前导出整个所选参数版本，不支持只选部分字段。
 
-Open the file under **Import configuration file**. Inspection verifies parameter
-values against their definitions and source files against their manifest without
-executing source code. Cancel leaves the store unchanged. **Keep original for
-later** stores only the original, which can be reopened in the same panel.
+## 接收并创建自己的副本 {#receive-and-create-your-own-copy}
 
-Choose a new branch name and **Create my copy**. It creates ordinary editable
-parameters and retains the original and derivation receipt in application data.
-Existing names are rejected; choose another name. Retrying an unchanged request
-uses the same operation identity. If the connection fails, the UI does not claim
-that nothing happened: retry unchanged or reopen the original to inspect copies.
+通过**导入配置文件**打开文件。检查过程按定义校验参数值、按清单校验源码文件，不执行源码。
+**取消检查**不会写入数据空间；**保留原件供以后使用**只保存原件，之后可从同一面板的
+**已导入的原件（最近 100 条）**重新打开。
 
-A setup is optional. If included, explicitly choose a current local device for
-**every** imported role. Sender device IDs are never accepted as implicit local
-bindings. Register missing devices through **Devices and drivers**, then reopen
-the saved original. Import does not connect equipment. Parameters, setup and the
-receipt either save together or roll back together.
+填写**新参数分支名称**，点击**创建我的副本**，生成普通可编辑参数，并在应用数据中保留原件和派生回执。
+已有名称会被拒绝，不覆盖原内容，请另选名称。对未修改请求重试会沿用同一操作身份。
+连接失败时不能断言“没有保存”：重试原请求，或重新打开原件检查已有副本，不要立即换名重复导入。
 
-If you choose parameters only, the setup stays in the original. This slice does
-not append it to an already derived branch: reopen the original and create another
-named copy with explicit bindings when you are ready. Saved parameter copies use
-**Parameter versions** below; setups use **Experiment setups**. An already open
-unsaved parameter draft remains intact.
+setup 是可选项。若勾选**同时创建我的 setup**，须为导入的**每个**角色明确选择当前本地设备。
+发送方设备 ID 不会自动成为本地绑定。缺少设备时，可先保留原件，到**设备与驱动**登记，
+再重新打开原件；面板也提供**刷新本地设备**。导入不会连接设备。
+参数、setup 和派生回执要么一起保存，要么一起回滚。
 
-## Attached source is a separate step
+若只创建参数，setup 仍留在原件中；当前不能把它追加到已经派生的分支。
+准备好后重新打开原件，明确本地绑定，另建一个包含 setup 的命名副本。
+参数副本的保存版本会在下方选中，可用**编辑副本**继续编辑；setup 可在下方**实验 setup**中选择。
+已有未保存参数草稿不会被导入覆盖，先处理该草稿再切换编辑。
 
-Read the attached file contents and dependency information before accepting source.
-**Accept source and download** saves an inert ZIP; it does not register or load code.
+## 附带源码需要单独处理 {#attached-source-is-a-separate-step}
 
-1. Extract into a new folder.
-2. In the desktop's **Application settings**, choose **Use existing folder** and
-   enter the extracted **Author directory**. If you already have its dependencies,
-   choose **Execution Python** and **Add code folder**. Otherwise select
-   **Prepare execution environment from pyproject.toml**; this explicit action
-   prepares an independent execution environment and registers the folder. You do
-   not need to invent an interpreter path first. The browser console cannot manage
-   local folders.
-3. In **Parameter versions**, edit and save your copy, then choose **Use for next
-   experiment** on the desired saved version. In **Experiments**, select the source
-   and the locally derived setup. Entering this page loads trusted author code;
-   the earlier inspection did not load it. Review the execution scenario and obtain
-   a fresh preview before saving a plan or running.
-4. Quit and reopen the application to continue with the retained originals, saved
-   copies, registered source and results. Reopening does not repeat acquisition.
-   Local environment bindings belong to this installation; a different computer
-   needs its own explicit source/environment setup.
+先阅读附件内容和依赖信息，再选择**接受源码并下载…**。
+这只保存不执行的 ZIP，不会登记目录、加载代码或安装依赖。
 
-No static method reconstruction, dynamic-control evaluation, dependency
-installation or calibration qualification is implied by import. Imported values
-remain initial inputs. The first slice does not exchange controls or plan records.
+1. 将归档解压到新目录。
+2. 在桌面的**应用设置**选择**使用已有目录**，填写解压后的**作者目录**。
+   已有依赖时，填写**执行 Python** 并点击**添加代码目录**；否则明确选择
+   **按 pyproject.toml 准备执行环境**，准备独立执行环境并登记目录，不必先猜一个解释器路径。
+   Notebook 内核需另行准备和选择；浏览器控制台不能管理本地目录。
+3. 在配置页编辑并保存参数副本，对所需保存版本选择**用于下次实验**。
+   在实验页选择源码及本地派生的 setup。进入可信源码的实验流程会加载作者代码，
+   而之前的文件检查没有加载它。保存计划或运行前，核对执行场景并重新预览。
+4. 正常退出并重开应用后，可以继续使用保留原件、保存副本、登记源码和结果；重开不会重复采集。
+   本地环境绑定属于当前安装，另一台电脑需要自己的源码与执行环境设置。
 
-Files are limited to 16 MiB. Current-format application backup/restore retains
-originals and derivation receipts. Schema 110 is a development format, with no
-old-store migration or compatibility promise; see the
-[data compatibility policy](../development/data-compatibility.md).
+导入不表示已重建静态方法、求值动态控制、安装依赖或验证校准资格。
+导入值仍只是初始输入；当前不交换实验控制值或计划记录。
 
-## Continuing on another computer
+文件上限为 16 MiB。当前格式的应用备份/恢复保留原件和派生回执。
+当前数据格式为 schema 116；仅提供明确确认、先备份再执行的
+[115→116 升级](maintain-application.md#back-up-and-upgrade-schema-115-to-116)，
+不在启动或导入配置时隐式迁移旧数据。其他旧格式没有通用兼容承诺，见
+[数据兼容政策](../development/data-compatibility.md)。
 
-Use configuration sharing when you want independent editable inputs in another
-store. It creates new local identities and does not transfer history or physical
-qualification. For the same store and its history, follow the current-format
-[stopped-project backup and restore workflow](backup-and-restore.md), retaining
-external source and dependency artifacts separately. Restore preserves store
-identity; it is not an independently writable clone. Inspect the restored source
-and prepare its local execution environment before trusted loading or new work.
+## 在另一台电脑继续 {#continuing-on-another-computer}
+
+需要在另一个数据空间得到独立可编辑输入时，使用配置分享。它创建新的本地身份，
+不转移历史或真实设备资格。需要延续同一数据空间及其历史时，按当前格式的
+[停止后备份与恢复流程](backup-and-restore.md)操作，另行保留外部源码和依赖产物。
+恢复会保留数据空间身份，不是独立可写克隆；可信加载或开始新任务前，先检查恢复的源码并准备本地执行环境。
