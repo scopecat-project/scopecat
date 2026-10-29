@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     import webview
     from webview.event import Event
 
+    from scopecat.daemon.endpoint import DaemonEndpointRecord
     from scopecat_app.desktop import DesktopWindows
     from scopecat_app.desktop_session import DesktopSession
 
@@ -210,6 +211,39 @@ def require_hosted_runner(home: Path) -> None:
             "Mac/Windows runner and a home below RUNNER_TEMP. Do not run on a "
             "user machine: production WebKit may clear its default website store."
         )
+
+
+def verify_started_owner(
+    runtime: ApplicationRuntime, record: DaemonEndpointRecord
+) -> dict[str, object]:
+    """Check the selected process/store before any acceptance business writes."""
+    binding = runtime.instance.runtime_binding
+    selected = runtime.installation()
+    status = runtime.status()  # Independently checks PID lifetime and HTTP roots.
+    if (
+        status.state != "running"
+        or status.record != record
+        or record.project_root.resolve() != runtime.root.resolve()
+        or record.data_root.resolve() != binding.data_root.resolve()
+        or record.deployment_root.resolve() != binding.deployment_root.resolve()
+        or record.python is None
+        or record.python.resolve() != selected.python.resolve()
+        or psutil.Process(record.pid).create_time() != record.process_create_time
+    ):
+        raise RuntimeError("Native acceptance process/store identity mismatch")
+    if selected.delivery_root is None or selected.delivery_manifest_sha256 is None:
+        raise RuntimeError("Native acceptance requires a qualified delivery identity")
+    manifest = selected.delivery_root / "bundle.json"
+    if file_hash(manifest) != selected.delivery_manifest_sha256:
+        raise RuntimeError("Native acceptance delivery identity changed")
+    return {
+        "pid": record.pid,
+        "process_create_time": record.process_create_time,
+        "data_root": str(record.data_root),
+        "deployment_root": str(record.deployment_root),
+        "python": str(record.python),
+        "bundle_sha256": selected.delivery_manifest_sha256,
+    }
 
 
 def cleanup(home: Path) -> None:
@@ -513,6 +547,7 @@ def probe(home: Path) -> None:
 
             assert macos_bundle_identifier() == "org.scopecat.desktop"
         record = runtime.start()
+        evidence["owner"] = verify_started_owner(runtime, record)
         session.connected(record.base_url)
         draft_target = prepare_decision(record.base_url)
         evidence["draft_target"] = draft_target
@@ -897,6 +932,7 @@ def smoke(home: Path) -> None:
     started = time.monotonic()
     try:
         record = runtime.start()
+        evidence["owner"] = verify_started_owner(runtime, record)
         session.connected(record.base_url)
         first = windows.create()
         diagnostics = WindowDiagnostics(reports / "window-diagnostics.jsonl")

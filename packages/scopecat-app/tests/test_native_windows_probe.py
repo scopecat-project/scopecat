@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
@@ -803,3 +804,53 @@ def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, 
     else:
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(receipt.read_text()) == {"run_id": "retained-run"}
+
+
+@pytest.mark.parametrize(
+    "mismatch", [None, "pid", "store", "python", "status", "bundle"]
+)
+def test_native_acceptance_checks_owner_before_business_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str | None
+):
+    from scopecat.daemon.endpoint import DaemonEndpointRecord
+
+    manifest = tmp_path / "bundle.json"
+    manifest.write_text('{"version":"synthetic"}')
+    process = psutil.Process()
+    record = DaemonEndpointRecord(
+        project_root=tmp_path,
+        data_root=tmp_path / ("other" if mismatch == "store" else "data"),
+        deployment_root=tmp_path / "deployment",
+        pid=process.pid,
+        process_create_time=process.create_time() + (1 if mismatch == "pid" else 0),
+        python=tmp_path / ("other-python" if mismatch == "python" else "python"),
+        base_url="http://127.0.0.1:1",
+        shutdown_token="synthetic" * 4,
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    selected = SimpleNamespace(
+        python=tmp_path / "python",
+        delivery_root=tmp_path,
+        delivery_manifest_sha256=(
+            "wrong" if mismatch == "bundle" else probe.file_hash(manifest)
+        ),
+    )
+    runtime = SimpleNamespace(
+        root=tmp_path,
+        instance=SimpleNamespace(
+            runtime_binding=SimpleNamespace(
+                data_root=tmp_path / "data", deployment_root=tmp_path / "deployment"
+            )
+        ),
+        installation=lambda: selected,
+        status=lambda: SimpleNamespace(
+            state="stopped" if mismatch == "status" else "running", record=record
+        ),
+    )
+    if mismatch:
+        with pytest.raises(RuntimeError, match="identity"):
+            probe.verify_started_owner(runtime, record)
+    else:
+        evidence = probe.verify_started_owner(runtime, record)
+        assert evidence["bundle_sha256"] == probe.file_hash(manifest)
+        assert "shutdown_token" not in evidence

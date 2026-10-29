@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from importlib.metadata import version
 from pathlib import Path
 from threading import Event
 from typing import cast
@@ -24,12 +25,12 @@ from scopecat_server.lifecycle import start_project, stop_project  # noqa: TID25
 
 
 def observe_result(
-    url: str, receipt: Path, stop: Event, workspace_id: str
+    url: str, receipt: Path, stop: Event, workspace_id: str, timeout: float = 60
 ) -> dict[str, object]:
     # Independent normal client: never use trace files to discover a run early.
     with AuthorProject(url, workspace_id=workspace_id) as author:
         job = author.reopen(receipt)
-        deadline = time.monotonic() + 60
+        deadline = time.monotonic() + timeout
         polls = 0
         while not stop.is_set():
             polls += 1
@@ -48,10 +49,38 @@ def observe_result(
         raise RuntimeError("Result observer stopped")
 
 
-def measure(root: Path, *, repetitions: int) -> dict[str, object]:
+def measure(
+    root: Path,
+    *,
+    repetitions: int,
+    point_count: int = 3,
+    compute_delay_ms: float = 0,
+    observer_timeout: float = 60,
+) -> dict[str, object]:
+    if (
+        point_count < 3
+        or repetitions < 0
+        or compute_delay_ms < 0
+        or observer_timeout <= 0
+    ):
+        raise ValueError(
+            "Require >=3 points, nonnegative repeats/delay and positive timeout"
+        )
     source = Path(__file__).resolve().parents[2] / "testing/fixtures/retained-signal"
     shutil.copytree(source / "src", root / "src")
     shutil.copy2(source / "scopecat.toml", root / "scopecat.toml")
+    if compute_delay_ms:
+        model = root / "src/ui_signal/ordinary.py"
+        content = model.read_text()
+        content = content.replace(
+            "import numpy as np", "import time\n\nimport numpy as np"
+        )
+        content = content.replace(
+            "    detuning = ",
+            f"    time.sleep({compute_delay_ms / 1000!r})\n    detuning = ",
+            1,
+        )
+        model.write_text(content)
     project = load_project(root / "scopecat.toml")
     trace = root / "timing"
     trace.mkdir()
@@ -75,14 +104,17 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
             ):
                 select_author_context(author)
                 original_revision = None
-                for operation in [
+                operations = [
                     "first",
                     *(["repeat"] * repetitions),
                     "edit_input",
                     "edit_scan",
                     "after_source_edit",
                     "after_refresh",
-                ]:
+                ]
+                if point_count != 3 or compute_delay_ms:
+                    operations = ["first", *(["repeat"] * repetitions)]
+                for operation in operations:
                     if operation == "after_source_edit":
                         path = root / "src/ui_signal/ordinary.py"
                         path.write_text(
@@ -103,7 +135,10 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                         scans={
                             "frequency": [4.6, 4.8, 5.0]
                             if operation == "edit_scan"
-                            else [4.7, 4.8, 4.9]
+                            else [
+                                4.7 + 0.2 * index / (point_count - 1)
+                                for index in range(point_count)
+                            ]
                         },
                     )
                     revision = prepared.preview.code_revision
@@ -126,11 +161,12 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                         job.receipt,
                         stop,
                         author.workspace_id,
+                        observer_timeout,
                     )
                     try:
-                        job.wait()
+                        job.wait(timeout=observer_timeout)
                         waited = time.monotonic_ns()
-                        result = future.result(timeout=60)
+                        result = future.result(timeout=observer_timeout)
                     finally:
                         stop.set()
                     analysis_start = time.monotonic_ns()
@@ -155,7 +191,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     analysis_visible = time.monotonic_ns()
                     reopened = author.reopen(job.receipt).result()
                     values = reopened.measurements()["result"].require_values()
-                    if reopened.id != result["run_id"] or len(values) != 3:
+                    if reopened.id != result["run_id"] or len(values) != point_count:
                         raise AssertionError("Receipt did not reopen the original data")
                     if analysis.code_revision != prepared.preview.code_revision:
                         raise AssertionError(
@@ -166,6 +202,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                         {
                             "operation": operation,
                             "procedure_id": job.id,
+                            "reopened_value_count": len(values),
                             **result,
                             "revision": prepared.preview.code_revision.content_hash
                             if prepared.preview.code_revision
@@ -211,15 +248,24 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
     correlate_events(samples, events)
     return {
         **benchmark_record_header(
-            case_id="author-first-data", case_version=4, kind="e2e"
+            case_id="author-first-data", case_version=5, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),
+        "package_versions": {
+            name: version(name)
+            for name in ("scopecat", "scopecat-server", "scopecat-app")
+        },
+        "point_count": point_count,
+        "axis_source": "values",
+        "compute_delay_ms": compute_delay_ms,
+        "observer_timeout_seconds": observer_timeout,
         "daemon_start_seconds": startup,
+        "startup_through_shutdown_seconds": (time.monotonic_ns() - started) / 1e9,
         "samples": samples,
         "http_calls": transport.calls,
         "scope": (
-            "Copied virtual signal, three computed points; "
+            "Copied virtual signal, explicit frequency values; "
             "normal admission/publication. "
             "Independent 0.2s retained-result observer; "
             "analysis visibility is a subsequent ordinary receipt read; "
@@ -280,12 +326,21 @@ def correlate_events(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repetitions", type=int, default=2)
+    parser.add_argument("--point-count", type=int, default=3)
+    parser.add_argument("--compute-delay-ms", type=float, default=0)
+    parser.add_argument("--observer-timeout", type=float, default=60)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="scopecat-first-data-") as directory:
         print(
             BENCHMARK_RESULT_PREFIX
             + json.dumps(
-                measure(Path(directory), repetitions=cast("int", args.repetitions))
+                measure(
+                    Path(directory),
+                    repetitions=cast("int", args.repetitions),
+                    point_count=cast("int", args.point_count),
+                    compute_delay_ms=cast("float", args.compute_delay_ms),
+                    observer_timeout=cast("float", args.observer_timeout),
+                )
             )
         )
 
