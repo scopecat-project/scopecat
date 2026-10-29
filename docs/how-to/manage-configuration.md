@@ -1,51 +1,47 @@
-# Edit parameters for an experiment
+# 编辑实验参数 {#edit-parameters-for-an-experiment}
 
-Use **Configuration** in the workbench, or `session.parameters` in VS Code.
-Parameters can be edited before selecting a sample or connecting a device.
-Saving values does not establish that a calibration is valid.
+在工作台的**配置**页，或 VS Code 中通过 `session.parameters` 编辑参数。
+不必先选择样品或连接设备。保存数值本身不证明校准有效。
 
-## In the workbench
+日常流程是：打开工作参数表，编辑并确认草稿已保存；将工作输入用于下次实验，
+重新预览后再运行。需要固定、复用或分享这批值时，再明确保存参数版本。
+[分享与导入配置](share-configuration.md)读取的是已保存版本，不是编辑器中的草稿。
 
-For an existing daily table, enter its **Working parameter branch** and choose
-**Open working table**. Reopening resumes that branch's active work, including
-unfinished text such as `-` or `1e`. Alternatively choose a **Saved parameter
-version**, then **Edit a copy**. **Edit another copy** starts independent work.
+## 在工作台中编辑 {#in-the-workbench}
 
-Values, units and notes save automatically to application storage. Wait for the
-saved status before quitting; input not yet acknowledged is not guaranteed after
-forced termination. Closing the editor only hides it. Navigation, reopening the
-application and restarting its service recover acknowledged input. Empty numeric
-text remains unfinished input; use **Mark unknown** to deliberately clear a value.
-Zero is a known value. Closing the editor or switching its saved version waits for
-saving; if saving fails, the editor stays open with the error and a retry button.
-A service disconnection keeps your input visible. Ordinary browser close/reload
-requests a leave warning while input is unsaved; staying lets you retry. Choosing
-to leave anyway can lose that unconfirmed input. Native application Quit behavior
-has not been separately verified for this warning.
+已有日常参数表时，选择**工作参数分支**，点击**打开工作参数表**。
+重新打开会恢复该分支的活动草稿，包括 `-`、`1e` 等尚未完成的文本。
+也可以选择**已保存的参数版本**，点击**编辑副本**；**编辑另一份副本**会开始独立编辑。
 
-Choose **Use working inputs for next experiment** when ready. This validates and
-captures the current inputs without saving a parameter version or moving a branch.
-Choose an **Experiment setup** and preview before running. If the working table
-changes, explicitly use its current inputs and preview again. Already submitted
-experiments keep their exact captured values.
+数值、单位和备注会自动保存到应用数据。看到**草稿已保存到应用数据**后再退出；
+尚未得到保存确认的输入，在强制终止后不保证恢复。关闭编辑器只是隐藏编辑界面，
+切换页面、重开应用或重启服务可以恢复已确认的草稿输入。
+空的数字文本仍是未完成输入；若要明确清空一个值，点击**标记为未知**。零是已知值。
 
-**Save a parameter checkpoint** is optional. Give it a version name and save on
-its own or to an explicit branch. Successful saving completes the draft and retains
-its history; failed saving leaves the draft active. Opening the working branch
-after completion starts from its saved head. Removing a whole known parameter
-requires a checkpoint because experiment overrides cannot represent that removal.
+关闭编辑器或切换所选参数版本时会等待草稿保存。失败时保留编辑器与错误，
+可点击**重试保存草稿**；服务断连时输入仍留在界面中。普通浏览器关闭或刷新时，
+未保存输入会请求离开警告；留在页面可继续重试，仍选择离开可能丢失未确认输入。
+这项浏览器提示不能当作原生应用 Quit 的独立验收结论。
 
-Concurrent writes retain conflicting input for review. If a branch changes,
-review its new values before choosing to keep your table; this keeps your whole
-table and does not merge cells automatically. Draft history lets you inspect and
-copy earlier input. Explicit discard ends that draft but retains its history.
+准备好后，点击**将工作输入用于下次实验**。这会校验并捕获当前输入，
+但不创建固定参数版本，也不移动参数分支。选择实验所用的 setup，再预览和运行。
+工作表后来发生变化时，需再次明确采用当前工作输入并重新预览；已提交实验保留原先捕获的精确数值。
 
-**Use for next experiment** on a saved version selects that exact version.
-Editing device addresses belongs in **Devices and drivers**, not the parameter form.
+若要保存固定版本，展开**保存参数检查点**，填写**新版本名称**，点击**保存参数版本**。
+可以单独保存版本，也可明确保存到命名分支。成功后草稿结束并保留历史；失败时草稿继续保留。
+工作分支的草稿结束后，再打开该分支会从其已保存的最新版本开始。
+移除整个已知参数需要保存检查点，因为实验覆盖值不能表示这种移除。
 
-## In VS Code
+并发写入时，冲突输入会保留供核对。如果分支已有新版本，先**核对分支最新版本**，
+再决定是否**核对分支后保留我的表格**；这会保留整张工作表，不会自动逐格合并。
+草稿历史可用于查看和复制较早输入；明确**丢弃草稿**会结束该草稿，但保留历史。
 
-Create a named history from an existing parameter revision once:
+在已保存版本上点击**用于下次实验**，选择的是这个精确版本，而不是会随分支移动的引用。
+设备连接地址应在**设备与驱动**中编辑，不属于参数表。
+
+## 在 VS Code 中编辑 {#in-vs-code}
+
+先从已有参数修订创建一次命名分支：
 
 ```python
 initial = session.parameters.get("initial-estimates")
@@ -54,7 +50,7 @@ session.use(parameter_branch="chip-a/daily")
 params = session.params
 ```
 
-Reopening the branch captures its current version for this editor:
+打开分支时，编辑器捕获该分支当前版本，然后可以编辑并查看差异：
 
 ```python
 params["drive"]["q0"]["frequency"] = 5.1
@@ -62,20 +58,17 @@ print(params.diff())
 version = params.save(note="Frequency estimate from the latest scan")
 ```
 
-Table and field names come from the author's declarations. Quantity fields accept
-values with units, for example `sc.Quantity(5.1, "GHz")`. Reading a value through
-a compatible unit view does not rewrite its stored representation.
-`None` marks an unknown non-key cell; it does not fill a default.
+表名和字段名由作者声明。Quantity 字段接受带单位的值，例如 `sc.Quantity(5.1, "GHz")`。
+通过兼容单位视图读取数值不会改写其存储表示。`None` 将非键单元格标记为未知，不会填入默认值。
 
-Use `params.discard()` to discard local edits. `params.copy()` makes an independent
-draft. `params.save("chip-a/trial")` saves a new branch and selects it in that editor;
-the original branch and other sessions keep their selections.
+`params.discard()` 丢弃本地编辑；`params.copy()` 创建独立草稿。
+`params.save("chip-a/trial")` 保存到新分支并在这个编辑器中选中它；原分支和其他会话的选择不变。
+这里的 Python 本地编辑不要与工作台自动保存的工作草稿混为一谈。
 
-For typed fields and new tables, see
-[parameter declarations](declare-dynamic-parameters.md).
-For file or pandas editing, see [table exchange](exchange-parameter-tables.md).
+声明类型化字段或新表，见[参数声明](declare-dynamic-parameters.md)；
+通过文件或 pandas 编辑，见[参数表交换](exchange-parameter-tables.md)。
 
-## Prepare and run
+## 准备并运行 {#prepare-and-run}
 
 ```python
 setup = session.setup.get("bench-v1")
@@ -85,22 +78,18 @@ print(prepared.preview)
 run = prepared.run()
 ```
 
-Preparation captures exact setup, device connections and parameter inputs.
-Changing another page's selection does not change this request. Changing a device's
-connection requires a fresh setup resolution and preview; already submitted work
-must finish or be cancelled before that maintenance.
+准备时会捕获精确的 setup、设备连接和参数输入。另一个页面更改选择不会改写这个请求。
+修改设备连接需要重新解析 setup 并预览；已提交的任务应先完成或取消，再进行这类维护。
 
-A preview checks whether the inputs can be used by this experiment. It is not
-independent calibration verification. Publish a verified candidate with
-[the parameter-branch workflow](publish-working-point-calibration.md).
+预览检查输入能否用于这个实验，不是独立的校准验证。
+需要发布经过验证的候选时，使用[参数分支工作流](publish-working-point-calibration.md)。
 
-## Conflicts and history
+## 冲突与历史 {#conflicts-and-history}
 
-If a save reports that the branch changed, the local draft remains available.
-`params.rebase()` merges independent cell changes. A conflicting cell or changed
-table declaration requires review; the editor does not silently choose a value.
+如果保存提示分支已变化，本地草稿仍保留。Python 编辑器的 `params.rebase()`
+可以合并互不冲突的单元格变化；同一单元格冲突或表声明变化需要核对，不会静默替你选值。
+这与工作台“保留我的表格”的整表选择不同。
 
-`session.parameters.history("chip-a/daily")` lists exact revisions.
-`session.parameters.get(version.id)` reopens one without changing any branch.
-Saving, copying and restoring values do not transfer calibration validity to a new
-sample, batch or setup.
+`session.parameters.history("chip-a/daily")` 列出精确修订；
+`session.parameters.get(version.id)` 打开指定版本，不移动任何分支。
+保存、复制或恢复参数值，都不会把校准资格转移到新的样品、批次或 setup。
