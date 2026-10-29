@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -28,7 +29,11 @@ class SQLiteDatabase:
     ) -> None:
         self.path = Path(path)
         self.busy_timeout_seconds = busy_timeout_seconds
-        self._writer_lock = RLock()
+        if os.environ.get("SCOPECAT_SQLITE_PROBE"):
+            from scopecat_server._sqlite_probe import ObservedRLock
+            self._writer_lock = ObservedRLock()
+        else:
+            self._writer_lock = RLock()
         self._connections_lock = Lock()
         self._writer: sqlite3.Connection | None = None
         self._idle_readers: list[sqlite3.Connection] = []
@@ -143,7 +148,11 @@ class SQLiteDatabase:
                 connection.close()
             if writer is not None:
                 try:
-                    writer.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                    if os.environ.get("SCOPECAT_SQLITE_PROBE"):
+                        from scopecat_server._sqlite_probe import checkpoint
+                        checkpoint(writer, self.path)
+                    else:
+                        writer.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
                 finally:
                     writer.close()
 
