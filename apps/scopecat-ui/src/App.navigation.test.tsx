@@ -999,7 +999,7 @@ describe("config provenance navigation", () => {
     renderApp();
 
     const progress = await screen.findByRole("region", { name: "run 进度" });
-    expect(progress).toHaveTextContent("3 accepted points · plan open");
+    expect(progress).toHaveTextContent("已接纳 3 个计划点 · 计划仍开放");
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
     expect(await screen.findByText(/连续完成前缀 2 个逻辑点/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
