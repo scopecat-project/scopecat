@@ -84,6 +84,14 @@ test("reopens a lost launch receipt after context changes without a second submi
       .getByRole("navigation", { name: "项目页面" })
       .getByRole("button", { name: /Experiments$/, exact: true })
       .click();
+    // Retained pages need not refetch on navigation. Explicitly refresh the catalog
+    // and observe the changed declaration before testing receipt recovery.
+    const refreshed = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/experiment-launcher" && response.ok(),
+    );
+    await page.getByRole("button", { name: "刷新项目数据", exact: true }).click();
+    expect(JSON.stringify(await (await refreshed).json())).toContain("Updated description.");
     await expect(page.getByRole("region", { name: "核实恢复的实验", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
     // Recovery reads the original receipt without reviewing or resubmitting the changed draft.

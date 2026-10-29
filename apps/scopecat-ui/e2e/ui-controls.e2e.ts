@@ -27,6 +27,11 @@ test("shared controls remain readable, keyboard accessible and contained across 
             }),
             set_window_title: async () => {},
             request_exit: async () => ({ runs: 1 }),
+            exit_status: async () => ({
+              draining: false, finishing: [], deferred: [], blockers: [],
+              file_operations: 0, error: null,
+            }),
+            wait_for_idle: async () => {},
             notebook_journey: async () => ({ state: "not_started", journey: null }),
           },
         },
@@ -138,7 +143,7 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await select.focus();
           await expect(select).toHaveCSS("outline-width", "2px");
           await page.keyboard.press("Tab");
-          await expect(page.getByLabel("Sample", { exact: true })).toBeFocused();
+          await expect(page.getByLabel("样品", { exact: true })).toBeFocused();
           const lookup = page.getByLabel("完整 run ID", { exact: true });
           if (!(await lookup.isVisible()))
             await page.getByText("按完整 run ID 查找", { exact: true }).click();

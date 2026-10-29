@@ -90,7 +90,7 @@ test("repeats a retained ordinary analysis with its original source after author
     // 在同一会话中从 Data 找回旧结果，独立窗口和返回不能丢失浏览条件。
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
     const data = page.getByRole("region", { name: "数据", exact: true });
-    await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
+    await expect(data.getByRole("heading", { name: "已保留的 run" })).toBeVisible();
     await data.getByLabel("起始时间（本地）").fill("2020-01-01T00:00");
     const importedResults = data.getByRole("region", { name: "导入的结果" });
     await expect(importedResults.getByText(`入口运行：${seed.run}`, { exact: true })).toBeVisible();

@@ -17,6 +17,14 @@ test("automatic quit explains unfinished work and keeps cancellation reachable",
       Object.assign(globalThis, {
         pywebview: {
           api: {
+            exit_status: async () => ({
+              draining: false,
+              finishing: [],
+              deferred: [],
+              blockers: [],
+              file_operations: 0,
+              error: null,
+            }),
             request_exit: async () => ({ procedures: 2, runs: 0, instrument_sessions: 0 }),
             wait_for_idle: async (wait: boolean) => {
               if (!wait && cancelFails) {
@@ -33,7 +41,7 @@ test("automatic quit explains unfinished work and keeps cancellation reachable",
     const dialog = page.getByRole("dialog", { name: "Quit Scopecat" });
     await expect(dialog).toContainText("Unfinished work: 2 workflows");
     await page.screenshot({ path: testInfo.outputPath("quit-before-wait.png"), fullPage: true });
-    await expect(dialog).toContainText("Unfinished does not always mean executing");
+    await expect(dialog).toContainText("Waiting stops new work and lets admitted work finish");
     await dialog.getByRole("button", { name: "Quit when work finishes", exact: true }).click();
     await expect(dialog.getByRole("status")).toContainText("does not answer reviews");
     await page.setViewportSize({ width: 390, height: 844 });
