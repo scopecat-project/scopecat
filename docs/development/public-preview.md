@@ -9,10 +9,12 @@
 日常合并运行 CI 并产生验证证据，不自动发布版本。
 首个数字实验版本 [v0.1.0 / build 1](https://github.com/scopecat-project/scopecat/releases/tag/v0.1.0)
 已于 2026-10-15 发布，对应源码 `efefef28c8b4b66b47c5849ddb954f5b317be711`。
-该发行的 tag 和文件保持原样；下文说明当前代码用于**后续构建**的规则，不回写历史产物。
+随后已发布 [v0.2.0 / build 2](https://github.com/scopecat-project/scopecat/releases/tag/v0.2.0)，
+源码为 `16567a7279d778feb2cbbf625cf77ae238280215`。历史 tag 和文件保持原样；
+下文说明当前代码用于**后续构建**的规则，不回写历史产物。
 
 `release.toml` 是应用发行号和原生 build number 的权威来源。同批七个第一方 wheel
-在构建时采用该发行号；UI 保留自己的内部版本表达。`0.0.0` / build `0` 仅是未发布的
+和正式 UI 在构建时采用该发行号；完整源码 SHA 保留在独立构建溯源字段。`0.0.0` / build `0` 仅是未发布的
 bootstrap 标记，不能发布。准备下一版本时默认使用 Knope 根据 changefile 建议的版本，
 也可显式指定版本覆盖；版本和 build number 都必须递增。
 
@@ -64,9 +66,43 @@ Renovate 分别跟踪 action 的固定 SHA/版本和带注释的 CLI `KNOPE_VERS
 CLI 版本须一致。预发布期间 Knope 保留 changefile，准备正式版本时再移除，使正式说明
 包含完整变化。
 
+### v0.2.0 之后的修复准备（尚未发行） {#post-020-patch-readiness}
+
+下列范围用于下一次修复发行的审查；版本建议仍由既有 changefile/Knope 流程计算。
+本清单不修改 `release.toml`，不建立 tag，不表示产物已发布，也不要求消费者提前追踪 main。
+
+- #1392：未来原生资格报告分别表达 channel、签名、公证、交互覆盖；保留旧报告读取和
+  12 项资产合同。说明来自 `.changeset/native-qualification.md`。
+- #1394：参数编辑与共享指南采用当前 GUI 术语，区分未保存编辑、固定参数版本与源码版本。
+- #1397：记录表区分切片未读取变量与缺失数据，不扩大数组读取；说明来自
+  `.changeset/record-table-projection.md`。
+- #1398：不可变 header/schema 身份复用，减少显式大扫描重复计算；说明来自
+  `.changeset/measurement-identity-reuse.md`。保留服务端独立验证，未改变科学数据、批次或持久格式。
+- #1400、#1401 分别跟踪本批基线/验收工具和持久进度显示；仅在实际合并后纳入候选。
+  固定逻辑点、记录数、连续前缀不能互换，动态总量仍未知。
+
+#1026 的候选卡片准备入口已由 #1380 实现并包含于 v0.2.0；本批复核不能写成新功能，
+下一次修复发行也不以另造候选入口为前置。
+
+受影响验收按最终候选身份组织：
+
+- 身份与性能：运行 hash/Arrow/ingest/reopen 回归，检查错误身份仍拒绝。需要量化时复用
+  [现有 benchmark](https://github.com/scopecat-project/scopecat/tree/main/benchmarks)，
+  比较同环境同负载的准备、执行及总耗时；Windows 已完成的 4096 点证据见 #1399，
+  不把有限样本或不同作者拓扑称为严格 A/B，不在普通 CI 加长扫描或绝对耗时阈值。
+- 数据呈现：覆盖固定标量、固定数组和未知总量；重开保留数据不重采，投影提示不冒充缺失，
+  有界预览不冒充完整记录数，完成量不能替代科学 outcome。
+- 原生/交付：隔离目录启动前明确，启动后核对 owner/store/PID 生命周期及版本，退出按身份核对；
+  不清理日常数据。精确发行候选的安装器资格与必要原生交互分别记录，CI `native_interaction`
+  未评估时不能用外部本机证据将它改为已覆盖。
+- 消费合同：核对七个 wheel 与 UI 版本、源码 SHA、实际 12 项资产及 `release.json` 摘要；
+  保留历史报告兼容性，不裁剪 UI ZIP/preview.json，不以签名或公证状态冒充发行 channel。
+
+正式发布前仍按下列既有流程和精确候选门禁执行；本次只准备说明和检查范围。
+
 ### 发行候选的交付检查 {#first-numbered-delivery-readiness}
 
-用户入口是[下载与安装](../getting-started/install.md)。已有 v0.1.0 不代表后续候选
+用户入口是[下载与安装](../getting-started/install.md)。已有发行不代表后续候选
 自动取得同样资格；分发新候选时按实际变更复用有效证据，并补齐受影响范围：
 
 - 明确发行号和原生 build number。工具存在或 CI 通过不等于已成功发布该版本。
