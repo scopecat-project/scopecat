@@ -782,8 +782,7 @@ def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, 
     (notebooks / "02_edit_scan.py").write_text(
         "from IPython import get_ipython\n"
         "assert get_ipython() is not None\n"
-        "from datetime import UTC, datetime
-from importlib.util import find_spec\n"
+        "from importlib.util import find_spec\n"
         "assert find_spec('foreign_virtualenv_marker') is None\n"
         "# %% Next cell sees the same notebook namespace.\n"
         "from types import SimpleNamespace\n"
