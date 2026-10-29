@@ -1,16 +1,12 @@
 name: Full acceptance
 on:
   workflow_dispatch:
-run-name: Temporary Windows SQLite diagnostic @ ${{ github.ref_name }}
+run-name: Temporary Windows paired writer diagnostic @ ${{ github.ref_name }}
 jobs:
   diagnostic:
-    name: SQLite diagnostic (${{ matrix.scenario }})
+    name: Paired candidate and calibration diagnostic
     runs-on: windows-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        scenario: [writer, close]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
@@ -22,27 +18,18 @@ jobs:
       - name: Run original representatives once
         shell: bash
         env:
-          SCENARIO: ${{ matrix.scenario }}
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
           SCOPECAT_SQLITE_PROBE: test-diagnostics
           PYTHONFAULTHANDLER: "1"
         run: |
           export SCOPECAT_SQLITE_PROBE="$PWD/test-diagnostics"
-          if [ "$SCENARIO" = writer ]; then
-            tests=(
-              'testing/reference_lab/tests/test_typed_candidates.py::test_branch_procedure_rejection_and_stale_destination_do_not_publish[parallel-False]'
-              'testing/reference_lab/tests/test_typed_candidates.py::test_branch_procedure_rejection_and_stale_destination_do_not_publish[sequential-False]'
-              'packages/scopecat-app/tests/test_calibration_teaching_journey.py::test_calibration_history_policy_regressions'
-            )
-          else
-            tests=(
-              'packages/scopecat-app/tests/test_teaching_mean_iq_journey.py::test_shipped_editing_lessons[None]'
-              'packages/scopecat-server/tests/author_journeys/test_author_refresh.py::test_refresh_freezes_admission_and_analysis_across_restore'
-            )
-          fi
+          tests=(
+            'testing/reference_lab/tests/test_typed_candidates.py::test_branch_procedure_rejection_and_stale_destination_do_not_publish[parallel-False]'
+            'packages/scopecat-app/tests/test_calibration_teaching_journey.py::test_calibration_history_policy_regressions'
+          )
           uv run --locked pytest -v -n 2 -p scripts.pytest_diagnostics --junitxml=test-diagnostics/result.xml "${tests[@]}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
-          name: sqlite-diagnostic-${{ matrix.scenario }}
+          name: sqlite-diagnostic-paired
           path: test-diagnostics/
