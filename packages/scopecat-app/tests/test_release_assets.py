@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import platform as python_platform
 import shutil
 import subprocess
 import textwrap
@@ -174,7 +175,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
         (source / "wheels/numpy-1-py3-none-any.whl").write_bytes(b"third party")
         (source / "toolchain/python.tar").write_bytes(b"build-time interpreter")
         portable = {
-            "python": "3.15.1",
+            "python": python_platform.python_version(),
             "target": target_identity(),
             "distribution": {"key": "fixture", "url": "https://example.org/python.tar"},
             "distribution_build": "fixture",
@@ -183,7 +184,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
         }
         write_json(source / "toolchain/runtime.json", portable)
         bundle["build_tools"] = {
-            "python": "3.15.1",
+            "python": python_platform.python_version(),
             "uv": "uv 0.13.5",
             "pnpm": "prebuilt GUI",
             "portable_python": portable,
@@ -228,6 +229,97 @@ def test_offline_assemble_verify_and_no_overwrite(release: tuple[Path, Path]) ->
     assert len(document["files"]) == 11
     with pytest.raises(FileExistsError, match="never overwrite"):
         assets.assemble(root, SHA, config)
+
+
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
+@pytest.mark.parametrize(
+    "public,version,channel",
+    [
+        ("0.2.0", "0.2.0", "release"),
+        ("0.3.0-rc.1", "0.3.0-rc.1", "prerelease"),
+        ("0.2.0", "0.2.0-dev", "development"),
+        ("0.3.0-rc.1", "0.3.0-rc.1-dev", "development"),
+    ],
+)
+def test_native_report_separates_channel_and_qualification(
+    tmp_path: Path, platform: str, public: str, version: str, channel: str
+) -> None:
+    resources = tmp_path / "resources"
+    (resources / "payload").mkdir(parents=True)
+    bundle = {
+        "public_version": public,
+        "release_version": version,
+        "build_number": 2,
+        "sources": {"public": SHA},
+        "target": {"platform": platform},
+        "runtime": {},
+        "build_id": "sha256:" + "b" * 64,
+    }
+    write_json(resources / "payload/bundle.json", bundle)
+    installer = tmp_path / "installer"
+    installer.write_bytes(b"synthetic installer")
+    native_producer.write_release_manifest(resources, tmp_path, installer)
+    report = json.loads((tmp_path / "native-release.json").read_bytes())
+    assert report["format"] == 2
+    assert report["channel"] == channel
+    assert "distribution" not in report
+    assert report["signing"] == {
+        "application": "ad-hoc" if platform == "darwin" else "unsigned",
+        "installer": "unsigned",
+    }
+    assert report["notarization"] == (
+        "not-notarized" if platform == "darwin" else "not-applicable"
+    )
+    assert report["native_interaction"] == "not-evaluated"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("channel", "release"),
+        ("signing", {"application": "trusted"}),
+        ("notarization", "notarized"),
+        ("native_interaction", "passed"),
+        ("distribution", "prerelease"),
+        ("format", 3),
+        ("format", True),
+        ("format", 1),
+    ],
+)
+def test_release_rejects_false_qualification(
+    release: tuple[Path, Path], field: str, value: object
+) -> None:
+    root, config = release
+    path = root / "macos-native-release.json"
+    report = json.loads(path.read_bytes())
+    report[field] = value
+    write_json(path, report)
+    with pytest.raises(ValueError, match="qualification"):
+        assets.assemble(root, SHA, config)
+
+
+def test_legacy_qualification_remains_verifiable_without_rewriting(
+    release: tuple[Path, Path], tmp_path: Path
+) -> None:
+    root, config = release
+    original = {}
+    for platform in assets.NATIVE:
+        path = root / f"{platform}-native-release.json"
+        report = json.loads(path.read_bytes())
+        report["format"] = 1
+        for key in ("channel", "signing", "notarization"):
+            del report[key]
+        report["distribution"] = "prerelease; no trusted signing/notarization"
+        write_json(path, report)
+        original[path.name] = path.read_text()
+    assets.assemble(root, SHA, config)
+    published = tmp_path / "published"
+    path = assets.export(root, published, SHA, config)
+    assert assets.verify(published, SHA, config) == path
+    document = json.loads(path.read_bytes())
+    assert len(list(published.iterdir())) == 12
+    for name, content in original.items():
+        assert document["qualification"][name] == content
 
 
 @pytest.mark.parametrize(

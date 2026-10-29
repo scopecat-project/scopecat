@@ -18,6 +18,7 @@ from scopecat_app.bundle import file_hash, inventory
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.app_build.macos_signing import verify as verify_signature
+from scripts.app_build.native_qualification import qualification_status
 
 AUTHOR_NOTEBOOK_CHECK = r"""
 import json, os, re, sys
@@ -278,7 +279,7 @@ def write_release_manifest(resources: Path, home: Path, installer: Path) -> None
     (home / "native-release.json").write_text(
         json.dumps(
             {
-                "format": 1,
+                "format": 2,
                 "installer": installer.name,
                 "sha256": file_hash(installer),
                 "bundle_sha256": file_hash(manifest),
@@ -286,12 +287,11 @@ def write_release_manifest(resources: Path, home: Path, installer: Path) -> None
                 "target": bundle["target"],
                 "runtime": bundle["runtime"],
                 "build_id": bundle["build_id"],
-                "distribution": "prerelease; no trusted signing/notarization",
+                **qualification_status(bundle),
                 "external": [
                     "author source and dependencies",
                     "vendor SDK/firmware",
                 ],
-                "native_interaction": "not-evaluated",
             },
             indent=2,
         )

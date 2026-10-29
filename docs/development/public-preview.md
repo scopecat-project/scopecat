@@ -138,6 +138,41 @@ Mac 单字段 build 限制）。版本支持 `X.Y.Z`、`X.Y.Z-alpha.N`、`X.Y.Z-
 新增 `installers` 索引提供目标和校验和。导出后的验证仍检查嵌入证据的来源、目标、资源清单
 和哈希。缺失、多余文件及错误 commit、版本、平台或哈希都会阻止组装/发布，不能只信文件名。
 
+#### release.json 读取合同 {#release-manifest-contract}
+
+`release.json` 是数字发行的公开清单入口；消费方显式选择发行，再固定该清单的 SHA256
+与预期完整源码 SHA。`format: 1` 的 `version`、`build_number`、`commit` 标识同一批产物。
+拒绝不支持的格式、重复 JSON key、无效身份与不一致摘要；文件名必须是无目录的本地文件名。
+`files` 是文件名到 SHA256 的映射，不包含 `release.json` 自身，不能依靠自摘要建立信任。
+`preview.file` 必须为 `preview.json`，其摘要必须同时匹配 `files` 和实际下载字节。
+读取 preview 后再交叉检查 commit、发行版本、build number、channel 与被选择文件的摘要；
+wheel 还须验证 METADATA 和同批第一方依赖。历史发行应按其实际格式读取，不套用新命名。
+
+只消费 wheels/UI 的读取器无需下载安装器，但仍须验证所选子集的字节与清单引用关系；
+这不等于完整发行资格。维护者的 `release_assets.py verify` 检查完整集合，需要对应源码
+中的 `release.toml`；它不是接受缺失文件的子集下载器。`installers` 提供平台、文件名与摘要，
+不能将目标平台记录解释为完整系统版本或硬件资格。
+
+未来构建的 `*-native-release.json` 使用 **format 2**，外层 release format 保持 1：
+
+| 字段 | 当前含义 |
+| --- | --- |
+| `channel` | 由 shipped bundle 身份确定：`development`、`prerelease`（alpha/beta/rc）、`release`；不是稳定性或签名承诺 |
+| `signing.application` | 当前构建策略：Mac `ad-hoc`、Windows `unsigned` |
+| `signing.installer` | 当前两平台安装器均 `unsigned`，不表示已完成可信签名验证 |
+| `notarization` | Mac `not-notarized`，Windows `not-applicable` |
+| `native_interaction` | 此资格报告为 `not-evaluated`；不把独立原生窗口验收并入 CI 的覆盖声明 |
+
+生成器仅用于当前受控打包流程，不是任意第三方安装器的签名检查工具；新增可信签名或公证
+必须同时补真实验证和合同。format 2 不再输出混合 channel/签名状态的 `distribution` 文案。
+读取器按子文档自己的 format 分派，拒绝不支持的格式；format 1 历史证据原文及摘要保持不变，
+其 `distribution` 不能作为结构化 channel 或可信签名证明。完整验证同时接受历史 format 1
+和当前 format 2；后者拒绝与来源身份、当前构建策略或交互覆盖不符的声明。
+
+公库现有完整读取方是组装、导出和发布前验证；delivery、固定 UI 下载及安装态验收仍读取
+`preview.json`。这些生产者/消费者关系不证明每份内部材料都有独立外部需求。四份资格文件
+仍只在构建输入中单独存在，公开集合保持 12 项；迁移 preview 读取器是后续独立工作。
+
 原生应用只保留 core/server 两个作者 wheel，并不意味着其余公开构建/测试消费者已迁移。
 七个 wheels、UI ZIP 和 `preview.json` 在消费者迁移前继续保留；最终公开资产裁剪仍由
 [#1030](https://github.com/scopecat-project/scopecat/issues/1030) 跟踪，本指南不宣称已经完成。
@@ -153,9 +188,11 @@ Mac 单字段 build 限制）。版本支持 `X.Y.Z`、`X.Y.Z-alpha.N`、`X.Y.Z-
 - 从旧 `0.2` 包基底回到应用 `0.1` 系列是有意选择。使用新环境或显式选择新精确版本与哈希配方；
   普通 upgrade 不能表达降级，作者环境仍按内容身份管理。
 
-UI 版本规则未改，继续以自身基底、公共版本和 commit 生成 SemVer prerelease。
+正式 UI 直接使用应用发行号（如 `0.2.0`），`build-info.json` 的 `source_commit` 单独保存
+完整源码 SHA；开发构建仍保留可追溯身份，不再给正式 UI 加旧基底前缀。
 Mac short version 是公共数字三元组，build 是显式 build number；Windows 文件版本为
-数字三元组加 build。完整公共预发布身份保留在清单中。
+安装器的数字三元组加 build，不表示 payload EXE 带有 FileVersion/ProductVersion。
+完整公共预发布身份保留在清单中。
 
 **历史 v0.1.0 不适用上述新命名和 wheel 规则。** 它保留 `Scopecat.dmg`、
 `Scopecat-Setup.exe`、四份独立平台清单及旧包名/版本，共 16 项资产；旧 wheel 使用各包基底加

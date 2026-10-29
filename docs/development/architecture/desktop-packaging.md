@@ -111,6 +111,12 @@ rechecks their source, target, resource inventory and checksums after export.
 Separate qualification files remain in Actions evidence. `release.json` retains
 the format-1 `preview` and `files` contract; `files` lists only downloadable assets.
 The added `installers` index exposes target and checksum without opening evidence.
+The public [release manifest contract](../public-preview.md#release-manifest-contract)
+defines identity checks and subset consumption. New native qualification reports use
+format 2 to separate release channel, application/installer signing, notarization
+and the report's interaction coverage. Outer release format 1 and the twelve assets
+are unchanged. Legacy format-1 evidence remains byte-preserved and readable; its
+combined `distribution` prose is not a structured channel or trust assertion.
 
 The preview manifest, UI archive and seven-wheel contract remain required by
 existing pinned artifact consumers and installed-framework qualification. Native
