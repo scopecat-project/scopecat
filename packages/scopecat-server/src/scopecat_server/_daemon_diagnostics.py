@@ -23,6 +23,8 @@ class _Observed:
     process: subprocess.Popen[bytes]
     created: float | None
     target: Path
+    daemon_identity: tuple[int, float] | None = None
+    observing_shutdown: bool = False
 
 
 _observed: dict[Path, _Observed] = {}
@@ -70,6 +72,48 @@ def _endpoint_snapshot(root: Path) -> dict[str, object] | None:
     }
 
 
+def _retained_daemon(observed: _Observed) -> dict[str, object] | None:
+    identity = observed.daemon_identity
+    if identity is None:
+        return None
+    row = _process_snapshot(identity[0])
+    if row.get("create_time") != identity[1]:
+        return {"pid": identity[0], "identity_gone_or_changed": True}
+    return row
+
+
+def _observe_shutdown(observed: _Observed) -> None:
+    from scopecat_server._windows_wait_probe import snapshot
+
+    started = time.monotonic()
+    for offset in (0, 2, 4, 6, 8, 10, 12):
+        now = time.monotonic()
+        if offset and now > started + offset + 1:
+            continue  # Never catch up a delayed diagnostic with a burst.
+        remaining = started + offset - now
+        if remaining > 0:
+            time.sleep(remaining)
+        row = _retained_daemon(observed)
+        if row is None:
+            return
+        sample = {"clock_ns": time.monotonic_ns(), "offset": offset, "daemon": row}
+        if not row.get("identity_gone_or_changed"):
+            try:
+                sample["native"] = snapshot(*observed.daemon_identity)
+            except (OSError, psutil.Error, ValueError) as error:
+                sample["native_error"] = type(error).__name__
+        sample["sample_end_ns"] = time.monotonic_ns()
+        try:
+            with observed.target.with_suffix(".wait.jsonl").open(
+                "a", encoding="utf-8"
+            ) as stream:
+                stream.write(json.dumps(sample) + "\n")
+        except OSError:
+            return
+        if row.get("identity_gone_or_changed"):
+            return
+
+
 def observe_spawn(root: Path, process: subprocess.Popen[bytes]) -> None:
     directory = os.environ.get("SCOPECAT_STARTUP_DIAGNOSTICS")
     if directory is None:
@@ -103,6 +147,26 @@ def capture(phase: str, *, root: Path | None = None) -> None:
                 log_target = observed.target.with_name(
                     f"{observed.target.name}-{time.monotonic_ns()}.log"
                 )
+                endpoint = _endpoint_snapshot(observed.root)
+                if phase == "healthy" and endpoint is not None and "pid" in endpoint:
+                    identity = (endpoint["pid"], endpoint["create_time"])
+                    if observed.daemon_identity is None:
+                        target_process = psutil.Process(identity[0])
+                        owned = target_process.create_time() == identity[1] and (
+                            (
+                                target_process.pid == observed.process.pid
+                                and identity[1] == observed.created
+                            )
+                            or any(
+                                parent.pid == observed.process.pid
+                                and parent.create_time() == observed.created
+                                for parent in target_process.parents()
+                            )
+                        )
+                        if owned:
+                            observed.daemon_identity = identity
+                    elif observed.daemon_identity != identity:
+                        endpoint = {"identity_changed": True}
                 row = {
                     "time": datetime.now(UTC).isoformat(),
                     "clock_ns": time.monotonic_ns(),
@@ -115,7 +179,8 @@ def capture(phase: str, *, root: Path | None = None) -> None:
                     "returncode": code,
                     "log_tail": log_target.name,
                     "launcher": _process_snapshot(observed.process.pid),
-                    "endpoint": _endpoint_snapshot(observed.root),
+                    "endpoint": endpoint,
+                    "retained_daemon": _retained_daemon(observed),
                 }
                 with observed.target.with_suffix(".jsonl").open(
                     "a", encoding="utf-8"
@@ -130,9 +195,26 @@ def capture(phase: str, *, root: Path | None = None) -> None:
                         stream.seek(max(0, stream.tell() - _LOG_BYTES))
                         tail = stream.read(_LOG_BYTES)
                     log_target.write_bytes(tail)
+                if (
+                    phase == "shutdown_requested"
+                    and observed.daemon_identity is not None
+                    and not observed.observing_shutdown
+                ):
+                    observed.observing_shutdown = True
+                    try:
+                        threading.Thread(
+                            target=_observe_shutdown,
+                            args=(observed,),
+                            daemon=True,
+                            name="owned-daemon-wait-observer",
+                        ).start()
+                    except RuntimeError as error:
+                        logging.getLogger(__name__).warning(
+                            "Wait observer unavailable: %s", error
+                        )
                 if code is not None:
                     del _observed[key]
-            except OSError as error:
+            except (OSError, psutil.Error) as error:
                 logging.getLogger(__name__).warning(
                     "Daemon diagnostics unavailable: %s", error
                 )
