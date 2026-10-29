@@ -3398,7 +3398,9 @@ def test_effect_is_fenced_and_terminal_updates_control(
         )
         durable_coverage = client.get(f"/api/v1/runs/{run_id}/coverage")
         detail = client.get(f"/api/v1/runs/{run_id}")
+        assert detail.json()["control"]["completed_logical_point_count"] == 4
         measurement_preview = client.get(f"/api/v1/runs/{run_id}/measurements/preview")
+        assert measurement_preview.json()["durable_record_count"] == 4
         measurement_arrow = client.post(
             f"/api/v1/runs/{run_id}/measurements/arrow",
             json={

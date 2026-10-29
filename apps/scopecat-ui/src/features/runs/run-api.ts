@@ -212,6 +212,7 @@ export async function getMeasurementPreview(
     items: response.items ?? [],
     schema: response.dataset_schema ?? undefined,
     truncated: response.truncated ?? false,
+    durableRecordCount: response.durable_record_count ?? undefined,
   };
 }
 
@@ -562,6 +563,7 @@ export function normalizeRun(
     result: outcome?.result,
     certainty: outcome?.certainty,
     progressCompleted: control.completed_point_count,
+    completedLogicalPointCount: control.completed_logical_point_count ?? undefined,
     pointPlan: {
       initialPointCount: control.point_plan.initial_point_count,
       acceptedPointCount: control.point_plan.accepted_point_count,

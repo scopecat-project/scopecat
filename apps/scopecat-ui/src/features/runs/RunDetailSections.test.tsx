@@ -140,7 +140,7 @@ describe("Run receipt summary", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("已完成")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
-    expect(screen.getByText(/9 个点已有持久化执行证据/)).toBeVisible();
+    expect(screen.getByText(/连续完成前缀 9 个逻辑点/)).toBeVisible();
   });
 
   it("does not invent receipts from coverage, and marks failed live refreshes", () => {
@@ -150,3 +150,35 @@ describe("Run receipt summary", () => {
     expect(screen.getByRole("region", { name: "run 进度" })).not.toHaveTextContent("已接收记录 9");
   });
 });
+
+it.each([
+  ["scalar", 4096, 4096],
+  ["array", 256, 256],
+  ["adaptive", undefined, 12],
+])(
+  "shows durable logical progress independently of preview records: %s",
+  (_kind, total, completed) => {
+    const run = {
+      runId: "reopened",
+      status: "succeeded",
+      stateLabel: "已完成",
+      progressCompleted: 2,
+      completedLogicalPointCount: completed,
+      plan: { pointCount: total },
+      pointPlan: { acceptedPointCount: 4096, closed: true },
+    } as ProjectRun;
+    render(
+      <ProgressCard
+        run={run}
+        events={[]}
+        measurements={{ items: [], truncated: true, durableRecordCount: 5000 }}
+      />,
+    );
+    const summary = screen.getByRole("region", { name: "run 进度" });
+    expect(summary).toHaveTextContent(`已完成逻辑点 ${completed} ／ 计划点 ${total ?? "未知"}`);
+    expect(summary).toHaveTextContent("已保存记录 5000");
+    expect(summary).not.toHaveTextContent(/已接收记录 \d/);
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
+    expect(screen.getByText(/连续完成前缀 2 个逻辑点/)).toBeVisible();
+  },
+);

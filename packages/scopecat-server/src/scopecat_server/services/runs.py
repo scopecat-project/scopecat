@@ -286,6 +286,7 @@ def _run_control_view(
     control: ControlRun,
     *,
     completed_point_count: int,
+    completed_logical_point_count: int,
     point_plan: RunPointPlanView,
 ) -> RunControlView:
     plan = control.admission.plan
@@ -330,6 +331,7 @@ def _run_control_view(
         attention_reason=control.attention_reason,
         cancellation_requested_at=control.cancellation_requested_at,
         completed_point_count=completed_point_count,
+        completed_logical_point_count=completed_logical_point_count,
         point_plan=point_plan,
     )
 
@@ -384,6 +386,10 @@ class RunService:
                                 self._runs,
                                 run_id=control.run_id,
                             ).read_in_transaction(connection),
+                            completed_logical_point_count=SQLiteRunCoverage(
+                                self._runs,
+                                run_id=control.run_id,
+                            ).completed_logical_points_in_transaction(connection),
                             point_plan=self._point_plans.read_in_transaction(
                                 connection,
                                 control.run_id,
@@ -425,6 +431,10 @@ class RunService:
                     self._runs,
                     run_id=run_id,
                 ).read_in_transaction(connection)
+                completed_logical_point_count = SQLiteRunCoverage(
+                    self._runs,
+                    run_id=run_id,
+                ).completed_logical_points_in_transaction(connection)
                 point_plan = self._point_plans.read_in_transaction(
                     connection,
                     run_id,
@@ -481,6 +491,7 @@ class RunService:
             control=_run_control_view(
                 control,
                 completed_point_count=completed_point_count,
+                completed_logical_point_count=completed_logical_point_count,
                 point_plan=point_plan,
             ),
             snapshot=snapshot,
@@ -1062,6 +1073,10 @@ class RunService:
             items=items,
             dataset_schema=terminal_schema or live_schema,
             truncated=next_offset is not None,
+            durable_record_count=SQLiteMeasurementDatasetRepository(
+                self._runs,
+                run_id=run_id,
+            ).acquisition_record_count(),
         )
 
     def measurement_live_preview(

@@ -102,6 +102,7 @@ describe("run daemon reads", () => {
             control: {
               state: "closed",
               completed_point_count: 1,
+              completed_logical_point_count: 3,
               point_plan: staticPointPlan("run/1"),
               admission: {
                 run_id: "run/1",
@@ -135,6 +136,8 @@ describe("run daemon reads", () => {
 
     expect(run).toMatchObject({
       experimentId: "ramsey",
+      completedLogicalPointCount: 3,
+      progressCompleted: 1,
       displayName: "Ramsey calibration",
       tags: ["calibration"],
       description: "Calibrate the Ramsey sequence.",
@@ -512,6 +515,7 @@ describe("run daemon reads", () => {
           items: [measurementRecord("run/1", 100)],
           dataset_schema: measurementSchema(),
           truncated: true,
+          durable_record_count: 4096,
         }),
       ),
     );
@@ -521,6 +525,7 @@ describe("run daemon reads", () => {
       items: [measurementRecord("run/1", 100)],
       schema: measurementSchema(),
       truncated: true,
+      durableRecordCount: 4096,
     });
     expect(requestPath(fetchMock.mock.calls[0]?.[0])).toBe(
       "/api/v1/runs/run%2F1/measurements/preview?limit=100",
