@@ -92,8 +92,12 @@ export function RunDetail({
   onResolveAttention,
   onOpenSample,
   onOpenRun,
+  originOpen,
+  onOriginOpenChange,
 }: {
   run: ProjectRun;
+  originOpen?: boolean;
+  onOriginOpenChange?: (open: boolean) => void;
   projectId?: string;
   collectionNames: Map<string, string>;
   events: ProjectEvent[];
@@ -321,7 +325,11 @@ export function RunDetail({
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
-        <details className="min-w-0 rounded-md border border-line p-3 [overflow-wrap:anywhere]">
+        <details
+          className="min-w-0 rounded-md border border-line p-3 [overflow-wrap:anywhere]"
+          open={originOpen}
+          onToggle={(event) => onOriginOpenChange?.(event.currentTarget.open)}
+        >
           <summary className="cursor-pointer text-sm font-semibold">样品与计划来源</summary>
           <div className="mt-2 space-y-2">
             <RunPlanOrigin runId={run.runId} projectId={projectId} />
