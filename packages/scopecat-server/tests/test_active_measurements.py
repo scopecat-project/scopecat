@@ -145,3 +145,25 @@ def _record(point_index: int, *, waveform: bool = False) -> MeasurementRecord:
             else {}
         ),
     )
+
+
+def test_active_header_reuse_rejects_conflicts_and_resets_with_new_segment() -> None:
+    store = ActiveMeasurementStore()
+    header = _header(point_count=2)
+    original_hash = header.content_hash
+    store.initialize(header, segment_id="first", acquisition_start=0)
+    changed = header.model_copy(update={"recording_contract_fingerprint": "other"})
+    assert changed.content_hash != original_hash
+    with pytest.raises(ActiveMeasurementConflict, match="different content"):
+        store.initialize(changed, segment_id="first", acquisition_start=0)
+    with pytest.raises(ActiveMeasurementConflict, match="different active header"):
+        store.ingest(_append(changed, (_record(0),)))
+    assert store.preview("run-1").received_record_count == 0
+
+    store.clear("run-1")
+    reopened = MeasurementDatasetHeader.model_validate_json(changed.model_dump_json())
+    store.initialize(reopened, segment_id="second", acquisition_start=0)
+    with pytest.raises(ActiveMeasurementConflict, match="different active header"):
+        store.ingest(_append(header, (_record(0),)))
+    store.ingest(_append(reopened, (_record(0),)))
+    assert store.preview("run-1").received_record_count == 1

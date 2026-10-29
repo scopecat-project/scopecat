@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
+from functools import cached_property
 from typing import Literal, Self, cast, override
 
 import numpy as np
@@ -108,9 +109,14 @@ class MeasurementDatasetHeader(_FrozenRecordingModel):
         )
         return f"measurement-dataset-header:{digest}"
 
+    @cached_property
+    def _wire_content_hash(self) -> str:
+        # Only the immutable header is cached, never append or mutable run state.
+        return model_wire_content_hash(self)
+
     @property
     def content_hash(self) -> str:
-        return model_wire_content_hash(self)
+        return self._wire_content_hash
 
 
 class MeasurementDatasetBatch(_FrozenRecordingModel):

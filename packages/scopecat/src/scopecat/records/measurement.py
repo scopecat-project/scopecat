@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterator, Mapping, Sequence
+from functools import cached_property
 from typing import (
     Annotated,
     Literal,
@@ -31,7 +32,10 @@ from pydantic import (
     model_validator,
 )
 
-from scopecat.kernel.content_identity import stable_content_hash
+from scopecat.kernel.content_identity import (
+    model_wire_content_hash,
+    stable_content_hash,
+)
 from scopecat.kernel.entity import EntityRef, entity_axis_fingerprint, entity_identity
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.interface_identity import InterfaceId
@@ -113,7 +117,12 @@ class MeasurementEntityIndex(_FrozenMeasurementModel):
     @field_validator("values")
     @classmethod
     def freeze_values(cls, value: Sequence[EntityRef]) -> Sequence[EntityRef]:
-        selected = tuple(value)
+        # EntityRef.model_copy(update=...) does not validate updates. Snapshot
+        # its wire fields so mutable author metadata cannot enter this index.
+        selected = tuple(
+            EntityRef.model_validate(entity.model_dump(mode="python"))
+            for entity in value
+        )
         identities = tuple(entity_identity(entity) for entity in selected)
         if len(identities) != len(set(identities)):
             raise ValueError("measurement entity index values must be unique")
@@ -481,6 +490,17 @@ class MeasurementDatasetSchema(_FrozenMeasurementModel):
     primary_observables: Sequence[str] = Field(default_factory=tuple)
     result: MeasurementResultContract | None = None
     metadata: MeasurementMetadata = Field(default_factory=_empty_metadata)
+
+    @cached_property
+    def _wire_content_hash(self) -> str:
+        # Validated nested models, sequences and metadata are immutable.
+        # model_copy(update=...) reconstructs this model without cached state.
+        return model_wire_content_hash(self)
+
+    @property
+    def content_hash(self) -> str:
+        """Identity of this immutable schema's normalized wire snapshot."""
+        return self._wire_content_hash
 
     @field_validator(
         "dimensions",
