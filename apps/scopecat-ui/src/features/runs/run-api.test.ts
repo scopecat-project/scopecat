@@ -548,12 +548,18 @@ describe("run daemon reads", () => {
     );
   });
 
-  it("requests one semantic product-grid slice", async () => {
+  it.each([
+    { projection: ["x", "signal"] },
+    { projection: [] },
+    { projection: null },
+    { projection: undefined },
+  ])("retains server-confirmed slice projection %j", async ({ projection }) => {
     const fetchMock = vi.fn((_input: RequestInfo | URL) =>
       Promise.resolve(
         jsonResponse({
           items: [measurementRecord("run/1", 3)],
           dataset_schema: measurementSchema(),
+          variable_ids: projection,
           selected_point_count: 6,
           offset: 4,
           window_point_count: 1,
@@ -570,6 +576,7 @@ describe("run daemon reads", () => {
     ).resolves.toEqual({
       items: [measurementRecord("run/1", 3)],
       schema: measurementSchema(),
+      variableIds: projection ?? undefined,
       selectedPointCount: 6,
       offset: 4,
       windowPointCount: 1,

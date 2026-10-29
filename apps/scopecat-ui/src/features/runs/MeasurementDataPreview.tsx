@@ -715,6 +715,7 @@ export function MeasurementDataPreview({
             records={tableRecords}
             schema={slicePlan ? chartSchema : preview.schema}
             entitySelection={entitySelection}
+            projectedVariableIds={slicePlan ? slice?.variableIds : undefined}
           />
         )}
       </details>
@@ -737,10 +738,12 @@ function DeferredRecordTable({
   records,
   schema,
   entitySelection,
+  projectedVariableIds,
 }: {
   records: MeasurementRecord[];
   schema?: MeasurementDatasetSchema;
   entitySelection: MeasurementEntitySelection;
+  projectedVariableIds?: readonly string[];
 }) {
   const pageSize = 100;
   const [page, setPage] = useState(0);
@@ -756,8 +759,8 @@ function DeferredRecordTable({
     [records, currentPage],
   );
   const table = useMemo(
-    () => measurementTable(pageRecords, schema, entitySelection),
-    [pageRecords, schema, entitySelection],
+    () => measurementTable(pageRecords, schema, entitySelection, projectedVariableIds),
+    [pageRecords, schema, entitySelection, projectedVariableIds],
   );
   return (
     <>

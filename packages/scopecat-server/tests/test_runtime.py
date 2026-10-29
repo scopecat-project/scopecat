@@ -3431,6 +3431,28 @@ def test_effect_is_fenced_and_terminal_updates_control(
             f"/api/v1/runs/{run_id}/measurements/query",
             json={"fixed_axis_indices": {"missing": 0}},
         )
+        for selected in (["signal"], [], ["trace"]):
+            projected = client.post(
+                f"/api/v1/runs/{run_id}/measurements/query",
+                json={"variable_ids": selected, "limit": 4},
+            )
+            assert projected.status_code == 200
+            assert projected.json()["variable_ids"] == selected
+            assert projected.json()["dataset_schema"] is None
+            assert projected.json()["selected_point_count"] == 4
+            assert [item["point_index"] for item in projected.json()["items"]] == list(
+                range(4)
+            )
+            for item in projected.json()["items"]:
+                assert not item["coordinates"]
+                assert set(item["observables"]) == set(selected)
+                original = measurement_records[item["point_index"]].model_dump(
+                    mode="json"
+                )
+                assert item["observables"] == {
+                    key: original["observables"][key] for key in selected
+                }
+        assert measurement_slice.json()["variable_ids"] is None
         trace_preview = client.post(
             f"/api/v1/runs/{run_id}/measurements/traces/query",
             json={

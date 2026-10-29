@@ -526,6 +526,7 @@ export function measurementTable(
   records: MeasurementRecord[],
   schema?: MeasurementDatasetSchema,
   entitySelection: MeasurementEntitySelection = {},
+  projectedVariableIds?: readonly string[],
 ): MeasurementTableModel {
   const variables = schema ? variableDescriptors(schema) : [];
   const entityAxisById = new Map(measurementEntityAxes(schema).map((axis) => [axis.id, axis]));
@@ -544,6 +545,8 @@ export function measurementTable(
       cells: [
         String(record.point_index),
         ...variables.map((variable) => {
+          if (projectedVariableIds && !projectedVariableIds.includes(variable.id))
+            return "未在当前切片读取";
           const axis = variable.entityAxisId
             ? entityAxisById.get(variable.entityAxisId)
             : undefined;

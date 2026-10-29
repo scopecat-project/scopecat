@@ -288,6 +288,7 @@ export async function getMeasurementSlice(
     items: response.items,
     schema: response.dataset_schema ?? undefined,
     selectedPointCount: response.selected_point_count,
+    variableIds: response.variable_ids ?? undefined,
     offset: response.offset ?? 0,
     windowPointCount: response.window_point_count ?? response.items.length,
     nextOffset: response.next_offset ?? undefined,
