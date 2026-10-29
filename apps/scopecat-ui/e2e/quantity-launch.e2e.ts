@@ -67,6 +67,14 @@ def voltage(experiment: sc.ExperimentContext, *,
     await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("voltage");
+    // Selection also reads operator settings before committing the new form.
+    // Do not click the previous experiment's context picker while that read is pending.
+    await expect(
+      page
+        .getByRole("region", { name: "Selected experiment", exact: true })
+        .getByRole("heading", { name: "voltage", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("amplitude value", { exact: true })).toBeVisible();
     await chooseAuthorContext(page);
     await expect(page.getByLabel("amplitude value", { exact: true })).toHaveValue("2000");
     await expect(page.getByLabel("amplitude unit", { exact: true })).toHaveValue("mV");

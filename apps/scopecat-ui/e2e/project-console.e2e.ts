@@ -278,7 +278,11 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   await expect(page.getByText("first_run", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("已完成", { exact: true }).first()).toBeVisible();
   const dataCard = page.getByTestId("data-card");
-  await expect(dataCard.getByText(/^1 records/)).toBeVisible();
+  await expect(
+    dataCard
+      .getByRole("region", { name: "测量数据摘要" })
+      .getByText("当前记录预览 1 条记录", { exact: true }),
+  ).toBeVisible();
   await dataCard.getByText("Raw records", { exact: true }).click();
   await expect(dataCard.getByTestId("measurement-preview")).toContainText('"temperature"');
   await expect(dataCard.getByTestId("measurement-preview")).toContainText('"value": 0.02');
@@ -329,31 +333,29 @@ test("reviews notebook candidate evidence without changing parameter branches", 
   const candidate = await createCandidateAnalysis(daemon.projectRoot);
 
   await page.goto(`${daemon.baseUrl}/?run=${encodeURIComponent(candidate.runId)}`);
-  const analyses = page.getByRole("region", { name: "Analyses", exact: true });
+  const analyses = page.getByRole("region", { name: "分析结果", exact: true });
   await analyses.getByText("notebook repetition fit", { exact: true }).click();
   await expect(analyses.getByRole("table", { name: "Candidate fit" })).toBeVisible();
   await expect(
     analyses.getByRole("img", {
-      name: "Candidate fit curve: Fit score (ratio) by Repetitions",
+      name: "Candidate fit curve：Fit score (ratio) 随 Repetitions 的变化",
     }),
   ).toBeVisible();
-  await expect(analyses.getByText("Showing 6 of 6 points across 2 layers")).toBeVisible();
+  await expect(analyses.getByText("显示 6 / 6 个点，共 2 个图层")).toBeVisible();
   await expect(
-    analyses.getByText("Band: Declared fixture residual bounds (absolute lower/upper bounds)", {
+    analyses.getByText("不确定性带: Declared fixture residual bounds （绝对下界/上界）", {
       exact: true,
     }),
   ).toBeVisible();
   const layeredFigure = analyses.locator("figure");
-  await layeredFigure.getByText("Retained source and projection", { exact: true }).first().click();
-  await expect(
-    layeredFigure.getByText("Dataset output in this publication:").first(),
-  ).toBeVisible();
+  await layeredFigure.getByText("保留的数据来源与投影", { exact: true }).first().click();
+  await expect(layeredFigure.getByText("本发布中的数据集输出：").first()).toBeVisible();
   await layeredFigure.screenshot({ path: test.info().outputPath("layered-fit.png") });
   const proposals = page.getByTestId("run-proposals-card");
   await expect(proposals.getByText(candidate.proposalId, { exact: true })).toBeVisible();
-  await expect(proposals.getByText("98% confidence", { exact: true })).toBeVisible();
+  await expect(proposals.getByText("98% 置信度", { exact: true })).toBeVisible();
   await expect(proposals.getByRole("button", { name: "Accept as default" })).toHaveCount(0);
-  await proposals.getByText("For authors: reopen this candidate", { exact: true }).click();
+  await proposals.getByText("作者操作：重新打开此候选", { exact: true }).click();
   await expect(proposals.locator("pre").first()).toContainText(candidate.runId);
   await expect(proposals.locator("pre").first()).toContainText(candidate.proposalId);
   await page.reload();
@@ -416,7 +418,11 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
     await expect(state).toHaveText("执行中");
     const dataCard = detail.getByTestId("data-card");
     await expect(dataCard.getByText("Measurement data", { exact: true })).toBeVisible();
-    await expect(dataCard.getByText(/^1 records/)).toBeVisible();
+    await expect(
+      dataCard
+        .getByRole("region", { name: "测量数据摘要" })
+        .getByText("当前记录预览 1 条记录", { exact: true }),
+    ).toBeVisible();
     await dataCard.getByText("Raw records", { exact: true }).click();
     await expect(dataCard.getByTestId("measurement-preview")).toBeVisible();
     await expect(dataCard.getByTestId("measurement-preview")).toContainText('"point_index": 0');
@@ -428,7 +434,11 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
     const completion = await experiment.completion;
     expectProcessOk(completion);
     await expect(state).toHaveText("已完成");
-    await expect(dataCard.getByText(/^15 records/)).toBeVisible();
+    await expect(
+      dataCard
+        .getByRole("region", { name: "测量数据摘要" })
+        .getByText("当前记录预览 15 条记录", { exact: true }),
+    ).toBeVisible();
     await expect(timeline.getByText(/From: leased.*To: closed/)).toBeVisible();
   } finally {
     await finishControlledExperiment(experiment);
@@ -492,7 +502,11 @@ test("exact run opens independently in two browser pages while acquisition conti
     await waitForMarker(experiment.measurementReady, experiment);
     await expect(result.getByTestId("run-status")).toHaveText("执行中");
     const resultData = result.getByTestId("data-card");
-    await expect(resultData.getByText(/^1 records/)).toBeVisible();
+    await expect(
+      resultData
+        .getByRole("region", { name: "测量数据摘要" })
+        .getByText("当前记录预览 1 条记录", { exact: true }),
+    ).toBeVisible();
     await resultData.getByText("Raw records", { exact: true }).click();
     await expect(resultData.getByTestId("measurement-preview")).toContainText('"point_index": 0');
     await page.getByTitle(`Inspect run ${runId}`, { exact: true }).click();
@@ -507,7 +521,12 @@ test("exact run opens independently in two browser pages while acquisition conti
     await writeFile(experiment.releaseMeasurement, "", "utf8");
     expectProcessOk(await experiment.completion);
     await expect(page.getByTestId("run-status")).toHaveText("已完成");
-    await expect(page.getByTestId("data-card").getByText(/^15 records/)).toBeVisible();
+    await expect(
+      page
+        .getByTestId("data-card")
+        .getByRole("region", { name: "测量数据摘要" })
+        .getByText("当前记录预览 15 条记录", { exact: true }),
+    ).toBeVisible();
     expect(writes).toEqual([]);
   } finally {
     await finishControlledExperiment(experiment);

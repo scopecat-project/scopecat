@@ -23,7 +23,17 @@ test("opens a delivered sample diagram and explains undelivered references", asy
   let failed = false;
   try {
     await writeFile(join(project, "scopecat.toml"), "[lab]\n");
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -100,7 +110,7 @@ test("opens a delivered sample diagram and explains undelivered references", asy
     });
     throw error;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (!failed) await rm(project, { recursive: true, force: true });
   }
 });

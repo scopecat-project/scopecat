@@ -40,9 +40,28 @@ export function useWorkspacePosition(view: string) {
   useLayoutEffect(() => {
     current.current = view;
     const position = positions.current.get(view);
+    const previousFocus = document.activeElement;
     const frame = requestAnimationFrame(() => {
+      if (document.visibilityState === "hidden") return;
       window.scrollTo({ top: position?.y ?? 0, left: 0 });
-      if (position?.element?.isConnected && position.element.getClientRects().length) {
+      const active = document.activeElement;
+      // Drawer/history restoration or a new user action may have already placed
+      // focus after this route committed. Reading-position recovery must not
+      // override that newer choice.
+      if (
+        active !== previousFocus &&
+        active instanceof HTMLElement &&
+        active !== document.body &&
+        active.isConnected &&
+        !active.closest("[hidden], [inert]") &&
+        active.getClientRects().length
+      )
+        return;
+      if (
+        position?.element?.isConnected &&
+        !position.element.closest("[hidden], [inert]") &&
+        position.element.getClientRects().length
+      ) {
         position.element.focus({ preventScroll: true });
         if (
           (position.element instanceof HTMLInputElement ||

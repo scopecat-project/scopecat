@@ -199,7 +199,7 @@ test("two workbench pages retain independent context and share collection number
     await expect(conflictB).toBeHidden();
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
     await expect(other.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
-    await other.getByRole("button", { name: "Open First batch recipe r1", exact: true }).click();
+    await other.getByRole("button", { name: "打开 First batch recipe r1", exact: true }).click();
     await expect(other.getByRole("combobox", { name: "可编辑草稿", exact: true })).not.toHaveValue(
       sharedDraft,
     );

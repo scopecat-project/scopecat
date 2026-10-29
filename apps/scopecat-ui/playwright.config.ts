@@ -1,11 +1,22 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// File costs from CI run 34759083211. Keep shared worker fixtures intact;
-// every other (including newly added) file belongs to the second project.
+// Rebalanced from CI run 40787744024: the original first project took 244s,
+// while the second exhausted its 15-minute job before finishing 56 tests.
+// Move ~505s of observed whole-file work to the first project; keep shared
+// worker fixtures intact. All other (including new) files belong to the second.
 const firstJourneyFiles = [
   "**/parameter-context.e2e.ts",
   "**/author-launch.e2e.ts",
   "**/manual-launch.e2e.ts",
+  "**/candidate-adoption.e2e.ts",
+  "**/candidate-launch.e2e.ts",
+  "**/launch-recovery.e2e.ts",
+  "**/manual-line-recovery.e2e.ts",
+  "**/manual-line-scans.e2e.ts",
+  "**/measurement-slicing.e2e.ts",
+  "**/parallel-drafts.e2e.ts",
+  "**/parameter-working-inputs.e2e.ts",
+  "**/procedure-operator.e2e.ts",
 ];
 
 export default defineConfig({

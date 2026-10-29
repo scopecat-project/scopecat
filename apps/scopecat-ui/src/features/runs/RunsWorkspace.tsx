@@ -91,6 +91,9 @@ export function RunsWorkspace({
   const { requestConfirmation, confirmationDialog } = useConfirmationDialog();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
+  // The measurement boundary resets per run; provenance browsing belongs to
+  // the retained workspace so following a source and going Back preserves it.
+  const [openOrigins, setOpenOrigins] = useState<Set<string>>(() => new Set());
   const [olderRunHistory, setOlderRunHistory] = useState<OlderRunHistory>();
   const [requestedMeasurementAxes, setRequestedMeasurementAxes] = useState<{
     runId: string;
@@ -646,6 +649,16 @@ export function RunsWorkspace({
                 projectId={health?.projectId}
                 collectionNames={collectionNames}
                 run={selectedRun}
+                originOpen={openOrigins.has(selectedRun.runId)}
+                onOriginOpenChange={(open) =>
+                  setOpenOrigins((current) => {
+                    if (current.has(selectedRun.runId) === open) return current;
+                    const next = new Set(current);
+                    if (open) next.add(selectedRun.runId);
+                    else next.delete(selectedRun.runId);
+                    return next;
+                  })
+                }
                 events={selectedEvents}
                 eventsError={selectedEventsQuery.error}
                 eventsPending={selectedEventsQuery.isPending}
