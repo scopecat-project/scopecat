@@ -408,6 +408,9 @@ def _verify(
     assert result.read_bytes() == first
     assert inventory(relocated, (".",)) == before, "Native app was modified on launch"
     state = cast("dict[str, str | bool]", json.loads(first))
+    assert Path(cast("str", state["state"])).resolve() == home / "data", (
+        "Native acceptance did not select its explicit isolated data home"
+    )
     assert state["status"] == "stopped"
     if sys.platform == "darwin":
         assert state["bundle_identifier"] == "org.scopecat.desktop", (

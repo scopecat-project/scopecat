@@ -65,3 +65,20 @@ def test_other_runs_cannot_fill_a_missing_boundary() -> None:
     events += trace("other-procedure", "other-run")
     with pytest.raises(AssertionError, match="client_result_visible"):
         correlate_events([sample()], events)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"point_count": 2},
+        {"compute_delay_ms": -1},
+        {"observer_timeout": 0},
+        {"repetitions": -1},
+    ],
+)
+def test_invalid_explicit_scan_budget_does_not_create_workspace(tmp_path, options):
+    from benchmarks.e2e.author_first_data import measure
+
+    with pytest.raises(ValueError, match="Require"):
+        measure(tmp_path, **{"repetitions": 0, **options})
+    assert not list(tmp_path.iterdir())

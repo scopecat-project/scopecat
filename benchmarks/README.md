@@ -339,3 +339,24 @@ may leave synthetic data for explicit inspection and cleanup. No physical HDD
 qualification or statistically significant performance claim follows from a
 small ABBA comparison. Results from this full-checkout protocol are distinct
 from the earlier temporary mixed-module probe and must be labeled accordingly.
+
+### Explicit-values author scan
+
+`author-first-data` also accepts an opt-in large explicit axis, using the same
+ordinary author preparation, submission, analysis, receipt and retained-data read:
+
+```sh
+python -m benchmarks.e2e.author_first_data --point-count 4096 --compute-delay-ms 25 --repetitions 0 --observer-timeout 600
+```
+
+This runs one first scan; `--repetitions` adds warm repeats. Non-default scan
+size/delay omits the separate input/source-edit scenarios. The default remains
+three points with those scenarios. Run the long profile manually in an isolated
+environment; ordinary CI has no absolute timing threshold or 4096-point scan.
+The result records source commit/dirty state, Python, explicit axis size, requested
+per-point delay, source revision, observed/reopened value counts and timings from
+preparation through retained analysis. This synthetic Lorentzian response is not
+a strict reproduction of a different author model or native GUI/storage load.
+The observer budget is explicit and applies to job completion as well; increasing
+it does not certify performance. Compare identical loads and environments, retain
+cold startup and preparation, and report failures rather than excluding them.

@@ -190,3 +190,6 @@ def test_reused_schema_identity_preserves_arrow_bytes_and_rejects_other_schemas(
         decode_measurement_append(original, changed)
     with pytest.raises(ValueError, match="schema"):
         decode_measurement_append(original, schema, dataset_schema_hash="wrong")
+    forged = encode_measurement_append(append, schema, dataset_schema_hash="wrong")
+    with pytest.raises(ValueError, match="schema"):
+        decode_measurement_append(forged, schema)
