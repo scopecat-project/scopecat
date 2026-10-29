@@ -135,12 +135,15 @@ describe("Run receipt summary", () => {
     const summary = screen.getByRole("region", { name: "run 进度" });
     expect(summary).toHaveTextContent("已接收记录 10");
     expect(summary).toHaveTextContent("已保存记录 4");
-    expect(summary).toHaveTextContent("6 received records not saved yet");
+    expect(summary).toHaveTextContent("还有 6 条已接收记录尚未保存");
     expect(summary).not.toHaveTextContent("Planned data received");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("已完成")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
     expect(screen.getByText(/连续完成前缀 9 个逻辑点/)).toBeVisible();
+    expect(summary).toHaveTextContent("运行结果：尚无结果 · 结果确定性：尚未报告");
+    expect(summary).toHaveTextContent("运行更新时间：尚未报告");
+    expect(summary).toHaveTextContent("不代表设备批次内部的执行进度");
   });
 
   it("does not invent receipts from coverage, and marks failed live refreshes", () => {
@@ -180,5 +183,38 @@ it.each([
     expect(summary).not.toHaveTextContent(/已接收记录 \d/);
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
     expect(screen.getByText(/连续完成前缀 2 个逻辑点/)).toBeVisible();
+  },
+);
+
+it.each([
+  ["succeeded", "known", "成功", "已确定"],
+  ["failed", "indeterminate", "失败", "无法确定"],
+  ["cancelled", "known", "已取消", "已确定"],
+  ["future_result", "future_certainty", "future_result", "future_certainty"],
+  ["constructor", "toString", "constructor", "toString"],
+])(
+  "preserves outcome and certainty separately: %s/%s",
+  (result, certainty, resultLabel, certaintyLabel) => {
+    render(
+      <ProgressCard
+        run={
+          {
+            runId: "outcome-run",
+            status: "failed",
+            stateLabel: "已关闭",
+            result,
+            certainty,
+            plan: {},
+            pointPlan: { acceptedPointCount: 12, closed: true },
+          } as ProjectRun
+        }
+        events={[]}
+      />,
+    );
+    const summary = screen.getByRole("region", { name: "run 进度" });
+    expect(summary).toHaveTextContent("已完成逻辑点 未知 ／ 计划点 未知");
+    expect(summary).toHaveTextContent("已接纳 12 个计划点 · 计划已封闭");
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
+    expect(summary).toHaveTextContent(`运行结果：${resultLabel} · 结果确定性：${certaintyLabel}`);
   },
 );

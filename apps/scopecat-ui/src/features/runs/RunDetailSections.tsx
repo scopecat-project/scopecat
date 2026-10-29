@@ -83,7 +83,7 @@ export function ProgressCard({
         <span className="text-text-soft">
           {run.plan.pointCount !== undefined
             ? `${run.plan.pointCount} 个计划点`
-            : `${run.pointPlan.acceptedPointCount} accepted points · plan ${run.pointPlan.closed ? "closed" : "open"}`}
+            : `已接纳 ${run.pointPlan.acceptedPointCount} 个计划点 · 计划${run.pointPlan.closed ? "已封闭" : "仍开放"}`}
         </span>
       </div>
       {receiptError && (
@@ -92,9 +92,7 @@ export function ProgressCard({
         </p>
       )}
       {received !== undefined && saved !== undefined && received > saved && (
-        <p className="mt-2 text-sm text-yellow">
-          {received - saved} received records not saved yet.
-        </p>
+        <p className="mt-2 text-sm text-yellow">还有 {received - saved} 条已接收记录尚未保存。</p>
       )}
       {received === undefined && active && (
         <p className="mt-2 text-sm text-text-soft">
@@ -108,18 +106,45 @@ export function ProgressCard({
           个逻辑点；已接收记录、已保存记录与逻辑点分别计数。
         </p>
         <p className="mt-1">
-          Result: {titleCase(run.result ?? "Pending")} · Certainty:{" "}
-          {titleCase(run.certainty ?? "Pending")} · Run updated:{" "}
-          {run.updatedAt ? formatRelative(run.updatedAt) : "Not reported"}
+          运行结果：{progressResultLabel(run.result)} · 结果确定性：
+          {progressCertaintyLabel(run.certainty)} · 运行更新时间：
+          {run.updatedAt ? formatRelative(run.updatedAt) : "尚未报告"}
         </p>
         <p className="mt-1">
-          Receipt counts describe data received by the daemon, not work inside a device batch.
-          Device acquisition progress is not inferred. A successful run includes saving and
-          finalization.
+          接收记录数表示后台服务已收到的数据，不代表设备批次内部的执行进度，
+          也不据此推断设备采集进度。运行成功还要求完成数据保存与收尾。
         </p>
       </details>
     </section>
   );
+}
+
+function progressResultLabel(result?: string): string {
+  switch (result) {
+    case undefined:
+      return "尚无结果";
+    case "succeeded":
+      return "成功";
+    case "failed":
+      return "失败";
+    case "cancelled":
+      return "已取消";
+    default:
+      return result;
+  }
+}
+
+function progressCertaintyLabel(certainty?: string): string {
+  switch (certainty) {
+    case undefined:
+      return "尚未报告";
+    case "known":
+      return "已确定";
+    case "indeterminate":
+      return "无法确定";
+    default:
+      return certainty;
+  }
 }
 
 export function ExecutionSegmentsCard({
