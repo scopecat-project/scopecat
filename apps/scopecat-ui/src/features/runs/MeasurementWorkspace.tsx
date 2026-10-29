@@ -100,13 +100,20 @@ export function MeasurementWorkspace({
             : "static block",
         )}
       >
-        <div className="mb-2 flex flex-none flex-wrap items-start gap-2">
-          {focused && <strong className="w-full text-sm">{title}</strong>}
-          <div className="min-w-0 flex-1 basis-64">{progress}</div>
+        <div
+          className={classes(
+            "mb-2 flex-none items-start gap-2",
+            focused ? "grid grid-cols-[minmax(0,1fr)_auto]" : "flex flex-wrap",
+          )}
+        >
+          {focused && <strong className="min-w-0 self-center break-words text-sm">{title}</strong>}
+          <div className={classes("min-w-0 flex-1 basis-64", focused && "col-span-2 row-start-2")}>
+            {progress}
+          </div>
           <button
             ref={trigger}
             type="button"
-            className={secondaryButton}
+            className={classes(secondaryButton, focused && "col-start-2 row-start-1")}
             onClick={() => {
               if (focused) dialog.current?.close();
               else {
