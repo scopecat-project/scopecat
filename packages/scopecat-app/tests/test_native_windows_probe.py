@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
@@ -781,7 +782,8 @@ def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, 
     (notebooks / "02_edit_scan.py").write_text(
         "from IPython import get_ipython\n"
         "assert get_ipython() is not None\n"
-        "from importlib.util import find_spec\n"
+        "from datetime import UTC, datetime
+from importlib.util import find_spec\n"
         "assert find_spec('foreign_virtualenv_marker') is None\n"
         "# %% Next cell sees the same notebook namespace.\n"
         "from types import SimpleNamespace\n"
@@ -825,7 +827,7 @@ def test_native_acceptance_checks_owner_before_business_writes(
         python=tmp_path / ("other-python" if mismatch == "python" else "python"),
         base_url="http://127.0.0.1:1",
         shutdown_token="synthetic" * 4,
-        started_at="2026-01-01T00:00:00Z",
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     selected = SimpleNamespace(
         python=tmp_path / "python",

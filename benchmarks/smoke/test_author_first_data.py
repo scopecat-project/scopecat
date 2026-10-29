@@ -1,5 +1,6 @@
 """Interaction origins and identity correlation, without starting a laboratory."""
 
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -76,7 +77,9 @@ def test_other_runs_cannot_fill_a_missing_boundary() -> None:
         {"repetitions": -1},
     ],
 )
-def test_invalid_explicit_scan_budget_does_not_create_workspace(tmp_path, options):
+def test_invalid_explicit_scan_budget_does_not_create_workspace(
+    tmp_path: Path, options: dict[str, int]
+) -> None:
     from benchmarks.e2e.author_first_data import measure
 
     with pytest.raises(ValueError, match="Require"):
