@@ -21,6 +21,7 @@ from scopecat_app.author_resources import PACKAGES as AUTHOR_PACKAGES
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.app_build.author_resources import AuthorRelease
+from scripts.app_build.native_qualification import validate_qualification
 from scripts.app_build.package_versions import validate_dependencies
 from scripts.app_build.release_identity import installer_filename, read_release
 
@@ -225,8 +226,7 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
             )
         )
         if (
-            native.get("format") != 1
-            or bundle.get("format") != 2
+            bundle.get("format") != 2
             or _object(native.get("sources")).get("public") != commit
             or native.get("sources") != bundle.get("sources")
             or native.get("target") != bundle.get("target")
@@ -241,6 +241,7 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
             or bundle.get("build_number") != identity.build_number
         ):
             raise ValueError(f"Native release identity mismatch: {platform}")
+        validate_qualification(native, bundle)
         AuthorRelease.from_document(bundle).metadata(
             cast("dict[str, str]", _object(bundle.get("target")))
         )
