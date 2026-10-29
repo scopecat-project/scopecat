@@ -1916,3 +1916,62 @@ def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
     assert reopened.create(command).finished_count == 2
     AnalysisFollowRunner(reopened, runs, analyze, rounds=rounds).advance(command.id)
     assert len(seen) == 2
+
+
+def test_completed_logical_points_union_prefix_sparse_groups_and_reopen(
+    tmp_path: Path,
+) -> None:
+    runs = _runs(tmp_path)
+    header = _header("logical-count", point_count=4)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    coverage = SQLiteRunCoverage(runs, run_id=header.run_id)
+    _commit_append(
+        runs, repository, _append(header, point_index=2, acquisition_start=0)
+    )
+    _commit_append(
+        runs, repository, _append(header, point_index=0, acquisition_start=1)
+    )
+    # An orphan/retry acquisition is a saved physical record, not completed work.
+    _commit_acquisition(
+        runs, repository, _append(header, point_index=3, acquisition_start=2)
+    )
+    with _sqlite_transaction(runs) as connection:
+        assert coverage.read_in_transaction(connection) == 0
+        assert coverage.completed_logical_points_in_transaction(connection) == 2
+        coverage.advance_in_transaction(connection, start_index=0, point_count=1)
+        assert coverage.completed_logical_points_in_transaction(connection) == 2
+    reopened = _runs(tmp_path)
+    with reopened.sqlite.read_transaction() as connection:
+        assert (
+            SQLiteRunCoverage(
+                reopened, run_id=header.run_id
+            ).completed_logical_points_in_transaction(connection)
+            == 2
+        )
+    assert repository.acquisition_record_count() == 3
+
+
+def test_unrecorded_completed_groups_count_without_measurement_payload(
+    tmp_path: Path,
+) -> None:
+    runs = _runs(tmp_path)
+    run_id = "unrecorded-count"
+    with _sqlite_transaction(runs) as connection:
+        _ensure_run_owner(connection, run_id)
+        SQLiteRecoveryGroups(runs, run_id=run_id).append_in_transaction(
+            connection,
+            (
+                RecoveryGroupCompletion(
+                    schedule_fingerprint="schedule",
+                    group_id="group",
+                    point_indices=(0, 3),
+                    output_kind="unrecorded",
+                ),
+            ),
+            segment_id=_segment_id(run_id),
+        )
+        coverage = SQLiteRunCoverage(runs, run_id=run_id)
+        assert coverage.completed_logical_points_in_transaction(connection) == 2
+        coverage.advance_in_transaction(connection, start_index=0, point_count=1)
+        assert coverage.completed_logical_points_in_transaction(connection) == 2

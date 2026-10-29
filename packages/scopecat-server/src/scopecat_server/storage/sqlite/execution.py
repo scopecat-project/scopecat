@@ -101,6 +101,25 @@ class SQLiteRunCoverage:
         )
         return 0 if row is None else _integer(row, "completed_point_count")
 
+    def completed_logical_points_in_transaction(
+        self, connection: sqlite3.Connection
+    ) -> int:
+        """Count the union of the durable prefix and sparse completed groups.
+
+        Recovery-group members are unique per run/point. This indexed suffix
+        count reads no Arrow payload and never expands the scientific plan.
+        """
+        prefix = self.read_in_transaction(connection)
+        row = _one(
+            connection.execute(
+                "SELECT COUNT(*) AS count FROM execution_recovery_group_points "
+                "WHERE run_id = ? AND point_index >= ?",
+                (self._run_id, prefix),
+            )
+        )
+        assert row is not None
+        return prefix + _integer(row, "count")
+
     def advance_in_transaction(
         self,
         connection: sqlite3.Connection,

@@ -96,6 +96,7 @@ export interface ProjectRun {
   result?: string;
   certainty?: string;
   progressCompleted?: number;
+  completedLogicalPointCount?: number;
   pointPlan: RunPointPlanProgress;
   plan: RunPlanSummary;
   resources: RunResource[];

@@ -38,7 +38,6 @@ import type {
 
 export function ProgressCard({
   run,
-  events,
   measurements,
   receiptError,
 }: {
@@ -52,7 +51,7 @@ export function ProgressCard({
   const savedPreview = measurements
     ? `${measurements.items.length}${measurements.truncated ? "+" : ""}`
     : undefined;
-  const completed = completedPoints(run, events);
+
   const active = ["accepted", "running"].includes(run.status);
   return (
     <section
@@ -61,6 +60,11 @@ export function ProgressCard({
     >
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <strong>{run.stateLabel}</strong>
+        <span>
+          已完成逻辑点 <strong>{run.completedLogicalPointCount ?? "未知"}</strong>
+          {" ／ 计划点 "}
+          <strong>{run.plan.pointCount ?? "未知"}</strong>
+        </span>
         {received !== undefined && (
           <span>
             已接收记录 <strong className="font-mono text-text">{received}</strong>
@@ -100,7 +104,8 @@ export function ProgressCard({
       <details className="mt-1 text-xs text-text-dim">
         <summary className="cursor-pointer">执行证据</summary>
         <p className="mt-2">
-          {completed} 个点已有持久化执行证据。已接收记录、已保存记录与已完成恢复组分别计数。
+          连续完成前缀 {run.progressCompleted ?? "未知"}{" "}
+          个逻辑点；已接收记录、已保存记录与逻辑点分别计数。
         </p>
         <p className="mt-1">
           Result: {titleCase(run.result ?? "Pending")} · Certainty:{" "}
@@ -814,28 +819,6 @@ function leaseStatusClass(status?: string): string {
     return "border-line bg-panel text-text-dim";
   }
   return "border-[rgb(128_163_207_/_18%)] bg-accent-soft text-accent";
-}
-
-function completedPoints(run: ProjectRun, events: ProjectEvent[]): number {
-  const completedPointIndices = new Set<number>();
-  for (const event of events) {
-    if (event.kind !== "execution_transition_committed" || event.payload.state !== "completed") {
-      continue;
-    }
-    const evidence = event.payload.evidence;
-    if (event.payload.stage === "point" && typeof evidence === "object" && evidence !== null) {
-      const pointIndices = (evidence as Record<string, unknown>).point_indices;
-      if (Array.isArray(pointIndices)) {
-        for (const pointIndex of pointIndices) {
-          if (typeof pointIndex === "number") completedPointIndices.add(pointIndex);
-        }
-      }
-      const pointIndex = event.payload.point_index;
-      if (typeof pointIndex === "number") completedPointIndices.add(pointIndex);
-    }
-  }
-  // Only durable transition facts survive daemon reconnects.
-  return Math.max(run.progressCompleted ?? 0, completedPointIndices.size);
 }
 
 function eventIcon(kind: string): ReactNode {

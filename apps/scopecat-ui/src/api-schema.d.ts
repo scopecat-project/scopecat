@@ -8950,6 +8950,8 @@ export interface components {
          */
         MeasurementPreview: {
             dataset_schema?: components["schemas"]["MeasurementDatasetSchema-Output"] | null;
+            /** Durable Record Count */
+            durable_record_count?: number | null;
             /**
              * Items
              * @default []
@@ -11612,6 +11614,8 @@ export interface components {
             attention_reason?: string | null;
             /** Cancellation Requested At */
             cancellation_requested_at?: string | null;
+            /** Completed Logical Point Count */
+            completed_logical_point_count?: number | null;
             /** Completed Point Count */
             completed_point_count: number;
             point_plan: components["schemas"]["RunPointPlanView"];

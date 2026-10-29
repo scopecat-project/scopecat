@@ -41,7 +41,7 @@ export function ProcedureChildRun({
         collectionName={collectionName}
       />
       <p>
-        {run.stateLabel} · {run.progressCompleted ?? 0} 个已完成点
+        {run.stateLabel} · {run.completedLogicalPointCount ?? "未知"} 个已完成逻辑点
       </p>
       {run.certainty && run.certainty !== "known" && (
         <p role="alert">采集结果尚不确定。再次采集前，请检查已有数据并核实外部状态。</p>

@@ -256,6 +256,7 @@ class RunControlView(_ViewModel):
     attention_reason: str | None = None
     cancellation_requested_at: datetime | None = None
     completed_point_count: int = Field(ge=0)
+    completed_logical_point_count: int | None = Field(default=None, ge=0)
     point_plan: RunPointPlanView
 
     @property
@@ -650,6 +651,7 @@ class MeasurementPreview(_ViewModel):
 
     items: tuple[MeasurementRecord, ...] = ()
     dataset_schema: MeasurementDatasetSchema | None = None
+    durable_record_count: int | None = Field(default=None, ge=0)
     truncated: bool = False
 
 
