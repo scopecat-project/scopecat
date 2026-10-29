@@ -30,6 +30,13 @@ _lock = threading.Lock()
 _LOG_BYTES = 65536
 
 
+def _io_snapshot(process: psutil.Process) -> dict[str, object]:
+    try:
+        return dict(process.io_counters()._asdict())
+    except (psutil.Error, NotImplementedError) as error:
+        return {"observation_error": type(error).__name__}
+
+
 def _process_snapshot(pid: int) -> dict[str, object]:
     try:
         process = psutil.Process(pid)
@@ -38,6 +45,7 @@ def _process_snapshot(pid: int) -> dict[str, object]:
             "create_time": process.create_time(),
             "status": process.status(),
             "threads": process.num_threads(),
+            "io_counters": _io_snapshot(process),
             "children": [
                 {"pid": child.pid, "create_time": child.create_time()}
                 for child in process.children(recursive=True)

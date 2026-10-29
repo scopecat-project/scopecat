@@ -87,3 +87,17 @@ def checkpoint(connection, path):
     except BaseException as error:
         emit("checkpoint_error", start_ns=started, error=repr(error))
         raise
+
+
+def sql_busy(error):
+    emit("sqlite_busy", code=error.sqlite_errorcode,
+         name=error.sqlite_errorname, stack=traceback.format_exception(error))
+
+
+def close_writer(writer):
+    emit("writer_close_start")
+    started = time.monotonic_ns()
+    try:
+        writer.close()
+    finally:
+        emit("writer_close_end", start_ns=started, end_ns=time.monotonic_ns())

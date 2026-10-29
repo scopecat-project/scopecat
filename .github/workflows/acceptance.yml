@@ -1,12 +1,16 @@
 name: Full acceptance
 on:
   workflow_dispatch:
-run-name: Temporary Windows paired writer diagnostic @ ${{ github.ref_name }}
+run-name: Temporary Windows original journey context diagnostic @ ${{ github.ref_name }}
 jobs:
   diagnostic:
-    name: Paired candidate and calibration diagnostic
+    name: Original journey context (${{ matrix.shard }})
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
@@ -23,13 +27,12 @@ jobs:
           PYTHONFAULTHANDLER: "1"
         run: |
           export SCOPECAT_SQLITE_PROBE="$PWD/test-diagnostics"
-          tests=(
-            'testing/reference_lab/tests/test_typed_candidates.py::test_branch_procedure_rejection_and_stale_destination_do_not_publish[parallel-False]'
-            'packages/scopecat-app/tests/test_calibration_teaching_journey.py::test_calibration_history_policy_regressions'
-          )
-          uv run --locked pytest -v -n 2 -p scripts.pytest_diagnostics --junitxml=test-diagnostics/result.xml "${tests[@]}"
+          uv run --locked python -m scopecat_testkit.check journey --shard "${{ matrix.shard }}" -- --maxprocesses=2 -p scripts.pytest_diagnostics
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
-          name: sqlite-diagnostic-paired
-          path: test-diagnostics/
+          name: sqlite-context-${{ strategy.job-index }}
+          path: |
+            test-diagnostics/
+            .test-results/
+          include-hidden-files: true

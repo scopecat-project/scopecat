@@ -105,6 +105,7 @@ class SQLiteDatabase:
 
         if not self._writer_lock.acquire(timeout=self.busy_timeout_seconds):
             raise SQLiteBusyError("project database writer is busy")
+        diagnostic_error = None
         try:
             connection = self._writer_connection()
             connection.execute("BEGIN IMMEDIATE")
@@ -127,9 +128,13 @@ class SQLiteDatabase:
                 sqlite3.SQLITE_LOCKED,
             }:
                 raise
+            diagnostic_error = error
             raise SQLiteBusyError("project database writer is busy") from error
         finally:
             self._writer_lock.release()
+            if diagnostic_error is not None and os.environ.get("SCOPECAT_SQLITE_PROBE"):
+                from scopecat_server._sqlite_probe import sql_busy
+                sql_busy(diagnostic_error)
 
     def close(self) -> None:
         """Checkpoint WAL state and close every daemon-owned connection."""
@@ -154,7 +159,11 @@ class SQLiteDatabase:
                     else:
                         writer.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
                 finally:
-                    writer.close()
+                    if os.environ.get("SCOPECAT_SQLITE_PROBE"):
+                        from scopecat_server._sqlite_probe import close_writer
+                        close_writer(writer)
+                    else:
+                        writer.close()
 
     def _writer_connection(self) -> sqlite3.Connection:
         with self._connections_lock:
