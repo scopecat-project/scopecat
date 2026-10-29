@@ -121,6 +121,22 @@ def test_shared_fixture_retains_complex_scalar_without_a_local_axis() -> None:
     assert len(set(values)) > 1
 
 
+@pytest.mark.parametrize(("name", "count"), [("coherent_scalar", 4), ("diagnostic", 1)])
+def test_shared_fixture_requires_exact_durable_record_count(
+    name: str, count: int
+) -> None:
+    expected = FIXTURE.read_text()
+    fixture = cast("dict[str, JsonValue]", json.loads(expected))
+    document = cast("dict[str, JsonValue]", fixture[name])
+    preview = MeasurementPreview.model_validate(document)
+    assert preview.durable_record_count == count
+    for wrong_count in (count + 1, float(count), None):
+        document["durable_record_count"] = wrong_count
+        assert not acceptance_json_matches(expected, json.dumps(fixture))
+    del document["durable_record_count"]
+    assert not acceptance_json_matches(expected, json.dumps(fixture))
+
+
 def test_fixture_comparison_limits_roundoff_to_complex_iq_components() -> None:
     expected = FIXTURE.read_text()
     # Use the observed cross-platform CI differences that motivated this tolerance.

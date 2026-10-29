@@ -426,6 +426,7 @@
         }
       ]
     },
+    "durable_record_count": 4,
     "items": [
       {
         "acquisition_evidence": {
@@ -1475,6 +1476,7 @@
         }
       ]
     },
+    "durable_record_count": 1,
     "items": [
       {
         "acquisition_evidence": {
