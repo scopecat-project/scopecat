@@ -687,6 +687,8 @@ class MeasurementSlice(_ViewModel):
 
     items: tuple[MeasurementRecord, ...] = ()
     dataset_schema: MeasurementDatasetSchema | None = None
+    # None means all variables; an empty tuple is an explicit empty projection.
+    variable_ids: tuple[str, ...] | None = None
     selected_point_count: Annotated[int, Field(ge=0)]
     offset: Annotated[int, Field(ge=0)] = 0
     window_point_count: Annotated[int, Field(ge=0)] = 0

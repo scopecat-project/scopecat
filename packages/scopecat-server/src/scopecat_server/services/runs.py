@@ -1151,6 +1151,9 @@ class RunService:
         return MeasurementSlice(
             items=records,
             dataset_schema=response_schema if query.include_schema else None,
+            variable_ids=(
+                tuple(query.variable_ids) if query.variable_ids is not None else None
+            ),
             selected_point_count=selected_point_count,
             offset=query.offset,
             window_point_count=len(point_indices),

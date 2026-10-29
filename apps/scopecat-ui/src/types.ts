@@ -158,6 +158,8 @@ export interface MeasurementLivePreview {
 export interface MeasurementSlicePreview {
   items: MeasurementRecord[];
   schema?: MeasurementDatasetSchema;
+  /** Confirmed server projection; absent means all or legacy/unknown coverage. */
+  variableIds?: string[];
   selectedPointCount: number;
   offset: number;
   windowPointCount: number;

@@ -3,7 +3,7 @@ import { lastMeasurementWindowOffset } from "./measurement-window";
 
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   MeasurementDatasetSchema,
@@ -1732,7 +1732,7 @@ describe("measurement visualization", () => {
       expect(screen.getByText("Record table · 4096 rows in this view")).toBeVisible();
       fireEvent.click(screen.getByText(/Record table/));
       await screen.findByTestId("measurement-table");
-      expect(table).toHaveBeenLastCalledWith(items.slice(0, 100), schema, {});
+      expect(table).toHaveBeenLastCalledWith(items.slice(0, 100), schema, {}, undefined);
       expect(screen.getByTestId("measurement-table").querySelectorAll("tbody tr")).toHaveLength(
         100,
       );
@@ -1748,15 +1748,15 @@ describe("measurement visualization", () => {
       }
       expect(points).toEqual(items.map((item) => String(item.point_index)));
       expect(screen.getByRole("button", { name: "下一页记录" })).toBeDisabled();
-      expect(table).toHaveBeenLastCalledWith(items.slice(4000), schema, {});
+      expect(table).toHaveBeenLastCalledWith(items.slice(4000), schema, {}, undefined);
       view.rerender(viewFor(next));
-      expect(table).toHaveBeenLastCalledWith(next.slice(4000), schema, {});
+      expect(table).toHaveBeenLastCalledWith(next.slice(4000), schema, {}, undefined);
       view.rerender(viewFor(items.slice(0, 205)));
-      expect(table).toHaveBeenLastCalledWith(items.slice(200, 205), schema, {});
+      expect(table).toHaveBeenLastCalledWith(items.slice(200, 205), schema, {}, undefined);
       view.rerender(viewFor(items));
-      expect(table).toHaveBeenLastCalledWith(items.slice(200, 300), schema, {});
+      expect(table).toHaveBeenLastCalledWith(items.slice(200, 300), schema, {}, undefined);
       fireEvent.click(screen.getByRole("button", { name: "末页记录" }));
-      expect(table).toHaveBeenLastCalledWith(items.slice(4000), schema, {});
+      expect(table).toHaveBeenLastCalledWith(items.slice(4000), schema, {}, undefined);
       fireEvent.click(screen.getByText("Raw records", { exact: true }));
       expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
         '"point_index": 4095',
@@ -1773,7 +1773,7 @@ describe("measurement visualization", () => {
       expect(stringify.mock.calls.some(([value]) => value === next)).toBe(false);
       fireEvent.click(screen.getByRole("button", { name: "退出聚焦，查看 run 详情" }));
       await screen.findByTestId("measurement-table");
-      expect(table).toHaveBeenLastCalledWith(next.slice(0, 100), schema, {});
+      expect(table).toHaveBeenLastCalledWith(next.slice(0, 100), schema, {}, undefined);
       expect(await screen.findByTestId("measurement-preview")).toHaveTextContent(
         '"logical_point_id": "new-4095"',
       );
@@ -1826,6 +1826,112 @@ describe("measurement visualization", () => {
     expect(await screen.findByRole("columnheader", { name: /Bias \[V\]/ })).toBeVisible();
     expect(screen.getByText(/Raw records/)).toBeVisible();
     expect(screen.queryByTestId("measurement-preview")).not.toBeInTheDocument();
+  });
+
+  it("labels omitted I/Q arrays from confirmed projection without changing the bounded table", async () => {
+    const base = scalarSchema();
+    const schema: MeasurementDatasetSchema = {
+      ...base,
+      point_domain: {
+        kind: "product_grid",
+        axes: [
+          gridAxis(
+            "bias",
+            Array.from({ length: 256 }, (_, i) => ({ ...scalar(i, ""), unit: null })),
+          ),
+        ],
+      },
+      dimensions: [
+        { id: "point", kind: "point", size: 256 },
+        { id: "sample", kind: "sample", size: 128 },
+      ],
+      variables: [
+        { ...base.variables![0]!, unit: null },
+        ...["I", "Q"].map((id) => ({
+          id,
+          role: "observable" as const,
+          dtype: "float64" as const,
+          dims: ["point", "sample"],
+          unit: "V",
+        })),
+      ],
+      primary_observables: ["I", "Q"],
+    };
+    const items = Array.from({ length: 256 }, (_, point) =>
+      record(
+        point,
+        { bias: scalar(point, "V") },
+        {
+          I: array(
+            Array.from({ length: 128 }, (_sample, i) => point + i),
+            "V",
+          ),
+          Q: array(
+            Array.from({ length: 128 }, (_sample, i) => point - i),
+            "V",
+          ),
+        },
+      ),
+    );
+    const projected = items.map((item) => ({ ...item, observables: {} }));
+    expect(measurementSlicePlan(schema)?.variableIds).toEqual(["bias"]);
+    // Legacy/unknown projection must not be guessed from a missing array value.
+    expect(measurementTable(projected.slice(0, 1), schema).rows[0]?.cells.slice(-2)).toEqual([
+      "—",
+      "—",
+    ]);
+    expect(measurementTable(items.slice(0, 1), schema).rows[0]?.cells.slice(-2)).toEqual([
+      "128 samples V",
+      "128 samples V",
+    ]);
+    render(
+      <MeasurementDataPreview
+        preview={{ schema, items: items.slice(0, 1) }}
+        slice={{ ...slicePreview(schema, projected), variableIds: ["bias"] }}
+        sliceError={null}
+        slicePending={false}
+        fixedAxisIndices={{}}
+        onFixedAxisIndexChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText(/Record table/));
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByText("未在当前切片读取")).toHaveLength(200);
+    expect(within(table).queryByText("—")).not.toBeInTheDocument();
+    expect(within(table).getAllByRole("row")).toHaveLength(101);
+    fireEvent.click(screen.getByRole("button", { name: "末页记录" }));
+    expect(within(table).getAllByText("未在当前切片读取")).toHaveLength(112);
+    expect(within(table).getAllByRole("row")).toHaveLength(57);
+    expect(within(table).getByRole("rowheader", { name: "255" })).toBeVisible();
+  });
+
+  it("does not relabel requested missing or unavailable values as unrequested", () => {
+    const schema = scalarSchema();
+    const items = [
+      record(0, { bias: scalar(0, "V") }, {}),
+      record(
+        1,
+        { bias: scalar(1, "V") },
+        {
+          signal: {
+            kind: "unavailable",
+            reason: "overload",
+            dtype: "float64",
+            metadata: {},
+            shape: [],
+            unit: null,
+          },
+        },
+      ),
+    ];
+    expect(
+      measurementTable(items, schema, {}, ["bias", "signal"]).rows.map((r) => r.cells.at(-1)),
+    ).toEqual(["—", "Unavailable · overload"]);
+    expect(measurementTable(items, schema, {}, []).rows[0]?.cells).toEqual([
+      "0",
+      "未在当前切片读取",
+      "未在当前切片读取",
+    ]);
   });
 
   it("keeps a live daemon receipt visible while the selected slice is not durable", async () => {

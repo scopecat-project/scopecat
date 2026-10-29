@@ -9097,6 +9097,8 @@ export interface components {
              * @default false
              */
             truncated: boolean;
+            /** Variable Ids */
+            variable_ids?: string[] | null;
             /**
              * Window Point Count
              * @default 0
