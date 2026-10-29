@@ -2839,7 +2839,9 @@ class DaemonClient:
         response = self._request(
             "POST",
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/measurements/ingest",
-            content=encode_measurement_append(append, dataset_schema),
+            content=encode_measurement_append(
+                append, dataset_schema, dataset_schema_hash=dataset_schema.content_hash
+            ),
             headers={
                 "Content-Type": "application/vnd.apache.arrow.file",
                 "X-Scopecat-Lease-ID": lease_id,

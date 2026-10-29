@@ -471,7 +471,9 @@ class ExecutorService:
                 raise ActiveMeasurementConflict(
                     "measurement ingest requires a registered dataset schema"
                 )
-            append = decode_measurement_append(content, dataset_schema)
+            append = decode_measurement_append(
+                content, dataset_schema, dataset_schema_hash=dataset_schema.content_hash
+            )
             if append.run_id != run_id:
                 raise ActiveMeasurementConflict(
                     "measurement ingest run id does not match its route"

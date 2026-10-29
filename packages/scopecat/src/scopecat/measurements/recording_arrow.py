@@ -12,7 +12,6 @@ from typing import cast
 import numpy as np
 import pyarrow as pa
 
-from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.measurements.arrow_entity_selection import (
     entity_leaf_indices,
@@ -640,7 +639,7 @@ def _decode_identity(
 def measurement_dataset_schema_hash(
     dataset_schema: MeasurementDatasetSchema,
 ) -> str:
-    return model_wire_content_hash(dataset_schema)
+    return dataset_schema.content_hash
 
 
 def _decode_records(
