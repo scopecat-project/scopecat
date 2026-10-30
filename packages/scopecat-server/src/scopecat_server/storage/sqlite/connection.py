@@ -139,13 +139,25 @@ class SQLiteDatabase:
                 self._idle_readers.clear()
                 writer = self._writer
                 self._writer = None
+            errors: list[BaseException] = []
             for connection in readers:
-                connection.close()
+                try:
+                    connection.close()
+                except BaseException as error:
+                    errors.append(error)
             if writer is not None:
                 try:
                     writer.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-                finally:
+                except BaseException as error:
+                    errors.append(error)
+                try:
                     writer.close()
+                except BaseException as error:
+                    errors.append(error)
+            if len(errors) == 1:
+                raise errors[0]
+            if errors:
+                raise BaseExceptionGroup("Failed to close SQLite database", errors)
 
     def _writer_connection(self) -> sqlite3.Connection:
         with self._connections_lock:
