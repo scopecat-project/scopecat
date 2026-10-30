@@ -315,7 +315,9 @@ def verify_windows_replacement(installer: Path, installed: Path) -> None:
     kernel.CreateFileW.restype = wintypes.HANDLE
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel.CloseHandle.restype = wintypes.BOOL
-    handle = kernel.CreateFileW(str(metadata), 0x80000000, 0, None, 3, 0, None)
+    handle = cast(
+        "int", kernel.CreateFileW(str(metadata), 0x80000000, 0, None, 3, 0, None)
+    )
     assert handle != ctypes.c_void_p(-1).value
     try:
         assert setup(installed).returncode != 0
