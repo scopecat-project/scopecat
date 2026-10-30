@@ -51,7 +51,6 @@ def delivery(tmp_path: Path) -> Path:
     (root / "requirements.lock").write_text("example==1\n")
     (root / "dependencies.lock").write_text("example==1\n")
     (root / "build.lock").write_text("version = 1\n")
-    (root / "install.py").write_text("# installer fixture\n")
     files = bundle.inventory(root, ("gui", "wheels"))
     files.update(
         {
@@ -60,7 +59,6 @@ def delivery(tmp_path: Path) -> Path:
                 "requirements.lock",
                 "dependencies.lock",
                 "build.lock",
-                "install.py",
             )
         }
     )

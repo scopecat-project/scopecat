@@ -66,6 +66,7 @@ def test_recipe_can_consume_public_artifacts_without_a_checkout(
         tmp_path / "artifact", recipe=recipe, preview=preview
     )
     verify_bundle(result)
+    assert not (result / "install.py").exists()
     assert (result / "gui/index.html").read_text() == "<html>published GUI</html>"
     assert json.loads((result / MANIFEST).read_text())["sources"]["public"] == "a" * 40
     metadata = json.loads((preview / "preview.json").read_text())
@@ -95,12 +96,6 @@ def recipe(tmp_path: Path) -> Path:
         ("scopecat-tutorials", "scopecat-tutorials"),
     ):
         project(public / "packages" / directory, name)
-    installer = public / "packages/scopecat-app/src/scopecat_app/bundle.py"
-    installer.parent.mkdir(parents=True)
-    installer.write_text("# maintained installer\n")
-    builder = public / "scripts/app_build/installer.py"
-    builder.parent.mkdir(parents=True)
-    builder.write_text("# repository installer\n")
     path = tmp_path / "delivery.toml"
     path.write_text(
         '[delivery]\nlock_project="."\npublic_source="public"\n'

@@ -142,7 +142,14 @@ def verify_bundle(root: Path) -> Bundle:
         "requirements.lock",
         "dependencies.lock",
         "build.lock",
-        "install.py",
+        # Historical material inventories may still contain the old installer.
+        *(
+            ["install.py"]
+            if "install.py" in bundle["files"]
+            or (root / "install.py").exists()
+            or (root / "install.py").is_symlink()
+            else []
+        ),
     ):
         path = root / name
         if path.is_symlink():

@@ -1,7 +1,7 @@
 """Prepare the existing Windows app or a Linux-only homologous teaching fixture.
 
 This is acceptance plumbing, not a Linux native application builder. The format 1
-input remains available for separate installer regression; the journey consumes
+input is internal build material; the journey consumes
 only the installed Python and verified format 2 resources.
 """
 

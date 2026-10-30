@@ -8,7 +8,7 @@ import tarfile
 from pathlib import Path
 
 import pytest
-from scripts.app_build import installer
+from scripts.app_build import runtime_install
 
 from scopecat_app import bundle
 
@@ -23,7 +23,6 @@ def delivery(tmp_path: Path) -> Path:
     (root / "requirements.lock").write_text("example==1\n")
     (root / "dependencies.lock").write_text("example==1\n")
     (root / "build.lock").write_text("version = 1\n")
-    (root / "install.py").write_text("# installer fixture\n")
     files = bundle.inventory(root, ("gui", "wheels"))
     files.update(
         {
@@ -32,7 +31,6 @@ def delivery(tmp_path: Path) -> Path:
                 "requirements.lock",
                 "dependencies.lock",
                 "build.lock",
-                "install.py",
             )
         }
     )
@@ -57,13 +55,28 @@ def test_gui_assets_must_match_delivery(delivery: Path):
         bundle.verify_bundle(delivery)
 
 
+@pytest.mark.parametrize("recorded", [False, True])
+def test_old_installer_is_checked_only_as_hashed_material(delivery: Path, recorded):
+    legacy = delivery / "install.py"
+    legacy.write_text("# historical material\n")
+    manifest = delivery / bundle.MANIFEST
+    document = json.loads(manifest.read_text())
+    if recorded:
+        document["files"]["install.py"] = bundle.file_hash(legacy)
+        manifest.write_text(json.dumps(document))
+        bundle.verify_bundle(delivery)
+        legacy.write_text("# changed\n")
+    with pytest.raises(ValueError, match="被修改"):
+        bundle.verify_bundle(delivery)
+
+
 def test_corrupt_wheel_blocks_install_before_environment_creation(
     delivery: Path, tmp_path: Path
 ):
     (delivery / "wheels/example.whl").write_bytes(b"changed")
     destination = tmp_path / "environment"
     with pytest.raises(ValueError, match="被修改"):
-        installer.install_bundle(delivery, destination)
+        runtime_install.install_runtime(delivery, destination)
     assert not destination.exists()
 
 
@@ -84,27 +97,6 @@ def add_toolchain(delivery: Path, *, unsafe=False):
     document = json.loads(path.read_text())
     document["files"].update(bundle.inventory(delivery, ("toolchain",)))
     path.write_text(json.dumps(document))
-
-
-def test_wheel_delivery_uses_installed_uv_without_host_path(
-    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    prefix = tmp_path / "application"
-    uv = prefix / ("Scripts/uv.exe" if os.name == "nt" else "bin/uv")
-    uv.parent.mkdir(parents=True)
-    uv.touch()
-    commands = []
-
-    def run(command):
-        commands.append(command)
-        if command[1] == "venv":
-            Path(command[-1]).mkdir()
-
-    monkeypatch.setenv("PATH", "")
-    monkeypatch.setattr(bundle.sys, "prefix", str(prefix))
-    monkeypatch.setattr(installer, "_run_install", run)
-    installer.install_bundle(delivery, tmp_path / "author")
-    assert all(command[0] == str(uv) for command in commands)
 
 
 def test_toolchain_reuses_prepared_archive_without_supply_lookup(
@@ -141,7 +133,7 @@ def test_installer_rejects_other_platform(delivery: Path, tmp_path: Path):
     data["target"]["machine"] = "other-architecture"
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="ABI"):
-        installer.install_bundle(delivery, tmp_path / "environment")
+        runtime_install.install_runtime(delivery, tmp_path / "environment")
 
 
 def test_manifest_paths_stay_inside_delivery(delivery: Path):
@@ -190,13 +182,11 @@ def test_start_checks_reused_service_gui(
     _check_served_gui(record, delivery / "gui")
 
 
-def test_public_install_bundle_still_refuses_existing_destination(
-    delivery: Path, tmp_path: Path
-):
+def test_runtime_install_refuses_existing_destination(delivery: Path, tmp_path: Path):
     destination = tmp_path / "existing"
     destination.mkdir()
-    with pytest.raises(FileExistsError, match="已存在"):
-        installer.install_bundle(delivery, destination)
+    with pytest.raises(FileExistsError):
+        runtime_install.install_runtime(delivery, destination)
 
 
 def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
@@ -381,23 +371,3 @@ def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_
         create_client_environment(runtime, workspace, rebuild=True)
     assert python.read_bytes() == b"existing interpreter"
     assert not list(workspace.glob(".venv-retained-*"))
-
-
-def test_standalone_installer_runs_without_installed_application(tmp_path: Path):
-    import subprocess
-    import sys
-
-    from scripts.app_build.delivery import standalone_installer
-
-    source = Path(__file__).resolve().parents[3]
-    installer_path = tmp_path / "install.py"
-    installer_path.write_text(standalone_installer(source), encoding="utf-8")
-    result = subprocess.run(  # noqa: S603 - owned generated installer
-        [sys.executable, "-I", "-S", str(installer_path), "--help"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "--bundle" in result.stdout

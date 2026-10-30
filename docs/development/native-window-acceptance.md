@@ -191,7 +191,7 @@ workflow** for a change requiring native requalification. Select the reviewed
 candidate ref under **Use workflow from**, choose **profile: native-distribution**,
 and confirm the run's head SHA equals the exact reviewed SHA. The earlier
 #885/#886 result above required their combined API and probe; neither an older
-branch nor a later main inherits that result. Do not choose `public-preview`,
+branch nor a later main inherits that result. Do not choose `candidate-artifacts`,
 which publishes release assets. The native profile builds and retains installer
 artifacts but does not create a release, tag or deployment.
 

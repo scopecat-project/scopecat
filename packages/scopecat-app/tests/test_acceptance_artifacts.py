@@ -93,7 +93,7 @@ def test_reject_mixed_or_missing_artifacts(bundle: Path, failure):
 
 
 JOBS = [
-    "PUBLIC_PREVIEW",
+    "CANDIDATE_ARTIFACTS",
     "NATIVE_DISTRIBUTION",
     "SERVICE_LIFECYCLE",
     "INSTALLED_ARTIFACTS",
@@ -105,13 +105,14 @@ JOBS = [
     "DOCS",
 ]
 SELECTED = {
-    "public-preview": {"PUBLIC_PREVIEW"},
+    "candidate-artifacts": {"CANDIDATE_ARTIFACTS"},
     "native-distribution": {"NATIVE_DISTRIBUTION"},
     "service-lifecycle": {"SERVICE_LIFECYCLE"},
     "browser": {"UI", "BROWSER_TESTS"},
     "teaching": {"UI", "INSTALLED_ARTIFACTS"},
     "local-application": {"UI", "BROWSER_TESTS", "INSTALLED_ARTIFACTS"},
-    "full": set(JOBS) - {"PUBLIC_PREVIEW", "NATIVE_DISTRIBUTION", "SERVICE_LIFECYCLE"},
+    "full": set(JOBS)
+    - {"CANDIDATE_ARTIFACTS", "NATIVE_DISTRIBUTION", "SERVICE_LIFECYCLE"},
 }
 
 

@@ -71,24 +71,6 @@ class DeliveryRecipe:
     source_builds: tuple[str, ...] = ()
 
 
-def standalone_installer(source: Path) -> str:
-    """Combine runtime integrity checks and repository installer for offline use."""
-    runtime = (source / "packages/scopecat-app/src/scopecat_app/bundle.py").read_text(
-        encoding="utf-8"
-    )
-    installer = (source / "scripts/app_build/installer.py").read_text(encoding="utf-8")
-    import ast
-
-    lines = installer.splitlines(keepends=True)
-    for node in reversed(ast.parse(installer).body):
-        if isinstance(node, ast.ImportFrom) and node.module in {
-            "__future__",
-            "scopecat_app.bundle",
-        }:
-            del lines[node.lineno - 1 : node.end_lineno]
-    return runtime + "\n" + "".join(lines)
-
-
 def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRecipe:
     """Resolve a maintained recipe without evaluating Python or shell commands."""
     path = path.resolve()
@@ -539,10 +521,6 @@ def build_delivery(
         _ = (destination / "requirements.lock").write_text(
             "\n".join(sorted(requirements)) + "\n", encoding="utf-8"
         )
-        (destination / "install.py").write_text(
-            standalone_installer(public or Path(__file__).resolve().parents[2]),
-            encoding="utf-8",
-        )
         files = inventory(destination, ("gui", "wheels", "toolchain"))
         files.update(
             {
@@ -551,7 +529,6 @@ def build_delivery(
                     "requirements.lock",
                     "dependencies.lock",
                     "build.lock",
-                    "install.py",
                 )
             }
         )

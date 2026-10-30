@@ -338,7 +338,8 @@ prevent opening unrelated data or stopping the application.
 An extension wheel is optional distribution of ordinary laboratory code. Install
 it in the selected execution environment, never the desktop runtime. Vendor SDKs
 can use their own process/environment while device ownership remains unified.
-Offline environment bundles are separate from the public native installer.
+Offline author dependencies, when needed, are prepared for the selected environment;
+there is no separate general-purpose application environment installer.
 
 ## Local settings boundary
 

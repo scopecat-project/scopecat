@@ -252,12 +252,16 @@ def package(app: Path, destination: Path) -> Path:
                 "PrivilegesRequired=lowest\nUninstallDisplayIcon={app}\\Scopecat.exe\n"
                 f"OutputDir={staging}\nOutputBaseFilename=Scopecat-Setup\n"
                 "Compression=lzma2\nSolidCompression=yes\nDisableProgramGroupPage=yes\n"
+                "CloseApplications=no\nRestartApplications=no\n"
                 "[Files]\n"
                 f'Source: "{app}\\*"; DestDir: "{{app}}"; '
                 "Flags: ignoreversion recursesubdirs createallsubdirs\n"
                 "[Icons]\n"
                 'Name: "{userprograms}\\Scopecat"; Filename: "{app}\\Scopecat.exe"; '
-                'AppUserModelID: "org.scopecat.desktop"\n',
+                'AppUserModelID: "org.scopecat.desktop"\n'
+                + Path(__file__)
+                .with_name("windows_upgrade.iss")
+                .read_text(encoding="utf-8"),
                 encoding="utf-8-sig",
             )
             _run([compiler, str(script)])

@@ -421,14 +421,16 @@ def test_teaching_delivery_requires_same_invocation_application_checks(
 
     def incomplete_help(command, **kwargs):
         calls.append(command)
-        work = Path(command[-1])
+        work = Path(command[3])
         work.mkdir()
         (work / "acceptance.json").write_text(json.dumps(receipt))
 
     monkeypatch.setattr(delivery.subprocess, "run", incomplete_help)
     destination = tmp_path / "evidence"
     with pytest.raises(RuntimeError, match="must pass in this Help invocation"):
-        delivery.verify(tmp_path / "payload", destination)
+        delivery.verify(
+            tmp_path / "payload", destination, runtime_python=tmp_path / "python"
+        )
     assert len(calls) == 1
     assert json.loads((destination / "help/acceptance.json").read_text()) == receipt
 

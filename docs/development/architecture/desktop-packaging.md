@@ -6,8 +6,7 @@ packages or writing application files. Editable author code and vendor environme
 remain independent. Native assembly consumes a full delivery as an intermediate,
 then ships a format-2 author resource manifest with only `scopecat` and
 `scopecat-server` wheels, GUI, constraints, a pinned Python recipe and uv tools.
-It does not retain the Python archive or third-party wheelhouse. The generic
-format-1 offline delivery and its installer remain supported. Author preparation
+It does not retain the Python archive or third-party wheelhouse. Format-1 delivery is internal build material; no standalone offline installer is shipped. Author preparation
 uses independent uv-managed or explicit Python and downloads third-party packages;
 application launch remains offline. The recipe is probed from the actual packaged
 interpreter and must match the delivery target. Selecting an author base checks
@@ -52,7 +51,7 @@ Mac packaging/libpython checks; author import smoke alone is insufficient.
 | --- | --- |
 | Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-app` owns the environment's `scopecat` console. Application launch uses the packaged runtime. |
 | Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
-| Installed teaching verification | Help and CLI-created ordinary author source run through the selected installed runtime and verified format-2 resources; author preparation remains online. The separate format-1 `install.py` regression retains manifest/hash checks and offline environment installation. |
+| Installed teaching verification | Help and CLI-created ordinary author source run through the selected installed runtime and verified format-2 resources; author preparation remains online. Internal runtime construction retains manifest/hash checks and offline dependency installation. |
 
 The application-tools wheel owns the `scopecat` console. Server-only consumers use
 the module entry; see [CLI ownership](../../reference/cli.md#entry-ownership-and-migration).
@@ -69,7 +68,6 @@ not additional desktop products.
 | Source and browser | Regular CI; Linux browser shards in `full` / `local-application` / `browser` | API, UI interactions and source regressions; not installed-package evidence |
 | Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or scopecat-app; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
 | Installed teaching consumer | Linux/Windows `installed-artifacts` in `full`, `local-application` or manual `teaching`; installed runtime and format-2 resources are archived and relocated | Windows uses the existing native builder; Linux uses an explicitly marked homologous runtime fixture, not a native application. Product import origins, retained Notebooks, ordinary CLI author preparation, application reopen and recovery are checked after the original runtime path is made unavailable. |
-| Legacy offline installer | Separate step in the same installed-artifacts job; complete format-1 materials remain build inputs | `install.py` offline regression is retained independently of the installed-runtime teaching journey. |
 | Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
 | Public artifact consumer | Immutable `preview.json`, wheels and GUI; downstream consumer pins | Source commit and package/hash identity; a downstream pin is not evidence for a newer framework candidate |
 | Release assembly | `release-publish` builds standard artifacts once, reuses them for platform delivery/native packaging | Matching release identity and qualified installer inventory; not invoked by ordinary CI |
@@ -81,8 +79,7 @@ installed checks consume its GUI, and platform delivery reuses its wheels.
 The manual `teaching` profile selects only the UI artifact producer and the two
 installed-artifacts jobs; it does not enable continuous full acceptance.
 The archived installed runtime is an internal validation carrier, not an additional
-desktop product commitment. Format 1 remains the build intermediate and separate
-offline-installer regression input. Calling course code a fixture describes its
+desktop product commitment. Format 1 remains an internal build intermediate. Calling course code a fixture describes its
 current maintenance form; it does not retire the teaching requirement. Narrowing installed teaching
 coverage requires an explicit consumer replacement and supported-platform decision.
 
@@ -161,8 +158,7 @@ has two additional boundaries:
   to run `scopecat_app.public_cli` and prepare ordinary editable author source.
   It does not reinstall the application or generate separate service/editor tasks.
   Practice, author and recovery preparation may access the network; format 2 is
-  not an offline dependency cache. A bare format-1 input retains the legacy installer
-  adapter, whose offline installation evidence is recorded separately.
+  not an offline dependency cache. An explicit installed runtime is required; the verifier does not install applications.
 - `verify_installed_help_kernels.py` prepares independent author Python environments
   from minimal format-2 resources and executes `parameters` and `groups` by default.
   These checks retain restart, repair, wrong-kernel rejection and snapshot recovery;
@@ -173,7 +169,7 @@ has two additional boundaries:
   Receipts identify the actual interpreter, payload format/hash and runtime/source
   metadata; they do not claim this already-installed runtime was installed offline
   by the verifier. The format-1 `build_id` is optional compatibility metadata.
-  Omitting `--runtime-python` retains the legacy format-1 installation adapter.
+  `--runtime-python` is required.
   Add `--all-topics` to also execute the remaining generator-declared topics in
   real kernels. The default teaching invocation does not pass that flag; its
   success is not evidence that every topic ran. Inspect the receipt's
@@ -292,8 +288,7 @@ test or a native window interaction test.
 The pending runtime-registration record is a crash-recovery journal. A newly
 verified package may complete it after replacement and recreate its derived receipt
 from current qualification; it need not reinstall the original package or read
-historical receipt formats. Scientific-data readers are unaffected. The retained
-standalone installer prepares offline environments, not desktop applications.
+historical receipt formats. Scientific-data readers are unaffected. Offline dependency installation belongs to the internal native runtime builder.
 
 ## Implementation boundary
 
@@ -340,3 +335,18 @@ an explicit dependency declaration retain their full captured environment contra
 Current native interaction evidence is linked from the
 [desktop product contract](desktop-product.md#evidence) and
 [native window acceptance](../native-window-acceptance.md).
+
+
+## 覆盖安装和预编译
+
+Windows Setup 在写入新版本前整体删除已登记安装的 `resources`，避免旧模块、
+`.dist-info`、DLL 和字节码残留。仅识别同一 AppId、同一路径的安装记录；未知 resources
+目录、重解析点或文件被占用时拒绝安装，不自动结束测量进程。安装根目录的无关文件及
+外部工作区、作者执行环境不在清理范围。删除失败会中止安装；这不是事务式回滚，
+中途失败需关闭占用进程后重装修复。Windows 验收覆盖未知目录拒绝、占用拒绝、
+同版本覆盖/缺失文件修复、已安装入口及卸载后的用户环境保留。
+
+离线依赖安装完成后，用应用自己的 Python 对标准库和安装包执行 `compileall`，
+生成 checked-hash 字节码，代码文件名以 `scopecat-runtime` 为相对根，不携带构建临时路径。
+编译失败阻止打包；搬迁不依赖源文件时间戳，源码变化会使缓存失效。
+原生启动继续使用 `-B`，读取已有缓存但不回写应用目录；源码开发仍使用通常的 Python 行为。

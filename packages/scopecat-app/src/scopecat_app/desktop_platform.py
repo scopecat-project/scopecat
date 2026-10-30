@@ -188,6 +188,12 @@ def _monitor_tray(
             return
 
 
+def _cocoa_schedule(action: Callable[[], None]) -> None:
+    from PyObjCTools import AppHelper
+
+    AppHelper.callAfter(action)
+
+
 def start_tray(
     create: Callable[[], Icon],
     changed: Callable[[bool], None] = lambda _available: None,
@@ -253,9 +259,7 @@ def start_tray(
 
     try:
         if sys.platform == "darwin":
-            from PyObjCTools import AppHelper
-
-            schedule = AppHelper.callAfter
+            schedule = _cocoa_schedule
         schedule(ready)
     except Exception:
         changed(False)

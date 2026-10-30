@@ -194,7 +194,6 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
             "requirements.lock",
             "dependencies.lock",
             "build.lock",
-            "install.py",
         ):
             (source / name).write_text("", encoding="utf-8")
             bundle["files"][name] = file_hash(source / name)
@@ -226,7 +225,7 @@ def test_offline_assemble_verify_and_no_overwrite(release: tuple[Path, Path]) ->
     assert assets.verify(root, SHA, config) == result
     document = json.loads(result.read_text())
     assert document["version"] == "0.3.0-rc.1"
-    assert len(document["files"]) == 11
+    assert len(document["files"]) == 6
     with pytest.raises(FileExistsError, match="never overwrite"):
         assets.assemble(root, SHA, config)
 
@@ -317,7 +316,7 @@ def test_legacy_qualification_remains_verifiable_without_rewriting(
     path = assets.export(root, published, SHA, config)
     assert assets.verify(published, SHA, config) == path
     document = json.loads(path.read_bytes())
-    assert len(list(published.iterdir())) == 12
+    assert len(list(published.iterdir())) == 7
     for name, content in original.items():
         assert document["qualification"][name] == content
 
@@ -589,29 +588,28 @@ def test_native_recipe_requires_a_sha256_digest(release: tuple[Path, Path]):
         assets.assemble(root, SHA, config)
 
 
-def test_export_uses_real_projection_and_keeps_preview_consumers(
+def test_export_publishes_only_installer_and_author_assets(
     release: tuple[Path, Path], tmp_path: Path
 ):
-    from scripts.app_build.preview import read_preview
-
     root, config = release
     assets.assemble(root, SHA, config)
     destination = tmp_path / "published"
     manifest = assets.export(root, destination, SHA, config)
     assert assets.verify(destination, SHA, config) == manifest
     document = json.loads(manifest.read_bytes())
-    assert len(list(destination.iterdir())) == 12
+    assert len(list(destination.iterdir())) == 7
     assert set(document["files"]) == {p.name for p in destination.iterdir()} - {
         "release.json"
     }
     assert len(document["qualification"]) == 4
     assert not list(destination.glob("*-bundle.json"))
     assert not list(destination.glob("*-native-release.json"))
-    preview = read_preview(destination / document["preview"]["file"])
-    assert assets._hash(destination / "preview.json") == document["preview"]["sha256"]
-    assert set(preview["packages"]) == assets.PACKAGES
-    for name, digest in preview["files"].items():
-        assert assets._hash(destination / name) == digest == document["files"][name]
+    assert document["format"] == 2
+    assert set(document["packages"]) == assets.PUBLIC_PACKAGES
+    assert not (destination / "preview.json").exists()
+    assert not (destination / "scopecat-ui.zip").exists()
+    for name, digest in document["files"].items():
+        assert assets._hash(destination / name) == digest
     for installer in document["installers"].values():
         assert assets._hash(destination / installer["file"]) == installer["sha256"]
     with pytest.raises(FileExistsError):
@@ -705,3 +703,26 @@ def test_release_assembly_requires_portable_provenance_even_with_matching_report
     with pytest.raises(ValueError, match="provenance"):
         assets.assemble(root, SHA, config)
     assert not (root / "release.json").exists()
+
+
+@pytest.mark.parametrize("fault", ["wheel", "extra", "manifest", "qualification"])
+def test_exported_subset_is_still_fully_verified(release, tmp_path, fault):
+    root, config = release
+    assets.assemble(root, SHA, config)
+    destination = tmp_path / "public"
+    manifest = assets.export(root, destination, SHA, config)
+    if fault == "wheel":
+        next(destination.glob("*.whl")).write_bytes(b"tampered")
+    elif fault == "extra":
+        (destination / "scopecat-ui.zip").write_bytes(b"internal material")
+    else:
+        document = json.loads(manifest.read_text())
+        if fault == "manifest":
+            document["files"][installer_name("macos")] = "0" * 64
+        else:
+            document["qualification"]["macos-bundle.json"] = "{}"
+        write_json(manifest, document)
+    with pytest.raises(
+        ValueError, match=r"checksum|unexpected|manifest differs|identity mismatch"
+    ):
+        assets.verify(destination, SHA, config)

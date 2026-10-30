@@ -36,6 +36,9 @@ PACKAGES = frozenset(
         "scopecat-testkit",
     }
 )
+PUBLIC_PACKAGES = frozenset(
+    {"scopecat", "scopecat-server", "scopecat-instruments", "scopecat-quantum"}
+)
 NATIVE = {"macos": ("darwin", ".dmg"), "windows": ("win32", ".exe")}
 
 
@@ -133,34 +136,37 @@ def _author_files(
             raise ValueError(f"Invalid native author resource: {name}")
 
 
-def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, object]:
-    """Validate constituent manifests before constructing their release identity."""
-    if not re.fullmatch(r"[a-f0-9]{40}", commit):
-        raise ValueError("Release requires a full commit SHA")
-    identity = read_release(release_file, require_release=True)
-    preview_path = _asset(directory, "preview.json")
-    preview = _read(preview_path)
-    if (
-        preview.get("format") != 1
-        or preview.get("commit") != commit
-        or preview.get("release_version") != identity.version
-        or preview.get("build_number") != identity.build_number
-        or preview.get("channel") != "release"
-    ):
-        raise ValueError("Preview release identity mismatch")
-    ui_version = preview.get("ui_version")
-    if ui_version != identity.javascript_package_version():
-        raise ValueError("UI release identity mismatch")
-    packages = _object(preview.get("packages"))
-    if set(packages) != set(PACKAGES):
-        raise ValueError("Release requires all seven public packages")
-    files = _object(preview.get("files"))
-    wheels = {name for name in files if name.endswith(".whl")}
-    if len(wheels) != len(PACKAGES) or set(files) != wheels | {"scopecat-ui.zip"}:
-        raise ValueError("Release requires exactly seven wheels and the UI archive")
-    hashes = {
-        name: _check_hash(directory, name, digest) for name, digest in files.items()
-    }
+def _release_inputs(
+    directory: Path, *, build_inputs: bool
+) -> tuple[dict[str, object], frozenset[str]]:
+    if build_inputs:
+        preview_path = _asset(directory, "preview.json")
+        preview = _read(preview_path)
+        required_packages = PACKAGES
+    else:
+        released = _read(_asset(directory, "release.json"))
+        if type(released.get("format")) is not int or released["format"] != 2:
+            raise ValueError("Expected release manifest format 2")
+        preview = {
+            **released,
+            "format": 1,
+            "release_version": released.get("version"),
+            "files": {
+                name: digest
+                for name, digest in _object(released.get("files")).items()
+                if name.endswith(".whl")
+            },
+        }
+        required_packages = PUBLIC_PACKAGES
+    return preview, required_packages
+
+
+def _release_wheels(
+    directory: Path,
+    wheels: set[str],
+    packages: dict[str, object],
+    expected_version: str,
+) -> dict[str, str]:
     found: set[str] = set()
     package_wheels: dict[str, str] = {}
     for name in wheels:
@@ -177,14 +183,50 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
         version = str(message["Version"])
         if package not in packages or package in found or version != packages[package]:
             raise ValueError(f"Wheel package/version mismatch: {name}")
-        if version != identity.pep440:
+        if version != expected_version:
             raise ValueError(f"Wheel release version mismatch: {name}")
         validate_dependencies(message.get_all("Requires-Dist", []), version)
         found.add(package)
         package_wheels[package] = name
-    if found != set(PACKAGES):
+    if found != set(packages):
         raise ValueError("Incomplete wheel inventory")
-    hashes["preview.json"] = _hash(preview_path)
+    return package_wheels
+
+
+def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, object]:
+    """Validate constituent manifests before constructing their release identity."""
+    if not re.fullmatch(r"[a-f0-9]{40}", commit):
+        raise ValueError("Release requires a full commit SHA")
+    identity = read_release(release_file, require_release=True)
+    build_inputs = (directory / "preview.json").exists()
+    preview, required_packages = _release_inputs(directory, build_inputs=build_inputs)
+    if (
+        preview.get("format") != 1
+        or preview.get("commit") != commit
+        or preview.get("release_version") != identity.version
+        or preview.get("build_number") != identity.build_number
+        or preview.get("channel") != "release"
+    ):
+        raise ValueError("Preview release identity mismatch")
+    ui_version = preview.get("ui_version")
+    if ui_version != identity.javascript_package_version():
+        raise ValueError("UI release identity mismatch")
+    packages = _object(preview.get("packages"))
+    if set(packages) != set(required_packages):
+        raise ValueError("Release package inventory mismatch")
+    files = _object(preview.get("files"))
+    wheels = {name for name in files if name.endswith(".whl")}
+    expected_files = set(wheels)
+    if build_inputs:
+        expected_files.add("scopecat-ui.zip")
+    if len(wheels) != len(required_packages) or set(files) != expected_files:
+        raise ValueError("Release wheel/UI inventory mismatch")
+    hashes = {
+        name: _check_hash(directory, name, digest) for name, digest in files.items()
+    }
+    package_wheels = _release_wheels(directory, wheels, packages, identity.pep440)
+    if build_inputs:
+        hashes["preview.json"] = _hash(directory / "preview.json")
     evidence_names = {
         f"{platform}-{kind}.json"
         for platform in NATIVE
@@ -273,13 +315,18 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
     }
     if actual_files != set(hashes) | present:
         raise ValueError("Release directory has unexpected or missing assets")
+    public_files = {package_wheels[name] for name in PUBLIC_PACKAGES}
+    public_files.update(str(_object(value)["file"]) for value in installers.values())
     return {
-        "format": 1,
+        "format": 2,
         "version": identity.version,
+        "channel": "release",
+        "ui_version": ui_version,
+        "wheel_version": identity.pep440,
+        "packages": {name: packages[name] for name in sorted(PUBLIC_PACKAGES)},
         "build_number": identity.build_number,
         "commit": commit,
-        "preview": {"file": "preview.json", "sha256": hashes["preview.json"]},
-        "files": dict(sorted(hashes.items())),
+        "files": {name: hashes[name] for name in sorted(public_files)},
         "installers": installers,
         "qualification": qualification,
     }

@@ -1,8 +1,8 @@
 """验收目标 runtime 的教学交付与在线作者准备。
 
 Use --application-layout for a Windows app or Linux runtime fixture, or pass
-format 2 resources with --runtime-python. Bare format 1 input retains the legacy
-installer adapter. Product imports are checked inside the target runtime.
+format 2 resources with --runtime-python. Product imports are checked inside
+the target runtime; this verifier never installs an application.
 """
 
 from __future__ import annotations
@@ -17,9 +17,7 @@ from time import perf_counter
 from typing import cast
 
 
-def verify(
-    bundle: Path, destination: Path, *, runtime_python: Path | None = None
-) -> None:
+def verify(bundle: Path, destination: Path, *, runtime_python: Path) -> None:
     from scopecat_app.bundle import configure_console
 
     configure_console()
@@ -41,11 +39,8 @@ def verify(
             str(Path(__file__).with_name("verify_installed_help_kernels.py")),
             str(bundle),
             str(help_evidence),
-            *(
-                ["--runtime-python", str(runtime_python.absolute())]
-                if runtime_python
-                else []
-            ),
+            "--runtime-python",
+            str(runtime_python.absolute()),
         ],
         cwd=destination,
         env=env,
@@ -200,4 +195,6 @@ if __name__ == "__main__":
         args.runtime_python = (
             resources / "python" / ("python.exe" if os.name == "nt" else "bin/python3")
         )
+    if args.runtime_python is None:
+        parser.error("Choose --application-layout or --runtime-python")
     verify(args.bundle, args.destination, runtime_python=args.runtime_python)

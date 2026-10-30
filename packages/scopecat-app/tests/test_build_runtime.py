@@ -177,3 +177,45 @@ def test_catalog_check_rejects_nonunique_supply_without_install(
     ):
         toolchain.select_runtime(repository)
     assert len(commands) == 1
+
+
+def test_bytecode_survives_relocation_and_checks_source_hash(tmp_path):
+    import importlib.util
+    import marshal
+    import sys
+
+    from scripts.app_build.runtime_install import compile_bytecode
+
+    home = tmp_path / "staging"
+    home.mkdir()
+    source = home / "relocatable_probe.py"
+    source.write_text("value = 17\n")
+    compile_bytecode(Path(sys.executable), home)
+    cache = Path(importlib.util.cache_from_source(str(source)))
+    data = cache.read_bytes()
+    assert int.from_bytes(data[4:8], "little") == 3
+    code = marshal.loads(data[16:])  # noqa: S302 - locally compiled fixture
+    assert code.co_filename == str(Path("scopecat-runtime") / source.name)
+    moved = home.rename(tmp_path / "installed")
+    cache = moved / cache.relative_to(home)
+    script = (
+        f"import sys;sys.path.insert(0, {str(moved)!r});"
+        "import relocatable_probe;print(relocatable_probe.value)"
+    )
+    for expected in (17, 23):
+        result = subprocess.check_output(  # noqa: S603 - local interpreter and fixture
+            [sys.executable, "-I", "-B", "-c", script], text=True
+        )
+        assert int(result) == expected
+        assert cache.read_bytes() == data
+        (moved / source.name).write_text("value = 23\n")
+
+
+def test_invalid_shipped_python_fails_precompilation(tmp_path):
+    import sys
+
+    from scripts.app_build.runtime_install import compile_bytecode
+
+    (tmp_path / "broken.py").write_text("def broken(\n")
+    with pytest.raises(subprocess.CalledProcessError):
+        compile_bytecode(Path(sys.executable), tmp_path)

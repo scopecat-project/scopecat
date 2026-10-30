@@ -271,6 +271,87 @@ def verify(
         write_release_manifest(resources, home, installer)
 
 
+def verify_windows_replacement(installer: Path, installed: Path) -> None:
+    """Exercise real Setup refusal, same-version replacement and repair on Windows."""
+    import ctypes
+    from ctypes import wintypes
+
+    def setup(destination: Path) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(  # noqa: S603 - explicit acceptance-only installer
+            [
+                str(installer.resolve()),
+                "/VERYSILENT",
+                "/SUPPRESSMSGBOXES",
+                "/NORESTART",
+                f"/DIR={destination}",
+            ],
+            check=False,
+            timeout=180,
+        )
+
+    foreign = installed.with_name("Unknown installation")
+    (foreign / "resources").mkdir(parents=True)
+    untouched = foreign / "resources/user.txt"
+    untouched.write_text("not owned")
+    assert setup(foreign).returncode != 0
+    assert untouched.read_text() == "not owned"
+    stale = installed / "resources/python/obsolete-0.0.dist-info"
+    stale.mkdir()
+    metadata = stale / "METADATA"
+    metadata.write_text("obsolete")
+    (installed / "resources/python/obsolete.pyc").write_bytes(b"obsolete")
+    note = installed / "user-note.txt"
+    note.write_text("preserve unrelated files")
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = cast(
+        "int", kernel.CreateFileW(str(metadata), 0x80000000, 0, None, 3, 0, None)
+    )
+    assert handle != ctypes.c_void_p(-1).value
+    try:
+        assert setup(installed).returncode != 0
+        assert metadata.exists()
+        assert (installed / "resources/bootstrap.py").is_file()
+    finally:
+        assert kernel.CloseHandle(handle)
+    junction = installed / "resources/foreign-link"
+    _ = subprocess.run(  # noqa: S603 - Windows CI junction fixture
+        [
+            str(Path(os.environ["SYSTEMROOT"]) / "System32/cmd.exe"),
+            "/c",
+            "mklink",
+            "/J",
+            str(junction),
+            str(foreign / "resources"),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        assert setup(installed).returncode != 0
+        assert untouched.read_text() == "not owned"
+        assert metadata.read_text() == "obsolete"
+    finally:
+        junction.rmdir()
+    (installed / "resources/bootstrap.py").unlink()
+    assert setup(installed).returncode == 0
+    assert not stale.exists()
+    assert not (installed / "resources/python/obsolete.pyc").exists()
+    assert (installed / "resources/bootstrap.py").is_file()
+    assert note.read_text() == "preserve unrelated files"
+
+
 def write_release_manifest(resources: Path, home: Path, installer: Path) -> None:
     """Record the verified installer and the actual shipped author manifest."""
     manifest = resources / "payload/bundle.json"
@@ -538,6 +619,7 @@ def _verify(
                 ],
                 check=True,
             )
+            verify_windows_replacement(installer, installed)
             _ = subprocess.run(  # noqa: S603 - installed native entry, still headless
                 [str(installed / "Scopecat.exe"), *command[1:]],
                 env=environment,
@@ -559,7 +641,8 @@ def _verify(
                 check=True,
             )
             print(
-                "PASS: Windows setup, installed entry and uninstall "
+                "PASS: Windows setup, replacement/repair, installed entry "
+                "and uninstall "
                 "preserve user environments"
             )
         else:
