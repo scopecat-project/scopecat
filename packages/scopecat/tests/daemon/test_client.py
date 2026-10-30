@@ -938,3 +938,53 @@ def test_live_preview_preserves_unflushed_counts_and_exact_identity(
             assert preview.received_record_count == 1
             assert preview.durable_record_count == 0
             assert preview.latest == (None if response_kind == "empty" else record)
+
+
+@pytest.mark.parametrize("code", ["sqlite_writer_busy", "other", None])
+def test_heartbeat_classifies_only_explicit_writer_busy(code: str | None) -> None:
+    from scopecat.automation import ProcedureLeaseRenewalBusy
+    from scopecat.automation.wire import ProcedureWorkerLeaseHeartbeatCommand
+    from scopecat.daemon.client import DaemonUnavailableError
+
+    requests: list[httpx2.Request] = []
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(503, json={"detail": "busy", "code": code})
+
+    with DaemonClient("http://test", transport=httpx2.MockTransport(reply)) as client:
+        expected = (
+            ProcedureLeaseRenewalBusy
+            if code == "sqlite_writer_busy"
+            else DaemonUnavailableError
+        )
+        with pytest.raises(expected):
+            client.heartbeat_procedure_worker_lease(
+                ProcedureWorkerLeaseHeartbeatCommand(
+                    procedure_run_id="p",
+                    lease_token="t",  # noqa: S106 - synthetic lease token
+                )
+            )
+    assert len(requests) == 1
+
+
+def test_heartbeat_does_not_replay_lost_response_without_authority_deadline() -> None:
+    from scopecat.automation.wire import ProcedureWorkerLeaseHeartbeatCommand
+
+    requests: list[httpx2.Request] = []
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        raise httpx2.ReadError("response lost", request=request)
+
+    with (
+        DaemonClient("http://test", transport=httpx2.MockTransport(reply)) as client,
+        pytest.raises(httpx2.ReadError),
+    ):
+        client.heartbeat_procedure_worker_lease(
+            ProcedureWorkerLeaseHeartbeatCommand(
+                procedure_run_id="p",
+                lease_token="t",  # noqa: S106 - synthetic lease token
+            )
+        )
+    assert len(requests) == 1

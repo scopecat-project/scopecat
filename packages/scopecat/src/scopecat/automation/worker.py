@@ -124,8 +124,12 @@ class ProcedureControlError(RuntimeError):
         super().__init__(f"procedure control operation {operation!r} failed: {cause}")
 
 
+class ProcedureLeaseRenewalBusy(RuntimeError):
+    """The server explicitly rejected renewal because its writer was busy."""
+
+
 class ProcedureLeaseLostError(RuntimeError):
-    """The background heartbeat proved that this worker lost authority."""
+    """The worker can no longer confirm its authority to commit effects."""
 
     def __init__(self, lease: ProcedureWorkerLease, cause: Exception) -> None:
         self.lease = lease
@@ -779,12 +783,9 @@ class _ProcedureLeaseAuthority:
                 with self._state_lock:
                     lease = self._lease
                 try:
-                    receipt = self._control.heartbeat_procedure_worker_lease(
-                        ProcedureWorkerLeaseHeartbeatCommand(
-                            procedure_run_id=lease.procedure_run_id,
-                            lease_token=lease.lease_token,
-                        )
-                    )
+                    receipt = self._renew_lease(lease)
+                    if receipt is None:
+                        return
                 except Exception as error:
                     with self._state_lock:
                         self._failure = (lease, error)
@@ -792,6 +793,34 @@ class _ProcedureLeaseAuthority:
                 with self._state_lock:
                     self._run = receipt.run
                     self._lease = receipt.lease
+
+    def _renew_lease(
+        self, lease: ProcedureWorkerLease
+    ) -> ProcedureWorkerLeaseHeartbeatReceipt | None:
+        # Hold the command lock throughout recovery: no effect completion can
+        # race a temporarily unavailable renewal. Never retry an unknown result.
+        command = ProcedureWorkerLeaseHeartbeatCommand(
+            procedure_run_id=lease.procedure_run_id,
+            lease_token=lease.lease_token,
+        )
+        for attempt in range(3):
+            if datetime.now(UTC) >= lease.expires_at:
+                raise RuntimeError("confirmed procedure lease expired during renewal")
+            try:
+                receipt = self._control.heartbeat_procedure_worker_lease(command)
+            except ProcedureLeaseRenewalBusy:
+                remaining = (lease.expires_at - datetime.now(UTC)).total_seconds()
+                if attempt == 2 or remaining <= 1:
+                    raise
+                if self._stop.wait(1):
+                    return None
+            else:
+                if datetime.now(UTC) >= lease.expires_at:
+                    raise RuntimeError(
+                        "renewal receipt arrived after confirmed lease expired"
+                    )
+                return receipt
+        raise AssertionError("unreachable renewal attempt")
 
     def _adopt(self, run: ProcedureRun) -> None:
         with self._state_lock:
@@ -826,6 +855,7 @@ __all__ = [
     "ProcedureControl",
     "ProcedureControlError",
     "ProcedureLeaseLostError",
+    "ProcedureLeaseRenewalBusy",
     "ProcedureNeedsAttention",
     "ProcedureWorker",
 ]

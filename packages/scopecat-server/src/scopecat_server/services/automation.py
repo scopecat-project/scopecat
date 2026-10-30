@@ -1035,11 +1035,11 @@ class AutomationService:
     ) -> ProcedureLeaseRecord:
         """Renew a live lease without changing procedure business revision."""
 
-        now = self._now()
         with (
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            now = self._now()
             run = self._store.read_run_in_transaction(connection, procedure_run_id)
             if run.state != "leased":
                 raise AutomationConflict("only a leased procedure can renew")

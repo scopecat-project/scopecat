@@ -118,6 +118,7 @@ from scopecat.automation.worker import (
     ProcedureControl,
     ProcedureControlError,
     ProcedureLeaseLostError,
+    ProcedureLeaseRenewalBusy,
     ProcedureNeedsAttention,
     ProcedureWorker,
 )
@@ -154,6 +155,7 @@ __all__ = [
     "ProcedureInputContinueReceipt",
     "ProcedureIntent",
     "ProcedureLeaseLostError",
+    "ProcedureLeaseRenewalBusy",
     "ProcedureNeedsAttention",
     "ProcedureRecoveryAdapter",
     "ProcedureRecoveryAvailability",
