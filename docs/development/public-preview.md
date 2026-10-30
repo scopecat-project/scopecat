@@ -7,11 +7,9 @@
 ## 数字版本发行 {#numbered-releases}
 
 日常合并运行 CI 并产生验证证据，不自动发布版本。
-首个数字实验版本 [v0.1.0 / build 1](https://github.com/scopecat-project/scopecat/releases/tag/v0.1.0)
-已于 2026-10-15 发布，对应源码 `efefef28c8b4b66b47c5849ddb954f5b317be711`。
-随后已发布 [v0.2.0 / build 2](https://github.com/scopecat-project/scopecat/releases/tag/v0.2.0)，
-源码为 `16567a7279d778feb2cbbf625cf77ae238280215`。历史 tag 和文件保持原样；
-下文说明当前代码用于**后续构建**的规则，不回写历史产物。
+已发布版本及其固定资产以 [GitHub Releases](https://github.com/scopecat-project/scopecat/releases)
+为准。v0.1.0 使用历史 16 项布局，v0.2.0/v0.2.1 使用 12 项布局；
+下文说明当前代码用于**后续构建**的 7 项规则，不回写历史 tag、文件或哈希。
 
 `release.toml` 是应用发行号和原生 build number 的权威来源。同批七个第一方 wheel
 和正式 UI 在构建时采用该发行号；完整源码 SHA 保留在独立构建溯源字段。`0.0.0` / build `0` 仅是未发布的
@@ -44,7 +42,7 @@ default: minor
 请保留原始 ID，并选择 Scopecat 显示的作者解释器。
 ```
 
-仓库固定的 Knope 0.23.1 将标题和正文整理为发布说明，默认沿用生成层级，不手工重复添加
+工作流固定的 Knope 版本（`KNOPE_VERSION`） 将标题和正文整理为发布说明，默认沿用生成层级，不手工重复添加
 版本或分类标题。标题保持在一个物理行；普通段落的硬换行可能使首行成为不完整标题。
 详细条目使用标题与正文，简单句子使用列表项；参见 [Knope change 示例](https://knope.tech/reference/concepts/change/)。
 
@@ -66,39 +64,12 @@ Renovate 分别跟踪 action 的固定 SHA/版本和带注释的 CLI `KNOPE_VERS
 CLI 版本须一致。预发布期间 Knope 保留 changefile，准备正式版本时再移除，使正式说明
 包含完整变化。
 
-### v0.2.0 之后的修复准备（尚未发行） {#post-020-patch-readiness}
+### 发行准备范围 {#post-020-patch-readiness}
 
-下列范围用于下一次修复发行的审查；版本建议仍由既有 changefile/Knope 流程计算。
-本清单不修改 `release.toml`，不建立 tag，不表示产物已发布，也不要求消费者提前追踪 main。
-
-- #1392：未来原生资格报告分别表达 channel、签名、公证、交互覆盖；保留旧报告读取和
-  当时的 12 项资产合同。说明来自 `.changeset/native-qualification.md`。
-- #1394：参数编辑与共享指南采用当前 GUI 术语，区分未保存编辑、固定参数版本与源码版本。
-- #1397：记录表区分切片未读取变量与缺失数据，不扩大数组读取；说明来自
-  `.changeset/record-table-projection.md`。
-- #1398：不可变 header/schema 身份复用，减少显式大扫描重复计算；说明来自
-  `.changeset/measurement-identity-reuse.md`。保留服务端独立验证，未改变科学数据、批次或持久格式。
-- #1400、#1401 分别跟踪本批基线/验收工具和持久进度显示；仅在实际合并后纳入候选。
-  固定逻辑点、记录数、连续前缀不能互换，动态总量仍未知。
-
-#1026 的候选卡片准备入口已由 #1380 实现并包含于 v0.2.0；本批复核不能写成新功能，
-下一次修复发行也不以另造候选入口为前置。
-
-受影响验收按最终候选身份组织：
-
-- 身份与性能：运行 hash/Arrow/ingest/reopen 回归，检查错误身份仍拒绝。需要量化时复用
-  [现有 benchmark](https://github.com/scopecat-project/scopecat/tree/main/benchmarks)，
-  比较同环境同负载的准备、执行及总耗时；Windows 已完成的 4096 点证据见 #1399，
-  不把有限样本或不同作者拓扑称为严格 A/B，不在普通 CI 加长扫描或绝对耗时阈值。
-- 数据呈现：覆盖固定标量、固定数组和未知总量；重开保留数据不重采，投影提示不冒充缺失，
-  有界预览不冒充完整记录数，完成量不能替代科学 outcome。
-- 原生/交付：隔离目录启动前明确，启动后核对 owner/store/PID 生命周期及版本，退出按身份核对；
-  不清理日常数据。精确发行候选的安装器资格与必要原生交互分别记录，CI `native_interaction`
-  未评估时不能用外部本机证据将它改为已覆盖。
-- 消费合同：核对七个 wheel 与 UI 版本、源码 SHA、当时的 12 项资产及 `release.json` 摘要；
-  保留历史报告兼容性，不裁剪 UI ZIP/preview.json，不以签名或公证状态冒充发行 channel。
-
-正式发布前仍按下列既有流程和精确候选门禁执行；本次只准备说明和检查范围。
+已发布功能与验收记录保留在 [CHANGELOG](https://github.com/scopecat-project/scopecat/blob/main/CHANGELOG.md)
+和相应 Release/PR，不在本指南维护第二份“下一版本”清单。
+准备候选时以最后实际分发版本为基线，审查 `.changeset/` 和实际差异，
+按下方流程选择受影响验收；工具或 PR 通过不代表新版本已发行。
 
 ### 发行候选的交付检查 {#first-numbered-delivery-readiness}
 
@@ -108,9 +79,9 @@ CLI 版本须一致。预发布期间 Knope 保留 changefile，准备正式版�
 - 明确发行号和原生 build number。工具存在或 CI 通过不等于已成功发布该版本。
 - 根据[原生验收](native-window-acceptance.md)证据说明实际测试的 OS 与架构。
   实验性发行可只声明已测系统，不必先建立完整最低版本矩阵；打包默认值不构成支持证明。
-- 在干净 Windows 目标上核对 WebView2 已安装和缺失 Runtime 的路径。安装器只复制应用
-  与快捷方式，不捆绑或安装 Evergreen Runtime；承诺新电脑首次启动或离线安装前，
-  应明确 Runtime 前置条件。
+- 在干净 Windows 目标上核对 WebView2 已安装和缺失 Runtime 的路径。安装器替换应用资源并创建
+  快捷方式，不捆绑或安装 Evergreen Runtime；承诺新电脑首次启动或离线安装前，
+  应明确 Runtime 前置条件。此项有限观察由 [#1416](https://github.com/scopecat-project/scopecat/issues/1416) 跟踪。
 - 核对精确候选的下载、安装、教程与作者目录准备、一次合成运行、Quit、重开及继续旅程，
   包括准备/启动失败后的恢复，保留源码和回执。后端测试不能代替原生首次打开或编辑器观察。
 - 在发行说明中记录签名/公证限制、外部编辑器与网络要求、数据兼容边界，核对实际资产与身份。
@@ -232,14 +203,12 @@ Mac short version 是公共数字三元组，build 是显式 build number；Wind
 `.dev<TIMESTAMP>+scopecat.<PUBLIC-PEP440>.g<SHA12>`。消费者必须按该发行的真实清单选择，
 不能从当前规则猜文件名或要求重发；后续构建不会替换它的文件或 tag。
 
-消费端应显式选择发行及可选的预期完整 SHA，核对 release/preview 身份和哈希后再更新
-wheel URL 与依赖锁。选择新发行与通过实验室硬件验收是两回事；发行存在不会自动改变任何 pin。
-保留的历史 SHA preview 仍可选择。已有消费端的 `tools/select_public.py` 使用
-`--release VERSION` 和可选 `--commit FULL_SHA` 选择数字发行，直接传入 `FULL_SHA`
-选择 SHA preview；这些是消费端入口，不是公库 checkout 命令。
+消费端显式选择数字发行及可选的预期完整 SHA，核对清单和所选 wheel 的身份/哈希，
+再更新依赖声明与锁。历史 SHA preview 只供匹配历史 checkout 复现，不再是当前选择入口。
+发行存在不会自动改变消费端 pin，也不代表实验室硬件验收通过。
 
 本地构建与离线校验使用以下命令；组装前须把两平台已验证的安装器、四份资格文档和全部
-公开框架产物放入同一个平面输入目录，具体布局见发布工作流：
+内部 wheel/UI 构建材料放入同一个平面输入目录，具体布局见发布工作流：
 
 ```sh
 uv run --locked python scripts/build_preview.py build/preview --ref FULL_SHA --release
@@ -253,7 +222,7 @@ uv run --locked python scripts/release_assets.py verify build/release --commit F
 已构建或发布。**Full acceptance → native-distribution** 的原生 Actions 产物保留 14 天，
 不是持久发行。不带 `--release` 的普通构建仍可生成按 commit 标记的开发产物。
 
-### 仅框架的 preview 交付 {#existing-framework-only-preview-delivery}
+### 内部候选材料 {#existing-framework-only-preview-delivery}
 
 **Full acceptance → candidate-artifacts** 只生成内部候选材料。
 精确提交通过 CI 后，手动选择该 profile，上传 wheels、UI 和 `preview.json` 为
@@ -314,7 +283,8 @@ Mac/Windows 仅为原生宿主另行取得锁定的 pywebview wheel，沿用已�
 Settings 准备作者环境时使用显式选择的独立 Python，或按工作区/配方固定版本查找
 uv 管理的 Python；缺少缓存时可能下载，离线缺失则明确报错，不复制应用自身的 Python。
 源码桌面宿主 Python 与作者 client/执行环境仍各自持有独立环境，既有作者环境不随资源
-缓存重建而改变。本步骤只迁移 `dev_resources`；native/release 仍使用 format 1 内部材料；通用 install.py 已退役，教学验收只消费已安装 runtime 与 format 2。
+缓存重建而改变。源码开发使用此投影；原生构建输入仍为 format 1 完整材料，公开 release.json 为 format 2。
+通用 `install.py` 已退役，教学验收消费明确准备的 runtime 与 format 2 作者资源。
 缓存身份包含包源码与依赖/构建输入，身份变化可能在启动或重启时触发重新准备。
 UI 编辑使用 HMR，不重建 wheels、作者资源或应用。
 源码 Python/包变化会提示重启：输入 `r` 重启空闲后端，或 `w` 等待空闲后再重启；活动或
