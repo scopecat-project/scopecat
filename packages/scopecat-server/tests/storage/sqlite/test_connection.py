@@ -6,7 +6,7 @@ from contextlib import closing
 from pathlib import Path
 from threading import Event
 from typing import cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -127,8 +127,6 @@ def test_busy_close_preserves_committed_wal_for_reopen_and_backup(
     tmp_path: Path,
 ) -> None:
     """An incomplete TRUNCATE is not a rollback of committed WAL contents."""
-    from unittest.mock import Mock
-
     path = tmp_path / "busy.sqlite3"
     database = SQLiteDatabase(path, busy_timeout_seconds=0)
     with database.initialization_connection() as writer:
@@ -183,8 +181,6 @@ def test_busy_close_preserves_committed_wal_for_reopen_and_backup(
 
 def _close_probe_database(tmp_path: Path):
     """Inject only owned connections; the real close coordination is exercised."""
-    from unittest.mock import Mock
-
     database = SQLiteDatabase(tmp_path / "probe.sqlite3")
     writer = Mock()
     writer.execute.return_value.fetchone.return_value = (0, 0, 0)
@@ -262,8 +258,6 @@ def test_close_reports_stage_error_releases_writer_and_is_not_retried(
 def test_reader_close_error_does_not_leak_remaining_owned_connections(
     tmp_path: Path,
 ) -> None:
-    from unittest.mock import Mock
-
     database, writer = _close_probe_database(tmp_path)
     broken, remaining = Mock(), Mock()
     error = sqlite3.OperationalError("injected reader close")
@@ -288,8 +282,6 @@ def test_close_preserves_all_cleanup_errors(
     tmp_path: Path,
     interrupt_reader: bool,
 ) -> None:
-    from unittest.mock import Mock
-
     database, writer = _close_probe_database(tmp_path)
     readers = [Mock(), Mock()]
     errors = [
