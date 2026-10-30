@@ -6,17 +6,20 @@ import os
 import sqlite3
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
+from typing import Literal, Never, override
 from unittest.mock import Mock
 
 import pytest
 from scopecat.automation import (
     ProcedureDefinitionRef,
     ProcedureSubmitCommand,
+    ProcedureWorkerLease,
     ProcedureWorkerLeaseAcquireCommand,
+    ProcedureWorkerLeaseAcquireReceipt,
     ProcedureWorkerLeaseHeartbeatCommand,
 )
 from scopecat.automation.worker import ProcedureLeaseLostError, _ProcedureLeaseAuthority
@@ -25,17 +28,20 @@ from scopecat_server import BackendConflict
 from scopecat_server.services.automation import AutomationService
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError, SQLiteDatabase
+from scopecat_server.storage.sqlite.object_store import StoredObject
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.resource_objects import put_resource_object
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+
+type LeaseStore = tuple[
+    SQLiteDatabase, SQLiteAutomationStore, AutomationService, list[datetime]
+]
 
 
 @pytest.fixture
 def lease_store(
     tmp_path: Path,
-) -> Generator[
-    tuple[SQLiteDatabase, SQLiteAutomationStore, AutomationService, list[datetime]]
-]:
+) -> Generator[LeaseStore]:
     database = SQLiteDatabase(tmp_path / "control.sqlite3", busy_timeout_seconds=0.02)
     SQLiteProjectStore(database, tmp_path / "objects").bootstrap()
     store = SQLiteAutomationStore(database)
@@ -52,7 +58,7 @@ def lease_store(
         database.close()
 
 
-def _acquire(service: AutomationService):
+def _acquire(service: AutomationService) -> ProcedureWorkerLeaseAcquireReceipt:
     run = service.submit(
         ProcedureSubmitCommand(
             request_key="contention",
@@ -85,17 +91,30 @@ def test_real_writer_busy_does_not_renew_or_override_lease(
             assert release.wait(5), "test did not release the writer"
 
     class PausedCommit(sqlite3.Connection):
+        @override
         def commit(self) -> None:
             if operation == "commit":
                 pause_once()
             super().commit()
 
     connect = sqlite3.connect
-    monkeypatch.setattr(
-        sqlite3,
-        "connect",
-        lambda *args, **kwargs: connect(*args, factory=PausedCommit, **kwargs),
-    )
+
+    def paused_connect(
+        database: str | Path,
+        *,
+        isolation_level: Literal["DEFERRED", "EXCLUSIVE", "IMMEDIATE"] | None = None,
+        timeout: float = 5.0,
+        check_same_thread: bool = True,
+    ) -> PausedCommit:
+        return connect(
+            database,
+            factory=PausedCommit,
+            isolation_level=isolation_level,
+            timeout=timeout,
+            check_same_thread=check_same_thread,
+        )
+
+    monkeypatch.setattr(sqlite3, "connect", paused_connect)
     fsync = os.fsync
 
     def paused_fsync(fd: int) -> None:
@@ -123,7 +142,7 @@ def test_real_writer_busy_does_not_renew_or_override_lease(
     if operation == "object_fsync":
         monkeypatch.setattr(os, "fsync", paused_fsync)
 
-    def write():
+    def write() -> StoredObject | None:
         if operation == "object_fsync":
             return put_resource_object(
                 database, project.objects, "run", "r", b"retained"
@@ -210,18 +229,23 @@ def test_real_writer_busy_does_not_renew_or_override_lease(
 
 
 def test_committed_renewal_with_lost_response_still_fences_worker(
-    lease_store, monkeypatch: pytest.MonkeyPatch
+    lease_store: LeaseStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database, store, service, clock = lease_store
     acquired = _acquire(service)
     clock[0] += timedelta(seconds=10)
-    monkeypatch.setattr(
-        "scopecat.automation.worker.datetime", SimpleNamespace(now=lambda _tz: clock[0])
-    )
-    monkeypatch.setattr("scopecat.automation.worker._heartbeat_delay", lambda _lease: 0)
+
+    def now(_tz: tzinfo) -> datetime:
+        return clock[0]
+
+    def heartbeat_delay(_lease: ProcedureWorkerLease) -> float:
+        return 0
+
+    monkeypatch.setattr("scopecat.automation.worker.datetime", SimpleNamespace(now=now))
+    monkeypatch.setattr("scopecat.automation.worker._heartbeat_delay", heartbeat_delay)
     control = Mock()
 
-    def lose_response(command):
+    def lose_response(command: ProcedureWorkerLeaseHeartbeatCommand) -> Never:
         service.heartbeat_lease(command)
         raise ConnectionError("renewal response lost after commit")
 
