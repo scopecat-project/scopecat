@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from threading import Event, RLock
+from typing import override
 
 import pytest
 from pydantic import BaseModel, ConfigDict, JsonValue
@@ -969,3 +970,103 @@ def _step_state(
 
 def _next_time(value: datetime) -> datetime:
     return max(datetime.now(UTC), value + timedelta(microseconds=1))
+
+
+def test_worker_retries_only_explicit_busy_without_repeating_effect() -> None:
+    from scopecat.automation.worker import ProcedureLeaseRenewalBusy
+
+    renewed = Event()
+    calls: list[ProcedureWorkerLeaseHeartbeatCommand] = []
+
+    class BusyOnce(MemoryProcedureControl):
+        @override
+        def heartbeat_procedure_worker_lease(
+            self, command: ProcedureWorkerLeaseHeartbeatCommand
+        ) -> ProcedureWorkerLeaseHeartbeatReceipt:
+            calls.append(command)
+            if len(calls) == 1:
+                raise ProcedureLeaseRenewalBusy("writer busy")
+            receipt = super().heartbeat_procedure_worker_lease(command)
+            renewed.set()
+            return receipt
+
+    control = BusyOnce(heartbeat_interval=0.001)
+    effects: list[str] = []
+
+    def effect(operation_id: str) -> RunOutputRef:
+        effects.append(operation_id)
+        assert renewed.wait(timeout=5)
+        return RunOutputRef(run_id="single-effect")
+
+    _EFFECTS["busy-renewal"] = effect
+    completed = ProcedureWorker(control, ProcedureRegistry((ONE_STEP,))).execute(
+        ONE_STEP, {"case": "busy-renewal"}, "busy-request", "worker-1"
+    )
+    assert completed.state == "closed"
+    assert len(effects) == 1
+    assert len(calls) >= 2
+    assert calls[0] == calls[1]
+    assert control.effect_complete_calls == 1
+
+
+@pytest.mark.parametrize("mode", ["busy", "lost_response", "expired", "late_receipt"])
+def test_renewal_failure_never_confirms_an_unobserved_lease(
+    mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from scopecat.automation.worker import (
+        ProcedureLeaseRenewalBusy,
+        _ProcedureLeaseAuthority,
+    )
+
+    now = datetime.now(UTC)
+    lease = ProcedureWorkerLease(
+        procedure_run_id="p",
+        worker_id="w",
+        lease_token="t",  # noqa: S106 - synthetic lease token
+        issued_at=now,
+        renewed_at=now,
+        expires_at=now + timedelta(seconds=30),
+        heartbeat_interval_seconds=10,
+    )
+    clock = [now]
+
+    def current_time(_tz: object) -> datetime:
+        return clock[0]
+
+    monkeypatch.setattr(
+        "scopecat.automation.worker.datetime", SimpleNamespace(now=current_time)
+    )
+    control = Mock()
+    stop = Mock()
+    stop.wait.return_value = False
+    confirmed = lease
+
+    def heartbeat(command: ProcedureWorkerLeaseHeartbeatCommand) -> object:
+        nonlocal confirmed
+        if mode == "busy":
+            raise ProcedureLeaseRenewalBusy("busy")
+        if mode == "expired":
+            clock[0] = lease.expires_at
+            raise ProcedureLeaseRenewalBusy("busy")
+        if mode == "late_receipt":
+            clock[0] = lease.expires_at
+            return SimpleNamespace(lease=lease)
+        # Server committed, but the client did not observe its receipt.
+        confirmed = lease.model_copy(update={"expires_at": now + timedelta(seconds=60)})
+        raise ConnectionError("response lost")
+
+    control.heartbeat_procedure_worker_lease.side_effect = heartbeat
+    authority = object.__new__(_ProcedureLeaseAuthority)
+    authority._control, authority._stop, authority._lease = control, stop, lease
+    with pytest.raises((ProcedureLeaseRenewalBusy, ConnectionError, RuntimeError)):
+        authority._renew_lease(lease)
+    assert authority._lease == lease
+    assert control.heartbeat_procedure_worker_lease.call_count == (
+        3 if mode == "busy" else 1
+    )
+    assert stop.wait.call_count == (2 if mode == "busy" else 0)
+    if mode == "lost_response":
+        assert confirmed.expires_at > lease.expires_at

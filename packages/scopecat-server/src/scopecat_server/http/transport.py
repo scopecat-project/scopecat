@@ -3529,7 +3529,7 @@ def _install_error_mapping(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=503,
-            content={"detail": str(error)},
+            content={"detail": str(error), "code": "sqlite_writer_busy"},
             headers={"Retry-After": "1"},
         )
 

@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
+from collections.abc import Generator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from threading import Event
 from unittest.mock import Mock
 
 import pytest
@@ -333,6 +338,91 @@ def test_runtime_reopens_durable_procedure_state(tmp_path: Path) -> None:
         assert (
             reopened.application.automation.get(admitted.procedure_run_id) == admitted
         )
+
+
+@pytest.mark.parametrize("after_wait", ["expired", "replaced", "live"])
+def test_heartbeat_uses_clock_and_token_after_waiting_for_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, after_wait: str
+) -> None:
+    database = SQLiteDatabase(tmp_path / "control.sqlite3")
+    SQLiteProjectStore(database, tmp_path / "objects").bootstrap()
+    store = SQLiteAutomationStore(database)
+    now = [_START]
+    service = AutomationService(
+        store,
+        runs=SQLiteRunRepository(database, tmp_path / "objects"),
+        lease_ttl=timedelta(seconds=30),
+        clock=lambda: now[0],
+    )
+    admitted = _submit(service)
+    acquired = service.acquire_lease(
+        ProcedureWorkerLeaseAcquireCommand(
+            procedure_run_id=admitted.procedure_run_id,
+            worker_id="original-worker",
+            expected_run_revision=admitted.revision,
+        )
+    )
+    command = ProcedureWorkerLeaseHeartbeatCommand(
+        procedure_run_id=admitted.procedure_run_id,
+        lease_token=acquired.lease.lease_token,
+    )
+    requested = Event()
+    transaction = store.write_transaction
+
+    @contextmanager
+    def observed_transaction() -> Generator[sqlite3.Connection]:
+        requested.set()
+        with transaction() as connection:
+            yield connection
+
+    monkeypatch.setattr(store, "write_transaction", observed_transaction)
+    now[0] = _START + timedelta(seconds=29)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            # The observer only signals entry; the real SQLite writer lock
+            # remains held until the clock/token transition is complete.
+            with database.writer_guard() as connection:
+                future = executor.submit(service.heartbeat_lease, command)
+                assert requested.wait(2)
+                assert not future.done()
+                now[0] = _START + timedelta(
+                    seconds=29.5 if after_wait == "live" else 30
+                )
+                if after_wait == "replaced":
+                    service.acquire_lease(
+                        ProcedureWorkerLeaseAcquireCommand(
+                            procedure_run_id=admitted.procedure_run_id,
+                            worker_id="replacement-worker",
+                            expected_run_revision=acquired.run.revision,
+                        )
+                    )
+                before = store.read_lease_in_transaction(
+                    connection, admitted.procedure_run_id
+                )
+                assert before is not None
+                if after_wait == "replaced":
+                    assert before.token != acquired.lease.lease_token
+                    assert before.worker_id == "replacement-worker"
+            if after_wait == "live":
+                renewed = future.result(timeout=2)
+                assert renewed.run.revision == acquired.run.revision
+                assert renewed.lease.lease_token == acquired.lease.lease_token
+                assert renewed.lease.expires_at == now[0] + timedelta(seconds=30)
+            else:
+                with pytest.raises(BackendConflict, match=r"lease.*stale.*expired"):
+                    future.result(timeout=2)
+            with database.read_connection() as connection:
+                after = store.read_lease_in_transaction(
+                    connection, admitted.procedure_run_id
+                )
+            if after_wait == "live":
+                assert after is not None
+                assert after.renewed_at == now[0]
+                assert after.acquired_at == before.acquired_at
+            else:
+                assert after == before
+    finally:
+        database.close()
 
 
 def test_worker_completes_exact_step_and_closes_procedure(tmp_path: Path) -> None:

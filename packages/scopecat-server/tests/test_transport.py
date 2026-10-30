@@ -588,7 +588,10 @@ def test_temporary_backend_unavailability_is_retryable() -> None:
 
     assert response.status_code == 503
     assert response.headers["Retry-After"] == "1"
-    assert response.json() == {"detail": "project database writer is busy"}
+    assert response.json() == {
+        "detail": "project database writer is busy",
+        "code": "sqlite_writer_busy",
+    }
 
 
 def test_static_dist_serves_files_and_spa_without_shadowing_api(

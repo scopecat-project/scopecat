@@ -20,6 +20,7 @@ from scopecat.automation import (
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureInputContinueReceipt,
+    ProcedureLeaseRenewalBusy,
     ProcedureRun,
     ProcedureRunAttentionCommand,
     ProcedureRunAttentionReceipt,
@@ -1036,11 +1037,24 @@ class DaemonClient:
         self,
         command: ProcedureWorkerLeaseHeartbeatCommand,
     ) -> ProcedureWorkerLeaseHeartbeatReceipt:
-        return self._post_idempotent_model(
-            self._procedure_path(command.procedure_run_id, "worker/lease/heartbeat"),
-            command,
-            ProcedureWorkerLeaseHeartbeatReceipt,
-        )
+        # Only the authority knows the last confirmed lease deadline. Do not
+        # replay a lost response here, outside that deadline's retry budget.
+        try:
+            return self._post_model(
+                self._procedure_path(
+                    command.procedure_run_id, "worker/lease/heartbeat"
+                ),
+                command,
+                ProcedureWorkerLeaseHeartbeatReceipt,
+            )
+        except DaemonUnavailableError as error:
+            try:
+                body = cast("object", error.response.json())
+            except ValueError:
+                raise error from None
+            if isinstance(body, dict) and body.get("code") == "sqlite_writer_busy":
+                raise ProcedureLeaseRenewalBusy(str(error)) from error
+            raise
 
     def release_procedure_worker_lease(
         self,
