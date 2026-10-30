@@ -48,7 +48,7 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path: Path):
     (payload / "gui").mkdir()
     (payload / "gui/index.html").write_text("smoke fixture", encoding="utf-8")
     files = inventory(payload, ("gui", "wheels"))
-    for name in ("requirements.lock", "dependencies.lock", "build.lock", "install.py"):
+    for name in ("requirements.lock", "dependencies.lock", "build.lock"):
         (payload / name).write_text("", encoding="utf-8")
         files[name] = file_hash(payload / name)
     (payload / MANIFEST).write_text(

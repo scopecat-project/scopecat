@@ -11,7 +11,7 @@ from unittest.mock import Mock
 
 import pytest
 from scripts.app_build import author_resources as resource_builder
-from scripts.app_build import installer
+from scripts.app_build import runtime_install
 from scripts.app_build.author_resources import build as build_author_resources
 
 from scopecat.kernel.content_identity import sha256_json_hash
@@ -61,7 +61,7 @@ def delivery(tmp_path: Path) -> Path:
     }
     (root / "toolchain/runtime.json").write_text(json.dumps(portable))
     files = bundle.inventory(root, ("gui", "wheels", "toolchain"))
-    for name in ("requirements.lock", "dependencies.lock", "build.lock", "install.py"):
+    for name in ("requirements.lock", "dependencies.lock", "build.lock"):
         (root / name).write_text("")
         files[name] = bundle.file_hash(root / name)
     (root / bundle.MANIFEST).write_text(
@@ -115,7 +115,7 @@ def test_projection_has_own_identity_and_keeps_full_delivery(
     assert (delivery / bundle.MANIFEST).read_bytes() == before
     bundle.verify_bundle(delivery)
     with pytest.raises(ValueError, match="清单版本"):
-        installer.install_bundle(resource, tmp_path / "not-created")
+        runtime_install.install_runtime(resource, tmp_path / "not-created")
     assert not (tmp_path / "not-created").exists()
     (resource / "author.json").write_text("modified")
     with pytest.raises(ValueError, match="被修改"):
@@ -301,7 +301,7 @@ def test_legacy_adapter_preserves_empty_source_metadata(delivery: Path, tmp_path
 
 
 def test_legacy_adapter_still_checks_unconsumed_files(delivery: Path, tmp_path: Path):
-    (delivery / "install.py").write_text("tampered")
+    (delivery / "build.lock").write_text("tampered")
     with pytest.raises(ValueError, match="被修改"):
         build_author_resources(delivery, tmp_path / "author")
     assert not (tmp_path / "author").exists()
@@ -526,6 +526,9 @@ def test_native_explicit_projection_feeds_windows_installer(
     assert native_package.package(app, tmp_path / "Setup.exe").is_file()
     assert "AppVersion=0.2.0\n" in scripts[0]
     assert "VersionInfoVersion=0.2.0.1\n" in scripts[0]
+    assert "CloseApplications=no\n" in scripts[0]
+    assert "function PrepareToInstall" in scripts[0]
+    assert "procedure CurStepChanged" in scripts[0]
 
 
 @pytest.mark.parametrize(

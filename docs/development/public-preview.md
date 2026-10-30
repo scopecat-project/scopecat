@@ -72,7 +72,7 @@ CLI 版本须一致。预发布期间 Knope 保留 changefile，准备正式版�
 本清单不修改 `release.toml`，不建立 tag，不表示产物已发布，也不要求消费者提前追踪 main。
 
 - #1392：未来原生资格报告分别表达 channel、签名、公证、交互覆盖；保留旧报告读取和
-  12 项资产合同。说明来自 `.changeset/native-qualification.md`。
+  当时的 12 项资产合同。说明来自 `.changeset/native-qualification.md`。
 - #1394：参数编辑与共享指南采用当前 GUI 术语，区分未保存编辑、固定参数版本与源码版本。
 - #1397：记录表区分切片未读取变量与缺失数据，不扩大数组读取；说明来自
   `.changeset/record-table-projection.md`。
@@ -95,7 +95,7 @@ CLI 版本须一致。预发布期间 Knope 保留 changefile，准备正式版�
 - 原生/交付：隔离目录启动前明确，启动后核对 owner/store/PID 生命周期及版本，退出按身份核对；
   不清理日常数据。精确发行候选的安装器资格与必要原生交互分别记录，CI `native_interaction`
   未评估时不能用外部本机证据将它改为已覆盖。
-- 消费合同：核对七个 wheel 与 UI 版本、源码 SHA、实际 12 项资产及 `release.json` 摘要；
+- 消费合同：核对七个 wheel 与 UI 版本、源码 SHA、当时的 12 项资产及 `release.json` 摘要；
   保留历史报告兼容性，不裁剪 UI ZIP/preview.json，不以签名或公证状态冒充发行 channel。
 
 正式发布前仍按下列既有流程和精确候选门禁执行；本次只准备说明和检查范围。
@@ -163,33 +163,32 @@ Mac 单字段 build 限制）。版本支持 `X.Y.Z`、`X.Y.Z-alpha.N`、`X.Y.Z-
 | 公开文件 | 当前导出规则 |
 | --- | --- |
 | 两个平台安装器 | `Scopecat-VERSION-PLATFORM-ARCH.dmg` / `.exe`；平台为 `macos` / `windows`，架构为目标资格记录中的 `arm64` / `x86_64` |
-| 七个第一方 wheel | 同批构建并校验 METADATA、精确第一方依赖和文件哈希 |
-| `scopecat-ui.zip`、`preview.json` | 保留现有固定产物消费者和安装态验收所需的协议 |
+| 四个公开 wheel | `scopecat`、`scopecat-server`、`scopecat-instruments`、`scopecat-quantum`；校验 METADATA、精确第一方依赖和文件哈希 |
 | `release.json` | 绑定发行号、build number、完整 commit、文件哈希及原生资格证据 |
 
-共 **12 项公开资产**。安装器名称必须与已验证目标一致，命名规则不增加支持的平台或架构。
+共 **7 项公开资产**。安装器名称必须与已验证目标一致，命名规则不增加支持的平台或架构。
 四份 `macos/windows` 的 `bundle.json` 和 `native-release.json` 资格文档以原文嵌入
 `release.json` 的 `qualification`；独立文件留在 Actions 构建证据中，不再单独导出。
-`release.json` 保持 format-1 的 `preview` 和 `files` 契约，`files` 只列被索引的公开下载文件；
-新增 `installers` 索引提供目标和校验和。导出后的验证仍检查嵌入证据的来源、目标、资源清单
+`release.json` 使用 **format 2**，`packages` 只列四个公开包，`files` 只列六个下载文件，
+不再引用 `preview.json`；`installers` 索引提供目标和校验和。导出后的验证仍检查嵌入证据的来源、目标、资源清单
 和哈希。缺失、多余文件及错误 commit、版本、平台或哈希都会阻止组装/发布，不能只信文件名。
 
 #### release.json 读取合同 {#release-manifest-contract}
 
 `release.json` 是数字发行的公开清单入口；消费方显式选择发行，再固定该清单的 SHA256
-与预期完整源码 SHA。`format: 1` 的 `version`、`build_number`、`commit` 标识同一批产物。
+与预期完整源码 SHA。`format: 2` 的 `version`、`build_number`、`commit` 标识同一批产物。
 拒绝不支持的格式、重复 JSON key、无效身份与不一致摘要；文件名必须是无目录的本地文件名。
 `files` 是文件名到 SHA256 的映射，不包含 `release.json` 自身，不能依靠自摘要建立信任。
-`preview.file` 必须为 `preview.json`，其摘要必须同时匹配 `files` 和实际下载字节。
-读取 preview 后再交叉检查 commit、发行版本、build number、channel 与被选择文件的摘要；
-wheel 还须验证 METADATA 和同批第一方依赖。历史发行应按其实际格式读取，不套用新命名。
+四个包的版本必须与发行的 `wheel_version` 一致，channel 必须为 release。
+wheel 还须验证 METADATA 和同批第一方依赖。历史 format 1 数字发行保留 preview 引用，
+读取其 preview 时继续核对清单摘要、commit 和发行版本；历史资产不会改写。
 
-只消费 wheels/UI 的读取器无需下载安装器，但仍须验证所选子集的字节与清单引用关系；
+只消费四个 wheels 的读取器无需下载安装器，但仍须验证所选文件的字节与清单引用关系；
 这不等于完整发行资格。维护者的 `release_assets.py verify` 检查完整集合，需要对应源码
 中的 `release.toml`；它不是接受缺失文件的子集下载器。`installers` 提供平台、文件名与摘要，
 不能将目标平台记录解释为完整系统版本或硬件资格。
 
-未来构建的 `*-native-release.json` 使用 **format 2**，外层 release format 保持 1：
+未来构建的 `*-native-release.json` 使用 **format 2**，外层 release 也使用 format 2：
 
 | 字段 | 当前含义 |
 | --- | --- |
@@ -205,13 +204,11 @@ wheel 还须验证 METADATA 和同批第一方依赖。历史发行应按其实�
 其 `distribution` 不能作为结构化 channel 或可信签名证明。完整验证同时接受历史 format 1
 和当前 format 2；后者拒绝与来源身份、当前构建策略或交互覆盖不符的声明。
 
-公库现有完整读取方是组装、导出和发布前验证；delivery、固定 UI 下载及安装态验收仍读取
-`preview.json`。这些生产者/消费者关系不证明每份内部材料都有独立外部需求。四份资格文件
-仍只在构建输入中单独存在，公开集合保持 12 项；迁移 preview 读取器是后续独立工作。
-
-原生应用只保留 core/server 两个作者 wheel，并不意味着其余公开构建/测试消费者已迁移。
-七个 wheels、UI ZIP 和 `preview.json` 在消费者迁移前继续保留；最终公开资产裁剪仍由
-[#1030](https://github.com/scopecat-project/scopecat/issues/1030) 跟踪，本指南不宣称已经完成。
+公库组装先验证七个 wheel、UI、内部 preview 清单和两平台资格，再导出公开子集。
+app、tutorials、testkit wheels、UI ZIP 和 `preview.json` 只保留在 Actions 候选材料中，
+供构建及显式开发者验收。联合测试通过公库源码环境或明确准备的内部 runtime 执行；
+不再以这些测试需求维持另一套公开安装入口。私库选择器固定四个公开包，支持新 format 2
+及已发布的当前包名 format 1 数字发行，退役历史 SHA 选择和 lab-tools/lab-teaching 包族。
 
 当前构建从 `release.toml` 为七个第一方 Python 包生成同一版本：
 
@@ -258,18 +255,15 @@ uv run --locked python scripts/release_assets.py verify build/release --commit F
 
 ### 仅框架的 preview 交付 {#existing-framework-only-preview-delivery}
 
-**Full acceptance → public-preview** 仍是显式、持久的仅框架发布入口。
-精确提交通过 CI 后，手动选择该 profile，发布 wheels、UI 和 `preview.json` 到
-`preview-<full SHA>`。它不要求原生安装器，也不随合并自动运行；既有 SHA 发行及 pin
-保持可读和不可变，新 SHA preview 仍可发布。
+**Full acceptance → candidate-artifacts** 只生成内部候选材料。
+精确提交通过 CI 后，手动选择该 profile，上传 wheels、UI 和 `preview.json` 为
+`scopecat-candidate-<完整 SHA>` Actions artifact，保留 14 天，不创建 tag 或 GitHub Release。
+开发者下载到明确目录后通过现有本地候选测试验证，不更新日常配方或冒充正式发行。
+需要长期保留的证据应另行归档；临时 artifact 不作为作者依赖的持久 URL。
 
-数字发行用于完整应用与框架一起交付；两条路径保留同一 URL/hash 选择契约、精确 wheel URL
-和锁哈希。`scripts.app_build.preview` 与 delivery `--preview` 读取已选 URL/hash，
-不假定 tag 格式。`build_preview.py` 与 delivery `--public-artifacts` 共用构建和校验代码，
-不另建包版本平台。
-
-仅框架交付是否也采用数字版本、是否统一框架与原生发行节奏仍是后续决策。
-Knope 和同批 wheel 版本规则没有取消现有 preview 能力，也没有增加原生安装器前置。
+正式用户采用数字发行。已经发布的 `preview-<SHA>` 文件及历史 pin 保持不变，
+不再发布新的仅框架 SHA release。`build_preview.py` 仍是内部构建入口，
+delivery `--public-artifacts` 可消费同批候选，不要求先构建原生安装器。
 
 ### 验证边界 {#qualification-boundaries}
 
@@ -320,8 +314,7 @@ Mac/Windows 仅为原生宿主另行取得锁定的 pywebview wheel，沿用已�
 Settings 准备作者环境时使用显式选择的独立 Python，或按工作区/配方固定版本查找
 uv 管理的 Python；缺少缓存时可能下载，离线缺失则明确报错，不复制应用自身的 Python。
 源码桌面宿主 Python 与作者 client/执行环境仍各自持有独立环境，既有作者环境不随资源
-缓存重建而改变。本步骤只迁移 `dev_resources`；native/release 的材料准备、旧 format 1
-与通用 installer 不因此退役，其他消费者的迁移状态另行记录。
+缓存重建而改变。本步骤只迁移 `dev_resources`；native/release 仍使用 format 1 内部材料；通用 install.py 已退役，教学验收只消费已安装 runtime 与 format 2。
 缓存身份包含包源码与依赖/构建输入，身份变化可能在启动或重启时触发重新准备。
 UI 编辑使用 HMR，不重建 wheels、作者资源或应用。
 源码 Python/包变化会提示重启：输入 `r` 重启空闲后端，或 `w` 等待空闲后再重启；活动或

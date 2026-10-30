@@ -143,6 +143,7 @@ def test_build_replaces_console_before_signing_and_rename(
     monkeypatch.setattr(native_package.sys, "platform", "darwin")
     monkeypatch.setattr(native_package, "resolve_delivery", lambda path: path)
     monkeypatch.setattr(native_package, "verify_bundle", lambda _: None)
+    monkeypatch.setattr(runtime_install, "verify_bundle", lambda _: None)
     import shutil
 
     monkeypatch.setattr(native_package, "native_author_inputs", lambda root, _: root)

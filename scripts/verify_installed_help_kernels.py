@@ -1,8 +1,8 @@
-"""Qualify offline application installation and online author Help preparation.
+"""Qualify an installed application runtime and online author Help preparation.
 
 Usage: python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>
 Add --runtime-python PYTHON for an installed runtime and verified format 2 resources.
-Without that option, the legacy delivery/toolchain installer remains supported.
+The runtime is required; this verifier never installs an application.
 Includes explicit snapshot recovery with a separately backed-up author fixture.
 Pass --all-topics for the slower qualification of all seven shipped Help topics.
 Does not restore Help continuation or exercise a browser/native editor.
@@ -14,11 +14,9 @@ import argparse
 import hashlib
 import json
 import os
-import runpy
 import shutil
 import subprocess
 import sys
-import tarfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -36,50 +34,6 @@ if TYPE_CHECKING:
 
 def python_in(root: Path) -> Path:
     return root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-
-
-def install_and_verify(payload: Path, work: Path, *, all_topics: bool = False) -> None:
-    started = perf_counter()
-    # The shipped installer is stdlib-only; use its manifest checks before unpacking.
-    installer = runpy.run_path(str(payload / "install.py"))
-    cast("Callable[[Path], object]", installer["verify_bundle"])(payload)
-    archive = payload / "toolchain/python.tar"
-    if not archive.is_file():
-        raise ValueError("Use an existing full application payload with its toolchain")
-    work.mkdir(parents=True, exist_ok=False)
-    base = work / "application-base"
-    with tarfile.open(archive) as stream:
-        stream.extractall(base, filter="data")
-    python = base / ("python.exe" if os.name == "nt" else "bin/python3")
-    env = journey_environment(work)
-    application = work / "application-python"
-    for name, command in (
-        (
-            "installation",
-            [str(python), "-I", str(payload / "install.py"), str(application)],
-        ),
-        (
-            "journey",
-            [
-                str(python_in(application)),
-                "-I",
-                str(Path(__file__).resolve()),
-                str(payload),
-                str(work),
-                "--installed",
-                *(["--all-topics"] if all_topics else []),
-            ],
-        ),
-    ):
-        phase = perf_counter()
-        subprocess.run(command, cwd=work, env=env, check=True)  # noqa: S603
-        print(f"{name}: {perf_counter() - phase:.3f}s", flush=True)
-    receipt = work / "acceptance.json"
-    evidence = cast(
-        "dict[str, object]", json.loads(receipt.read_text(encoding="utf-8"))
-    )
-    evidence["total_seconds"] = perf_counter() - started
-    receipt.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
 def journey_environment(work: Path) -> dict[str, str]:
@@ -133,20 +87,13 @@ def verify_runtime(
     )
 
 
-def verified_author_payload(payload: Path, work: Path) -> tuple[Path, Bundle]:
+def verified_author_payload(payload: Path) -> tuple[Path, Bundle]:
     from scopecat_app.author_resources import verify_resources
 
     document = verify_resources(payload)
-    author_payload = payload
-    if document["format"] == 1:
-        # Compatibility for jobs still providing a full legacy installer payload.
-        from scripts.app_build.author_resources import build as build_author_resources
-
-        author_payload = build_author_resources(
-            payload, work / "author-resources", python=Path(sys.executable)
-        )
-        verify_resources(author_payload)
-    return author_payload, document
+    if document["format"] != 2:
+        raise ValueError("An installed runtime requires format 2 author resources")
+    return payload, document
 
 
 def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> None:
@@ -203,8 +150,8 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     # Installation must not seed a cache that conceals missing author dependencies.
     author_cache = work / "author-empty-cache"
     author_cache.mkdir()
-    author_payload, document = verified_author_payload(payload, work)
-    assert os.environ["UV_OFFLINE"] == ("1" if document["format"] == 1 else "0")
+    author_payload, document = verified_author_payload(payload)
+    assert os.environ["UV_OFFLINE"] == "0"
     nbformat = notebook_io()
     runtime = ApplicationRuntime(work / "application")
     material = files("scopecat_tutorials.course_material").joinpath("lessons")
@@ -226,11 +173,9 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
         "runtime": document["runtime"],
         "sources": document["sources"],
         "installed_python": sys.executable,
-        "carrier": "legacy-installer"
-        if document["format"] == 1
-        else "installed-runtime",
+        "carrier": "installed-runtime",
         "installed_origins": origins,
-        "application_installation_offline": True if document["format"] == 1 else None,
+        "application_installation_offline": None,
         "cache_started_empty": True,
         "author_cache_started_empty": True,
         "native_editor": "not evaluated",
@@ -297,8 +242,7 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
 
     try:
         phase = perf_counter()
-        # Practice uses this invocation's cache (seeded by the legacy installer
-        # or populated online), never the independent cold Help author cache.
+        # Practice uses this invocation's online cache, separate from cold Help.
         application_checks["phase"] = "empty-application"
         registered_source = work / "registered-source" / "实验代码"
         write_author_scaffold(registered_source)
@@ -755,6 +699,9 @@ if __name__ == "__main__":
             args.runtime_python.absolute(),
             all_topics=args.all_topics,
         )
+    elif args.installed:
+        verify_installed(
+            args.payload.resolve(), args.work.resolve(), all_topics=args.all_topics
+        )
     else:
-        action = verify_installed if args.installed else install_and_verify
-        action(args.payload.resolve(), args.work.resolve(), all_topics=args.all_topics)
+        parser.error("--runtime-python is required")

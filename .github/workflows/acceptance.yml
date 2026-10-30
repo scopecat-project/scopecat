@@ -14,7 +14,7 @@ on:
           - teaching
           - service-lifecycle
           - native-distribution
-          - public-preview
+          - candidate-artifacts
       browser_shard:
         description: Browser profile only; select a journey or both
         type: choice
@@ -35,10 +35,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
-  public-preview:
-    if: inputs.profile == 'public-preview'
+  candidate-artifacts:
+    if: inputs.profile == 'candidate-artifacts'
     permissions:
-      contents: write # Create and publish preview releases.
+      contents: read
       actions: read # Verify successful CI for this commit.
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -66,14 +66,13 @@ jobs:
           node-version-file: .node-version
       - name: Build public artifacts
         run: uv run --locked python scripts/build_preview.py preview
-      - name: Publish immutable preview assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "preview-$GITHUB_SHA" preview/* --target "$GITHUB_SHA" \
-            --draft --prerelease --title "Preview $GITHUB_SHA" \
-            --notes "Public Python wheels and workbench assets from this exact commit. Dependencies remain consumer-locked; this is not a native application installer."
-          gh release edit "preview-$GITHUB_SHA" --draft=false
+      - name: Retain internal candidate artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scopecat-candidate-${{ github.sha }}
+          path: preview/
+          if-no-files-found: error
+          retention-days: 14
 
   native-distribution:
     if: inputs.profile == 'native-distribution'
@@ -530,9 +529,6 @@ jobs:
           uv run --locked --group delivery python -m scripts.app_build.delivery
           dist/tutorial --public-artifacts dist/framework
 
-      - name: Retain legacy installer regression
-        run: uv run --locked python dist/tutorial/install.py dist/legacy-install-check
-
       - name: Set up Windows native compiler
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
@@ -598,7 +594,7 @@ jobs:
     name: Acceptance gate (${{ inputs.profile }})
     if: ${{ always() }}
     needs:
-      - public-preview
+      - candidate-artifacts
       - native-distribution
       - service-lifecycle
       - python-tests
@@ -614,7 +610,7 @@ jobs:
       - name: Require successful jobs
         env:
           PROFILE: ${{ inputs.profile }}
-          PUBLIC_PREVIEW_RESULT: ${{ needs['public-preview'].result }}
+          CANDIDATE_ARTIFACTS_RESULT: ${{ needs['candidate-artifacts'].result }}
           NATIVE_DISTRIBUTION_RESULT: ${{ needs['native-distribution'].result }}
           SERVICE_LIFECYCLE_RESULT: ${{ needs['service-lifecycle'].result }}
           INSTALLED_ARTIFACTS_RESULT: ${{ needs['installed-artifacts'].result }}
@@ -625,8 +621,8 @@ jobs:
           UI_RESULT: ${{ needs.ui.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
-          if [ "$PROFILE" = public-preview ]; then
-            test "$PUBLIC_PREVIEW_RESULT" = success
+          if [ "$PROFILE" = candidate-artifacts ]; then
+            test "$CANDIDATE_ARTIFACTS_RESULT" = success
             for result in "$NATIVE_DISTRIBUTION_RESULT" "$SERVICE_LIFECYCLE_RESULT" \
               "$INSTALLED_ARTIFACTS_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
               "$PYTHON_TESTS_RESULT" "$BENCHMARK_SMOKE_RESULT" \
@@ -635,7 +631,7 @@ jobs:
             done
             exit 0
           fi
-          test "$PUBLIC_PREVIEW_RESULT" = skipped
+          test "$CANDIDATE_ARTIFACTS_RESULT" = skipped
           if [ "$PROFILE" = native-distribution ]; then
             test "$NATIVE_DISTRIBUTION_RESULT" = success
             for result in "$SERVICE_LIFECYCLE_RESULT" "$INSTALLED_ARTIFACTS_RESULT" \

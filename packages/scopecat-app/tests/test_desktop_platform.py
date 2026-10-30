@@ -3,6 +3,7 @@
 import sys
 import threading
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -89,7 +90,8 @@ def test_cocoa_tray_is_created_and_shown_on_the_main_loop(
 def test_quit_hook_matches_real_pywebview_delegate_signature():
     from webview.platforms import cocoa
 
-    app = cocoa.AppKit.NSApplication.sharedApplication()
+    # PyObjC populates AppKit dynamically; pywebview exposes the actual module.
+    app = cast("Any", cocoa.AppKit).NSApplication.sharedApplication()
     previous = app.delegate()
     delegate = cocoa.BrowserView.AppDelegate.alloc().init()
     app.setDelegate_(delegate)

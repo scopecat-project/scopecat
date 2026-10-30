@@ -196,7 +196,7 @@ work. See the canonical
 ## Runtime assets and author-environment resources
 
 Two resource formats serve different purposes. Format 1 is the complete locked
-build/offline material set, including the dependency wheelhouse and installer;
+internal build material set, including the dependency wheelhouse;
 delivery preparation also retains the portable Python archive and uv. Format 2 is
 a smaller GUI and author-preparation resource set: GUI assets, the core/server wheels,
 dependency constraints, `author.json`, a checksum manifest and optional uv tools.
@@ -277,7 +277,7 @@ wheels are copied from this delivery, not rebuilt. Windows installer versions an
 release assembly consume the resulting format 2 identity and wheel hashes.
 Assembly also requires complete build provenance with the same target as the
 author bundle; a matching report checksum alone does not satisfy that contract.
-The legacy path adapter and installer remain supported; neither the runtime
+The build-material path adapter remains internal; neither the runtime
 archive nor the third-party wheelhouse producer changes in this projection step. See
 [teaching acceptance limits](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits)
 for the selected commands and evidence boundaries. Neither consumer migration
@@ -308,11 +308,9 @@ and rejects the application's internal interpreter, including virtual environmen
 based on it. It does not extract the application's bundled Python for authors or
 silently substitute another Python version after a failed download.
 
-The low-level standalone `install.py DESTINATION` remains a separate offline
-installation path for complete format 1 materials and legacy regression checks.
-It does not install a desktop app or generate launchers. Toolchain construction
-needs network access; installing the locked format 1 wheels is offline. Format 2
-alone does not promise offline author dependency preparation.
+The standalone offline installer has been retired. Native construction and internal
+Linux runtime fixtures share verified runtime installation; user installation uses
+the native package.
 
 `python -m scripts.app_build.native_package DELIVERY APP --installer INSTALLER` packages
 the delivery and its prepared toolchain into a relocatable native application.

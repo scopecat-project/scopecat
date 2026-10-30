@@ -95,13 +95,13 @@ is manual. Its profile gate checks every selected job and expected skip:
 
 | Profile | Use and coverage |
 | --- | --- |
-| `full` | Integrated qualification: Linux/Windows Python, both browser shards, benchmark, isolated installed wheels, relocated runtime teaching and separate legacy offline-installer regression, plus static/UI/docs checks |
+| `full` | Integrated qualification: Linux/Windows Python, both browser shards, benchmark, isolated installed wheels, relocated runtime teaching, plus static/UI/docs checks |
 | `local-application` | Bounded installation trial: UI build, both browser shards and Linux/Windows installed-artifacts checks; pair with successful PR CI |
-| `teaching` | UI artifact producer and Linux/Windows installed-artifacts only: independent framework validation, separate legacy installer regression, and relocated Windows application/Linux runtime fixture with format-2 Help/kernel and recovery checks; pair with successful PR CI |
+| `teaching` | UI artifact producer and Linux/Windows installed-artifacts only: independent framework validation, relocated Windows application/Linux runtime fixture with format-2 Help/kernel and recovery checks; pair with successful PR CI |
 | `browser` | UI artifact producer and both real-daemon browser shards |
 | `service-lifecycle` | Windows/Linux service lifecycle and reset-backup qualification |
 | `native-distribution` | Mac/Windows native packaging and installer qualification; see [desktop packaging](architecture/desktop-packaging.md) |
-| `public-preview` | Publishes immutable framework preview artifacts after successful CI for that commit; see [public previews](public-preview.md) |
+| `candidate-artifacts` | Retains internal wheels/UI artifacts for 14 days after successful CI; creates no release or tag; see [candidate artifacts](public-preview.md#existing-framework-only-preview-delivery) |
 
 Fast CI does not qualify installed delivery or a release. Browser evidence does
 not cover native operation or installed recovery. Source, installation, native

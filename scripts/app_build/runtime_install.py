@@ -7,9 +7,12 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+from scopecat_app.bundle import verify_bundle
+
 
 def install_runtime(payload: Path, python_home: Path) -> Path:
-    """Callers verify the delivery and own layout, platform checks and publication."""
+    """Verify internal build materials before creating the application runtime."""
+    verify_bundle(payload)
     python_home.mkdir(parents=True, exist_ok=False)
     with tarfile.open(payload / "toolchain/python.tar") as archive:
         archive.extractall(python_home, filter="data")
@@ -33,4 +36,28 @@ def install_runtime(payload: Path, python_home: Path) -> Path:
         ],
         check=True,
     )
+    compile_bytecode(python, python_home)
     return python
+
+
+def compile_bytecode(python: Path, python_home: Path) -> None:
+    """Compile shipped sources with relocatable names and hash-based validity."""
+    subprocess.run(  # noqa: S603 - selected packaged interpreter and owned sources
+        [
+            str(python),
+            "-I",
+            "-B",
+            "-m",
+            "compileall",
+            "-q",
+            "-f",
+            "--invalidation-mode",
+            "checked-hash",
+            "-s",
+            str(python_home),
+            "-p",
+            "scopecat-runtime",
+            str(python_home),
+        ],
+        check=True,
+    )
