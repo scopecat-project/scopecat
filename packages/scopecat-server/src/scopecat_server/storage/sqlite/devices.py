@@ -56,9 +56,15 @@ class DeviceRepository:
                 (device.head.revision_id,),
             ).fetchone(),
         )
+        revision = self.revision(device.head.revision_id)
         return DeviceView(
             device=device,
-            revision=self.revision(device.head.revision_id),
+            revision=revision,
+            previous_revision=(
+                self.revision(revision.previous.revision_id)
+                if revision.previous is not None
+                else None
+            ),
             last_connection_test=None
             if row is None
             else DeviceConnectionTest.model_validate_json(cast("str", row[0])),
@@ -180,7 +186,7 @@ class DeviceRepository:
             label=label, revision=revision, expected_head=expected_head
         )
         if not new_revision:
-            return view
+            return self.view(view.device.id)
         device = view.device
         self.connection.execute(
             "INSERT INTO devices(device_id, record_json) VALUES (?, ?) "
@@ -201,7 +207,7 @@ class DeviceRepository:
                 "(alias, device_id) VALUES (?, ?)",
                 (alias, device.id),
             )
-        return view
+        return self.view(device.id)
 
     def rename(self, device_id: str, label: str) -> RegisteredDevice:
         current = self.get(device_id)

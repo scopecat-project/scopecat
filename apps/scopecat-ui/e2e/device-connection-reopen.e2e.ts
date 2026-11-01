@@ -115,12 +115,57 @@ test("connection test feedback follows the saved revision across editing and dae
     expect(tested.last_connection_test?.revision).toEqual(edited.device.head);
     expect(tested.last_connection_test?.error).toBeNull();
 
+    // Load a previous configuration without publishing or touching hardware.
+    await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
+    await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("-1");
+    await expect(dialog.getByRole("region", { name: "连接修改预览" })).toContainText("驱动选项");
+    expect((await current()).device.head).toEqual(tested.device.head);
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await dialog.getByRole("region", { name: "连接修改预览" }).scrollIntoViewIfNeeded();
+      await expect(dialog.getByRole("heading", { name: "编辑设备" })).toBeInViewport();
+      await expect(dialog.getByRole("button", { name: "保存设备", exact: true })).toBeInViewport();
+      await testInfo.attach(`connection-recovery-${width}`, {
+        body: await page.screenshot({
+          fullPage: true,
+          ...(process.env.SCOPECAT_SCREENSHOTS
+            ? { path: `${process.env.SCOPECAT_SCREENSHOTS}/connection-recovery-${width}.png` }
+            : {}),
+        }),
+        contentType: "image/png",
+      });
+    }
+    await dialog.getByRole("button", { name: "取消", exact: true }).click();
+    expect((await current()).device.head).toEqual(tested.device.head);
+    // Reopen, restore as a new revision, fail its test, then repair in place.
+    await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
+    await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const restored = await current();
+    expect(restored.revision.content).toEqual(failed.revision.content);
+    expect(restored.device.head).not.toEqual(failed.device.head);
+    expect(restored.revision.previous).toEqual(tested.device.head);
+    await page.getByRole("button", { name: "测试连接", exact: true }).click();
+    await expect(page.getByText(/上次连接测试失败：/)).toBeVisible();
+    await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
+    await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole("button", { name: "测试连接", exact: true }).click();
+    await expect(page.getByText(/连接测试通过，/)).toBeVisible();
+    const finalTested = await current();
+
     await page.goto("about:blank");
     await stop();
     await start();
     await page.goto(`${url}/#instruments`);
     await expect(page.getByText(/连接测试通过，/)).toBeVisible();
-    expect((await current()).last_connection_test).toEqual(tested.last_connection_test);
+    expect((await current()).last_connection_test).toEqual(finalTested.last_connection_test);
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("2");
   } finally {

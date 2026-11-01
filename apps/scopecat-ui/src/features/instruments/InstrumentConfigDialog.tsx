@@ -45,7 +45,7 @@ import {
 } from "./connection-fields";
 
 export function InstrumentConfigDialog({
-  device,
+  device: suppliedDevice,
   catalog,
   description,
   onCancel,
@@ -57,6 +57,8 @@ export function InstrumentConfigDialog({
   onCancel: () => void;
   onPublished: (saved: DeviceView) => void | Promise<void>;
 }) {
+  const [device] = useState(suppliedDevice);
+  const [draftGeneration, setDraftGeneration] = useState(0);
   const existing = device?.revision.content;
   const first =
     catalog.drivers.find((item) => item.driver_id === existing?.driver.driver_id) ??
@@ -83,6 +85,7 @@ export function InstrumentConfigDialog({
   const [validState, setValidState] = useState(true);
   const [invalidOptions, setInvalidOptions] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
+  const [restored, setRestored] = useState(false);
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
   const connectionSaveStarted = useRef(false);
@@ -115,6 +118,34 @@ export function InstrumentConfigDialog({
       safety.safe_state_requirement === "required"
     ) ||
       hasSafety);
+  const proposed = {
+    driver: implementation,
+    connection,
+    access_aliases: aliases
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    safety: { ...safety, safe_state: safeState },
+  };
+  const changes = existing && implementation ? connectionChanges(existing, proposed) : [];
+  const previous = device?.previous_revision;
+  const canRestore =
+    previous && JSON.stringify(previous.content.driver) === JSON.stringify(existing?.driver);
+  const restorePrevious = () => {
+    if (!previous || !canRestore) return;
+    setDriverId(previous.content.driver.driver_id);
+    setConnection(previous.content.connection);
+    setAliases(previous.content.access_aliases.join("\n"));
+    setSafety(previous.content.safety ?? safety);
+    setSafeState(previous.content.safety?.safe_state ?? []);
+    setInvalidOptions(new Set());
+    setNote(`使用先前连接设置：${previous.id}`);
+    setRestored(true);
+    setDraftGeneration((value) => value + 1);
+    setValidState(true);
+    attempt.current = null;
+    setError(undefined);
+  };
   const save = async () => {
     if (!valid || !implementation || saving.current) return;
     saving.current = true;
@@ -132,6 +163,7 @@ export function InstrumentConfigDialog({
         safety: { ...safety, safe_state: safeState },
       };
       if (
+        !restored &&
         !connectionSaveStarted.current &&
         device &&
         existing &&
@@ -190,176 +222,228 @@ export function InstrumentConfigDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className={dialogBackdrop} />
         <Dialog.Viewport className={dialogViewport}>
-          <Dialog.Popup className={`${dialogPopup} w-[min(680px,100%)]`}>
-            <header className="border-b border-line p-4">
+          <Dialog.Popup
+            className={`${dialogPopup} flex max-h-[calc(100dvh-40px)] w-[min(680px,100%)] flex-col max-[460px]:max-h-[calc(100dvh-20px)]`}
+          >
+            <header className="shrink-0 border-b border-line p-4">
               <Dialog.Title className={dialogTitle}>
                 {device ? "编辑设备" : "添加设备"}
               </Dialog.Title>
               <Dialog.Description className={dialogDescription}>
-                保存连接设置后，使用“测试连接”检查设备。
+                编辑中的值是草稿。保存后再显式测试该连接版本，不会自动应用仪器属性。
               </Dialog.Description>
             </header>
-            <fieldset
-              disabled={busy}
-              onChange={() => {
-                attempt.current = null;
-              }}
-              className="grid gap-4 p-4"
-            >
-              <Controls.Field>
-                设备名称
-                <Controls.Input value={label} onChange={(event) => setLabel(event.target.value)} />
-              </Controls.Field>
-              <Controls.Field>
-                驱动
-                <Controls.Select
-                  value={driverId}
-                  onChange={(event) => {
-                    setDriverId(event.target.value);
-                    setConnection(
-                      initialConnection(
-                        undefined,
-                        catalog.drivers.find((item) => item.driver_id === event.target.value),
-                      ),
-                    );
-                    setInvalidOptions(new Set());
-                  }}
-                >
-                  {catalog.drivers.map((item) => (
-                    <option key={item.driver_id} value={item.driver_id}>
-                      {driverLabel(item)}
-                    </option>
-                  ))}
-                </Controls.Select>
-              </Controls.Field>
-              {driver && (
+            <div className="min-h-0 overflow-y-auto">
+              <fieldset
+                disabled={busy}
+                onChange={() => {
+                  attempt.current = null;
+                }}
+                className="grid gap-4 p-4"
+              >
+                {previous && (
+                  <div className="grid gap-2">
+                    <button
+                      type="button"
+                      className={secondaryButton}
+                      disabled={!canRestore}
+                      onClick={restorePrevious}
+                    >
+                      使用上一连接版本生成草稿
+                    </button>
+                    {!canRestore && <p>上一版本的驱动实现不同，不能在此恢复；请先核对驱动版本。</p>}
+                    {restored && (
+                      <p role="status">
+                        已载入先前设置，尚未保存。提交将创建新版本，不恢复硬件状态。
+                      </p>
+                    )}
+                  </div>
+                )}
                 <Controls.Field>
-                  连接
+                  设备名称
+                  <Controls.Input
+                    value={label}
+                    onChange={(event) => setLabel(event.target.value)}
+                  />
+                </Controls.Field>
+                <Controls.Field>
+                  驱动
                   <Controls.Select
-                    value={connection.kind}
+                    value={driverId}
                     onChange={(event) => {
-                      const kind = event.target.value as ConnectionKind;
+                      setDriverId(event.target.value);
                       setConnection(
-                        newConnection(
-                          kind,
-                          driver.connections.find((item) => item.kind === kind),
+                        initialConnection(
+                          undefined,
+                          catalog.drivers.find((item) => item.driver_id === event.target.value),
                         ),
                       );
                       setInvalidOptions(new Set());
                     }}
                   >
-                    {driver.connections.map((item) => (
-                      <option key={item.kind} value={item.kind}>
-                        {connectionKindLabel(item.kind)}
+                    {catalog.drivers.map((item) => (
+                      <option key={item.driver_id} value={item.driver_id}>
+                        {driverLabel(item)}
                       </option>
                     ))}
                   </Controls.Select>
                 </Controls.Field>
-              )}
-              {connection.kind === "tcpip_socket" && (
-                <TcpConnectionFields connection={connection} onChange={setConnection} />
-              )}
-              {connection.kind === "serial" && (
-                <SerialConnectionFields connection={connection} onChange={setConnection} />
-              )}
-              {fields.length > 0 && (
-                <fieldset>
-                  <legend>驱动选项</legend>
-                  {fields.map((field) => (
-                    <OptionInput
-                      key={`${driverId}:${connection.kind}:${field.id}`}
-                      field={field}
-                      value={jsonOptionValue(options[field.id]) ?? field.defaultValue}
-                      onChange={(value) => {
-                        const next = { ...options };
-                        if (value === undefined) delete next[field.id];
-                        else next[field.id] = value;
-                        setConnection({ ...connection, options: next });
+                {driver && (
+                  <Controls.Field>
+                    连接
+                    <Controls.Select
+                      value={connection.kind}
+                      onChange={(event) => {
+                        const kind = event.target.value as ConnectionKind;
+                        setConnection(
+                          newConnection(
+                            kind,
+                            driver.connections.find((item) => item.kind === kind),
+                          ),
+                        );
+                        setInvalidOptions(new Set());
                       }}
-                      onValidityChange={(fieldValid) =>
-                        setInvalidOptions((current) => {
-                          const next = new Set(current);
-                          if (fieldValid) next.delete(field.id);
-                          else next.add(field.id);
-                          return next;
+                    >
+                      {driver.connections.map((item) => (
+                        <option key={item.kind} value={item.kind}>
+                          {connectionKindLabel(item.kind)}
+                        </option>
+                      ))}
+                    </Controls.Select>
+                  </Controls.Field>
+                )}
+                {connection.kind === "tcpip_socket" && (
+                  <TcpConnectionFields connection={connection} onChange={setConnection} />
+                )}
+                {connection.kind === "serial" && (
+                  <SerialConnectionFields connection={connection} onChange={setConnection} />
+                )}
+                {fields.length > 0 && (
+                  <fieldset>
+                    <legend>驱动选项</legend>
+                    {fields.map((field) => (
+                      <OptionInput
+                        key={`${draftGeneration}:${driverId}:${connection.kind}:${field.id}`}
+                        field={field}
+                        value={jsonOptionValue(options[field.id]) ?? field.defaultValue}
+                        onChange={(value) => {
+                          const next = { ...options };
+                          if (value === undefined) delete next[field.id];
+                          else next[field.id] = value;
+                          setConnection({ ...connection, options: next });
+                        }}
+                        onValidityChange={(fieldValid) =>
+                          setInvalidOptions((current) => {
+                            const next = new Set(current);
+                            if (fieldValid) next.delete(field.id);
+                            else next.add(field.id);
+                            return next;
+                          })
+                        }
+                      />
+                    ))}
+                  </fieldset>
+                )}
+                <details open={connection.kind === "driver_managed"}>
+                  <summary>物理标识与其他地址</summary>
+                  <p>
+                    声明指向同一设备的其他访问路径，每行一项。如地址已登记到其他设备，访问前必须先解决冲突。
+                  </p>
+                  <Controls.Field>
+                    访问别名
+                    <Controls.Textarea
+                      value={aliases}
+                      onChange={(event) => setAliases(event.target.value)}
+                    />
+                  </Controls.Field>
+                </details>
+                <details>
+                  <summary>设备安全</summary>
+                  <InstrumentDefaultsEditor
+                    key={draftGeneration}
+                    mode="safety"
+                    description={existing?.driver.driver_id === driverId ? description : undefined}
+                    defaultState={safeState}
+                    runStart="preserve"
+                    onDefaultStateChange={setSafeState}
+                    onRunStartChange={() => {}}
+                    onValidityChange={setValidState}
+                  />
+                  <Controls.Field>
+                    <input
+                      type="checkbox"
+                      checked={safety.require_safe_success ?? false}
+                      onChange={(event) =>
+                        setSafety({ ...safety, require_safe_success: event.target.checked })
+                      }
+                    />
+                    任务成功后要求安全状态
+                  </Controls.Field>
+                  <Controls.Field>
+                    <input
+                      type="checkbox"
+                      checked={safety.require_safe_failure ?? false}
+                      onChange={(event) =>
+                        setSafety({ ...safety, require_safe_failure: event.target.checked })
+                      }
+                    />
+                    失败后要求安全状态
+                  </Controls.Field>
+                  <Controls.Field>
+                    <input
+                      type="checkbox"
+                      checked={safety.safe_state_requirement === "required"}
+                      onChange={(event) =>
+                        setSafety({
+                          ...safety,
+                          safe_state_requirement: event.target.checked ? "required" : "best_effort",
                         })
                       }
                     />
-                  ))}
-                </fieldset>
-              )}
-              <details open={connection.kind === "driver_managed"}>
-                <summary>物理标识与其他地址</summary>
-                <p>
-                  声明指向同一设备的其他访问路径，每行一项。如地址已登记到其他设备，访问前必须先解决冲突。
+                    无法确认安全状态时保持设备阻止状态
+                  </Controls.Field>
+                </details>
+                {device && (
+                  <Controls.Field>
+                    修改原因
+                    <Controls.Input
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                    />
+                  </Controls.Field>
+                )}
+                {changes.length > 0 && (
+                  <section
+                    aria-label="连接修改预览"
+                    className="grid gap-2 rounded border border-line p-3"
+                  >
+                    <strong>保存后的变化</strong>
+                    <dl className="grid gap-2 break-all">
+                      {changes.map((change) => (
+                        <div key={change.name}>
+                          <dt>{change.name}</dt>
+                          <dd>
+                            {change.before} → {change.after}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p>
+                      保存会退役此设备的旧空闲连接，可能执行驱动的断开动作。占用或待处理状态会阻止保存。
+                    </p>
+                    <p>新版本尚未测试；引用旧连接的实验准备需要重新检查。历史运行保持原版本。</p>
+                    <p>失败不代表硬件回滚；请以提交结果和设备待处理状态为准。</p>
+                  </section>
+                )}
+                {(error || drivers.error) && (
+                  <p role="alert">{error ?? errorMessage(drivers.error)}</p>
+                )}
+                <p className="text-sm text-text-dim">
+                  保存后请在设备详情中使用“测试连接”。修改连接前请停止受影响任务。
                 </p>
-                <Controls.Field>
-                  访问别名
-                  <Controls.Textarea
-                    value={aliases}
-                    onChange={(event) => setAliases(event.target.value)}
-                  />
-                </Controls.Field>
-              </details>
-              <details>
-                <summary>设备安全</summary>
-                <InstrumentDefaultsEditor
-                  mode="safety"
-                  description={existing?.driver.driver_id === driverId ? description : undefined}
-                  defaultState={safeState}
-                  runStart="preserve"
-                  onDefaultStateChange={setSafeState}
-                  onRunStartChange={() => {}}
-                  onValidityChange={setValidState}
-                />
-                <Controls.Field>
-                  <input
-                    type="checkbox"
-                    checked={safety.require_safe_success ?? false}
-                    onChange={(event) =>
-                      setSafety({ ...safety, require_safe_success: event.target.checked })
-                    }
-                  />
-                  任务成功后要求安全状态
-                </Controls.Field>
-                <Controls.Field>
-                  <input
-                    type="checkbox"
-                    checked={safety.require_safe_failure ?? false}
-                    onChange={(event) =>
-                      setSafety({ ...safety, require_safe_failure: event.target.checked })
-                    }
-                  />
-                  失败后要求安全状态
-                </Controls.Field>
-                <Controls.Field>
-                  <input
-                    type="checkbox"
-                    checked={safety.safe_state_requirement === "required"}
-                    onChange={(event) =>
-                      setSafety({
-                        ...safety,
-                        safe_state_requirement: event.target.checked ? "required" : "best_effort",
-                      })
-                    }
-                  />
-                  无法确认安全状态时保持设备阻止状态
-                </Controls.Field>
-              </details>
-              {device && (
-                <Controls.Field>
-                  修改原因
-                  <Controls.Input value={note} onChange={(event) => setNote(event.target.value)} />
-                </Controls.Field>
-              )}
-              {(error || drivers.error) && (
-                <p role="alert">{error ?? errorMessage(drivers.error)}</p>
-              )}
-              <p className="text-sm text-text-dim">
-                保存后请在设备详情中使用“测试连接”。修改连接前请停止受影响任务。
-              </p>
-            </fieldset>
-            <footer className="flex justify-end gap-2 border-t border-line p-4">
+              </fieldset>
+            </div>
+            <footer className="flex shrink-0 justify-end gap-2 border-t border-line p-4">
               <Dialog.Close className={secondaryButton} disabled={busy}>
                 取消
               </Dialog.Close>
@@ -376,4 +460,42 @@ export function InstrumentConfigDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+function connectionChanges(
+  before: DeviceConnection,
+  after: {
+    driver: DeviceConnection["driver"] | undefined;
+    connection: DeviceConnection["connection"];
+    access_aliases: string[];
+    safety: DeviceConnection["safety"];
+  },
+) {
+  const fields: [string, unknown, unknown][] = [
+    ["驱动", before.driver, after.driver],
+    ...Array.from(
+      new Set([...Object.keys(before.connection), ...Object.keys(after.connection)]),
+    ).map((key): [string, unknown, unknown] => [
+      (
+        {
+          kind: "连接方式",
+          host: "主机",
+          port: "端口",
+          timeout_seconds: "超时（秒）",
+          options: "驱动选项",
+        } as Record<string, string>
+      )[key] ?? key,
+      (before.connection as unknown as Record<string, unknown>)[key],
+      (after.connection as unknown as Record<string, unknown>)[key],
+    ]),
+    ["访问别名", before.access_aliases, after.access_aliases],
+    ["设备安全", before.safety, after.safety],
+  ];
+  return fields
+    .filter(([, a, b]) => JSON.stringify(a) !== JSON.stringify(b))
+    .map(([name, a, b]) => ({
+      name,
+      before: JSON.stringify(a) ?? "未设置",
+      after: JSON.stringify(b) ?? "未设置",
+    }));
 }

@@ -871,3 +871,56 @@ def test_save_response_loss_replay_and_reviewed_head_conflicts(tmp_path: Path) -
             runtime.application.devices.get("signal").device.head.revision_id
             == "new-intent"
         )
+
+
+def test_previous_connection_draft_creates_new_revision_without_hardware_access(
+    tmp_path: Path,
+) -> None:
+    endpoint = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=endpoint) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        original = _register(client)
+        setup = _setup(client, "recovery-bench")
+        edit = {
+            "device_id": "signal",
+            "label": "Signal source",
+            "revision_id": "edited-address",
+            "connection": {
+                **original["revision"]["content"],
+                "access_aliases": ["serial:COM7"],
+            },
+            "expected_head": original["device"]["head"],
+            "actor": "operator",
+        }
+        edited = client.post("/api/v1/devices", json=edit)
+        assert edited.status_code == 200, edited.text
+        listed = client.get("/api/v1/devices").json()["items"][0]
+        assert listed["previous_revision"] == original["revision"]
+        assert not endpoint._connections
+        recovery = {
+            **edit,
+            "revision_id": "recovered-address",
+            "expected_head": listed["device"]["head"],
+            "connection": listed["previous_revision"]["content"],
+        }
+        recovered = client.post("/api/v1/devices", json=recovery)
+        assert recovered.status_code == 200, recovered.text
+        result = recovered.json()
+        assert result["revision"]["content"] == original["revision"]["content"]
+        assert result["revision"]["id"] != original["revision"]["id"]
+        assert result["previous_revision"] == edited.json()["revision"]
+        assert result["last_connection_test"] is None
+        assert client.post("/api/v1/devices", json=recovery).json() == result
+        assert runtime.application.setup.get(setup.id) == setup
+        with pytest.raises(BackendConflict, match="changed; prepare"):
+            runtime.application.instruments.open_session(
+                InstrumentSessionOpenCommand(
+                    setup=setup.ref,
+                    instrument_ids=("source",),
+                    actor="operator",
+                    operation_id="stale-recovery",
+                )
+            )
+        assert not endpoint._connections

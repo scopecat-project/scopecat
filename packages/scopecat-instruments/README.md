@@ -368,8 +368,12 @@ pattern.
 
 The Instruments workspace reads the provider's driver catalog to add or
 configure a device. It exposes only supported connection kinds and typed driver
-options, can test a candidate connection before publishing it, and derives
-sparse startup-default fields from the probed interface description.
+options. Save a registered connection revision first, then explicitly test that
+revision in device details. A failed test leaves the saved revision in place;
+edit it or load the preceding connection settings into a new draft. Publishing
+that draft creates another revision, not a hardware rollback. Editing an existing
+connection retires its idle connection through the normal maintenance fence;
+driver disconnect behavior may affect the device.
 
 Virtual instrument:
 
