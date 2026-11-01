@@ -61,7 +61,9 @@ test("connection test feedback follows the saved revision across editing and dae
     await page.goto(`${url}/#instruments`);
     await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
     await page.getByRole("button", { name: "添加设备", exact: true }).click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page
+      .getByRole("dialog")
+      .or(page.getByRole("region", { name: "编辑设备", exact: true }));
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       const name = dialog.getByLabel("设备名称");
@@ -86,6 +88,11 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "添加设备", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "添加设备", exact: true }).click();
     await dialog.getByLabel("设备名称").fill("Reopen virtual device");
+    await dialog.getByRole("button", { name: "添加控制器地址" }).click();
+    await expect(dialog.getByRole("button", { name: "保存设备", exact: true })).toBeDisabled();
+    await dialog.getByLabel("控制器地址 名称 1").fill("main");
+    await dialog.getByLabel("控制器地址 值 1").fill("192.0.2.1");
+    await dialog.getByLabel("Python 路径", { exact: true }).fill("/opt/vendor/python");
     await dialog.getByLabel("Gain", { exact: true }).fill("-1");
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -95,6 +102,9 @@ test("connection test feedback follows the saved revision across editing and dae
       "instrument connection could not be established",
     );
     const failed = await current();
+    expect(
+      await page.evaluate("JSON.parse(sessionStorage.getItem('device-workbench-tabs') || '{}')"),
+    ).toMatchObject({ [failed.device.id]: "connection" });
     expect(failed.last_connection_test?.revision).toEqual(failed.device.head);
 
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
@@ -132,8 +142,9 @@ test("connection test feedback follows the saved revision across editing and dae
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
       await dialog.getByRole("region", { name: "连接修改预览" }).scrollIntoViewIfNeeded();
-      await expect(dialog.getByRole("heading", { name: "编辑设备" })).toBeInViewport();
+      await dialog.getByRole("button", { name: "保存设备", exact: true }).scrollIntoViewIfNeeded();
       await expect(dialog.getByRole("button", { name: "保存设备", exact: true })).toBeInViewport();
+      await page.evaluate("window.scrollTo(0, 0)");
       await testInfo.attach(`connection-recovery-${width}`, {
         body: await page.screenshot({
           fullPage: true,
@@ -173,6 +184,55 @@ test("connection test feedback follows the saved revision across editing and dae
     expect((await current()).last_connection_test).toEqual(finalTested.last_connection_test);
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("2");
+    await expect(dialog.getByLabel("控制器地址 值 1")).toHaveValue("192.0.2.1");
+    await dialog.getByRole("button", { name: "取消", exact: true }).click();
+    await page.getByRole("button", { name: "操作", exact: true }).click();
+    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await page.getByRole("button", { name: "连接与环境", exact: true }).click();
+    await expect(page.getByRole("button", { name: "释放物理连接" })).toBeDisabled();
+    await page.getByRole("button", { name: "操作", exact: true }).click();
+    await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "连接与环境", exact: true }).click();
+    await page.getByRole("button", { name: "释放物理连接" }).click();
+    await expect(page.getByText(/上次释放物理连接成功/)).toBeVisible();
+    const device = await current();
+    const accessResponse = await page.request.post(
+      `${url}/api/v1/devices/${device.device.id}/access`,
+    );
+    const access = await accessResponse.json();
+    const setup = { revision_id: access.id, content_hash: access.content_hash };
+    const externalResponse = await page.request.post(`${url}/api/v1/instrument-sessions`, {
+      data: {
+        setup,
+        actor: "External software fixture",
+        operation_id: "external-handoff-test",
+        instrument_ids: [device.device.id],
+      },
+    });
+    expect(externalResponse.ok()).toBe(true);
+    const external = await externalResponse.json();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "释放物理连接" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "编辑设备", exact: true })).toBeDisabled();
+    const blocked = await page.request.post(`${url}/api/v1/instruments/release`, {
+      data: { setup, instrument_ids: [device.device.id] },
+    });
+    expect(blocked.status()).toBe(409);
+    expect(
+      (
+        await page.request.post(`${url}/api/v1/instrument-sessions/${external.session_id}/close`)
+      ).ok(),
+    ).toBe(true);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "释放物理连接" })).toBeEnabled();
+    await page.getByRole("button", { name: "操作", exact: true }).click();
+    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await page.getByRole("button", { name: "释放控制", exact: true }).click();
   } finally {
     if (daemon! && daemon.exitCode === null) await stop();
     await rm(root, { recursive: true, force: true });

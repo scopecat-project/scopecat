@@ -49,7 +49,17 @@ endpoint = LocalInstrumentBackendEndpoint(
                             options_schema={
                                 "type": "object",
                                 "properties": {
-                                    "gain": {"type": "number", "default": 1}
+                                    "gain": {"type": "number", "default": 1},
+                                    "addresses": {
+                                        "type": "object",
+                                        "title": "控制器地址",
+                                        "additionalProperties": {"type": "string"},
+                                    },
+                                    "interpreter": {
+                                        "title": "Python 路径",
+                                        "default": None,
+                                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                                    },
                                 },
                             },
                         ),

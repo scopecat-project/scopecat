@@ -20,6 +20,7 @@ export function InstrumentSessionPanel({
   closePending,
   interactionPending,
   refreshPending,
+  stateAvailable,
   configuredDefaultsVisible,
   configuredDefaultsPending,
   configuredDefaultsDisabled,
@@ -39,6 +40,7 @@ export function InstrumentSessionPanel({
   closePending: boolean;
   interactionPending: boolean;
   refreshPending: boolean;
+  stateAvailable: boolean;
   configuredDefaultsVisible: boolean;
   configuredDefaultsPending: boolean;
   configuredDefaultsDisabled: boolean;
@@ -89,8 +91,14 @@ export function InstrumentSessionPanel({
             type="button"
             className={secondaryButton}
             onClick={onRefresh}
-            disabled={interactionPending || closePending}
-            title={interactionPending ? "请等待当前仪器交互完成" : undefined}
+            disabled={interactionPending || closePending || !stateAvailable}
+            title={
+              !stateAvailable
+                ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"
+                : interactionPending
+                  ? "请等待当前仪器交互完成"
+                  : undefined
+            }
           >
             <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
             刷新状态
@@ -107,7 +115,7 @@ export function InstrumentSessionPanel({
             ) : (
               <Unplug size={14} />
             )}
-            断开连接
+            释放控制
           </button>
         </div>
       </div>
@@ -197,7 +205,7 @@ export function InstrumentSessionPanel({
       <div className="grid min-w-0 flex-1 gap-1 max-[680px]:w-full max-[680px]:basis-full">
         <strong className="text-xs text-text-soft">准备交互时再连接</strong>
         <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
-          连接后可读取或调整仪器。完成后请断开，让实验可以使用它。选中设备不会连接。
+          连接后可读取或调整仪器。完成后释放控制，让实验可以使用它。选中设备不会连接。
         </small>
       </div>
       <button type="button" className={primaryButton} onClick={onConnect} disabled={connectPending}>

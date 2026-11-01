@@ -108,6 +108,15 @@ class DesktopAPI:
             selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
             return selected[0] if selected else None
 
+    def choose_file(self) -> str | None:
+        import webview
+
+        with self._session.operation():
+            selected = self._window().create_file_dialog(
+                webview.FileDialog.OPEN, allow_multiple=False
+            )
+            return selected[0] if selected else None
+
     def open_capture(self) -> dict[str, object] | None:
         import webview
 

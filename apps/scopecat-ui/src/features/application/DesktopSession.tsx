@@ -94,6 +94,7 @@ interface DesktopAPI {
   register_source(directory: string, interpreter: string): Promise<string>;
   select_source_environment(directory: string, interpreter: string): Promise<string>;
   choose_directory(): Promise<string | null>;
+  choose_file?(): Promise<string | null>;
   create_source(parent: string, name: string): Promise<string>;
   prepare_author_environment(directory: string): Promise<string>;
   create_author_environment(directory: string, rebuild?: boolean): Promise<string>;

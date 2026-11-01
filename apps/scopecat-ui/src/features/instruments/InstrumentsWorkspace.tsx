@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InstrumentSession } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
+import { connectionOptionFields } from "./connection-fields";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import { InstrumentInspector } from "./InstrumentInspector";
 import { DriverSourcePanel } from "./DriverSourcePanel";
@@ -12,6 +13,7 @@ import {
   prepareDeviceAccess,
   testDeviceConnection,
   retireDevice,
+  releaseDeviceConnection,
   type DeviceView,
 } from "./device-api";
 import {
@@ -43,6 +45,37 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   const [sessionError, setSessionError] = useState<string>();
   const [savedRevision, setSavedRevision] = useState<string>();
   const [configTarget, setConfigTarget] = useState<ConfigTarget>();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [tabs, setTabs] = useState<Record<string, string>>(() => {
+    try {
+      const stored: unknown = JSON.parse(sessionStorage.getItem("device-workbench-tabs") ?? "{}");
+      if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+      return Object.fromEntries(
+        Object.entries(stored).filter(
+          ([, value]) =>
+            value === "operations" || value === "connection" || value === "diagnostics",
+        ),
+      );
+    } catch {
+      return {};
+    }
+  });
+  const tab = selectedId ? (tabs[selectedId] ?? "operations") : "operations";
+  const rememberTab = (deviceId: string, value: string) => {
+    setTabs((current) => {
+      const next = { ...current, [deviceId]: value };
+      try {
+        sessionStorage.setItem("device-workbench-tabs", JSON.stringify(next));
+      } catch {
+        /* The workbench remains usable when storage is unavailable. */
+      }
+      return next;
+    });
+  };
+  const chooseTab = (value: string) => {
+    if (selectedId) rememberTab(selectedId, value);
+  };
   const openAttempt = useRef<OpenAttempt | undefined>(undefined);
   const devicesQuery = useQuery({
     queryKey: ["devices"],
@@ -131,6 +164,17 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     probe.variables?.device.head.revision_id === selectedDevice?.device.head.revision_id
       ? probe.error
       : null;
+  const releaseConnection = useMutation({
+    retry: false,
+    mutationFn: () => {
+      if (!selectedId || !revision) throw new Error("请选择已配置设备。");
+      return releaseDeviceConnection(selectedId, {
+        revision_id: revision.id,
+        content_hash: revision.content_hash,
+      });
+    },
+    onSettled: refresh,
+  });
   const retire = useMutation({
     mutationFn: () => {
       if (!selectedDevice) throw new Error("请选择设备。");
@@ -200,6 +244,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instrumentsQuery.dataUpdatedAt, session?.session_id]);
   const connectCurrent = () => {
+    releaseConnection.reset();
     if (!revision || !selectedId) return;
     const key = `${revision.id}:${selectedId}`;
     if (openAttempt.current?.key !== key)
@@ -211,7 +256,8 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       };
     connect.mutate(openAttempt.current);
   };
-  const busy = connect.isPending || close.isPending || probe.isPending;
+  const busy =
+    connect.isPending || close.isPending || probe.isPending || releaseConnection.isPending;
   const owned =
     selectedDevice?.availability === "active" ||
     selectedDevice?.availability === "quarantined" ||
@@ -222,6 +268,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     setSessionError(undefined);
     probe.reset();
     retire.reset();
+    releaseConnection.reset();
     openAttempt.current = undefined;
   };
   return (
@@ -235,7 +282,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
         </div>
         <div className="flex flex-wrap gap-3">
           <Controls.Button
-            disabled={daemonUnavailable || !catalog.data || busy}
+            disabled={daemonUnavailable || !catalog.data || busy || !!configTarget}
             onClick={() => setConfigTarget({ kind: "add" })}
           >
             添加设备
@@ -264,55 +311,93 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
         <DriverSourcePanel daemonUnavailable={daemonUnavailable} sessionBusy={busy || !!session} />
       </details>
       {devicesQuery.error && <p role="alert">{errorMessage(devicesQuery.error)}</p>}
-      <div className="grid min-h-[640px] grid-cols-[300px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1">
+      <div className="grid min-h-[640px] grid-cols-[240px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1">
         <aside aria-label="已登记设备" className="rounded-lg border border-line bg-panel p-3">
+          <Controls.Field>
+            搜索设备
+            <Controls.Input value={search} onChange={(event) => setSearch(event.target.value)} />
+          </Controls.Field>
+          <Controls.Field>
+            设备状态
+            <Controls.Select value={filter} onChange={(event) => setFilter(event.target.value)}>
+              <option value="all">全部</option>
+              <option value="idle">空闲</option>
+              <option value="active">占用中</option>
+              <option value="quarantined">需要处理</option>
+            </Controls.Select>
+          </Controls.Field>
           {devicesQuery.isPending && <p>正在加载设备…</p>}
           {devicesQuery.isSuccess && devices.length === 0 && (
             <p>尚无设备。添加设备即可开始，无需先创建实验 setup。</p>
           )}
           {session && <p className="mb-3 text-sm">选择其他设备会释放当前手动会话。</p>}
-          {devices.map((item) => (
-            <button
-              key={item.device.id}
-              title={`查看仪器 ${item.device.id}`}
-              aria-pressed={item.device.id === selectedId}
-              disabled={busy}
-              className="mb-2 grid w-full gap-1 rounded-md border border-line p-3 text-left hover:bg-panel-strong aria-pressed:border-accent aria-pressed:bg-accent-soft disabled:opacity-60"
-              onClick={() => {
-                if (item.device.id === selectedId) return;
-                if (session)
-                  close.mutate({
-                    id: session.session_id,
-                    abort: false,
-                    selectAfter: item.device.id,
-                  });
-                else selectDevice(item.device.id);
-              }}
-            >
-              <strong>{item.device.label}</strong>
-              <span className="text-sm">{connectionSummary(item.revision.content.connection)}</span>
-              <span>
-                {item.device.state === "retired"
-                  ? "已退役"
-                  : item.availability === "quarantined"
-                    ? "需要处理"
-                    : item.availability === "active"
-                      ? item.owner_kind === "run"
-                        ? "运行中"
-                        : "手动会话占用中"
-                      : "空闲"}
-              </span>
-            </button>
-          ))}
+          {devices
+            .filter(
+              (item) =>
+                `${item.device.label} ${connectionSummary(item.revision.content.connection)}`
+                  .toLocaleLowerCase()
+                  .includes(search.toLocaleLowerCase()) &&
+                (filter === "all" || item.availability === filter),
+            )
+            .map((item) => (
+              <button
+                key={item.device.id}
+                title={`查看仪器 ${item.device.id}`}
+                aria-pressed={item.device.id === selectedId}
+                disabled={busy || !!configTarget}
+                className="mb-2 grid w-full gap-1 rounded-md border border-line p-2 text-left hover:bg-panel-strong aria-pressed:border-accent aria-pressed:bg-accent-soft disabled:opacity-60"
+                onClick={() => {
+                  if (item.device.id === selectedId) return;
+                  if (session)
+                    close.mutate({
+                      id: session.session_id,
+                      abort: false,
+                      selectAfter: item.device.id,
+                    });
+                  else selectDevice(item.device.id);
+                }}
+              >
+                <strong>{item.device.label}</strong>
+                <span className="text-sm">
+                  {connectionSummary(item.revision.content.connection)}
+                </span>
+                <span>
+                  {item.device.state === "retired"
+                    ? "已退役"
+                    : item.availability === "quarantined"
+                      ? "需要处理"
+                      : item.availability === "active"
+                        ? item.owner_kind === "run"
+                          ? "运行中"
+                          : "手动会话占用中"
+                        : "空闲"}
+                </span>
+              </button>
+            ))}
         </aside>
         <div className="grid content-start gap-3">
           {selectedDevice && (
             <header className="rounded-lg border border-line bg-panel p-3">
               <h3 className="text-base font-semibold leading-6">{selectedDevice.device.label}</h3>
+              {selected?.owner_actor && (
+                <p className="text-sm">
+                  当前占用：{selected.owner_actor}
+                  {selected.owner_kind === "run" ? " · 实验运行" : " · 手动会话"}
+                </p>
+              )}
               <div className="flex flex-wrap gap-3">
                 <Controls.Button
-                  disabled={selectedDevice.device.state === "retired" || !!session || busy || owned}
-                  onClick={() => probe.mutate(selectedDevice)}
+                  disabled={
+                    selectedDevice.device.state === "retired" ||
+                    !!session ||
+                    busy ||
+                    owned ||
+                    !!configTarget
+                  }
+                  onClick={() => {
+                    releaseConnection.reset();
+                    probe.mutate(selectedDevice);
+                  }}
                 >
                   测试连接
                 </Controls.Button>
@@ -322,11 +407,13 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                     !!session ||
                     busy ||
                     owned ||
+                    !!configTarget ||
                     !catalog.data
                   }
-                  onClick={() =>
-                    setConfigTarget({ kind: "edit", deviceId: selectedDevice.device.id })
-                  }
+                  onClick={() => {
+                    chooseTab("connection");
+                    setConfigTarget({ kind: "edit", deviceId: selectedDevice.device.id });
+                  }}
                 >
                   编辑设备
                 </Controls.Button>
@@ -337,6 +424,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                     !!session ||
                     busy ||
                     owned ||
+                    !!configTarget ||
                     retire.isPending
                   }
                   onClick={() => retire.mutate()}
@@ -364,6 +452,30 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               {(probeError || retire.error) && (
                 <p role="alert">{errorMessage(probeError ?? retire.error)}</p>
               )}
+              {selected?.owner_kind === "run" && selected.owner_id && (
+                <a
+                  className="underline"
+                  href={`?run=${encodeURIComponent(selected.owner_id)}#runs`}
+                >
+                  查看占用实验
+                </a>
+              )}
+              <nav aria-label="设备详情" className="mt-3 flex flex-wrap gap-2">
+                {[
+                  ["operations", "操作"],
+                  ["connection", "连接与环境"],
+                  ["diagnostics", "诊断记录"],
+                ].map(([value, label]) => (
+                  <Controls.Button
+                    key={value}
+                    aria-pressed={tab === value}
+                    disabled={!!configTarget}
+                    onClick={() => chooseTab(value!)}
+                  >
+                    {label}
+                  </Controls.Button>
+                ))}
+              </nav>
               {selectedDevice.device.state === "retired" && <p>此设备已退役，执行记录仍保留。</p>}
             </header>
           )}
@@ -379,37 +491,164 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               ))}
             </section>
           )}
-          {selected && selectedDevice?.device.state === "available" ? (
-            <InstrumentInspector
-              key={`${revision?.id}:${selected.instrument_id}`}
-              instrument={selected}
-              session={session}
-              sessionError={sessionError}
-              connectPending={connect.isPending}
-              closePending={close.isPending}
-              onConnect={connectCurrent}
-              onClose={() => session && close.mutate({ id: session.session_id, abort: false })}
-              onSessionLost={loseSession}
-              onDisconnectOwner={() => {
-                if (selected.owner_kind === "instrument_session" && selected.owner_id)
-                  close.mutate({ id: selected.owner_id, abort: true });
+          {selectedDevice && tab === "connection" && !configTarget && (
+            <section
+              className="grid gap-3 rounded-lg border border-line bg-panel p-3"
+              aria-label="连接与环境"
+            >
+              <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
+              <dl className="grid gap-2" aria-label="已保存连接设置">
+                {connectionOptionFields(
+                  catalog.data?.drivers
+                    .find(
+                      (driver) =>
+                        driver.driver_id === selectedDevice.revision.content.driver.driver_id,
+                    )
+                    ?.connections.find(
+                      (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
+                    )?.options_schema,
+                ).map((field) => {
+                  const value = selectedDevice.revision.content.connection.options?.[field.id];
+                  return (
+                    <div key={field.id} className="min-w-0">
+                      <dt className="font-semibold">{field.label}</dt>
+                      <dd className="break-all">
+                        {field.sensitive ? (
+                          value == null ? (
+                            "未设置"
+                          ) : (
+                            "已设置（已隐藏）"
+                          )
+                        ) : value == null ? (
+                          (field.choiceLabels?.[""] ?? "未指定")
+                        ) : field.stringMap &&
+                          typeof value === "object" &&
+                          !Array.isArray(value) ? (
+                          <ul>
+                            {Object.entries(value).map(([name, entry]) => (
+                              <li key={name}>
+                                {name}：{typeof entry === "string" ? entry : "复杂值"}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : typeof value === "string" ? (
+                          (field.choiceLabels?.[value] ?? value)
+                        ) : typeof value === "boolean" ? (
+                          value ? (
+                            "是"
+                          ) : (
+                            "否"
+                          )
+                        ) : typeof value === "number" ? (
+                          String(value)
+                        ) : (
+                          "复杂设置（编辑时查看）"
+                        )}
+                      </dd>
+                      {field.description && (
+                        <dd className="text-sm text-text-dim">{field.description}</dd>
+                      )}
+                    </div>
+                  );
+                })}
+              </dl>
+              <p>使用“编辑设备”修改连接与驱动环境。设备调试不需要样品或实验路由。</p>
+              <Controls.Button
+                disabled={
+                  selectedDevice.device.state === "retired" ||
+                  !!session ||
+                  owned ||
+                  busy ||
+                  !revision
+                }
+                onClick={() => releaseConnection.mutate()}
+              >
+                释放物理连接
+              </Controls.Button>
+              <small>
+                交给外部脚本前先释放控制，再释放物理连接。此操作执行驱动的断开逻辑；不表示输出归零，也不替外部程序预留设备。
+              </small>
+              {releaseConnection.isSuccess && (
+                <p role="status">
+                  上次释放物理连接成功；这不是持续连接状态。外部程序结束后重新连接并读取状态。
+                </p>
+              )}
+              {releaseConnection.error && (
+                <p role="alert">{errorMessage(releaseConnection.error)}</p>
+              )}
+            </section>
+          )}
+          {selectedDevice && tab === "diagnostics" && (
+            <section
+              className="grid gap-2 rounded-lg border border-line bg-panel p-3"
+              aria-label="诊断记录"
+            >
+              <h4>最近连接测试</h4>
+              <p>
+                {selectedDevice.last_connection_test?.error ??
+                  (selectedDevice.last_connection_test
+                    ? "测试通过；不是当前硬件状态读回。"
+                    : "尚无测试记录。")}
+              </p>
+              <p>
+                {selectedDevice.availability === "quarantined"
+                  ? "需要处理上次不确定的操作。请在操作页核查占用与恢复入口。"
+                  : selectedDevice.availability === "active"
+                    ? "当前有任务或手动会话占用；请在操作页查看。"
+                    : "当前没有登记的占用。"}
+              </p>
+              <details>
+                <summary>技术信息</summary>
+                <code className="break-all">{selectedDevice.revision.id}</code>
+                <p className="break-all">{selectedDevice.revision.content.driver.driver_id}</p>
+              </details>
+            </section>
+          )}
+          {configTarget?.kind === "edit" && catalog.data && (
+            <InstrumentConfigDialog
+              key={configTarget.deviceId}
+              embedded
+              device={selectedDevice}
+              catalog={catalog.data}
+              description={selected?.description ?? undefined}
+              onCancel={() => setConfigTarget(undefined)}
+              onPublished={async (saved) => {
+                setConfigTarget(undefined);
+                setSavedRevision(saved.revision.id);
+                releaseConnection.reset();
+                refresh();
+                await queryClient.invalidateQueries({ queryKey: ["setup-revisions"] });
               }}
             />
-          ) : !selectedDevice ? (
-            <p>选择设备以查看控制项。</p>
-          ) : instrumentsQuery.isFetching ? (
-            <p>正在读取设备能力…</p>
-          ) : null}
+          )}
+          <div hidden={tab !== "operations" || !!configTarget}>
+            {selected && selectedDevice?.device.state === "available" ? (
+              <InstrumentInspector
+                key={`${revision?.id}:${selected.instrument_id}`}
+                instrument={selected}
+                session={session}
+                sessionError={sessionError}
+                connectPending={connect.isPending}
+                closePending={close.isPending}
+                onConnect={connectCurrent}
+                onClose={() => session && close.mutate({ id: session.session_id, abort: false })}
+                onSessionLost={loseSession}
+                onDisconnectOwner={() => {
+                  if (selected.owner_kind === "instrument_session" && selected.owner_id)
+                    close.mutate({ id: selected.owner_id, abort: true });
+                }}
+              />
+            ) : !selectedDevice ? (
+              <p>选择设备以查看控制项。</p>
+            ) : instrumentsQuery.isFetching ? (
+              <p>正在读取设备能力…</p>
+            ) : null}
+          </div>
         </div>
       </div>
-      {configTarget && catalog.data && (
+      {configTarget?.kind === "add" && catalog.data && (
         <InstrumentConfigDialog
-          key={configTarget.kind === "edit" ? configTarget.deviceId : "new"}
-          device={
-            configTarget.kind === "edit"
-              ? devices.find((item) => item.device.id === configTarget.deviceId)
-              : undefined
-          }
+          key="new"
           catalog={catalog.data}
           description={selected?.description ?? undefined}
           onCancel={() => setConfigTarget(undefined)}
@@ -417,6 +656,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
             setConfigTarget(undefined);
             setSelectedId(saved.device.id);
             setSavedRevision(saved.revision.id);
+            rememberTab(saved.device.id, "connection");
             refresh();
             await queryClient.invalidateQueries({ queryKey: ["setup-revisions"] });
           }}

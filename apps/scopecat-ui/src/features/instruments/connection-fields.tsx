@@ -1,5 +1,5 @@
 import * as Controls from "../../ui/Controls";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DriverConnectionSpec, DriverSpec, InstrumentConnection } from "../../api-contract";
 export type ConnectionKind = InstrumentConnection["kind"];
 type TcpConnection = Extract<InstrumentConnection, { kind: "tcpip_socket" }>;
@@ -21,6 +21,14 @@ interface OptionField {
   required: boolean;
   minimum?: number;
   maximum?: number;
+  description?: string;
+  choices?: string[];
+  choiceLabels?: Record<string, string>;
+  sensitive?: boolean;
+  pathKind?: "directory" | "file";
+  stringMap?: boolean;
+  minLength?: number;
+  minProperties?: number;
 }
 
 export function TcpConnectionFields({
@@ -210,14 +218,50 @@ export function OptionInput({
       </Controls.Field>
     );
   }
+  if (field.type === "object" && field.stringMap) {
+    return (
+      <StringMapInput
+        field={field}
+        value={value}
+        onChange={onChange}
+        onValidityChange={onValidityChange}
+      />
+    );
+  }
+  if (field.type === "string" && field.pathKind)
+    return (
+      <PathOptionInput
+        field={field}
+        value={value}
+        onChange={onChange}
+        onValidityChange={onValidityChange}
+      />
+    );
   if (field.type === "string") {
     return (
       <Controls.Field>
         <span>{field.label}</span>
-        <Controls.Input
-          value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
-        />
+        {field.choices ? (
+          <Controls.Select
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value || undefined)}
+          >
+            <option value="">
+              {field.required ? "请选择" : (field.choiceLabels?.[""] ?? "未指定")}
+            </option>
+            {field.choices.map((choice) => (
+              <option key={choice} value={choice}>
+                {field.choiceLabels?.[choice] ?? choice}
+              </option>
+            ))}
+          </Controls.Select>
+        ) : (
+          <Controls.Input
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value || (field.required ? "" : undefined))}
+          />
+        )}
+        {field.description && <small className="text-text-dim">{field.description}</small>}
       </Controls.Field>
     );
   }
@@ -240,6 +284,167 @@ export function OptionInput({
       integer={field.type === "integer"}
       onChange={onChange}
     />
+  );
+}
+
+function PathOptionInput({
+  field,
+  value,
+  onChange,
+  onValidityChange,
+}: Parameters<typeof OptionInput>[0]) {
+  const [native, setNative] = useState(window.pywebview?.api);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    const ready = () => setNative(window.pywebview?.api);
+    window.addEventListener("pywebviewready", ready);
+    return () => {
+      active.current = false;
+      window.removeEventListener("pywebviewready", ready);
+    };
+  }, []);
+  const available =
+    field.pathKind === "directory" ? !!native?.choose_directory : !!native?.choose_file;
+  const choose = async () => {
+    if (!native || pending) return;
+    setPending(true);
+    setError("");
+    onValidityChange(false);
+    try {
+      const path =
+        field.pathKind === "directory"
+          ? await native.choose_directory()
+          : await native.choose_file?.();
+      if (active.current && path) onChange(path);
+    } catch (failure) {
+      if (active.current)
+        setError(failure instanceof Error ? failure.message : "无法打开路径选择器");
+    } finally {
+      if (active.current) {
+        setPending(false);
+        onValidityChange(true);
+      }
+    }
+  };
+  return (
+    <div className="grid gap-1">
+      <Controls.Field>
+        <span>{field.label}</span>
+        <Controls.Input
+          disabled={pending}
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => onChange(event.target.value || (field.required ? "" : undefined))}
+        />
+      </Controls.Field>
+      {available && (
+        <Controls.Button type="button" disabled={pending} onClick={() => void choose()}>
+          {pending ? "正在选择…" : `选择${field.label}`}
+        </Controls.Button>
+      )}
+      {field.description && <small className="text-text-dim">{field.description}</small>}
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}
+
+function StringMapInput({
+  field,
+  value,
+  onChange,
+  onValidityChange,
+}: {
+  field: OptionField;
+  value: OptionValue | undefined;
+  onChange: (value: OptionValue | undefined) => void;
+  onValidityChange: (valid: boolean) => void;
+}) {
+  const [rows, setRows] = useState(() =>
+    Object.entries(isRecord(value) ? value : {}).map(([name, entry], id) => ({
+      id,
+      name,
+      value: typeof entry === "string" ? entry : "",
+    })),
+  );
+  const [nextId, setNextId] = useState(rows.length);
+  const [error, setError] = useState("");
+  const update = (next: typeof rows) => {
+    setRows(next);
+    if (next.length === 0 && !field.required) {
+      setError("");
+      onValidityChange(true);
+      onChange(undefined);
+      return;
+    }
+    const names = next.map((row) => row.name.trim());
+    const valid =
+      names.every(Boolean) &&
+      new Set(names).size === names.length &&
+      next.every((row) => row.value.trim()) &&
+      next.length >= (field.minProperties ?? 0);
+    setError(valid ? "" : "请填写名称和值，名称不能重复。");
+    onValidityChange(valid);
+    if (valid) onChange(Object.fromEntries(next.map((row) => [row.name.trim(), row.value.trim()])));
+  };
+  return (
+    <fieldset className="grid min-w-0 gap-2" aria-label={field.label}>
+      <legend>{field.label}</legend>
+      {field.description && <small className="text-text-dim">{field.description}</small>}
+      {rows.map((row, index) => (
+        <div
+          key={row.id}
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] items-end gap-2 max-[460px]:grid-cols-1"
+        >
+          <Controls.Field>
+            名称
+            <Controls.Input
+              aria-label={`${field.label} 名称 ${index + 1}`}
+              value={row.name}
+              onChange={(event) =>
+                update(
+                  rows.map((item) =>
+                    item.id === row.id ? { ...item, name: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+          </Controls.Field>
+          <Controls.Field>
+            值
+            <Controls.Input
+              aria-label={`${field.label} 值 ${index + 1}`}
+              value={row.value}
+              onChange={(event) =>
+                update(
+                  rows.map((item) =>
+                    item.id === row.id ? { ...item, value: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+          </Controls.Field>
+          <Controls.Button
+            type="button"
+            onClick={() => update(rows.filter((item) => item.id !== row.id))}
+            aria-label={`移除${field.label}第 ${index + 1} 行`}
+          >
+            移除
+          </Controls.Button>
+        </div>
+      ))}
+      <Controls.Button
+        type="button"
+        onClick={() => {
+          update([...rows, { id: nextId, name: "", value: "" }]);
+          setNextId(nextId + 1);
+        }}
+      >
+        添加{field.label}
+      </Controls.Button>
+      {error && <p role="alert">{error}</p>}
+    </fieldset>
   );
 }
 
@@ -328,16 +533,8 @@ export function initialConnection(
   driver: DriverSpec | undefined,
 ): InstrumentConnection {
   const supported = driver?.connections.find((candidate) => candidate.kind === existing?.kind);
-  if (existing && supported) {
-    const options = {
-      ...defaultOptions(supported.options_schema),
-      ...existing.options,
-    };
-    return {
-      ...existing,
-      ...(existing.options || Object.keys(options).length > 0 ? { options } : {}),
-    };
-  }
+  // Opening an existing revision must not inject new driver defaults or migrate its mode.
+  if (existing && supported) return existing;
   const connectionSpec = driver?.connections[0];
   return newConnection(connectionSpec?.kind ?? "virtual", connectionSpec);
 }
@@ -396,11 +593,17 @@ export function connectionIsValid(connection: InstrumentConnection): boolean {
 export function optionsAreValid(options: ConnectionOptions, fields: OptionField[]): boolean {
   return fields.every((field) => {
     const value = options[field.id] ?? field.defaultValue;
-    if (value === undefined) return !field.required;
+    if (value === undefined || value === null) return !field.required;
     if (field.type === "boolean") return typeof value === "boolean";
-    if (field.type === "string") return typeof value === "string";
+    if (field.type === "string")
+      return (
+        typeof value === "string" &&
+        value.length >= (field.minLength ?? 0) &&
+        (!field.choices || field.choices.includes(value))
+      );
     if (field.type === "array") return Array.isArray(value);
-    if (field.type === "object") return isRecord(value);
+    if (field.type === "object")
+      return isRecord(value) && Object.keys(value).length >= (field.minProperties ?? 0);
     return (
       typeof value === "number" &&
       Number.isFinite(value) &&
@@ -412,16 +615,38 @@ export function optionsAreValid(options: ConnectionOptions, fields: OptionField[
 }
 
 // Driver options stay opaque; the editor projects their top-level JSON Schema fields.
-export function connectionOptionFields(schema: unknown): OptionField[] {
+export function connectionOptionFields(
+  schema: unknown,
+  options: ConnectionOptions = {},
+): OptionField[] {
   if (!isRecord(schema) || !isRecord(schema.properties)) return [];
   const required = new Set(
     Array.isArray(schema.required)
       ? schema.required.filter((value): value is string => typeof value === "string")
       : [],
   );
+  // A top-level discriminator can make additional fields required. Nested schema logic
+  // remains authoritative on the server rather than guessing which branch applies.
+  if (isRecord(schema.if) && isRecord(schema.if.properties) && isRecord(schema.then)) {
+    const conditions = Object.entries(schema.if.properties);
+    if (
+      conditions.length > 0 &&
+      conditions.every(
+        ([id, condition]) =>
+          isRecord(condition) && "const" in condition && options[id] === condition.const,
+      )
+    ) {
+      if (Array.isArray(schema.then.required))
+        for (const id of schema.then.required) if (typeof id === "string") required.add(id);
+    }
+  }
   return Object.entries(schema.properties).flatMap(([id, value]) => {
     if (!isRecord(value)) return [];
-    const type = value.type;
+    const shape = Array.isArray(value.anyOf)
+      ? value.anyOf.find((item) => isRecord(item) && item.type !== "null")
+      : value;
+    if (!isRecord(shape)) return [];
+    const type = shape.type;
     if (
       type !== "array" &&
       type !== "boolean" &&
@@ -439,6 +664,37 @@ export function connectionOptionFields(schema: unknown): OptionField[] {
         type,
         defaultValue: jsonOptionValue(value.default),
         required: required.has(id),
+        description: typeof value.description === "string" ? value.description : undefined,
+        choices:
+          Array.isArray(shape.enum) && shape.enum.every((item) => typeof item === "string")
+            ? shape.enum
+            : undefined,
+        stringMap:
+          type === "object" &&
+          isRecord(shape.additionalProperties) &&
+          shape.additionalProperties.type === "string",
+        choiceLabels: isRecord(value["x-enum-labels"])
+          ? Object.fromEntries(
+              Object.entries(value["x-enum-labels"]).filter(
+                (entry): entry is [string, string] => typeof entry[1] === "string",
+              ),
+            )
+          : undefined,
+        pathKind:
+          value.format === "directory-path"
+            ? "directory"
+            : value.format === "file-path"
+              ? "file"
+              : undefined,
+        sensitive:
+          (isRecord(shape.additionalProperties) &&
+            (shape.additionalProperties.writeOnly === true ||
+              shape.additionalProperties.format === "password")) ||
+          value.writeOnly === true ||
+          value.format === "password" ||
+          /password|secret|token|credential|api[_-]?key/i.test(id),
+        minLength: typeof shape.minLength === "number" ? shape.minLength : undefined,
+        minProperties: typeof shape.minProperties === "number" ? shape.minProperties : undefined,
         minimum: typeof value.minimum === "number" ? value.minimum : undefined,
         maximum: typeof value.maximum === "number" ? value.maximum : undefined,
       },
