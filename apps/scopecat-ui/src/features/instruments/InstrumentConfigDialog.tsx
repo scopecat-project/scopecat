@@ -127,7 +127,7 @@ export function InstrumentConfigDialog({
       .filter(Boolean),
     safety: { ...safety, safe_state: safeState },
   };
-  const changes = existing && implementation ? connectionChanges(existing, proposed) : [];
+  const changes = existing && implementation ? connectionChanges(existing, proposed, catalog) : [];
   const previous = device?.previous_revision;
   const canRestore =
     previous && JSON.stringify(previous.content.driver) === JSON.stringify(existing?.driver);
@@ -429,18 +429,13 @@ export function InstrumentConfigDialog({
                       ))}
                     </dl>
                     <p>
-                      保存会退役此设备的旧空闲连接，可能执行驱动的断开动作。占用或待处理状态会阻止保存。
+                      保存会关闭此设备的旧空闲连接，并执行驱动规定的断开动作。保存后请测试新连接，相关实验需重新检查准备。
                     </p>
-                    <p>新版本尚未测试；引用旧连接的实验准备需要重新检查。历史运行保持原版本。</p>
-                    <p>失败不代表硬件回滚；请以提交结果和设备待处理状态为准。</p>
                   </section>
                 )}
                 {(error || drivers.error) && (
                   <p role="alert">{error ?? errorMessage(drivers.error)}</p>
                 )}
-                <p className="text-sm text-text-dim">
-                  保存后请在设备详情中使用“测试连接”。修改连接前请停止受影响任务。
-                </p>
               </fieldset>
             </div>
             <footer className="flex shrink-0 justify-end gap-2 border-t border-line p-4">
@@ -470,32 +465,106 @@ function connectionChanges(
     access_aliases: string[];
     safety: DeviceConnection["safety"];
   },
+  catalog: DriverCatalog,
 ) {
-  const fields: [string, unknown, unknown][] = [
-    ["驱动", before.driver, after.driver],
-    ...Array.from(
-      new Set([...Object.keys(before.connection), ...Object.keys(after.connection)]),
-    ).map((key): [string, unknown, unknown] => [
-      (
-        {
-          kind: "连接方式",
-          host: "主机",
-          port: "端口",
-          timeout_seconds: "超时（秒）",
-          options: "驱动选项",
-        } as Record<string, string>
-      )[key] ?? key,
-      (before.connection as unknown as Record<string, unknown>)[key],
-      (after.connection as unknown as Record<string, unknown>)[key],
-    ]),
-    ["访问别名", before.access_aliases, after.access_aliases],
-    ["设备安全", before.safety, after.safety],
-  ];
-  return fields
-    .filter(([, a, b]) => JSON.stringify(a) !== JSON.stringify(b))
-    .map(([name, a, b]) => ({
+  const changes: { name: string; before: string; after: string }[] = [];
+  const add = (name: string, a: unknown, b: unknown, display = displayChangeValue) => {
+    if (JSON.stringify(a) === JSON.stringify(b)) return;
+    const oldValue = display(a);
+    const newValue = display(b);
+    changes.push({
       name,
-      before: JSON.stringify(a) ?? "未设置",
-      after: JSON.stringify(b) ?? "未设置",
-    }));
+      before: oldValue,
+      after: oldValue === newValue ? `${newValue}（内容已修改）` : newValue,
+    });
+  };
+  const driverName = (value: unknown) => {
+    const ref = value as DeviceConnection["driver"] | undefined;
+    const spec = catalog.drivers.find((item) => item.driver_id === ref?.driver_id);
+    return spec ? driverLabel(spec) : "未提供名称的驱动";
+  };
+  add("驱动", before.driver, after.driver, driverName);
+  const labels: Record<string, string> = {
+    kind: "连接方式",
+    host: "主机",
+    port: "端口",
+    timeout_seconds: "读取超时（秒）",
+    write_timeout_seconds: "写入超时（秒）",
+    baud_rate: "波特率",
+    data_bits: "数据位",
+    stop_bits: "停止位",
+    parity: "校验位",
+    xonxoff: "XON/XOFF 流控",
+    rtscts: "RTS/CTS 流控",
+    dsrdtr: "DSR/DTR 流控",
+  };
+  for (const key of new Set([
+    ...Object.keys(before.connection),
+    ...Object.keys(after.connection),
+  ])) {
+    if (key === "options") continue;
+    const a = (before.connection as unknown as Record<string, unknown>)[key];
+    const b = (after.connection as unknown as Record<string, unknown>)[key];
+    add(
+      labels[key] ?? `连接选项 ${key}`,
+      a,
+      b,
+      key === "kind" ? (value) => connectionKindLabel(value as ConnectionKind) : displayChangeValue,
+    );
+  }
+  const optionLabels = new Map<string, string>();
+  for (const config of [before, after]) {
+    const spec = catalog.drivers.find((item) => item.driver_id === config.driver?.driver_id);
+    for (const field of connectionOptionFields(
+      spec?.connections.find((item) => item.kind === config.connection.kind)?.options_schema,
+    )) {
+      optionLabels.set(field.id, field.label);
+    }
+  }
+  const oldOptions = before.connection.options ?? {};
+  const newOptions = after.connection.options ?? {};
+  for (const key of new Set([...Object.keys(oldOptions), ...Object.keys(newOptions)])) {
+    add(`驱动选项 · ${optionLabels.get(key) ?? key}`, oldOptions[key], newOptions[key]);
+  }
+  add(
+    "访问别名",
+    before.access_aliases,
+    after.access_aliases,
+    (value) => (value as string[]).join("、") || "未设置",
+  );
+  const safetyLabels: Record<string, string> = {
+    safe_state: "设备安全 · 目标状态",
+    safe_operations: "设备安全 · 收尾操作",
+    safe_state_requirement: "设备安全 · 状态确认要求",
+    require_safe_success: "设备安全 · 任务成功后要求安全状态",
+    require_safe_failure: "设备安全 · 失败后要求安全状态",
+  };
+  for (const key of new Set([
+    ...Object.keys(before.safety ?? {}),
+    ...Object.keys(after.safety ?? {}),
+  ])) {
+    add(
+      safetyLabels[key] ?? `设备安全 · ${key}`,
+      (before.safety as Record<string, unknown> | undefined)?.[key],
+      (after.safety as Record<string, unknown> | undefined)?.[key],
+      key === "safe_state_requirement"
+        ? (value) =>
+            value === "required"
+              ? "必须确认"
+              : value === "best_effort"
+                ? "尽力确认"
+                : displayChangeValue(value)
+        : displayChangeValue,
+    );
+  }
+  return changes;
+}
+
+function displayChangeValue(value: unknown): string {
+  if (value === undefined || value === null) return "未设置";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value || "空文本";
+  if (Array.isArray(value)) return `列表（${value.length} 项；请在对应设置中查看内容）`;
+  return "复杂设置（请在对应设置中查看内容）";
 }

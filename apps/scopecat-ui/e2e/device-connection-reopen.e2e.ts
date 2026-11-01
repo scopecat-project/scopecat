@@ -120,6 +120,11 @@ test("connection test feedback follows the saved revision across editing and dae
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("-1");
     await expect(dialog.getByRole("region", { name: "连接修改预览" })).toContainText("驱动选项");
+    await expect(dialog.getByRole("region", { name: "连接修改预览" })).toContainText(
+      "驱动选项 · Gain",
+    );
+    await expect(dialog.getByRole("region", { name: "连接修改预览" })).toContainText("2 → -1");
+    await expect(dialog.getByRole("region", { name: "连接修改预览" })).not.toContainText('{"gain"');
     expect((await current()).device.head).toEqual(tested.device.head);
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 1000 });

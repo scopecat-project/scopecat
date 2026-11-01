@@ -350,10 +350,6 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                     连接配置已保存，尚未测试。请点击“测试连接”；保存不代表设备状态已读回。
                   </p>
                 )}
-              <details>
-                <summary>已保存的连接版本</summary>
-                <code className="break-all">{selectedDevice.revision.id}</code>
-              </details>
               {selectedDevice.last_connection_test ? (
                 <p role="status">
                   {selectedDevice.last_connection_test.error
