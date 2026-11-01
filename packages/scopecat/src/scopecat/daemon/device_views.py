@@ -37,6 +37,7 @@ class DeviceView(_DeviceAccessModel):
     owner_kind: Literal["run", "instrument_session"] | None = None
     owner_id: str | None = None
     last_connection_test: DeviceConnectionTest | None = None
+    previous_revision: DeviceConnectionRevision | None = None
 
     @model_validator(mode="after")
     def validate_head(self) -> DeviceView:

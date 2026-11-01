@@ -6412,6 +6412,7 @@ export interface components {
             owner_id?: string | null;
             /** Owner Kind */
             owner_kind?: ("run" | "instrument_session") | null;
+            previous_revision?: components["schemas"]["DeviceConnectionRevision"] | null;
             revision: components["schemas"]["DeviceConnectionRevision"];
         };
         /** DirectConfigRegistrySource */

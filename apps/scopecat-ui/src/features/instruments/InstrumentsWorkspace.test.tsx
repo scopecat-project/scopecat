@@ -41,6 +41,7 @@ vi.mock("./device-api", () => ({
 }));
 
 import { InstrumentsWorkspace } from "./InstrumentsWorkspace";
+import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import {
   abortInstrumentSession,
   applyInstrumentConfiguredDefaults,
@@ -1317,6 +1318,85 @@ describe("instrument workspace", () => {
     );
     expect(saveDevice).not.toHaveBeenCalled();
     expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("retains the reviewed head when inventory refreshes during editing", async () => {
+    const original = registeredDevice(
+      instrument({
+        driver_id: "keysight.pna",
+        connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (device: DeviceView) => (
+      <QueryClientProvider client={client}>
+        <InstrumentConfigDialog
+          device={device}
+          catalog={driverCatalog()}
+          onCancel={() => {}}
+          onPublished={() => {}}
+        />
+      </QueryClientProvider>
+    );
+    const rendered = render(view(original));
+    fireEvent.change(screen.getByLabelText("主机"), { target: { value: "192.0.2.24" } });
+    const refreshed = {
+      ...original,
+      device: { ...original.device, head: { ...original.device.head, revision_id: "other-edit" } },
+    };
+    rendered.rerender(view(refreshed));
+    const save = screen.getByRole("button", { name: "保存设备" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(saveDevice).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(saveDevice).mock.calls[0]![0].expected_head).toEqual(original.device.head);
+  });
+
+  it("loads previous settings only into a cancellable draft and publishes against the current head", async () => {
+    const registered = registeredDevice(
+      instrument({
+        driver_id: "keysight.pna",
+        connection: { kind: "tcpip_socket", host: "192.0.2.24", port: 5025 },
+      }),
+    );
+    const previous = {
+      ...registered.revision,
+      id: "previous-connection",
+      content: {
+        ...registered.revision.content,
+        connection: {
+          kind: "tcpip_socket" as const,
+          host: "192.0.2.20",
+          port: 5025,
+          timeout_seconds: 2,
+        },
+      },
+    };
+    registered.previous_revision = previous;
+    vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
+    let dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "使用上一连接版本生成草稿" }));
+    expect(within(dialog).getByLabelText("主机")).toHaveValue("192.0.2.20");
+    expect(within(dialog).getByRole("region", { name: "连接修改预览" })).toHaveTextContent(
+      "192.0.2.24",
+    );
+    expect(testDeviceConnection).not.toHaveBeenCalled();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+    expect(saveDevice).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "编辑设备" }));
+    dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("主机")).toHaveValue("192.0.2.24");
+    fireEvent.click(within(dialog).getByRole("button", { name: "使用上一连接版本生成草稿" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
+    await waitFor(() => expect(saveDevice).toHaveBeenCalledTimes(1));
+    const command = vi.mocked(saveDevice).mock.calls[0]![0];
+    expect(command.expected_head).toEqual(registered.device.head);
+    expect(command.revision_id).not.toBe(previous.id);
+    expect(command.connection.connection).toEqual(previous.content.connection);
   });
 
   it("replays a save after its committed response is lost and blocks duplicate clicks", async () => {

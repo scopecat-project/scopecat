@@ -41,6 +41,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   const [session, setSession] = useState<InstrumentSession>();
   const sessionRef = useRef<InstrumentSession | undefined>(undefined);
   const [sessionError, setSessionError] = useState<string>();
+  const [savedRevision, setSavedRevision] = useState<string>();
   const [configTarget, setConfigTarget] = useState<ConfigTarget>();
   const openAttempt = useRef<OpenAttempt | undefined>(undefined);
   const devicesQuery = useQuery({
@@ -343,6 +344,12 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                   退役设备
                 </Controls.Button>
               </div>
+              {savedRevision === selectedDevice.revision.id &&
+                !selectedDevice.last_connection_test && (
+                  <p role="status">
+                    连接配置已保存，尚未测试。请点击“测试连接”；保存不代表设备状态已读回。
+                  </p>
+                )}
               {selectedDevice.last_connection_test ? (
                 <p role="status">
                   {selectedDevice.last_connection_test.error
@@ -409,6 +416,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
           onPublished={async (saved) => {
             setConfigTarget(undefined);
             setSelectedId(saved.device.id);
+            setSavedRevision(saved.revision.id);
             refresh();
             await queryClient.invalidateQueries({ queryKey: ["setup-revisions"] });
           }}
