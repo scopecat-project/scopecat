@@ -1033,3 +1033,15 @@ def test_tray_loss_during_native_hide_cannot_leave_late_hidden_view(
     monkeypatch.setattr("scopecat_app.desktop.hide_window", native_hide)
     windows.hide()
     assert actions == ["show", "hide", "show"]
+
+
+def test_file_picker_returns_selected_path_without_runtime_mutation():
+    runtime = Mock()
+    window = Mock()
+    api = DesktopAPI(DesktopSession(runtime, threading.Event()), lambda: window)
+    window.create_file_dialog.return_value = None
+    assert api.choose_file() is None
+    window.create_file_dialog.return_value = ("C:/SDK Python/python.exe",)
+    assert api.choose_file() == "C:/SDK Python/python.exe"
+    assert window.create_file_dialog.call_args.kwargs == {"allow_multiple": False}
+    assert runtime.mock_calls == []

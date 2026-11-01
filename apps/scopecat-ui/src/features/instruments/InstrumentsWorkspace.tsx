@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InstrumentSession } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
+import { connectionOptionFields } from "./connection-fields";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import { InstrumentInspector } from "./InstrumentInspector";
 import { DriverSourcePanel } from "./DriverSourcePanel";
@@ -61,10 +62,9 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     }
   });
   const tab = selectedId ? (tabs[selectedId] ?? "operations") : "operations";
-  const chooseTab = (value: string) => {
-    if (!selectedId) return;
+  const rememberTab = (deviceId: string, value: string) => {
     setTabs((current) => {
-      const next = { ...current, [selectedId]: value };
+      const next = { ...current, [deviceId]: value };
       try {
         sessionStorage.setItem("device-workbench-tabs", JSON.stringify(next));
       } catch {
@@ -72,6 +72,9 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       }
       return next;
     });
+  };
+  const chooseTab = (value: string) => {
+    if (selectedId) rememberTab(selectedId, value);
   };
   const openAttempt = useRef<OpenAttempt | undefined>(undefined);
   const devicesQuery = useQuery({
@@ -449,6 +452,14 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               {(probeError || retire.error) && (
                 <p role="alert">{errorMessage(probeError ?? retire.error)}</p>
               )}
+              {selected?.owner_kind === "run" && selected.owner_id && (
+                <a
+                  className="underline"
+                  href={`?run=${encodeURIComponent(selected.owner_id)}#runs`}
+                >
+                  查看占用实验
+                </a>
+              )}
               <nav aria-label="设备详情" className="mt-3 flex flex-wrap gap-2">
                 {[
                   ["operations", "操作"],
@@ -486,6 +497,61 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               aria-label="连接与环境"
             >
               <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
+              <dl className="grid gap-2" aria-label="已保存连接设置">
+                {connectionOptionFields(
+                  catalog.data?.drivers
+                    .find(
+                      (driver) =>
+                        driver.driver_id === selectedDevice.revision.content.driver.driver_id,
+                    )
+                    ?.connections.find(
+                      (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
+                    )?.options_schema,
+                ).map((field) => {
+                  const value = selectedDevice.revision.content.connection.options?.[field.id];
+                  return (
+                    <div key={field.id} className="min-w-0">
+                      <dt className="font-semibold">{field.label}</dt>
+                      <dd className="break-all">
+                        {field.sensitive ? (
+                          value == null ? (
+                            "未设置"
+                          ) : (
+                            "已设置（已隐藏）"
+                          )
+                        ) : value == null ? (
+                          (field.choiceLabels?.[""] ?? "未指定")
+                        ) : field.stringMap &&
+                          typeof value === "object" &&
+                          !Array.isArray(value) ? (
+                          <ul>
+                            {Object.entries(value).map(([name, entry]) => (
+                              <li key={name}>
+                                {name}：{typeof entry === "string" ? entry : "复杂值"}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : typeof value === "string" ? (
+                          (field.choiceLabels?.[value] ?? value)
+                        ) : typeof value === "boolean" ? (
+                          value ? (
+                            "是"
+                          ) : (
+                            "否"
+                          )
+                        ) : typeof value === "number" ? (
+                          String(value)
+                        ) : (
+                          "复杂设置（编辑时查看）"
+                        )}
+                      </dd>
+                      {field.description && (
+                        <dd className="text-sm text-text-dim">{field.description}</dd>
+                      )}
+                    </div>
+                  );
+                })}
+              </dl>
               <p>使用“编辑设备”修改连接与驱动环境。设备调试不需要样品或实验路由。</p>
               <Controls.Button
                 disabled={
@@ -503,7 +569,9 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                 交给外部脚本前先释放控制，再释放物理连接。此操作执行驱动的断开逻辑；不表示输出归零，也不替外部程序预留设备。
               </small>
               {releaseConnection.isSuccess && (
-                <p role="status">物理连接已释放。外部程序结束后重新连接并读取状态。</p>
+                <p role="status">
+                  上次释放物理连接成功；这不是持续连接状态。外部程序结束后重新连接并读取状态。
+                </p>
               )}
               {releaseConnection.error && (
                 <p role="alert">{errorMessage(releaseConnection.error)}</p>
@@ -588,7 +656,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
             setConfigTarget(undefined);
             setSelectedId(saved.device.id);
             setSavedRevision(saved.revision.id);
-            setTabs((current) => ({ ...current, [saved.device.id]: "connection" }));
+            rememberTab(saved.device.id, "connection");
             refresh();
             await queryClient.invalidateQueries({ queryKey: ["setup-revisions"] });
           }}

@@ -103,6 +103,7 @@ export function InstrumentConfigDialog({
   const implementation = drivers.data?.items.find((item) => item.driver_id === driverId);
   const fields = connectionOptionFields(
     driver?.connections.find((item) => item.kind === connection.kind)?.options_schema,
+    connection.options ?? {},
   );
   const options = connection.options ?? {};
   const hasSafety = safeState.length > 0 || (safety.safe_operations?.length ?? 0) > 0;
@@ -318,7 +319,7 @@ export function InstrumentConfigDialog({
                 <OptionInput
                   key={`${draftGeneration}:${driverId}:${connection.kind}:${field.id}`}
                   field={field}
-                  value={jsonOptionValue(options[field.id]) ?? field.defaultValue}
+                  value={jsonOptionValue(options[field.id])}
                   onChange={(value) => {
                     const next = { ...options };
                     if (value === undefined) delete next[field.id];
@@ -514,18 +515,27 @@ function connectionChanges(
     );
   }
   const optionLabels = new Map<string, string>();
+  const sensitiveOptions = new Set<string>();
   for (const config of [before, after]) {
     const spec = catalog.drivers.find((item) => item.driver_id === config.driver?.driver_id);
     for (const field of connectionOptionFields(
       spec?.connections.find((item) => item.kind === config.connection.kind)?.options_schema,
     )) {
       optionLabels.set(field.id, field.label);
+      if (field.sensitive) sensitiveOptions.add(field.id);
     }
   }
   const oldOptions = before.connection.options ?? {};
   const newOptions = after.connection.options ?? {};
   for (const key of new Set([...Object.keys(oldOptions), ...Object.keys(newOptions)])) {
-    add(`驱动选项 · ${optionLabels.get(key) ?? key}`, oldOptions[key], newOptions[key]);
+    add(
+      `驱动选项 · ${optionLabels.get(key) ?? key}`,
+      oldOptions[key],
+      newOptions[key],
+      sensitiveOptions.has(key)
+        ? (value) => (value == null ? "未设置" : "已设置（已隐藏）")
+        : displayChangeValue,
+    );
   }
   add(
     "访问别名",

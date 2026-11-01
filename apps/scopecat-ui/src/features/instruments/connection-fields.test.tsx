@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { connectionOptionFields, OptionInput, optionsAreValid } from "./connection-fields";
+import {
+  initialConnection,
+  newConnection,
+  connectionOptionFields,
+  OptionInput,
+  optionsAreValid,
+} from "./connection-fields";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 const schema = {
   type: "object",
   required: ["addresses", "mode"],
@@ -66,4 +75,55 @@ it("renders optional nullable paths and enums as ordinary controls", () => {
     optionsAreValid({ addresses: { main: "192.0.2.1" }, python: null, mode: "local" }, fields),
   ).toBe(true);
   expect(optionsAreValid({ addresses: {}, mode: "invalid" }, fields)).toBe(false);
+});
+
+it("preserves legacy options and only applies defaults to a new connection", () => {
+  const optionsSchema = {
+    type: "object",
+    required: ["master"],
+    properties: {
+      master: { type: "string" },
+      source: { type: "string", enum: ["device", "file"], default: "device" },
+      python: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
+      root: { type: "string" },
+    },
+    if: { properties: { source: { const: "device" } }, required: ["source"] },
+    // JSON Schema keyword, not a Promise method.
+    // eslint-disable-next-line unicorn/no-thenable
+    then: { required: ["root"] },
+  };
+  const spec = { kind: "driver_managed" as const, options_schema: optionsSchema };
+  const driver = {
+    driver_id: "test",
+    implementation_version: "1",
+    label: "Test",
+    connections: [spec],
+  };
+  const legacy = { kind: "driver_managed" as const, options: { master: "main" } };
+  expect(initialConnection(legacy, driver)).toEqual(legacy);
+  expect(
+    optionsAreValid(legacy.options, connectionOptionFields(optionsSchema, legacy.options)),
+  ).toBe(true);
+  expect(newConnection("driver_managed", spec).options).toEqual({ source: "device", python: null });
+  const migrated = { ...legacy.options, source: "device" };
+  expect(optionsAreValid(migrated, connectionOptionFields(optionsSchema, migrated))).toBe(false);
+});
+
+it("selects a native path only on success and preserves the draft on cancellation", async () => {
+  const choose = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce("C:/SDK with spaces");
+  vi.stubGlobal("pywebview", { api: { choose_directory: choose } });
+  const field = connectionOptionFields({
+    properties: { root: { type: "string", title: "SDK 目录", format: "directory-path" } },
+  })[0]!;
+  const change = vi.fn(),
+    validity = vi.fn();
+  render(
+    <OptionInput field={field} value="C:/old" onChange={change} onValidityChange={validity} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "选择SDK 目录" }));
+  expect(screen.getByRole("button", { name: "正在选择…" })).toBeDisabled();
+  await waitFor(() => expect(validity).toHaveBeenLastCalledWith(true));
+  expect(change).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "选择SDK 目录" }));
+  await waitFor(() => expect(change).toHaveBeenLastCalledWith("C:/SDK with spaces"));
 });

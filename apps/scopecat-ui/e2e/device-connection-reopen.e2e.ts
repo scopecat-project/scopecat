@@ -102,6 +102,9 @@ test("connection test feedback follows the saved revision across editing and dae
       "instrument connection could not be established",
     );
     const failed = await current();
+    expect(
+      await page.evaluate("JSON.parse(sessionStorage.getItem('device-workbench-tabs') || '{}')"),
+    ).toMatchObject({ [failed.device.id]: "connection" });
     expect(failed.last_connection_test?.revision).toEqual(failed.device.head);
 
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
@@ -194,7 +197,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "连接与环境", exact: true }).click();
     await page.getByRole("button", { name: "释放物理连接" }).click();
-    await expect(page.getByText(/物理连接已释放/)).toBeVisible();
+    await expect(page.getByText(/上次释放物理连接成功/)).toBeVisible();
     const device = await current();
     const accessResponse = await page.request.post(
       `${url}/api/v1/devices/${device.device.id}/access`,

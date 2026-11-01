@@ -231,3 +231,12 @@ daemon lifetime; warm means reuse of an existing connection; reconnect means a
 new connection after an earlier observation in that same daemon lifetime. A new
 daemon begins a new context. Connection reuse does **not** promise setup residency
 across independently admitted runs.
+
+### 连接字段的桌面呈现
+
+设备工作台按 `options_schema` 的顶层 `title`、`description`、`enum` 和字符串映射呈现连接。
+可用 `x-enum-labels` 为枚举值提供显示名称（空字符串键说明旧配置未指定值的含义），
+用 `format: directory-path` / `file-path` 提供桌面路径选择；网页端保留文本输入。
+标记 `writeOnly: true` 或 `format: password` 的字段在只读概览和差异预览中遮蔽。
+编辑已有连接保持原始 options，默认值只用于新建；顶层 `if.properties.<field>.const` / `then.required`
+可将显式来源选择关联到必填项。其他复杂 schema 条件仍由服务端校验，不推测隐藏迁移。

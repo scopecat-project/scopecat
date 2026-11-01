@@ -149,7 +149,7 @@ describe("instrument workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "连接与环境" }));
     expect(openInstrumentSession).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "释放物理连接" }));
-    await screen.findByText(/物理连接已释放/);
+    await screen.findByText(/上次释放物理连接成功/);
     expect(releaseDeviceConnection).toHaveBeenCalledExactlyOnceWith("drive-source", {
       revision_id: "lab-default",
       content_hash: "sha256:active",
@@ -170,7 +170,76 @@ describe("instrument workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "释放物理连接" }));
     await screen.findByText("connection retirement failed");
     expect(releaseDeviceConnection).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/物理连接已释放/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/上次释放物理连接成功/)).not.toBeInTheDocument();
+  });
+
+  it("remembers each device tab and requires cancel before switching an edit draft", async () => {
+    mockInventory({
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+      problems: [],
+      items: [instrument(), instrument({ instrument_id: "second" })],
+    });
+    renderWorkspace();
+    await screen.findByRole("button", { name: "连接" });
+    fireEvent.click(screen.getByRole("button", { name: "连接与环境" }));
+    fireEvent.click(screen.getByRole("button", { name: "编辑设备" }));
+    const editor = await findConnectionEditor();
+    fireEvent.change(within(editor).getByLabelText("设备名称"), {
+      target: { value: "Unsaved name" },
+    });
+    expect(screen.getByTitle("查看仪器 second")).toBeDisabled();
+    fireEvent.click(screen.getByTitle("查看仪器 second"));
+    expect(within(editor).getByLabelText("设备名称")).toHaveValue("Unsaved name");
+    fireEvent.click(within(editor).getByRole("button", { name: "取消" }));
+    fireEvent.click(screen.getByTitle("查看仪器 second"));
+    expect(screen.getByRole("button", { name: "操作" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "诊断记录" }));
+    fireEvent.click(screen.getByTitle("查看仪器 drive-source"));
+    expect(screen.getByRole("button", { name: "连接与环境" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    cleanup();
+    renderWorkspace();
+    await screen.findByTitle("查看仪器 second");
+    fireEvent.click(screen.getByTitle("查看仪器 second"));
+    expect(screen.getByRole("button", { name: "诊断记录" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(saveDevice).not.toHaveBeenCalled();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("shows saved connection fields without editing and masks secrets", async () => {
+    const catalog = driverCatalog();
+    catalog.drivers[0]!.connections[0]!.options_schema = {
+      type: "object",
+      properties: {
+        root: { type: "string", title: "SDK 目录" },
+        addresses: { type: "object", title: "地址表", additionalProperties: { type: "string" } },
+        api_token: { type: "string", title: "认证信息", writeOnly: true },
+      },
+    };
+    vi.mocked(getDriverCatalog).mockResolvedValue(catalog);
+    const device = registeredDevice(instrument());
+    device.revision.content.connection.options = {
+      root: "/opt/sdk",
+      addresses: { main: "192.0.2.1" },
+      api_token: "never-show-this",
+      unknown: "hidden-extra",
+    };
+    vi.mocked(getDevices).mockResolvedValue({ items: [device] });
+    renderWorkspace();
+    await screen.findByRole("button", { name: "连接" });
+    fireEvent.click(screen.getByRole("button", { name: "连接与环境" }));
+    expect(await screen.findByText("/opt/sdk")).toBeVisible();
+    expect(screen.getByText("main：192.0.2.1")).toBeVisible();
+    expect(screen.getByText("已设置（已隐藏）")).toBeVisible();
+    expect(screen.queryByText("never-show-this")).not.toBeInTheDocument();
+    expect(screen.queryByText("hidden-extra")).not.toBeInTheDocument();
+    expect(queryConnectionEditor()).not.toBeInTheDocument();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
   it("opens registered devices without choosing an experiment setup", async () => {
