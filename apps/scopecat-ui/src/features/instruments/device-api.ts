@@ -57,3 +57,12 @@ export function testDeviceConnection(device: DeviceView, operationId: string, ac
     }),
   );
 }
+
+export function releaseDeviceConnection(
+  deviceId: string,
+  setup: components["schemas"]["SetupRevisionRef"],
+) {
+  return apiData(
+    apiClient.POST("/api/v1/instruments/release", { body: { setup, instrument_ids: [deviceId] } }),
+  );
+}

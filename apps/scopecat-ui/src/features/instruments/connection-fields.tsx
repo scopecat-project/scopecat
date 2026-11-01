@@ -21,6 +21,11 @@ interface OptionField {
   required: boolean;
   minimum?: number;
   maximum?: number;
+  description?: string;
+  choices?: string[];
+  stringMap?: boolean;
+  minLength?: number;
+  minProperties?: number;
 }
 
 export function TcpConnectionFields({
@@ -210,14 +215,39 @@ export function OptionInput({
       </Controls.Field>
     );
   }
+  if (field.type === "object" && field.stringMap) {
+    return (
+      <StringMapInput
+        field={field}
+        value={value}
+        onChange={onChange}
+        onValidityChange={onValidityChange}
+      />
+    );
+  }
   if (field.type === "string") {
     return (
       <Controls.Field>
         <span>{field.label}</span>
-        <Controls.Input
-          value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
-        />
+        {field.choices ? (
+          <Controls.Select
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value || undefined)}
+          >
+            <option value="">请选择</option>
+            {field.choices.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </Controls.Select>
+        ) : (
+          <Controls.Input
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value || (field.required ? "" : undefined))}
+          />
+        )}
+        {field.description && <small className="text-text-dim">{field.description}</small>}
       </Controls.Field>
     );
   }
@@ -240,6 +270,98 @@ export function OptionInput({
       integer={field.type === "integer"}
       onChange={onChange}
     />
+  );
+}
+
+function StringMapInput({
+  field,
+  value,
+  onChange,
+  onValidityChange,
+}: {
+  field: OptionField;
+  value: OptionValue | undefined;
+  onChange: (value: OptionValue | undefined) => void;
+  onValidityChange: (valid: boolean) => void;
+}) {
+  const [rows, setRows] = useState(() =>
+    Object.entries(isRecord(value) ? value : {}).map(([name, entry], id) => ({
+      id,
+      name,
+      value: typeof entry === "string" ? entry : "",
+    })),
+  );
+  const [nextId, setNextId] = useState(rows.length);
+  const [error, setError] = useState("");
+  const update = (next: typeof rows) => {
+    setRows(next);
+    const names = next.map((row) => row.name.trim());
+    const valid =
+      names.every(Boolean) &&
+      new Set(names).size === names.length &&
+      next.every((row) => row.value.trim()) &&
+      next.length >= (field.minProperties ?? 0);
+    setError(valid ? "" : "请填写名称和值，名称不能重复。");
+    onValidityChange(valid);
+    if (valid) onChange(Object.fromEntries(next.map((row) => [row.name.trim(), row.value.trim()])));
+  };
+  return (
+    <fieldset className="grid min-w-0 gap-2" aria-label={field.label}>
+      <legend>{field.label}</legend>
+      {field.description && <small className="text-text-dim">{field.description}</small>}
+      {rows.map((row, index) => (
+        <div
+          key={row.id}
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] items-end gap-2 max-[460px]:grid-cols-1"
+        >
+          <Controls.Field>
+            名称
+            <Controls.Input
+              aria-label={`${field.label} 名称 ${index + 1}`}
+              value={row.name}
+              onChange={(event) =>
+                update(
+                  rows.map((item) =>
+                    item.id === row.id ? { ...item, name: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+          </Controls.Field>
+          <Controls.Field>
+            值
+            <Controls.Input
+              aria-label={`${field.label} 值 ${index + 1}`}
+              value={row.value}
+              onChange={(event) =>
+                update(
+                  rows.map((item) =>
+                    item.id === row.id ? { ...item, value: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+          </Controls.Field>
+          <Controls.Button
+            type="button"
+            onClick={() => update(rows.filter((item) => item.id !== row.id))}
+            aria-label={`移除${field.label}第 ${index + 1} 行`}
+          >
+            移除
+          </Controls.Button>
+        </div>
+      ))}
+      <Controls.Button
+        type="button"
+        onClick={() => {
+          update([...rows, { id: nextId, name: "", value: "" }]);
+          setNextId(nextId + 1);
+        }}
+      >
+        添加{field.label}
+      </Controls.Button>
+      {error && <p role="alert">{error}</p>}
+    </fieldset>
   );
 }
 
@@ -396,11 +518,17 @@ export function connectionIsValid(connection: InstrumentConnection): boolean {
 export function optionsAreValid(options: ConnectionOptions, fields: OptionField[]): boolean {
   return fields.every((field) => {
     const value = options[field.id] ?? field.defaultValue;
-    if (value === undefined) return !field.required;
+    if (value === undefined || value === null) return !field.required;
     if (field.type === "boolean") return typeof value === "boolean";
-    if (field.type === "string") return typeof value === "string";
+    if (field.type === "string")
+      return (
+        typeof value === "string" &&
+        value.length >= (field.minLength ?? 0) &&
+        (!field.choices || field.choices.includes(value))
+      );
     if (field.type === "array") return Array.isArray(value);
-    if (field.type === "object") return isRecord(value);
+    if (field.type === "object")
+      return isRecord(value) && Object.keys(value).length >= (field.minProperties ?? 0);
     return (
       typeof value === "number" &&
       Number.isFinite(value) &&
@@ -421,7 +549,11 @@ export function connectionOptionFields(schema: unknown): OptionField[] {
   );
   return Object.entries(schema.properties).flatMap(([id, value]) => {
     if (!isRecord(value)) return [];
-    const type = value.type;
+    const shape = Array.isArray(value.anyOf)
+      ? value.anyOf.find((item) => isRecord(item) && item.type !== "null")
+      : value;
+    if (!isRecord(shape)) return [];
+    const type = shape.type;
     if (
       type !== "array" &&
       type !== "boolean" &&
@@ -439,6 +571,17 @@ export function connectionOptionFields(schema: unknown): OptionField[] {
         type,
         defaultValue: jsonOptionValue(value.default),
         required: required.has(id),
+        description: typeof value.description === "string" ? value.description : undefined,
+        choices:
+          Array.isArray(shape.enum) && shape.enum.every((item) => typeof item === "string")
+            ? shape.enum
+            : undefined,
+        stringMap:
+          type === "object" &&
+          isRecord(shape.additionalProperties) &&
+          shape.additionalProperties.type === "string",
+        minLength: typeof shape.minLength === "number" ? shape.minLength : undefined,
+        minProperties: typeof shape.minProperties === "number" ? shape.minProperties : undefined,
         minimum: typeof value.minimum === "number" ? value.minimum : undefined,
         maximum: typeof value.maximum === "number" ? value.maximum : undefined,
       },

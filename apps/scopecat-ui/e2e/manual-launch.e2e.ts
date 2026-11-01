@@ -81,7 +81,7 @@ test("registered devices share ownership across pages without setup selection", 
     expect(await blocked.text()).toContain("resources are busy");
     await second.getByRole("button", { name: "刷新", exact: true }).click();
     await expect(second.getByRole("button", { name: "连接", exact: true })).not.toBeVisible();
-    await page.getByRole("button", { name: "断开连接", exact: true }).click();
+    await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await second.getByRole("button", { name: "刷新", exact: true }).click();
     const nextOpening = second.waitForRequest((request) =>
       request.url().endsWith("/instrument-sessions"),
@@ -89,7 +89,7 @@ test("registered devices share ownership across pages without setup selection", 
     await second.getByRole("button", { name: "连接", exact: true }).click();
     expect((await nextOpening).postDataJSON().setup).toEqual(deviceSetup);
     await expect(second.getByText("交互会话已连接")).toBeVisible();
-    await second.getByRole("button", { name: "断开连接", exact: true }).click();
+    await second.getByRole("button", { name: "释放控制", exact: true }).click();
     await second.getByRole("button", { name: "测试连接", exact: true }).click();
     await expect(second.getByText(/连接测试通过，测试会话已释放/)).toBeVisible();
     await second.close();

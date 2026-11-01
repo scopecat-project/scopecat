@@ -396,7 +396,6 @@ function InstrumentInspectorContent({
             </h2>
             <AvailabilityBadge availability={instrument.availability} connected={connected} />
           </div>
-          <code className="mt-1 block text-xs text-text-dim">{instrumentId}</code>
           {description?.description && (
             <p className="mt-[9px] mb-0 max-w-[760px] text-xs leading-[1.55] text-text-dim">
               {description.description}
@@ -413,6 +412,7 @@ function InstrumentInspectorContent({
         closePending={closePending}
         interactionPending={interactionPending}
         refreshPending={readMutation.isPending}
+        stateAvailable={declaredTargets.size > 0}
         configuredDefaultsVisible={hasConfiguredDefaults}
         configuredDefaultsPending={configuredDefaultsMutation.isPending}
         configuredDefaultsDisabled={configuredDefaultsDisabled}

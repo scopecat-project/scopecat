@@ -1322,6 +1322,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instruments/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release Instruments */
+        post: operations["release_instruments_api_v1_instruments_release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/launch-attempts": {
         parameters: {
             query?: never;
@@ -7304,6 +7321,20 @@ export interface components {
         InstrumentRegistry: {
             /** Instruments */
             instruments: components["schemas"]["InstrumentSpec"][];
+        };
+        /**
+         * InstrumentReleaseCommand
+         * @description Disconnect idle configured instruments; active owners block release.
+         */
+        InstrumentReleaseCommand: {
+            /** Instrument Ids */
+            instrument_ids: components["schemas"]["NonEmptyText"][];
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /** InstrumentReleaseReceipt */
+        InstrumentReleaseReceipt: {
+            /** Instrument Ids */
+            instrument_ids: components["schemas"]["NonEmptyText"][];
         };
         /** @enum {string} */
         InstrumentRunStartPolicy: "preserve" | "apply_default_state";
@@ -16263,6 +16294,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstrumentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_instruments_api_v1_instruments_release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentReleaseCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentReleaseReceipt"];
                 };
             };
             /** @description Validation Error */
