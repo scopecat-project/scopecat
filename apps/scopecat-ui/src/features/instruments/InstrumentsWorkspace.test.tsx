@@ -211,36 +211,57 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
-  it("shows saved connection fields without editing and masks secrets", async () => {
-    const catalog = driverCatalog();
-    catalog.drivers[0]!.connections[0]!.options_schema = {
-      type: "object",
-      properties: {
-        root: { type: "string", title: "SDK 目录" },
-        addresses: { type: "object", title: "地址表", additionalProperties: { type: "string" } },
-        api_token: { type: "string", title: "认证信息", writeOnly: true },
-      },
-    };
-    vi.mocked(getDriverCatalog).mockResolvedValue(catalog);
-    const device = registeredDevice(instrument());
-    device.revision.content.connection.options = {
-      root: "/opt/sdk",
-      addresses: { main: "192.0.2.1" },
-      api_token: "never-show-this",
-      unknown: "hidden-extra",
-    };
-    vi.mocked(getDevices).mockResolvedValue({ items: [device] });
-    renderWorkspace();
-    await screen.findByRole("button", { name: "连接" });
-    fireEvent.click(screen.getByRole("button", { name: "连接与环境" }));
-    expect(await screen.findByText("/opt/sdk")).toBeVisible();
-    expect(screen.getByText("main：192.0.2.1")).toBeVisible();
-    expect(screen.getByText("已设置（已隐藏）")).toBeVisible();
-    expect(screen.queryByText("never-show-this")).not.toBeInTheDocument();
-    expect(screen.queryByText("hidden-extra")).not.toBeInTheDocument();
-    expect(queryConnectionEditor()).not.toBeInTheDocument();
-    expect(openInstrumentSession).not.toHaveBeenCalled();
-  });
+  it.each([{ writeOnly: true }, { format: "password" }])(
+    "masks sensitive map values in saved settings and changes (%j)",
+    async (annotation) => {
+      const catalog = driverCatalog();
+      catalog.drivers[0]!.connections[0]!.options_schema = {
+        type: "object",
+        properties: {
+          root: { type: "string", title: "SDK 目录" },
+          addresses: { type: "object", title: "地址表", additionalProperties: { type: "string" } },
+          api_token: { type: "string", title: "认证信息", writeOnly: true },
+          headers: {
+            type: "object",
+            title: "请求头",
+            additionalProperties: { type: "string", ...annotation },
+          },
+        },
+      };
+      vi.mocked(getDriverCatalog).mockResolvedValue(catalog);
+      const device = registeredDevice(instrument());
+      device.revision.content.connection.options = {
+        root: "/opt/sdk",
+        addresses: { main: "192.0.2.1" },
+        api_token: "never-show-this",
+        headers: { Authorization: "never-show-header" },
+        unknown: "hidden-extra",
+      };
+      vi.mocked(getDevices).mockResolvedValue({ items: [device] });
+      renderWorkspace();
+      await screen.findByRole("button", { name: "连接" });
+      fireEvent.click(screen.getByRole("button", { name: "连接与环境" }));
+      expect(await screen.findByText("/opt/sdk")).toBeVisible();
+      expect(screen.getByText("main：192.0.2.1")).toBeVisible();
+      expect(screen.getAllByText("已设置（已隐藏）")).toHaveLength(2);
+      expect(screen.queryByText(/never-show-header/)).not.toBeInTheDocument();
+      expect(screen.queryByText("never-show-this")).not.toBeInTheDocument();
+      expect(screen.queryByText("hidden-extra")).not.toBeInTheDocument();
+      expect(queryConnectionEditor()).not.toBeInTheDocument();
+      expect(openInstrumentSession).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "编辑设备" }));
+      const editor = await findConnectionEditor();
+      fireEvent.change(within(editor).getByLabelText("请求头 值 1"), {
+        target: { value: "new-private-header" },
+      });
+      const preview = within(editor).getByRole("region", { name: "连接修改预览" });
+      expect(preview).toHaveTextContent("已设置（已隐藏） → 已设置（已隐藏）");
+      expect(preview).not.toHaveTextContent("never-show-header");
+      expect(preview).not.toHaveTextContent("new-private-header");
+      expect(preview).not.toHaveTextContent("Authorization");
+      expect(saveDevice).not.toHaveBeenCalled();
+    },
+  );
 
   it("opens registered devices without choosing an experiment setup", async () => {
     renderWorkspace();

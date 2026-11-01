@@ -687,6 +687,9 @@ export function connectionOptionFields(
               ? "file"
               : undefined,
         sensitive:
+          (isRecord(shape.additionalProperties) &&
+            (shape.additionalProperties.writeOnly === true ||
+              shape.additionalProperties.format === "password")) ||
           value.writeOnly === true ||
           value.format === "password" ||
           /password|secret|token|credential|api[_-]?key/i.test(id),
