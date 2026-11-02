@@ -1,7 +1,9 @@
 """Native file transfer publishes complete downloads and preserves failed targets."""
 
 import threading
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any, override
 from unittest.mock import ANY, Mock
 
 import httpx2
@@ -27,7 +29,8 @@ def test_cancelled_download_preserves_destination_and_removes_partial(
     cancel = threading.Event()
 
     class Cancelled(httpx2.SyncByteStream):
-        def __iter__(self):
+        @override
+        def __iter__(self) -> Iterator[bytes]:
             yield b"a" * 1024 * 1024
             cancel.set()
             yield b"b" * 1024 * 1024
@@ -59,7 +62,7 @@ def test_file_dialog_uses_connection_selected_after_dialog(
     api = DesktopAPI(session, lambda: window)
     target = tmp_path / "selected.scopecat"
 
-    def choose(*args, **kwargs):
+    def choose(*args: object, **kwargs: object):
         session.connected("http://localhost:4321")
         return (str(target),)
 
@@ -74,12 +77,16 @@ def test_file_dialog_uses_connection_selected_after_dialog(
     download.assert_called_once_with("http://localhost:4321", HASH, target, ANY)
 
 
-def _transport(monkeypatch: pytest.MonkeyPatch, handler):
+def _transport(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Callable[[httpx2.Request], httpx2.Response],
+):
     client = httpx2.Client
-    monkeypatch.setattr(
-        "scopecat_app.desktop_files.httpx2.Client",
-        lambda **kwargs: client(transport=httpx2.MockTransport(handler), **kwargs),
-    )
+
+    def create_client(**kwargs: Any) -> httpx2.Client:
+        return client(transport=httpx2.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr("scopecat_app.desktop_files.httpx2.Client", create_client)
 
 
 def test_native_import_streams_file_and_validates_receipt(
@@ -89,7 +96,7 @@ def test_native_import_streams_file_and_validates_receipt(
     source = tmp_path / "input.scopecat"
     source.write_bytes(content)
 
-    def handle(request):
+    def handle(request: httpx2.Request):
         assert request.method == "POST"
         assert request.headers["content-type"] == "application/octet-stream"
         assert request.read() == content
@@ -125,17 +132,21 @@ def test_native_save_replaces_only_after_completed_download(
 @pytest.mark.parametrize("save", [save_capture, export_run])
 @pytest.mark.parametrize("failure", ["server", "interrupted"])
 def test_native_save_failure_preserves_existing_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, save
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    save: Callable[[str, str, Path], None],
 ):
     target = tmp_path / "output.scopecat"
     target.write_bytes(b"previous")
 
     class Interrupted(httpx2.SyncByteStream):
-        def __iter__(self):
+        @override
+        def __iter__(self) -> Iterator[bytes]:
             yield b"partial"
             raise httpx2.ReadError("connection closed")
 
-    def handle(request):
+    def handle(request: httpx2.Request):
         if failure == "server":
             return httpx2.Response(409, json={"detail": "capture unavailable"})
         return httpx2.Response(200, stream=Interrupted())
@@ -149,7 +160,9 @@ def test_native_save_failure_preserves_existing_file(
 
 @pytest.mark.parametrize("selection_type", [str, tuple], ids=["cocoa", "path-tuple"])
 def test_native_dialog_cancel_does_not_transfer_or_restart(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection_type
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selection_type: type[str | tuple[str, ...]],
 ):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())
@@ -185,10 +198,10 @@ def test_artifact_save_uses_record_identity_and_native_destination(
     session = DesktopSession(runtime, threading.Event())
     session.connected("http://localhost:1234")
     api = DesktopAPI(session, lambda: window)
-    requests = []
+    requests: list[str] = []
     fail = False
 
-    def handle(request):
+    def handle(request: httpx2.Request):
         requests.append(request.url.path)
         if fail:
             return httpx2.Response(404, json={"detail": "Missing artifact"})
@@ -223,17 +236,20 @@ def test_artifact_save_uses_record_identity_and_native_destination(
 @pytest.mark.parametrize("source", [False, True], ids=["configuration", "source"])
 @pytest.mark.parametrize("selection_type", [str, tuple], ids=["cocoa", "path-tuple"])
 def test_configuration_native_save_cancel_path_and_failed_transfer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source, selection_type
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: bool,
+    selection_type: type[str | tuple[str, ...]],
 ):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())
     session.connected("http://localhost:1234")
     api = DesktopAPI(session, lambda: window)
-    requests = []
+    requests: list[httpx2.Request] = []
     fail = False
     document = '{"label":"shared inputs"}'
 
-    def handle(request):
+    def handle(request: httpx2.Request):
         requests.append(request)
         assert request.method == "POST"
         if source:

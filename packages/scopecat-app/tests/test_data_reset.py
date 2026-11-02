@@ -88,7 +88,7 @@ def legacy(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Legacy]:
         assert path.read_bytes() == content
 
 
-def assert_empty(runtime):
+def assert_empty(runtime: ApplicationRuntime):
     with sqlite3.connect(
         runtime.instance.runtime_binding.data_root / "control.sqlite3"
     ) as db:
@@ -107,7 +107,7 @@ def assert_empty(runtime):
 
 
 @pytest.mark.parametrize("backup_first", [True, False])
-def test_host_confirm_reset_and_restart(legacy: Legacy, backup_first):
+def test_host_confirm_reset_and_restart(legacy: Legacy, backup_first: bool):
     runtime, _, prepare, backup = legacy
     home = runtime.home
     data = runtime.instance.runtime_binding.data_root
@@ -172,7 +172,7 @@ def test_host_confirm_reset_and_restart(legacy: Legacy, backup_first):
         "inside-backup",
     ],
 )
-def test_refusal_preserves_database(legacy: Legacy, unsafe):
+def test_refusal_preserves_database(legacy: Legacy, unsafe: str):
     runtime, error, prepare, backup = legacy
     data = runtime.instance.runtime_binding.data_root
     original = (data / "control.sqlite3").read_bytes()
@@ -244,10 +244,10 @@ def test_interrupted_delete_requires_confirmation_and_verified_backup(
 
     original = Path.unlink
 
-    def fail_object(path, *args, **kwargs):
+    def fail_object(path: Path, missing_ok: bool = False):
         if "objects" in path.parts:
             raise OSError("permission denied")
-        return original(path, *args, **kwargs)
+        return original(path, missing_ok=missing_ok)
 
     with monkeypatch.context() as patch:
         patch.setattr(Path, "unlink", fail_object)
@@ -290,7 +290,7 @@ def test_folder_cancel_does_not_delete_or_remember_skip(legacy: Legacy):
 
 @pytest.mark.parametrize("cancel", [True, False])
 def test_host_uses_pinned_folder_dialog_contract(
-    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, cancel
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, cancel: bool
 ):
     """Exercise pywebview's real adapter; only its OS GUI backend is substituted."""
     runtime, _, prepare, backup = legacy
@@ -334,17 +334,17 @@ def test_host_uses_pinned_folder_dialog_contract(
 
 @pytest.mark.parametrize("damage", ["archive", "new-object"])
 def test_resume_refuses_unbacked_or_corrupt_content(
-    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, damage
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, damage: str
 ):
     from pathlib import Path
 
     runtime, error, prepare, backup = legacy
     unlink = Path.unlink
 
-    def interrupt(path, *args, **kwargs):
+    def interrupt(path: Path, missing_ok: bool = False):
         if path.name == "control.sqlite3":
             raise OSError("permission denied")
-        return unlink(path, *args, **kwargs)
+        return unlink(path, missing_ok=missing_ok)
 
     with monkeypatch.context() as patch:
         patch.setattr(Path, "unlink", interrupt)
@@ -373,10 +373,16 @@ def test_inventory_error_prevents_backup_and_deletion(
     runtime, error, prepare, backup = legacy
     walk = data_reset.os.walk
 
-    def denied(path, *args, **kwargs):
+    def denied(
+        path: Path,
+        topdown: bool = True,
+        onerror: Callable[[OSError], object] | None = None,
+        followlinks: bool = False,
+    ):
         if str(path).endswith("objects"):
-            kwargs["onerror"](PermissionError("unreadable shard"))
-        return walk(path, *args, **kwargs)
+            assert onerror is not None
+            onerror(PermissionError("unreadable shard"))
+        return walk(path, topdown=topdown, onerror=onerror, followlinks=followlinks)
 
     monkeypatch.setattr(data_reset.os, "walk", denied)
     before = (
@@ -409,7 +415,7 @@ def test_initialization_failure_has_separate_retry_phase(
 
 
 @pytest.mark.parametrize("backup_first", [True, False])
-def test_sqlite_writer_blocks_backup_and_skip(legacy: Legacy, backup_first):
+def test_sqlite_writer_blocks_backup_and_skip(legacy: Legacy, backup_first: bool):
     runtime, error, prepare, backup = legacy
     database = runtime.instance.runtime_binding.data_root / "control.sqlite3"
     with sqlite3.connect(database, isolation_level=None) as writer:
@@ -449,7 +455,7 @@ def test_reset_backup_preserves_recoverable_wal_without_reading_locked_index(
     original_object = object_path.read_bytes()
     actual_hash = data_reset.file_hash
 
-    def hash_without_index(path):
+    def hash_without_index(path: Path):
         if path == data / "control.sqlite3-shm":
             raise PermissionError("Windows WAL-index byte-range lock")
         return actual_hash(path)

@@ -180,7 +180,7 @@ def test_backup_fences_other_bridges_through_capture_and_result(
     with pytest.raises(ValueError, match="取消等待"):
         api.backup_application()
     session.wait_for_idle(False)
-    stages = []
+    stages: list[str] = []
 
     def check_fence(stage: str) -> None:
         stages.append(stage)

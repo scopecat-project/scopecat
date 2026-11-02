@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import platform as python_platform
@@ -14,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from scripts import release_assets as assets
+from scripts import verify_native_application as native_producer
 from scripts.app_build.author_resources import build as build_author_resources
 from scripts.app_build.author_resources import native_author_inputs
 
@@ -21,16 +22,6 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat_app.bundle import file_hash, inventory, target_identity, verify_bundle
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts/release_assets.py"
-spec = importlib.util.spec_from_file_location("release_assets", SCRIPT)
-assert spec is not None and spec.loader is not None
-assets = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(assets)
-native_spec = importlib.util.spec_from_file_location(
-    "verify_native_application", SCRIPT.with_name("verify_native_application.py")
-)
-assert native_spec is not None and native_spec.loader is not None
-native_producer = importlib.util.module_from_spec(native_spec)
-native_spec.loader.exec_module(native_producer)
 SHA = "a" * 40
 
 
@@ -113,7 +104,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
     config = tmp_path / "release.toml"
     config.write_text('version = "0.3.0-rc.1"\nbuild_number = 9\n')
     version = "0.3.0rc1"
-    files = {}
+    files: dict[str, str] = {}
     for name in assets.PACKAGES:
         wheel = root / f"{name.replace('-', '_')}-{version}-py3-none-any.whl"
         with zipfile.ZipFile(wheel, "w") as archive:
@@ -139,7 +130,8 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
     for platform, (target, _suffix) in assets.NATIVE.items():
         installer = root / installer_name(platform)
         installer.write_bytes(platform.encode())
-        bundle = {
+        # Mutable wire document: tests intentionally construct invalid manifests.
+        bundle: dict[str, Any] = {
             "format": 1,
             "release_version": "0.3.0-rc.1",
             "public_version": "0.3.0-rc.1",
@@ -245,7 +237,7 @@ def test_native_report_separates_channel_and_qualification(
 ) -> None:
     resources = tmp_path / "resources"
     (resources / "payload").mkdir(parents=True)
-    bundle = {
+    bundle: dict[str, Any] = {
         "public_version": public,
         "release_version": version,
         "build_number": 2,
@@ -301,7 +293,7 @@ def test_legacy_qualification_remains_verifiable_without_rewriting(
     release: tuple[Path, Path], tmp_path: Path
 ) -> None:
     root, config = release
-    original = {}
+    original: dict[str, str] = {}
     for platform in assets.NATIVE:
         path = root / f"{platform}-native-release.json"
         report = json.loads(path.read_bytes())
@@ -366,7 +358,9 @@ def test_wrong_preview_identity_fails(
 @pytest.mark.parametrize(
     "ui_version", ["0.4.0", None, f"0.1.0-scopecat.0.3.0.rc.1.g{SHA[:12]}"]
 )
-def test_ui_release_identity_rejected_before_asset_assembly(tmp_path: Path, ui_version):
+def test_ui_release_identity_rejected_before_asset_assembly(
+    tmp_path: Path, ui_version: str | None
+) -> None:
     config = tmp_path / "release.toml"
     config.write_text('version="0.3.0-rc.1"\nbuild_number=9\n')
     write_json(
@@ -539,7 +533,9 @@ def test_native_public_wheels_must_match_preview(
         "gui/../../outside",
     ],
 )
-def test_native_resources_reject_unselected_files(release: tuple[Path, Path], extra):
+def test_native_resources_reject_unselected_files(
+    release: tuple[Path, Path], extra: str
+) -> None:
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -556,7 +552,9 @@ def test_native_resources_reject_unselected_files(release: tuple[Path, Path], ex
 @pytest.mark.parametrize(
     "missing", ["author.json", "requirements.lock", "gui/index.html"]
 )
-def test_native_resources_require_recipe_and_gui(release: tuple[Path, Path], missing):
+def test_native_resources_require_recipe_and_gui(
+    release: tuple[Path, Path], missing: str
+) -> None:
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -568,7 +566,7 @@ def test_native_resources_require_recipe_and_gui(release: tuple[Path, Path], mis
 
 def test_legacy_full_delivery_is_not_a_native_author_payload(
     release: tuple[Path, Path],
-):
+) -> None:
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -578,7 +576,7 @@ def test_legacy_full_delivery_is_not_a_native_author_payload(
         assets.assemble(root, SHA, config)
 
 
-def test_native_recipe_requires_a_sha256_digest(release: tuple[Path, Path]):
+def test_native_recipe_requires_a_sha256_digest(release: tuple[Path, Path]) -> None:
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -590,7 +588,7 @@ def test_native_recipe_requires_a_sha256_digest(release: tuple[Path, Path]):
 
 def test_export_publishes_only_installer_and_author_assets(
     release: tuple[Path, Path], tmp_path: Path
-):
+) -> None:
     root, config = release
     assets.assemble(root, SHA, config)
     destination = tmp_path / "published"
@@ -619,7 +617,9 @@ def test_export_publishes_only_installer_and_author_assets(
 @pytest.mark.parametrize(
     "change", ["evidence", "installer", "extra", "missing", "inventory"]
 )
-def test_export_rejects_tampering(release: tuple[Path, Path], tmp_path: Path, change):
+def test_export_rejects_tampering(
+    release: tuple[Path, Path], tmp_path: Path, change: str
+) -> None:
     root, config = release
     assets.assemble(root, SHA, config)
     destination = tmp_path / "published"
@@ -645,7 +645,7 @@ def test_export_rejects_tampering(release: tuple[Path, Path], tmp_path: Path, ch
 
 def test_export_preserves_windows_evidence_bytes(
     release: tuple[Path, Path], tmp_path: Path
-):
+) -> None:
     root, config = release
     bundle = root / "windows-bundle.json"
     bundle.write_bytes(
@@ -665,8 +665,8 @@ def test_export_preserves_windows_evidence_bytes(
 
 @pytest.mark.parametrize("dependency", ["scopecat>=0.1", "scopecat==0.2.0"])
 def test_release_rejects_mixed_batch_dependencies(
-    release: tuple[Path, Path], dependency
-):
+    release: tuple[Path, Path], dependency: str
+) -> None:
     root, config = release
     wheel = next(root.glob("scopecat_server-*.whl"))
     with zipfile.ZipFile(wheel, "w") as archive:
@@ -706,7 +706,9 @@ def test_release_assembly_requires_portable_provenance_even_with_matching_report
 
 
 @pytest.mark.parametrize("fault", ["wheel", "extra", "manifest", "qualification"])
-def test_exported_subset_is_still_fully_verified(release, tmp_path, fault):
+def test_exported_subset_is_still_fully_verified(
+    release: tuple[Path, Path], tmp_path: Path, fault: str
+) -> None:
     root, config = release
     assets.assemble(root, SHA, config)
     destination = tmp_path / "public"

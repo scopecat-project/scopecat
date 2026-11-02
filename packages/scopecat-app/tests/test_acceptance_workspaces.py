@@ -3,12 +3,18 @@
 import subprocess
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
+from scripts import (
+    verify_macos_download,
+    verify_native_application,
+    verify_native_replacement,
+)
 
 
-def load_script(name):
+def load_script(name: str) -> ModuleType:
     path = Path(__file__).resolve().parents[3] / "scripts" / f"{name}.py"
     spec = spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
@@ -17,12 +23,7 @@ def load_script(name):
     return module
 
 
-verify_macos_download = load_script("verify_macos_download")
-verify_native_application = load_script("verify_native_application")
-verify_native_replacement = load_script("verify_native_replacement")
-
-
-def assert_reports_uploaded(workflow, relatives):
+def assert_reports_uploaded(workflow: str, relatives: list[Path]):
     """Check actual retained files against this workflow's always-upload step."""
     jobs = yaml.safe_load(workflow)["jobs"]
     uploads = [
@@ -48,7 +49,9 @@ def assert_reports_uploaded(workflow, relatives):
     ["windows-storage/", "reset-recovery/", "data/desktop/desktop.log"],
 )
 @pytest.mark.parametrize("fault", ["missing", "checkout-root", "blank-line"])
-def test_native_upload_contract_rejects_missing_or_misrooted_reports(relative, fault):
+def test_native_upload_contract_rejects_missing_or_misrooted_reports(
+    relative: str, fault: str
+) -> None:
     workflow = (
         Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
     ).read_text()
@@ -74,8 +77,8 @@ def test_native_upload_contract_rejects_missing_or_misrooted_reports(relative, f
 
 @pytest.mark.parametrize("failure", [False, True])
 def test_every_native_report_survives_cleanup_and_is_uploaded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: bool
+) -> None:
     # Independent inventory of each probe's diagnostics, including early failures.
     relatives = [
         "data/desktop/desktop.log",
@@ -100,7 +103,9 @@ def test_every_native_report_survives_cleanup_and_is_uploaded(
     app, reports = tmp_path / "app", tmp_path / "reports"
     app.mkdir()
 
-    def check(copied, home, installer, *, native_windows):
+    def check(
+        copied: Path, home: Path, installer: Path | None, *, native_windows: bool
+    ):
         for relative in relatives:
             path = home / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,14 +133,14 @@ def test_every_native_report_survives_cleanup_and_is_uploaded(
 @pytest.mark.parametrize("keep_work", [False, True])
 @pytest.mark.parametrize("failure", [False, True])
 def test_replacement_reclaims_packages_and_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keep_work, failure
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keep_work: bool, failure: bool
+) -> None:
     previous, current = tmp_path / "previous", tmp_path / "current"
     previous.mkdir()
     current.mkdir()
     reports = tmp_path / "reports"
 
-    def check(old, new, home):
+    def check(old: Path, new: Path, home: Path):
         assert (old, new) == (previous, current)
         home.mkdir()
         (home / "retired-package").mkdir()
@@ -165,14 +170,20 @@ def test_replacement_reclaims_packages_and_environment(
 @pytest.mark.parametrize("failure", [False, True])
 @pytest.mark.parametrize("storage_reports", ["cocoa-storage", "windows-storage"])
 def test_native_acceptance_preserves_candidate_and_reports(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keep_work, failure, storage_reports
-):
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    keep_work: bool,
+    failure: bool,
+    storage_reports: str,
+) -> None:
     app = tmp_path / "Scopecat.app"
     app.mkdir()
     (app / "original").write_text("candidate")
     reports = tmp_path / "reports"
 
-    def check(copied, home, installer, *, native_windows):
+    def check(
+        copied: Path, home: Path, installer: Path | None, *, native_windows: bool
+    ):
         assert not native_windows
         assert copied != app
         copied.rename(copied.with_name("Removed Scopecat.app"))
@@ -232,7 +243,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
     )
 
 
-def test_acceptance_rejects_reports_inside_candidate(tmp_path: Path):
+def test_acceptance_rejects_reports_inside_candidate(tmp_path: Path) -> None:
     app = tmp_path / "app"
     app.mkdir()
     with pytest.raises(ValueError, match="outside"):
@@ -242,7 +253,7 @@ def test_acceptance_rejects_reports_inside_candidate(tmp_path: Path):
 
 def test_download_failure_cleans_disposable_app_but_keeps_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+) -> None:
     def check(installer: Path, home: Path):
         home.mkdir()
         (home / "Scopecat.app").mkdir()
@@ -258,7 +269,7 @@ def test_download_failure_cleans_disposable_app_but_keeps_report(
 
 def test_native_window_opt_in_refuses_local_before_copying(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+) -> None:
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     app, reports = tmp_path / "app", tmp_path / "reports"
     with pytest.raises(subprocess.CalledProcessError):
@@ -268,29 +279,34 @@ def test_native_window_opt_in_refuses_local_before_copying(
 
 @pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_reset_failure_keeps_report_and_owned_logs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_fails
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_fails: bool
+) -> None:
     import json
     from types import SimpleNamespace
 
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "scripts"))
+    # pytest leaves syspath_prepend's path parameter untyped.
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "scripts"))  # pyright: ignore[reportUnknownMemberType]
     probe = load_script("verify_native_reset")
-    monkeypatch.setattr(probe, "require_hosted_runner", lambda _: None)
+
+    def allow_runner(_: str) -> None:
+        pass
+
+    monkeypatch.setattr(probe, "require_hosted_runner", allow_runner)
     monkeypatch.setattr(probe.sys, "platform", "win32")
-    monkeypatch.setattr(
-        probe,
-        "ApplicationRuntime",
-        lambda _: SimpleNamespace(
+
+    def runtime(_: Path) -> SimpleNamespace:
+        return SimpleNamespace(
             installation=lambda: SimpleNamespace(python=Path("unused-python"))
-        ),
-    )
+        )
+
+    monkeypatch.setattr(probe, "ApplicationRuntime", runtime)
     app, home = tmp_path / "app", tmp_path / "home"
     (app / "resources").mkdir(parents=True)
     home.mkdir()
     reports = home / "reset-recovery"
-    calls = []
+    calls: list[list[str]] = []
 
-    def run(command, log, *, timeout):
+    def run(command: list[str], log: Path, *, timeout: float):
         calls.append(command)
         log.write_text("host diagnostic")
         if len(calls) == 1:
@@ -319,15 +335,15 @@ def test_reset_failure_keeps_report_and_owned_logs(
     ("window_code", "reset_code"), [(0, 0), (7, 0), (0, 8), (7, 8)]
 )
 def test_native_sequence_collects_independent_results(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, window_code, reset_code
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, window_code: int, reset_code: int
+) -> None:
     import json
 
     reports = tmp_path / "native-windows"
     reports.mkdir()
-    calls = []
+    calls: list[str] = []
 
-    def run(command, *, check):
+    def run(command: list[str], *, check: bool):
         calls.append(Path(command[1]).name)
         if len(calls) == 1:
             (reports / "result.json").write_text(
@@ -377,15 +393,15 @@ def test_native_sequence_collects_independent_results(
     ],
 )
 def test_native_sequence_refuses_unverified_cleanup(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt: dict[str, object] | None
+) -> None:
     import json
 
     reports = tmp_path / "native-windows"
     reports.mkdir()
-    calls = []
+    calls: list[list[str]] = []
 
-    def run(command, *, check):
+    def run(command: list[str], *, check: bool):
         calls.append(command)
         if receipt is not None:
             (reports / "result.json").write_text(json.dumps(receipt))
@@ -412,14 +428,15 @@ def test_native_sequence_refuses_unverified_cleanup(
     ],
 )
 def test_teaching_delivery_requires_same_invocation_application_checks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt: dict[str, object] | None
+) -> None:
     import json
 
-    delivery = load_script("verify_teaching_delivery")
-    calls = []
+    from scripts import verify_teaching_delivery as delivery
 
-    def incomplete_help(command, **kwargs):
+    calls: list[list[str]] = []
+
+    def incomplete_help(command: list[str], **kwargs: object):
         calls.append(command)
         work = Path(command[3])
         work.mkdir()
@@ -435,7 +452,7 @@ def test_teaching_delivery_requires_same_invocation_application_checks(
     assert json.loads((destination / "help/acceptance.json").read_text()) == receipt
 
 
-def test_incomplete_help_receipt_is_retained_by_installed_upload():
+def test_incomplete_help_receipt_is_retained_by_installed_upload() -> None:
     workflow = (
         Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
     ).read_text()
@@ -452,10 +469,11 @@ def test_incomplete_help_receipt_is_retained_by_installed_upload():
 
 def test_installed_help_launches_selected_runtime_with_isolated_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+) -> None:
     import json
 
-    help_script = load_script("verify_installed_help_kernels")
+    from scripts import verify_installed_help_kernels as help_script
+
     payload = tmp_path / "resources"
     payload.mkdir()
     (payload / "bundle.json").write_text(json.dumps({"format": 2}))
@@ -463,29 +481,32 @@ def test_installed_help_launches_selected_runtime_with_isolated_environment(
     work = tmp_path / "evidence"
     monkeypatch.setenv("PYTHONPATH", "repository-source")
     monkeypatch.setenv("SCOPECAT_DAEMON_URL", "http://unrelated")
-    calls = []
-    monkeypatch.setattr(
-        help_script.subprocess,
-        "run",
-        lambda command, **kwargs: calls.append((command, kwargs)),
-    )
+    calls: list[tuple[list[str], Path, bool, dict[str, str]]] = []
+
+    def capture(
+        command: list[str], *, cwd: Path, check: bool, env: dict[str, str]
+    ) -> None:
+        calls.append((command, cwd, check, env))
+
+    monkeypatch.setattr(help_script.subprocess, "run", capture)
     help_script.verify_runtime(payload, work, python)
     assert len(calls) == 1
-    command, options = calls[0]
+    command, cwd, check, env = calls[0]
     assert command[:2] == [str(python), "-I"]
     assert command[3:] == [str(payload), str(work), "--installed"]
-    assert options["cwd"] == work and options["check"] is True
-    assert "PYTHONPATH" not in options["env"]
-    assert "SCOPECAT_DAEMON_URL" not in options["env"]
-    assert options["env"]["UV_OFFLINE"] == "0"
-    assert options["env"]["UV_CACHE_DIR"] == str(work / "empty-cache")
+    assert cwd == work and check is True
+    assert "PYTHONPATH" not in env
+    assert "SCOPECAT_DAEMON_URL" not in env
+    assert env["UV_OFFLINE"] == "0"
+    assert env["UV_CACHE_DIR"] == str(work / "empty-cache")
     assert list((work / "empty-cache").iterdir()) == []
 
 
-def test_runtime_entry_does_not_silently_install_legacy_payload(tmp_path: Path):
+def test_runtime_entry_does_not_silently_install_legacy_payload(tmp_path: Path) -> None:
     import json
 
-    help_script = load_script("verify_installed_help_kernels")
+    from scripts import verify_installed_help_kernels as help_script
+
     payload = tmp_path / "legacy"
     payload.mkdir()
     (payload / "bundle.json").write_text(json.dumps({"format": 1}))

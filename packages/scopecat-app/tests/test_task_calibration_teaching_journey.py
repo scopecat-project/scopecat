@@ -6,7 +6,8 @@ from pathlib import Path
 import httpx2
 import pytest
 from nbclient import NotebookClient
-from nbformat import read, v4, write
+from testing.app_support.notebook_typing import cells as notebook_cells
+from testing.app_support.notebook_typing import read, v4, write
 from testing.app_support.project import create_project
 from testing.app_support.verify_editing import _cell_index
 
@@ -50,19 +51,24 @@ def test_managed_task_calibration_shipped_kernel(
     for anchor in ("task-3", "task-4", "task-9"):
         _cell_index(raw, anchor)
     notebook = read(path, as_version=4)
-    notebook.cells.insert(
-        _cell_index(notebook.cells, "task-3"), v4.new_code_cell(_EDIT_AFTER_PREPARE)
+    notebook_cells(notebook).insert(
+        _cell_index(notebook_cells(notebook), "task-3"),
+        v4.new_code_cell(_EDIT_AFTER_PREPARE),
     )
-    notebook.cells.insert(
-        _cell_index(notebook.cells, "task-4"), v4.new_code_cell(_OBSERVE_DISCONNECT)
+    notebook_cells(notebook).insert(
+        _cell_index(notebook_cells(notebook), "task-4"),
+        v4.new_code_cell(_OBSERVE_DISCONNECT),
     )
-    notebook.cells.insert(
-        _cell_index(notebook.cells, "task-9"), v4.new_code_cell(_CHECKS_AND_SAVE)
+    notebook_cells(notebook).insert(
+        _cell_index(notebook_cells(notebook), "task-9"),
+        v4.new_code_cell(_CHECKS_AND_SAVE),
     )
     reopen = v4.new_notebook(
         cells=[
             v4.new_code_cell("import scopecat as sc\nsession = sc.notebook()"),
-            notebook.cells[_cell_index(notebook.cells, "task-history")],
+            notebook_cells(notebook)[
+                _cell_index(notebook_cells(notebook), "task-history")
+            ],
             v4.new_code_cell(_REOPEN),
         ]
     )

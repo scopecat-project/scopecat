@@ -56,7 +56,9 @@ def test_gui_assets_must_match_delivery(delivery: Path):
 
 
 @pytest.mark.parametrize("recorded", [False, True])
-def test_old_installer_is_checked_only_as_hashed_material(delivery: Path, recorded):
+def test_old_installer_is_checked_only_as_hashed_material(
+    delivery: Path, recorded: bool
+):
     legacy = delivery / "install.py"
     legacy.write_text("# historical material\n")
     manifest = delivery / bundle.MANIFEST
@@ -80,7 +82,7 @@ def test_corrupt_wheel_blocks_install_before_environment_creation(
     assert not destination.exists()
 
 
-def add_toolchain(delivery: Path, *, unsafe=False):
+def add_toolchain(delivery: Path, *, unsafe: bool = False):
     directory = delivery / "toolchain"
     directory.mkdir()
     with tarfile.open(directory / "python.tar", "w") as archive:
@@ -106,10 +108,14 @@ def test_toolchain_reuses_prepared_archive_without_supply_lookup(
 
     add_toolchain(delivery)
     before = (delivery / bundle.MANIFEST).read_bytes()
+
+    def reject_late_lookup(*_a: object, **_k: object):
+        return pytest.fail("late runtime lookup")
+
     monkeypatch.setattr(
         toolchain.subprocess,
         "run",
-        lambda *_a, **_k: pytest.fail("late runtime lookup"),
+        reject_late_lookup,
     )
     output = toolchain.build(delivery, tmp_path / "packaged")
     assert (output / bundle.MANIFEST).read_bytes() == before
@@ -119,7 +125,7 @@ def test_toolchain_reuses_prepared_archive_without_supply_lookup(
     ).read_bytes()
 
 
-def test_toolchain_rejects_unprepared_delivery(delivery, tmp_path):
+def test_toolchain_rejects_unprepared_delivery(delivery: Path, tmp_path: Path):
     from scripts.app_build import toolchain
 
     with pytest.raises(ValueError, match="rebuild the delivery"):
@@ -165,19 +171,25 @@ def test_start_checks_reused_service_gui(
         shutdown_token="test-only-token-" * 3,
         started_at=datetime.now(UTC),
     )
+
+    def missing_gui(*_args: object, **_kwargs: object):
+        return httpx.Response(404)
+
     monkeypatch.setattr(
         httpx,
         "get",
-        lambda *_args, **_kwargs: httpx.Response(404),
+        missing_gui,
     )
     with pytest.raises(ValueError, match="服务保持运行"):
         _check_served_gui(record, delivery / "gui")
+
+    def served_gui(*_args: object, **_kwargs: object):
+        return httpx.Response(200, content=(delivery / "gui/index.html").read_bytes())
+
     monkeypatch.setattr(
         httpx,
         "get",
-        lambda *_args, **_kwargs: httpx.Response(
-            200, content=(delivery / "gui/index.html").read_bytes()
-        ),
+        served_gui,
     )
     _check_served_gui(record, delivery / "gui")
 
@@ -251,7 +263,7 @@ def test_runtime_directory_symlink_skip_boundary(
 
 @pytest.mark.parametrize("problem", ["relative", "missing", "changed"])
 def test_installer_receipt_never_guesses_a_replacement(
-    delivery: Path, tmp_path: Path, problem
+    delivery: Path, tmp_path: Path, problem: str
 ):
     prefix = tmp_path / "environment"
     prefix.mkdir()
@@ -300,9 +312,9 @@ def test_delivery_resources_are_independent_of_gui_location(
     gui = tmp_path / "separate-workbench"
     gui.mkdir()
     (gui / "index.html").write_text("GUI elsewhere")
-    requests = []
+    requests: list[dict[str, object]] = []
 
-    def probe(_python, request):
+    def probe(_python: Path, request: dict[str, object]):
         requests.append(request)
         return {
             "static_dir": str(gui),
@@ -365,7 +377,11 @@ def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_
     python = environment_python(workspace / ".venv")
     python.parent.mkdir(parents=True)
     python.write_bytes(b"existing interpreter")
-    monkeypatch.setattr("scopecat_app.author_environment.check", lambda _r, _w, p: p)
+
+    def existing_python(_r: ApplicationRuntime, _w: Path, p: Path):
+        return p
+
+    monkeypatch.setattr("scopecat_app.author_environment.check", existing_python)
     assert create_client_environment(runtime, workspace) == python
     with pytest.raises(ValueError, match="未登记作者环境资源"):
         create_client_environment(runtime, workspace, rebuild=True)

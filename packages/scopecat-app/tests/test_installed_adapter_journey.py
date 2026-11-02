@@ -262,8 +262,8 @@ finally:
 
 
 def check_notebook_kernel(project: Path, python: Path, kernel_home: Path) -> None:
-    from jupyter_client import KernelManager
     from jupyter_client.kernelspec import KernelSpecManager
+    from jupyter_client.manager import KernelManager
 
     from scopecat_app.notebook import kernel_command
 

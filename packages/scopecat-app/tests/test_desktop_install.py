@@ -29,12 +29,16 @@ def test_mac_entry_is_outside_data_and_cache(
 ):
     monkeypatch.setattr(installation_paths.sys, "platform", "darwin")
     monkeypatch.setattr(installation_paths.Path, "home", lambda: tmp_path)
-    monkeypatch.setattr(
-        installation_paths, "user_data_path", lambda *_a, **_kw: tmp_path / "support"
-    )
-    monkeypatch.setattr(
-        installation_paths, "user_cache_path", lambda *_a, **_kw: tmp_path / "cache"
-    )
+
+    def support_path(*_a: object, **_kw: object):
+        return tmp_path / "support"
+
+    monkeypatch.setattr(installation_paths, "user_data_path", support_path)
+
+    def cache_path(*_a: object, **_kw: object):
+        return tmp_path / "cache"
+
+    monkeypatch.setattr(installation_paths, "user_cache_path", cache_path)
     paths = InstallationPaths.current_user()
     assert paths.entry == tmp_path / "Applications/Scopecat.app"
     assert paths.entry is not None
@@ -78,7 +82,7 @@ def native_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> NativeStart
         pending = paths.state / "installation-pending.json"
         selection = paths.state / "installation.json"
 
-        def __init__(self, home):
+        def __init__(self, home: Path):
             assert home == paths.state
             self.home = home
             self.root = home / "runtime"
@@ -86,30 +90,34 @@ def native_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> NativeStart
 
             self.instance = ApplicationInstance(self.root, "legacy")
 
-        def configure(self, **_kwargs):
+        def configure(self, **_kwargs: object):
             self.selection.write_text(receipt())
             return selected
 
         def installation(self):
             return selected
 
-        def qualify(self, python, static_dir, *, delivery_root):
+        def qualify(self, python: Path, static_dir: Path, *, delivery_root: Path):
             assert static_dir == payload / "gui"
             assert delivery_root == payload
-            return SimpleNamespace(
-                python=python,
-                package=json.loads((payload / "bundle.json").read_text())["build"],
-                model_dump_json=lambda **_kw: json.dumps(
+
+            def serialize_candidate(**_kw: object):
+                return json.dumps(
                     {
                         "python": str(python),
                         "package": json.loads((payload / "bundle.json").read_text())[
                             "build"
                         ],
                     }
-                ),
+                )
+
+            return SimpleNamespace(
+                python=python,
+                package=json.loads((payload / "bundle.json").read_text())["build"],
+                model_dump_json=serialize_candidate,
             )
 
-        def select(self, candidate):
+        def select(self, candidate: SimpleNamespace):
             updates.append(candidate)
             selected.python = candidate.python
             selected.package = candidate.package

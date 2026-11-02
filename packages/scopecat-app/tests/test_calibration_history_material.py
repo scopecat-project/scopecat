@@ -18,7 +18,12 @@ from testing.app_support.project import create_project
     ],
 )
 def test_history_reads_all_pages_and_excludes_other_lessons(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic, cell_id, prefix, api
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    topic: str,
+    cell_id: str,
+    prefix: str,
+    api: str,
 ):
     root = create_project(tmp_path / topic, topic=topic).parent
     notebook = root / "notebooks" / f"{topic}.ipynb"
@@ -28,7 +33,7 @@ def test_history_reads_all_pages_and_excludes_other_lessons(
     vars(identity)["IDENTITY"] = "this-directory"
     monkeypatch.setitem(sys.modules, "my_experiment.lesson_identity", identity)
 
-    def record(key):
+    def record(key: str | None):
         return SimpleNamespace(
             request_key=key,
             procedure_run_id=key,
@@ -46,9 +51,9 @@ def test_history_reads_all_pages_and_excludes_other_lessons(
         ),
         7: SimpleNamespace(items=[older], next_cursor=None),
     }
-    visited = []
+    visited: list[int | None] = []
 
-    def read_page(*, cursor):
+    def read_page(*, cursor: int | None):
         visited.append(cursor)
         return pages[cursor]
 

@@ -141,24 +141,51 @@ def test_build_replaces_console_before_signing_and_rename(
         archive.add(runtime / "bin", arcname="bin")
         archive.add(runtime / "lib", arcname="lib")
     monkeypatch.setattr(native_package.sys, "platform", "darwin")
-    monkeypatch.setattr(native_package, "resolve_delivery", lambda path: path)
-    monkeypatch.setattr(native_package, "verify_bundle", lambda _: None)
-    monkeypatch.setattr(runtime_install, "verify_bundle", lambda _: None)
+
+    def resolve_delivery(path: Path):
+        return path
+
+    monkeypatch.setattr(native_package, "resolve_delivery", resolve_delivery)
+
+    def verify_bundle_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(native_package, "verify_bundle", verify_bundle_stub)
+
+    def verify_runtime_bundle_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(runtime_install, "verify_bundle", verify_runtime_bundle_stub)
     import shutil
 
-    monkeypatch.setattr(native_package, "native_author_inputs", lambda root, _: root)
+    def author_inputs(root: Path, _: object):
+        return root
+
+    monkeypatch.setattr(native_package, "native_author_inputs", author_inputs)
+
+    def copy_resources(src: Path, dst: Path, **_kw: object):
+        return Path(shutil.copytree(src, dst))
+
     monkeypatch.setattr(
         native_package,
         "build_author_resources",
-        lambda src, dst, **_kw: Path(shutil.copytree(src, dst)),
+        copy_resources,
     )
-    monkeypatch.setattr(
-        native_package.author_resources, "verify_resources", lambda _: None
-    )
-    monkeypatch.setattr(cocoa_dependency, "verify_wheel", lambda _: None)
-    installed = []
 
-    def run(command):
+    def verify_resources_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(
+        native_package.author_resources, "verify_resources", verify_resources_stub
+    )
+
+    def verify_wheel_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(cocoa_dependency, "verify_wheel", verify_wheel_stub)
+    installed: list[Path] = []
+
+    def run(command: list[str], **_kwargs: object):
         if command[1:3] == ["pip", "install"]:
             assert {"--offline", "--no-index", "--no-deps", "--require-hashes"} <= set(
                 command
@@ -168,9 +195,9 @@ def test_build_replaces_console_before_signing_and_rename(
             entry.write_text(f"#!{python}\n")
             installed.append(entry)
 
-    signed = []
+    signed: list[Path] = []
 
-    def sign(app):
+    def sign(app: Path):
         entry = app / "Contents/Resources/python/bin/scopecat"
         assert entry == installed[0]
         assert entry.read_text().startswith("#!/bin/sh\n")
@@ -179,9 +206,7 @@ def test_build_replaces_console_before_signing_and_rename(
         signed.append(app)
 
     monkeypatch.setattr(native_package, "_run", run)
-    monkeypatch.setattr(
-        runtime_install.subprocess, "run", lambda command, **_kw: run(command)
-    )
+    monkeypatch.setattr(runtime_install.subprocess, "run", run)
     monkeypatch.setattr(macos_signing, "sign", sign)
     destination = tmp_path / "Final 中文 Scopecat.app"
     assert native_package.build(source, destination) == destination

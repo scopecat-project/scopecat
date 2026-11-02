@@ -142,7 +142,7 @@ def test_minimal_teaching_refresh_and_restart(
             analyze_rabi = importlib.import_module("my_experiment.session").analyze_rabi
             session.use(parameter_branch="learner-choice")
             assert session.params.version == version
-            assert session.params[Drive]["q0"].frequency == 5.148
+            assert session.params[Drive]["q0"].frequency == 5.148  # pyright: ignore[reportUnknownMemberType] - Drive is imported from the generated author project.
             restored = session.reopen(receipt).wait(timeout=120).result()
             assert restored.id == run_id
             assert (

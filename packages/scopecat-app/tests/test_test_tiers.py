@@ -49,7 +49,7 @@ def test_unclassified_files_require_a_decision(tmp_path: Path, suite: str) -> No
 def test_platform_smoke_requires_actual_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, expected: int
 ):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))  # pyright: ignore[reportUnknownMemberType] - pytest leaves path unannotated.
     from scripts import platform_smoke
 
     test = tmp_path / "test_probe.py"
@@ -59,8 +59,10 @@ def test_platform_smoke_requires_actual_passes(
     monkeypatch.setattr(platform_smoke, "PLATFORM", {platform_smoke.sys.platform: []})
     monkeypatch.delenv("SMOKE_EXPECTED_SHA", raising=False)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        platform_smoke.subprocess, "check_output", lambda *_a, **_kw: "test-sha"
-    )
+
+    def current_revision(*_a: object, **_kw: object):
+        return "test-sha"
+
+    monkeypatch.setattr(platform_smoke.subprocess, "check_output", current_revision)
     # This temporary probe has no xdist config; main still supplies -n 0.
     assert platform_smoke.main() == expected

@@ -10,23 +10,25 @@ from pydantic import TypeAdapter
 
 from scopecat.records.practice import PracticeScope
 from scopecat_app import notebook_journey as journey
+from scopecat_app.application_runtime import ApplicationRuntime
 from scopecat_tutorials.lessons import TOPICS, LessonTopic
 
 
 @pytest.fixture(autouse=True)
 def enrolled_course(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        journey,
-        "enroll_course",
-        lambda _runtime, _workspace, topic: PracticeScope(
+    def enroll(
+        _runtime: ApplicationRuntime, _workspace: Path, topic: LessonTopic
+    ) -> PracticeScope:
+        return PracticeScope(
             id=f"course-{topic}",
             title=topic,
             lesson=topic,
             directory="source",
             kind="notebook",
             workspace_id="source",
-        ),
-    )
+        )
+
+    monkeypatch.setattr(journey, "enroll_course", enroll)
 
 
 def test_other_window_observes_preparation_failure_and_retry(
@@ -38,12 +40,12 @@ def test_other_window_observes_preparation_failure_and_retry(
     )
     create = journey.create_lesson_source
 
-    def create_slowly(*args):
+    def create_slowly(directory: Path, topic: LessonTopic = "parameters") -> None:
         source_started.set()
         assert allow_source.wait(10)
-        create(*args)
+        create(directory, topic)
 
-    def fail(*args):
+    def fail(_runtime: ApplicationRuntime, _workspace: Path) -> Path:
         environment_started.set()
         assert allow_environment.wait(10)
         raise ValueError("dependency unavailable")
@@ -113,7 +115,7 @@ def test_explicit_repair_retries_client_failure_without_replacing_edited_course(
 
 @pytest.mark.parametrize("topic", TOPICS)
 def test_retry_and_continue_preserve_files_and_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic: LessonTopic
 ):
     runtime = Mock(home=tmp_path)
     client = Mock()
@@ -176,16 +178,18 @@ def test_fresh_sources_have_independent_identity_and_no_manager_tasks(tmp_path: 
 
 @pytest.mark.parametrize("topic", ["parameters", "groups"])
 def test_windows_editor_opens_folder_and_notebook_without_command_shell(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic: LessonTopic
 ):
     installation = tmp_path / "VS Code"
     (installation / "bin").mkdir(parents=True)
     executable = installation / "Code.exe"
     executable.touch()
     monkeypatch.setattr(journey.sys, "platform", "win32")
-    monkeypatch.setattr(
-        journey.shutil, "which", lambda _: str(installation / "bin/code.cmd")
-    )
+
+    def which(_: str) -> str:
+        return str(installation / "bin/code.cmd")
+
+    monkeypatch.setattr(journey.shutil, "which", which)
     launched = Mock()
     monkeypatch.setattr(journey.subprocess, "Popen", launched)
     saved = journey.NotebookJourney(
@@ -204,15 +208,20 @@ def test_windows_editor_opens_folder_and_notebook_without_command_shell(
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
 @pytest.mark.parametrize("active_venv", [None, "application-venv"])
 def test_editor_does_not_inherit_application_virtual_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform, active_venv
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    platform: str,
+    active_venv: str | None,
 ):
     installation = tmp_path / "editor"
     (installation / "bin").mkdir(parents=True)
     (installation / "Code.exe").touch()
     monkeypatch.setattr(journey.sys, "platform", platform)
-    monkeypatch.setattr(
-        journey.shutil, "which", lambda _: str(installation / "bin/code")
-    )
+
+    def which(_: str) -> str:
+        return str(installation / "bin/code")
+
+    monkeypatch.setattr(journey.shutil, "which", which)
     if active_venv is None:
         monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     else:
@@ -265,7 +274,7 @@ def test_topics_keep_separate_receipts_and_reject_unknown_topics(
     topics = TypeAdapter(list[LessonTopic]).validate_python(list(TOPICS))
     saved = {topic: journey.prepare(runtime, topic=topic) for topic in topics}
     assert len({item.directory for item in saved.values()}) == len(TOPICS)
-    identities = set()
+    identities: set[str] = set()
     for topic in topics:
         item = saved[topic]
         assert journey.current(Mock(home=tmp_path), topic) == item

@@ -76,6 +76,7 @@ exclude = [
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "recommended"
+failOnWarnings = true
 extraPaths = [
   ".",
   "testing/fixtures/retained-signal/src",
@@ -106,12 +107,15 @@ reportUnreachable = "hint"
 # roots must precede their parent projects.
 [[tool.basedpyright.executionEnvironments]]
 root = "packages/scopecat-app/tests"
-# Keep dynamic fixture/JSON warnings visible without blocking this newly covered
-# test root. Errors still fail; other roots retain their existing warning gate.
-failOnWarnings = false
+# Test doubles and deliberately malformed serialized inputs cross dynamic APIs.
+# Permit explicit Any at those boundaries, as in the core tests, while keeping
+# Unknown, argument, member and optional checks active for ordinary test code.
+reportAny = "none"
+reportExplicitAny = "none"
 # Lifecycle and packaging tests intentionally inspect private state and helpers.
-# Keep argument/member/optional checks active, including for test doubles.
+# They also patch module imports at the location where the application uses them.
 reportPrivateUsage = "none"
+reportPrivateLocalImportUsage = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "testing/reference_lab/tests"
