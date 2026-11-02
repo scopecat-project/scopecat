@@ -534,7 +534,11 @@ def test_native_explicit_projection_feeds_windows_installer(
     for name, digest in inputs.files.items():
         assert projected["files"][name] == verified["files"][name] == digest
     monkeypatch.setattr(native_package.sys, "platform", "win32")
-    monkeypatch.setattr(native_package.shutil, "which", Mock(return_value="ISCC.exe"))
+
+    def which_stub(_: str) -> str:
+        return "ISCC.exe"
+
+    monkeypatch.setattr(native_package.shutil, "which", which_stub)
     scripts: list[str] = []
 
     def compile_installer(command: list[str]):
@@ -644,9 +648,11 @@ def test_native_recipe_must_match_portable_python_provenance(
     inputs = resource_builder.native_author_inputs(
         delivery, bundle.verify_bundle(delivery)
     )
-    monkeypatch.setattr(
-        resource_builder, "_recipe", Mock(return_value={"python": "3.15.99"})
-    )
+
+    def recipe_stub(*_: object) -> dict[str, str]:
+        return {"python": "3.15.99"}
+
+    monkeypatch.setattr(resource_builder, "_recipe", recipe_stub)
     with pytest.raises(ValueError, match="recipe does not match provenance"):
         build_author_resources(inputs, tmp_path / "author")
     assert not (tmp_path / "author").exists()

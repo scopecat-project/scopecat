@@ -34,8 +34,15 @@ def test_interrupted_client_preparation_preserves_retry(
         python.parent.mkdir(parents=True)
         python.write_bytes(b"original interpreter")
     runtime = Mock()
-    monkeypatch.setattr(environments, "_bundle", Mock(return_value=tmp_path))
-    monkeypatch.setattr(environments, "resolve", Mock(return_value=Path("base")))
+
+    def bundle_path(_: ApplicationRuntime) -> Path:
+        return tmp_path
+
+    def resolve(*_: object, **__: object) -> Path:
+        return Path("base")
+
+    monkeypatch.setattr(environments, "_bundle", bundle_path)
+    monkeypatch.setattr(environments, "resolve", resolve)
     interrupted = failure("preparation interrupted")
 
     def install(*args: object, **kwargs: object) -> None:
@@ -106,15 +113,25 @@ def preparation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Preparation:
         python=Path("application-python"),
         environment={"scopecat": "1", "server": "1"},
     )
-    monkeypatch.setattr(environments, "_bundle", Mock(return_value=bundle))
+
+    def bundle_path(_: ApplicationRuntime) -> Path:
+        return bundle
+
+    monkeypatch.setattr(environments, "_bundle", bundle_path)
     monkeypatch.setattr(environments, "find_uv_bin", lambda: "uv")
-    monkeypatch.setattr(environments, "resolve", Mock(return_value=Path("base")))
+
+    def resolve(*_: object, **__: object) -> Path:
+        return Path("base")
+
+    monkeypatch.setattr(environments, "resolve", resolve)
     (bundle / "wheels").mkdir()
     for name in ("scopecat", "scopecat_server"):
         (bundle / "wheels" / f"{name}-1-py3-none-any.whl").touch()
-    monkeypatch.setattr(
-        environments, "identity", Mock(return_value={"binary_sha256": "original"})
-    )
+
+    def identity(_: Path) -> dict[str, object]:
+        return {"binary_sha256": "original"}
+
+    monkeypatch.setattr(environments, "identity", identity)
     calls: list[list[str]] = []
 
     def run(command: list[str]) -> None:
@@ -252,10 +269,16 @@ def test_online_newer_dependency_cannot_override_delivery_lock(
     runtime.installation.return_value = SimpleNamespace(
         python=Path(sys.executable), environment={"scopecat": "1", "server": "1"}
     )
-    monkeypatch.setattr(environments, "_bundle", Mock(return_value=bundle))
-    monkeypatch.setattr(
-        environments, "resolve", Mock(return_value=Path(sys.executable))
-    )
+
+    def bundle_path(_: ApplicationRuntime) -> Path:
+        return bundle
+
+    monkeypatch.setattr(environments, "_bundle", bundle_path)
+
+    def resolve(*_: object, **__: object) -> Path:
+        return Path(sys.executable)
+
+    monkeypatch.setattr(environments, "resolve", resolve)
     monkeypatch.setattr("scopecat_server.author_environment.capture", Mock())
     monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "uv-cache"))
     monkeypatch.setenv("UV_NO_CONFIG", "true")
@@ -422,9 +445,11 @@ def test_changed_interpreter_identity_does_not_reuse_candidate(
 ):
     runtime, source, calls, _capture = preparation
     before = environments.prepare_execution_environment(runtime, source)
-    monkeypatch.setattr(
-        environments, "identity", Mock(return_value={"binary_sha256": "replaced"})
-    )
+
+    def identity(_: Path) -> dict[str, object]:
+        return {"binary_sha256": "replaced"}
+
+    monkeypatch.setattr(environments, "identity", identity)
     after = environments.prepare_execution_environment(runtime, source)
     assert after != before
     assert sum("install" in command for command in calls) == 2

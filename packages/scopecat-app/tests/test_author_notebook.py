@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 from filelock import FileLock
@@ -41,12 +40,16 @@ def laboratory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Laboratory:
         installation=lambda: service,
         source=registered_source,
     )
-    monkeypatch.setattr(author_notebook, "ApplicationRuntime", Mock(return_value=store))
-    monkeypatch.setattr(
-        author_notebook.subprocess,
-        "run",
-        Mock(return_value=SimpleNamespace(returncode=0, stderr="")),
-    )
+
+    def runtime(_: Path) -> SimpleNamespace:
+        return store
+
+    monkeypatch.setattr(author_notebook, "ApplicationRuntime", runtime)
+
+    def run(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(author_notebook.subprocess, "run", run)
     return source, home, service
 
 
@@ -91,11 +94,11 @@ def test_missing_notebook_extra_does_not_launch_or_install(
     laboratory: Laboratory, monkeypatch: pytest.MonkeyPatch
 ):
     source, home, _ = laboratory
-    monkeypatch.setattr(
-        author_notebook.subprocess,
-        "run",
-        Mock(return_value=SimpleNamespace(returncode=1, stderr="")),
-    )
+
+    def run(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=1, stderr="")
+
+    monkeypatch.setattr(author_notebook.subprocess, "run", run)
     monkeypatch.setattr(author_notebook.subprocess, "Popen", pytest.fail)
     with pytest.raises(ValueError, match="JupyterLab/ipykernel"):
         author_notebook.launch_notebook(source, home)
@@ -156,24 +159,32 @@ def test_default_notebook_opens_sole_registered_source(
     service = SimpleNamespace(
         id="a" * 32, root=str(root), python="installed/python", name="Software"
     )
+
+    def registered_source(_path: Path) -> str:
+        return "registered-source"
+
     store = SimpleNamespace(
         home=home,
         lock=FileLock(home / "services.lock"),
         root=root,
         installation=lambda: service,
-        source=Mock(return_value="registered-source"),
+        source=registered_source,
     )
-    monkeypatch.setattr(
-        author_workspaces,
-        "local_author_workspaces",
-        Mock(return_value=[SimpleNamespace(root=root)]),
-    )
-    monkeypatch.setattr(author_notebook, "ApplicationRuntime", Mock(return_value=store))
-    monkeypatch.setattr(
-        author_notebook.subprocess,
-        "run",
-        Mock(return_value=SimpleNamespace(returncode=0)),
-    )
+
+    def workspaces(_: Path) -> list[SimpleNamespace]:
+        return [SimpleNamespace(root=root)]
+
+    monkeypatch.setattr(author_workspaces, "local_author_workspaces", workspaces)
+
+    def runtime(_: Path) -> SimpleNamespace:
+        return store
+
+    monkeypatch.setattr(author_notebook, "ApplicationRuntime", runtime)
+
+    def run(*_a: object, **_kw: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(author_notebook.subprocess, "run", run)
     calls: list[tuple[list[str], Path]] = []
 
     def start(command: list[str], *, cwd: Path, env: dict[str, str]) -> SimpleNamespace:

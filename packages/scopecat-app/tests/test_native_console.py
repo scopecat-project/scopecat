@@ -6,7 +6,6 @@ import site
 import subprocess
 import venv
 from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 from scripts.app_build.native_package import _write_macos_console
@@ -147,8 +146,16 @@ def test_build_replaces_console_before_signing_and_rename(
         return path
 
     monkeypatch.setattr(native_package, "resolve_delivery", resolve_delivery)
-    monkeypatch.setattr(native_package, "verify_bundle", Mock(return_value=None))
-    monkeypatch.setattr(runtime_install, "verify_bundle", Mock(return_value=None))
+
+    def verify_bundle_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(native_package, "verify_bundle", verify_bundle_stub)
+
+    def verify_runtime_bundle_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(runtime_install, "verify_bundle", verify_runtime_bundle_stub)
     import shutil
 
     def author_inputs(root: Path, _: object):
@@ -164,10 +171,18 @@ def test_build_replaces_console_before_signing_and_rename(
         "build_author_resources",
         copy_resources,
     )
+
+    def verify_resources_stub(_: Path) -> None:
+        return None
+
     monkeypatch.setattr(
-        native_package.author_resources, "verify_resources", Mock(return_value=None)
+        native_package.author_resources, "verify_resources", verify_resources_stub
     )
-    monkeypatch.setattr(cocoa_dependency, "verify_wheel", Mock(return_value=None))
+
+    def verify_wheel_stub(_: Path) -> None:
+        return None
+
+    monkeypatch.setattr(cocoa_dependency, "verify_wheel", verify_wheel_stub)
     installed: list[Path] = []
 
     def run(command: list[str], **_kwargs: object):

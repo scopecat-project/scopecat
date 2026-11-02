@@ -24,9 +24,10 @@ from scopecat_app.desktop_session import DesktopSession
 def test_home_is_stable_canonical_external_and_worktree_specific(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(
-        dev_resources, "user_data_path", Mock(return_value=tmp_path / "user")
-    )
+    def user_data_path_stub(*_a: object, **_k: object) -> Path:
+        return tmp_path / "user"
+
+    monkeypatch.setattr(dev_resources, "user_data_path", user_data_path_stub)
     source = tmp_path / "source"
     source.mkdir()
     alias = tmp_path / "alias"
@@ -150,7 +151,11 @@ def test_terminal_wait_restarts_only_after_idle(
     runtime = Mock()
     runtime.stop_if_idle.side_effect = [False, False, True]
     session = DesktopSession(runtime, threading.Event())
-    monkeypatch.setattr(dev, "source_stamp", Mock(return_value="source"))
+
+    def source_stamp_stub(_: Path) -> str:
+        return "source"
+
+    monkeypatch.setattr(dev, "source_stamp", source_stamp_stub)
     commands: queue.Queue[str] = queue.Queue()
     commands.put("w")
     start = Mock(side_effect=session.closing.set)
@@ -226,10 +231,16 @@ def test_frontend_failure_reports_without_stopping_background_and_can_quit(
         return reported.set()
 
     logger.error.side_effect = report_failure
-    monkeypatch.setattr(
-        dev, "logging", SimpleNamespace(getLogger=Mock(return_value=logger))
-    )
-    monkeypatch.setattr(dev, "source_stamp", Mock(return_value="source"))
+
+    def get_logger_stub(_name: str) -> Mock:
+        return logger
+
+    monkeypatch.setattr(dev, "logging", SimpleNamespace(getLogger=get_logger_stub))
+
+    def source_stamp_stub(_source: Path) -> str:
+        return "source"
+
+    monkeypatch.setattr(dev, "source_stamp", source_stamp_stub)
     frontend = Mock(returncode=1)
     frontend.poll.return_value = 1
     commands: queue.Queue[str] = queue.Queue()
@@ -302,14 +313,24 @@ def test_cached_payload_repairs_native_wheel_and_extraction(
     monkeypatch.setattr(
         dev_resources, "sys", SimpleNamespace(platform=platform, path=list(sys.path))
     )
-    monkeypatch.setattr(dev_resources, "source_identity", Mock(return_value="bytes"))
-    monkeypatch.setattr(
-        dev_resources, "resource_identity", Mock(return_value="identity")
-    )
+
+    def source_identity_stub(_: Path) -> str:
+        return "bytes"
+
+    monkeypatch.setattr(dev_resources, "source_identity", source_identity_stub)
+
+    def resource_identity_stub(_: Path) -> str:
+        return "identity"
+
+    monkeypatch.setattr(dev_resources, "resource_identity", resource_identity_stub)
+
+    def verify_resources_stub(_: Path) -> dict[str, dict[str, str]]:
+        return {"sources": {"public": "bytes"}}
+
     monkeypatch.setattr(
         dev_resources,
         "verify_resources",
-        Mock(return_value={"sources": {"public": "bytes"}}),
+        verify_resources_stub,
     )
 
     def verify(wheels: Path) -> None:
@@ -421,11 +442,21 @@ def test_material_preparation_runs_only_export_and_two_source_builds(
         "sys",
         SimpleNamespace(platform="linux", executable=sys.executable),
     )
-    monkeypatch.setattr(author_materials, "version", Mock(return_value="locked"))
-    monkeypatch.setattr(
-        author_materials.toolchain, "baseline", Mock(return_value="3.15.1")
-    )
-    monkeypatch.setattr(delivery, "package_version", Mock(return_value=None))
+
+    def version_stub(_: str) -> str:
+        return "locked"
+
+    monkeypatch.setattr(author_materials, "version", version_stub)
+
+    def baseline_stub(_: Path) -> str:
+        return "3.15.1"
+
+    monkeypatch.setattr(author_materials.toolchain, "baseline", baseline_stub)
+
+    def package_version_stub(*_a: object, **_k: object) -> None:
+        return None
+
+    monkeypatch.setattr(delivery, "package_version", package_version_stub)
     monkeypatch.setattr(delivery, "run", run)
     inputs = author_materials.prepare(
         source,
@@ -489,7 +520,11 @@ def prepared_source(
         )
 
     monkeypatch.setattr(dev_resources, "prepare_materials", materials)
-    monkeypatch.setattr(dev_resources, "_native_ready", Mock(return_value=True))
+
+    def native_ready_stub(*_: object) -> bool:
+        return True
+
+    monkeypatch.setattr(dev_resources, "_native_ready", native_ready_stub)
     monkeypatch.setattr(
         dev_resources, "sys", SimpleNamespace(platform="linux", version=sys.version)
     )

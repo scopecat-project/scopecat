@@ -185,9 +185,11 @@ def test_windows_editor_opens_folder_and_notebook_without_command_shell(
     executable = installation / "Code.exe"
     executable.touch()
     monkeypatch.setattr(journey.sys, "platform", "win32")
-    monkeypatch.setattr(
-        journey.shutil, "which", Mock(return_value=str(installation / "bin/code.cmd"))
-    )
+
+    def which(_: str) -> str:
+        return str(installation / "bin/code.cmd")
+
+    monkeypatch.setattr(journey.shutil, "which", which)
     launched = Mock()
     monkeypatch.setattr(journey.subprocess, "Popen", launched)
     saved = journey.NotebookJourney(
@@ -215,9 +217,11 @@ def test_editor_does_not_inherit_application_virtual_env(
     (installation / "bin").mkdir(parents=True)
     (installation / "Code.exe").touch()
     monkeypatch.setattr(journey.sys, "platform", platform)
-    monkeypatch.setattr(
-        journey.shutil, "which", Mock(return_value=str(installation / "bin/code"))
-    )
+
+    def which(_: str) -> str:
+        return str(installation / "bin/code")
+
+    monkeypatch.setattr(journey.shutil, "which", which)
     if active_venv is None:
         monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     else:

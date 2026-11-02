@@ -273,13 +273,19 @@ def test_new_source_preserves_existing_files(tmp_path: Path):
 def test_busy_source_creation_retains_folder_without_interrupting_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    def create_client_environment(*_: object) -> None:
+        return None
+
+    def prepare_execution_environment(*_: object) -> Path:
+        return tmp_path / "execution/python"
+
     monkeypatch.setattr(
         "scopecat_app.author_environment.create_client_environment",
-        Mock(return_value=None),
+        create_client_environment,
     )
     monkeypatch.setattr(
         "scopecat_app.author_environment.prepare_execution_environment",
-        Mock(return_value=tmp_path / "execution/python"),
+        prepare_execution_environment,
     )
     runtime = Mock()
     runtime.stop_if_idle.return_value = False
@@ -948,7 +954,11 @@ def test_desktop_starts_service_with_optional_import_unavailable(
         return SimpleNamespace(base_url="http://localhost:1234")
 
     runtime.start.side_effect = start_service
-    monkeypatch.setattr(session, "finish_exit", Mock(return_value=True))
+
+    def finish_exit(_destroy: Callable[[], None]) -> bool:
+        return True
+
+    monkeypatch.setattr(session, "finish_exit", finish_exit)
 
     def start_native(supervise: Callable[[], None], **kwargs: object):
         assert kwargs["menu"]  # Explicit Quit/status remain native menu actions.

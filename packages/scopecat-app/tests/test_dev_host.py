@@ -34,13 +34,19 @@ def inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> HostInputs:
     icon.parent.mkdir()
     icon.write_bytes(b"icon")
     monkeypatch.setattr(dev_host, "__file__", str(module))
-    monkeypatch.setattr(dev_host, "files", Mock(return_value=module.parent))
+
+    def files_stub(_: str) -> Path:
+        return module.parent
+
+    monkeypatch.setattr(dev_host, "files", files_stub)
     monkeypatch.setattr(dev_host.sys, "executable", str(python))
     monkeypatch.setattr(dev_host.sys, "prefix", str(source / ".venv"))
     monkeypatch.setattr(dev_host, "shared_library", lambda: library)
-    monkeypatch.setattr(
-        dev_host.subprocess, "check_output", Mock(return_value="clang test")
-    )
+
+    def check_output_stub(*_a: object, **_k: object) -> str:
+        return "clang test"
+
+    monkeypatch.setattr(dev_host.subprocess, "check_output", check_output_stub)
     return source, python, library, module, icon
 
 
@@ -72,9 +78,11 @@ def test_host_inputs_invalidate_cache(
     if changed in paths:
         paths[changed].write_bytes(b"changed")
     elif changed == "abi":
-        monkeypatch.setattr(
-            dev_host.sysconfig, "get_config_var", Mock(return_value="other-abi")
-        )
+
+        def get_config_var_stub(_name: str) -> str:
+            return "other-abi"
+
+        monkeypatch.setattr(dev_host.sysconfig, "get_config_var", get_config_var_stub)
     else:
         source = source.parent / "another-checkout"
     assert dev_host.host_identity(source) != first
@@ -96,9 +104,11 @@ def builder(
 ) -> HostBuild:
     source, *_ = inputs
     commands: list[list[str]] = []
-    monkeypatch.setattr(
-        dev_host, "development_home", Mock(return_value=tmp_path / "worktree-id")
-    )
+
+    def development_home_stub(_source: Path) -> Path:
+        return tmp_path / "worktree-id"
+
+    monkeypatch.setattr(dev_host, "development_home", development_home_stub)
     monkeypatch.setattr(dev_host, "check_interpreter", Mock())
 
     def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
@@ -191,7 +201,11 @@ def test_exec_preserves_process_terminal_and_passes_one_home(
     executable = source / "host/Scopecat Dev.app/Contents/MacOS/scopecat-dev"
     monkeypatch.delenv(dev_host.MARKER, raising=False)
     monkeypatch.setenv("PYTHONHOME", "unwanted")
-    monkeypatch.setattr(dev_host, "build_host", Mock(return_value=executable))
+
+    def build_host_stub(_source: Path) -> Path:
+        return executable
+
+    monkeypatch.setattr(dev_host, "build_host", build_host_stub)
     execute = Mock()
     monkeypatch.setattr(dev_host.os, "execve", execute)
     change_directory = Mock()
@@ -271,9 +285,11 @@ def test_compiled_mac_host_loads_relocated_entries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     source = Path(__file__).resolve().parents[3]
-    monkeypatch.setattr(
-        dev_host, "development_home", Mock(return_value=tmp_path / "cache")
-    )
+
+    def development_home_stub(_: Path) -> Path:
+        return tmp_path / "cache"
+
+    monkeypatch.setattr(dev_host, "development_home", development_home_stub)
     executable = dev_host.build_host(source)
     home = tmp_path / "unused-home"
     for module, options, expected in (
@@ -301,7 +317,11 @@ def test_windows_reentry_selects_source_cwd_before_loading_repository_module(
     home = tmp_path / "retained-home"
     executable = tmp_path / "host.exe"
     monkeypatch.delenv(dev_host_windows.MARKER, raising=False)
-    monkeypatch.setattr(dev_host_windows, "build_host", Mock(return_value=executable))
+
+    def build_host_stub(_: Path) -> Path:
+        return executable
+
+    monkeypatch.setattr(dev_host_windows, "build_host", build_host_stub)
     launch = Mock()
     launch.return_value.__enter__ = Mock(return_value=Mock(wait=lambda: 23))
     launch.return_value.__exit__ = Mock(return_value=False)

@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 
@@ -174,15 +173,22 @@ def test_update_resources_follow_actual_selected_interpreter(
     import sys
     from pathlib import Path
 
+    def model_dump_json_stub(**_kwargs: object) -> str:
+        return "{}"
+
     selected = SimpleNamespace(
         python=Path(sys.executable).absolute()
         if same_interpreter
         else tmp_path / "other/python",
         delivery_root=tmp_path / "payload",
-        model_dump_json=Mock(return_value="{}"),
+        model_dump_json=model_dump_json_stub,
     )
     calls: list[tuple[Path, Path | None]] = []
-    monkeypatch.setattr(ApplicationRuntime, "configure", Mock(return_value=selected))
+
+    def configure_stub(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return selected
+
+    monkeypatch.setattr(ApplicationRuntime, "configure", configure_stub)
 
     def qualify(
         _runtime: ApplicationRuntime,
@@ -195,7 +201,11 @@ def test_update_resources_follow_actual_selected_interpreter(
         return selected
 
     monkeypatch.setattr(ApplicationRuntime, "qualify", qualify)
-    monkeypatch.setattr(ApplicationRuntime, "select", Mock(return_value=None))
+
+    def select_stub(*_args: object) -> None:
+        return None
+
+    monkeypatch.setattr(ApplicationRuntime, "select", select_stub)
     application.main(["--home", str(tmp_path), "--action", "update"])
     assert calls == [
         (Path(sys.executable), selected.delivery_root if same_interpreter else None)

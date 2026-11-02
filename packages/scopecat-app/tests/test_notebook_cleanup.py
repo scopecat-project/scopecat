@@ -56,7 +56,11 @@ def registered_course(
             ),
         ).model_dump_json()
     )
-    monkeypatch.setattr(cleanup, "author_bindings_path", Mock(return_value=registry))
+
+    def bindings_path(_root: Path) -> Path:
+        return registry
+
+    monkeypatch.setattr(cleanup, "author_bindings_path", bindings_path)
     scope = PracticeScope(
         id="course",
         title="Course",
