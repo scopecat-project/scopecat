@@ -8,7 +8,7 @@ export function readOperatorSettings() {
   return apiData(apiClient.GET("/api/v1/operator-settings"));
 }
 
-export function OperatorSettings() {
+export function OperatorSettings({ onSaved }: { onSaved?: () => void } = {}) {
   const settings = useQuery({ queryKey: ["operator-settings"], queryFn: readOperatorSettings });
   const client = useQueryClient();
   const [edit, setEdit] = useState<{ operator: string; revision: number }>();
@@ -18,6 +18,7 @@ export function OperatorSettings() {
     onSuccess: (value) => {
       client.setQueryData(["operator-settings"], value);
       setEdit(undefined);
+      onSaved?.();
     },
   });
   return (

@@ -2583,3 +2583,21 @@ function getConnectionEditor() {
 async function findConnectionEditor() {
   return waitFor(getConnectionEditor);
 }
+
+it("opens the source entry for an empty application without implying installed drivers or a control target", async () => {
+  vi.mocked(getDevices).mockResolvedValue({ items: [] });
+  vi.mocked(getInstruments).mockResolvedValue({
+    setup: { revision_id: "empty", content_hash: "sha256:empty" },
+    problems: [],
+    items: [],
+  });
+  vi.mocked(getDriverCatalog).mockRejectedValue(
+    new ApiError("project does not configure an instrument backend", 409),
+  );
+  renderWorkspace();
+  await screen.findByText("尚未启用设备驱动。请先选择驱动来源。");
+  expect(screen.getByText("驱动来源与可用驱动").closest("details")).toHaveAttribute("open");
+  expect(screen.getByRole("button", { name: "检查并启用驱动" })).toBeVisible();
+  expect(screen.queryByText("正在使用已安装驱动。")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "打开控制窗口" })).not.toBeInTheDocument();
+});

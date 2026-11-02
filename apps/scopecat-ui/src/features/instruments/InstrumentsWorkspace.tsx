@@ -139,6 +139,7 @@ export function InstrumentsWorkspace({
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["devices"] });
     void queryClient.invalidateQueries({ queryKey: ["instruments"] });
+    void queryClient.invalidateQueries({ queryKey: ["instrument-drivers"] });
   };
   const loseSession = (message: string) => {
     sessionRef.current = undefined;
@@ -484,7 +485,7 @@ export function InstrumentsWorkspace({
         </div>
         <div className="flex flex-wrap gap-3">
           <Controls.Button
-            disabled={daemonUnavailable || !catalog.data || busy || !!configTarget}
+            disabled={daemonUnavailable || !catalog.data?.drivers.length || busy || !!configTarget}
             onClick={() => setConfigTarget({ kind: "add" })}
           >
             添加设备
@@ -492,28 +493,43 @@ export function InstrumentsWorkspace({
           <Controls.Button onClick={refresh}>刷新</Controls.Button>
         </div>
       </header>
-      <details className="rounded-lg border border-line bg-panel p-4">
-        <summary>已安装驱动</summary>
-        <p className="my-2 text-sm text-text-dim">
-          更新驱动请前往{" "}
-          <a className="underline" href="#settings">
-            应用设置
-          </a>
-          .
-        </p>
-        {catalog.error && <p role="alert">{errorMessage(catalog.error)}</p>}
-        {catalog.data?.drivers.length === 0 && <p>未安装可选驱动。</p>}
+      <details
+        open={devices.length === 0 || !catalog.data?.drivers.length}
+        className="rounded-lg border border-line bg-panel p-4"
+      >
+        <summary>驱动来源与可用驱动</summary>
+        {catalog.error && (
+          <p role="alert">
+            {errorMessage(catalog.error) === "project does not configure an instrument backend"
+              ? "尚未启用设备驱动。请先选择驱动来源。"
+              : errorMessage(catalog.error)}
+          </p>
+        )}
+        {catalog.data?.drivers.length === 0 && <p>当前来源没有提供可选驱动。</p>}
         <ul>
           {catalog.data?.drivers.map((driver) => (
-            <li key={driver.driver_id}>
-              {driver.label} · {driver.implementation_version} · {driver.driver_id}
-            </li>
+            <li key={driver.driver_id}>{driver.label}</li>
           ))}
         </ul>
-        <DriverSourcePanel daemonUnavailable={daemonUnavailable} sessionBusy={busy || !!session} />
+        <DriverSourcePanel
+          daemonUnavailable={daemonUnavailable}
+          sessionBusy={busy || !!session}
+          hasDrivers={!!catalog.data?.drivers.length}
+        />
       </details>
       {devicesQuery.error && <p role="alert">{errorMessage(devicesQuery.error)}</p>}
-      <div className="grid min-h-[640px] grid-cols-[240px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1">
+      {devices.length === 0 && !!catalog.data?.drivers.length && (
+        <p className="rounded-lg border border-line bg-panel p-4">
+          驱动已就绪。点击“添加设备”，选择驱动并填写连接设置；无需先创建实验。
+        </p>
+      )}
+      <div
+        className={
+          devices.length > 0
+            ? "grid grid-cols-[240px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1"
+            : "hidden"
+        }
+      >
         <aside aria-label="已登记设备" className="rounded-lg border border-line bg-panel p-3">
           <Controls.Field>
             搜索设备
@@ -823,7 +839,7 @@ export function InstrumentsWorkspace({
               }}
             />
           )}
-          <div hidden={tab !== "operations" || !!configTarget}>
+          <div hidden={!selectedDevice || tab !== "operations" || !!configTarget}>
             {manageOnly ? (
               <section className="rounded-lg border border-line bg-panel p-4">
                 <Controls.Button
