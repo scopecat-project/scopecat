@@ -2601,3 +2601,26 @@ it("opens the source entry for an empty application without implying installed d
   expect(screen.queryByText("正在使用已安装驱动。")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "打开控制窗口" })).not.toBeInTheDocument();
 });
+
+it("keeps connection drafts editable after driver validation without calling it a version conflict", async () => {
+  const registered = registeredDevice(
+    instrument({
+      driver_id: "keysight.pna",
+      connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
+    }),
+  );
+  vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
+  vi.mocked(saveDevice).mockRejectedValueOnce(
+    new ApiError("invalid connection options: upper bound must exceed lower bound", 409),
+  );
+  renderWorkspace();
+  fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
+  const dialog = await findConnectionEditor();
+  fireEvent.change(within(dialog).getByLabelText("主机"), { target: { value: "192.0.2.24" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
+  const error = await within(dialog).findByRole("alert");
+  expect(error).toHaveTextContent("驱动参数未通过检查");
+  expect(error).not.toHaveTextContent("关闭");
+  expect(within(dialog).getByLabelText("主机")).toHaveValue("192.0.2.24");
+  expect(within(dialog).getByRole("button", { name: "保存设备" })).toBeEnabled();
+});

@@ -767,6 +767,17 @@ export function RunsWorkspace({
                 title="Loading run details"
                 detail="The project run index is being read."
               />
+            ) : runsQuery.isSuccess && runs.length === 0 ? (
+              <div className="grid gap-3 p-6">
+                <h2 className="text-lg font-semibold">还没有实验记录</h2>
+                <p>首次使用可以先添加设备并测试连接，无需先创建实验。</p>
+                <a className="underline" href="#instruments">
+                  配置设备与驱动
+                </a>
+                <a className="underline" href="#launch">
+                  准备实验
+                </a>
+              </div>
             ) : (
               <DetailEmpty
                 icon={<CircleDot />}

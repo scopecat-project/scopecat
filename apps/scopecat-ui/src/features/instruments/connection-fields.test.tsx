@@ -127,3 +127,51 @@ it("selects a native path only on success and preserves the draft on cancellatio
   fireEvent.click(screen.getByRole("button", { name: "选择SDK 目录" }));
   await waitFor(() => expect(change).toHaveBeenLastCalledWith("C:/SDK with spaces"));
 });
+
+it("renders a required enum behind a local reference and validates its choice", () => {
+  const fields = connectionOptionFields({
+    $defs: { Mode: { type: "string", enum: ["local", "remote"] } },
+    type: "object",
+    required: ["mode"],
+    properties: { mode: { $ref: "#/$defs/Mode", title: "时钟来源" } },
+  });
+  expect(fields).toHaveLength(1);
+  expect(optionsAreValid({}, fields)).toBe(false);
+  expect(optionsAreValid({ mode: "local" }, fields)).toBe(true);
+  expect(optionsAreValid({ mode: "other" }, fields)).toBe(false);
+  const change = vi.fn();
+  render(
+    <OptionInput
+      field={fields[0]!}
+      value={undefined}
+      onChange={change}
+      onValidityChange={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByRole("combobox", { name: "时钟来源" }), {
+    target: { value: "remote" },
+  });
+  expect(change).toHaveBeenCalledWith("remote");
+});
+
+it("retains unsupported required fields and rejects cyclic or remote references without fetching", () => {
+  for (const ref of ["#/$defs/Cycle", "https://example.invalid/schema"]) {
+    const fields = connectionOptionFields({
+      $defs: { Cycle: { $ref: "#/$defs/Cycle" } },
+      required: ["mode"],
+      properties: { mode: { $ref: ref } },
+    });
+    expect(fields).toHaveLength(1);
+    expect(fields[0]?.type).toBe("unsupported");
+    expect(optionsAreValid({}, fields)).toBe(false);
+  }
+});
+
+it("honors exclusive numeric limits from referenced nullable schemas", () => {
+  const fields = connectionOptionFields({
+    $defs: { Rate: { type: "number", exclusiveMinimum: 0 } },
+    properties: { rate: { anyOf: [{ $ref: "#/$defs/Rate" }, { type: "null" }], default: null } },
+  });
+  expect(optionsAreValid({ rate: 0 }, fields)).toBe(false);
+  expect(optionsAreValid({ rate: 1 }, fields)).toBe(true);
+});

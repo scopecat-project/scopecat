@@ -133,6 +133,25 @@ class DeviceService:
                 f"invalid connection options: {error.message}"
             ) from error
 
+    def _validate_description(self, command: DeviceSaveCommand) -> None:
+        """Run the existing pure provider declaration before publishing or retiring."""
+        endpoint = self.endpoint
+        assert endpoint is not None
+        description = endpoint.describe(
+            (
+                InstrumentBindingSpec(
+                    id=command.device_id,
+                    driver_id=command.connection.driver.driver_id,
+                    connection=command.connection.connection,
+                ),
+            )
+        )
+        if description.problems:
+            raise BackendConflict(
+                "invalid connection options: "
+                + "; ".join(problem.message for problem in description.problems)
+            )
+
     def list(self) -> tuple[DeviceView, ...]:
         with self.control.read_transaction() as connection:
             claims = {
@@ -352,6 +371,7 @@ class DeviceService:
                             "device revision ID already has different provenance"
                         )
                     return current
+            self._validate_description(command)
             with (
                 self._maintenance(
                     command.device_id, command.expected_head
