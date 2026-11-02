@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from filelock import FileLock
@@ -29,18 +30,22 @@ def laboratory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Laboratory:
     service = SimpleNamespace(
         id="a" * 32, name="Lab", python="first-environment/python"
     )
+
+    def registered_source(root: Path) -> str | None:
+        return "source-id" if root == source else None
+
     store = SimpleNamespace(
         home=home,
         root=home / "instance",
         lock=FileLock(home / "services.lock"),
         installation=lambda: service,
-        source=lambda root: "source-id" if root == source else None,
+        source=registered_source,
     )
-    monkeypatch.setattr(author_notebook, "ApplicationRuntime", lambda _: store)
+    monkeypatch.setattr(author_notebook, "ApplicationRuntime", Mock(return_value=store))
     monkeypatch.setattr(
         author_notebook.subprocess,
         "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stderr=""),
+        Mock(return_value=SimpleNamespace(returncode=0, stderr="")),
     )
     return source, home, service
 
@@ -52,10 +57,10 @@ def test_launch_keeps_user_python_when_application_changes(
     monkeypatch.setenv("PYTHONPATH", "foreign-source")
     monkeypatch.setenv("PYTHONHOME", "foreign-python")
     monkeypatch.setenv("SCOPECAT_DAEMON_URL", "http://foreign-service")
-    sessions = []
+    sessions: list[Path] = []
     python = str(author_notebook.project_python(source))
 
-    def start(command, *, cwd, env):
+    def start(command: list[str], *, cwd: Path, env: dict[str, str]) -> SimpleNamespace:
         assert cwd == source
         assert env["SCOPECAT_APPLICATION_ROOT"] == str(home / "instance")
         assert command[:4] == [python, "-I", "-m", "jupyterlab"]
@@ -67,7 +72,7 @@ def test_launch_keeps_user_python_when_application_changes(
         assert spec["env"] == {}
         sessions.append(path)
 
-        def wait():
+        def wait() -> int:
             with FileLock(home / "services.lock", timeout=0):
                 return 0
 
@@ -89,7 +94,7 @@ def test_missing_notebook_extra_does_not_launch_or_install(
     monkeypatch.setattr(
         author_notebook.subprocess,
         "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stderr=""),
+        Mock(return_value=SimpleNamespace(returncode=1, stderr="")),
     )
     monkeypatch.setattr(author_notebook.subprocess, "Popen", pytest.fail)
     with pytest.raises(ValueError, match="JupyterLab/ipykernel"):
@@ -125,7 +130,7 @@ def test_pending_runtime_registration_prevents_notebook_launch(
 def test_public_notebook_entry_forwards_workspace_options(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    received = []
+    received: list[str] = []
     monkeypatch.setattr(author_notebook, "main", received.extend)
     arguments = ["author folder", "--home", "application home", "--no-browser"]
     result = CliRunner().invoke(app, ["notebook", *arguments])
@@ -156,22 +161,22 @@ def test_default_notebook_opens_sole_registered_source(
         lock=FileLock(home / "services.lock"),
         root=root,
         installation=lambda: service,
-        source=lambda _path: "registered-source",
+        source=Mock(return_value="registered-source"),
     )
     monkeypatch.setattr(
         author_workspaces,
         "local_author_workspaces",
-        lambda _: [SimpleNamespace(root=root)],
+        Mock(return_value=[SimpleNamespace(root=root)]),
     )
-    monkeypatch.setattr(author_notebook, "ApplicationRuntime", lambda _: store)
+    monkeypatch.setattr(author_notebook, "ApplicationRuntime", Mock(return_value=store))
     monkeypatch.setattr(
         author_notebook.subprocess,
         "run",
-        lambda *_a, **_kw: SimpleNamespace(returncode=0),
+        Mock(return_value=SimpleNamespace(returncode=0)),
     )
-    calls = []
+    calls: list[tuple[list[str], Path]] = []
 
-    def start(command, *, cwd, env):
+    def start(command: list[str], *, cwd: Path, env: dict[str, str]) -> SimpleNamespace:
         calls.append((command, cwd))
         return SimpleNamespace(wait=lambda: 0)
 

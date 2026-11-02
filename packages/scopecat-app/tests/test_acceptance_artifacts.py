@@ -3,7 +3,6 @@
 # ruff: noqa: S603 -- execute the maintained Ubuntu gate with fixture results
 
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -16,14 +15,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from scripts import verify_acceptance_artifacts as verify
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location(
-    "verify_acceptance_artifacts", ROOT / "scripts/verify_acceptance_artifacts.py"
-)
-assert spec is not None and spec.loader is not None
-verify = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(verify)
 COMMIT = "a" * 40
 
 
@@ -49,7 +43,7 @@ def bundle(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_exact_bundle_checks_every_declared_file(bundle: Path):
+def test_exact_bundle_checks_every_declared_file(bundle: Path) -> None:
     assert verify.verify_bundle(bundle, COMMIT)["source_commit"] == COMMIT
     (bundle / "sample.whl").write_bytes(b"changed")
     with pytest.raises(ValueError, match="checksum"):
@@ -60,7 +54,7 @@ def test_exact_bundle_checks_every_declared_file(bundle: Path):
     "failure",
     ["commit", "gui_commit", "gui_version", "missing_gui", "missing_wheel", "path"],
 )
-def test_reject_mixed_or_missing_artifacts(bundle: Path, failure):
+def test_reject_mixed_or_missing_artifacts(bundle: Path, failure: str) -> None:
     path = bundle / "preview.json"
     manifest = json.loads(path.read_text())
     if failure == "commit":
@@ -116,7 +110,7 @@ SELECTED = {
 }
 
 
-def gate(profile, results):
+def gate(profile: str, results: dict[str, str]):
     workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
     job = yaml.safe_load(workflow)["jobs"]["gate"]
     assert job["if"] == "${{ always() }}"
@@ -158,7 +152,7 @@ def gate(profile, results):
 
 
 @pytest.mark.parametrize("profile", SELECTED)
-def test_gate_keeps_existing_profiles_and_requires_selected_jobs(profile):
+def test_gate_keeps_existing_profiles_and_requires_selected_jobs(profile: str) -> None:
     results = {
         job: "success" if job in SELECTED[profile] else "skipped" for job in JOBS
     }
@@ -177,12 +171,14 @@ def test_gate_keeps_existing_profiles_and_requires_selected_jobs(profile):
             )
 
 
-def test_unknown_or_empty_selection_cannot_pass():
+def test_unknown_or_empty_selection_cannot_pass() -> None:
     assert gate("unknown", dict.fromkeys(JOBS, "skipped")).returncode != 0
     assert gate("browser", dict.fromkeys(JOBS, "skipped")).returncode != 0
 
 
-def test_gate_ignores_display_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_gate_ignores_display_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/acceptance.yml").read_text())
     for step in workflow["jobs"]["gate"]["steps"]:
         step["name"] = "A reader-facing label"
@@ -194,11 +190,11 @@ def test_gate_ignores_display_names(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.parametrize("profile", SELECTED)
-def test_workflow_selects_exact_profile_jobs(profile):
+def test_workflow_selects_exact_profile_jobs(profile: str) -> None:
     jobs = yaml.safe_load((ROOT / ".github/workflows/acceptance.yml").read_text())[
         "jobs"
     ]
-    selected = set()
+    selected: set[str] = set()
     for name, body in jobs.items():
         if name == "gate":
             continue
@@ -223,7 +219,7 @@ def test_workflow_selects_exact_profile_jobs(profile):
     assert steps[0]["env"]["BROWSER_SHARD"] == "${{ matrix.shard }}"
 
 
-def browser_verification_step(workflow):
+def browser_verification_step(workflow: str):
     steps = yaml.safe_load(workflow)["jobs"]["browser-tests"]["steps"]
     downloads = [
         (index, step)
@@ -253,7 +249,7 @@ def browser_verification_step(workflow):
     return check
 
 
-def test_browser_rechecks_downloaded_identity_before_extraction(bundle: Path):
+def test_browser_rechecks_downloaded_identity_before_extraction(bundle: Path) -> None:
     workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
     step = browser_verification_step(workflow)
     command = shlex.split(step["run"])
@@ -289,7 +285,9 @@ def test_browser_rechecks_downloaded_identity_before_extraction(bundle: Path):
 
 
 @pytest.mark.parametrize("change", ["disabled", "ignored-failure", "renamed"])
-def test_browser_verification_contract_ignores_labels_but_rejects_bypass(change):
+def test_browser_verification_contract_ignores_labels_but_rejects_bypass(
+    change: str,
+) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/acceptance.yml").read_text())
     step = next(
         step
@@ -314,7 +312,9 @@ def test_browser_verification_contract_ignores_labels_but_rejects_bypass(change)
 
 @pytest.mark.parametrize("profile", SELECTED)
 @pytest.mark.parametrize("shard", ["", "both", "1", "2"])
-def test_browser_scope_preserves_default_and_integrated_profiles(profile, shard):
+def test_browser_scope_preserves_default_and_integrated_profiles(
+    profile: str, shard: str
+) -> None:
     import ast
 
     workflow = yaml.safe_load((ROOT / ".github/workflows/acceptance.yml").read_text())

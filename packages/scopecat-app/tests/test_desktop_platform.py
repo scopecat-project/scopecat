@@ -2,6 +2,7 @@
 
 import sys
 import threading
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
@@ -28,7 +29,7 @@ def test_window_menu_excludes_auxiliary_windows_on_the_main_loop(
     monkeypatch.setattr(sys, "platform", "darwin")
     document, auxiliary, app = Mock(), Mock(), Mock()
     app.windows.return_value = [document, auxiliary]
-    callbacks = []
+    callbacks: list[Callable[[], object]] = []
     monkeypatch.setitem(
         sys.modules,
         "webview",
@@ -66,7 +67,7 @@ def test_cocoa_tray_is_created_and_shown_on_the_main_loop(
         "scopecat_app.desktop_platform.macos_bundle_identifier",
         lambda: "org.scopecat.desktop",
     )
-    callbacks = []
+    callbacks: list[Callable[[], object]] = []
     monkeypatch.setitem(
         sys.modules,
         "PyObjCTools",
@@ -91,9 +92,10 @@ def test_quit_hook_matches_real_pywebview_delegate_signature():
     from webview.platforms import cocoa
 
     # PyObjC populates AppKit dynamically; pywebview exposes the actual module.
-    app = cast("Any", cocoa.AppKit).NSApplication.sharedApplication()
+    native_cocoa = cast("Any", cocoa)
+    app = native_cocoa.AppKit.NSApplication.sharedApplication()
     previous = app.delegate()
-    delegate = cocoa.BrowserView.AppDelegate.alloc().init()
+    delegate = native_cocoa.BrowserView.AppDelegate.alloc().init()
     app.setDelegate_(delegate)
     quit_requested = threading.Event()
     closing = threading.Event()
@@ -111,9 +113,11 @@ def test_quit_hook_matches_real_pywebview_delegate_signature():
 
 @pytest.mark.parametrize("failure", [ImportError, RuntimeError])
 @pytest.mark.parametrize("platform", ["win32", "darwin"])
-def test_optional_tray_failure_retains_fallback(monkeypatch, failure, platform):
+def test_optional_tray_failure_retains_fallback(
+    monkeypatch: pytest.MonkeyPatch, failure: type[Exception], platform: str
+):
     monkeypatch.setattr(sys, "platform", platform)
-    callbacks = []
+    callbacks: list[Callable[[], object]] = []
     monkeypatch.setitem(
         sys.modules,
         "PyObjCTools",
@@ -130,10 +134,16 @@ def test_optional_tray_failure_retains_fallback(monkeypatch, failure, platform):
 
 
 @pytest.mark.parametrize("available", [True, False])
-def test_windows_tray_needs_native_confirmation(monkeypatch, available):
+def test_windows_tray_needs_native_confirmation(
+    monkeypatch: pytest.MonkeyPatch, available: bool
+):
     monkeypatch.setattr(sys, "platform", "win32")
+
+    def is_available(_tray: object) -> bool:
+        return available
+
     monkeypatch.setattr(
-        "scopecat_app.desktop_platform._tray_is_available", lambda _tray: available
+        "scopecat_app.desktop_platform._tray_is_available", is_available
     )
     tray, changed = Mock(), Mock()
     stop = start_tray(lambda: tray, changed)
@@ -144,7 +154,7 @@ def test_windows_tray_needs_native_confirmation(monkeypatch, available):
     tray.stop.assert_called_once()
 
 
-def test_async_tray_show_failure_is_contained(monkeypatch):
+def test_async_tray_show_failure_is_contained(monkeypatch: pytest.MonkeyPatch):
     from unittest.mock import PropertyMock
 
     monkeypatch.setattr(sys, "platform", "win32")
@@ -157,14 +167,17 @@ def test_async_tray_show_failure_is_contained(monkeypatch):
 
 
 @pytest.mark.parametrize("result, width", [(0, 16), (0, 0), (-1, 16)])
-def test_windows_native_probe_uses_pinned_backend_identity(monkeypatch, result, width):
+def test_windows_native_probe_uses_pinned_backend_identity(
+    monkeypatch: pytest.MonkeyPatch, result: int, width: int
+):
     import ctypes
 
     from scopecat_app.desktop_platform import _tray_is_available
 
     monkeypatch.setattr(sys, "platform", "win32")
 
-    def query(identifier, rect):
+    def query(identifier: Any, rect: Any) -> int:
+        # ctypes.byref exposes native structures through a runtime-only _obj.
         assert identifier._obj.hWnd == 123
         assert identifier._obj.uID == 0
         rect._obj.right = width
@@ -185,7 +198,9 @@ def test_windows_native_probe_uses_pinned_backend_identity(monkeypatch, result, 
 @pytest.mark.parametrize(
     "hidden, window", [(False, object()), (True, object()), (False, None)]
 )
-def test_cocoa_probe_requires_visible_native_button(monkeypatch, hidden, window):
+def test_cocoa_probe_requires_visible_native_button(
+    monkeypatch: pytest.MonkeyPatch, hidden: bool, window: object | None
+):
     from scopecat_app.desktop_platform import _tray_is_available
 
     monkeypatch.setattr(sys, "platform", "darwin")
@@ -196,7 +211,7 @@ def test_cocoa_probe_requires_visible_native_button(monkeypatch, hidden, window)
     assert _tray_is_available(tray) == (not hidden and window is not None)
 
 
-def test_late_windows_setup_after_shutdown_cleans_up(monkeypatch):
+def test_late_windows_setup_after_shutdown_cleans_up(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "platform", "win32")
     tray, changed = Mock(), Mock()
     stop = start_tray(lambda: tray, changed)
@@ -209,7 +224,9 @@ def test_late_windows_setup_after_shutdown_cleans_up(monkeypatch):
 
 
 @pytest.mark.parametrize("embedded", [True, False])
-def test_linux_gtk_keeps_working_tray_and_requires_embedding(monkeypatch, embedded):
+def test_linux_gtk_keeps_working_tray_and_requires_embedding(
+    monkeypatch: pytest.MonkeyPatch, embedded: bool
+):
     from scopecat_app.desktop_platform import _tray_is_available
 
     monkeypatch.setattr(sys, "platform", "linux")
@@ -221,7 +238,9 @@ def test_linux_gtk_keeps_working_tray_and_requires_embedding(monkeypatch, embedd
 
 
 @pytest.mark.parametrize("docked, mapped", [(True, True), (False, True), (True, False)])
-def test_linux_xorg_requires_completed_docking(monkeypatch, docked, mapped):
+def test_linux_xorg_requires_completed_docking(
+    monkeypatch: pytest.MonkeyPatch, docked: bool, mapped: bool
+):
     from scopecat_app.desktop_platform import _tray_is_available
 
     monkeypatch.setattr(sys, "platform", "linux")
@@ -238,7 +257,9 @@ def test_linux_xorg_requires_completed_docking(monkeypatch, docked, mapped):
 @pytest.mark.parametrize(
     "host, registered", [(True, True), (False, True), (True, False)]
 )
-def test_indicator_requires_host_and_own_registration(monkeypatch, host, registered):
+def test_indicator_requires_host_and_own_registration(
+    monkeypatch: pytest.MonkeyPatch, host: bool, registered: bool
+):
     from scopecat_app.desktop_platform import _indicator_has_host
 
     bus = Mock()
@@ -262,9 +283,9 @@ def test_indicator_requires_host_and_own_registration(monkeypatch, host, registe
     assert _indicator_has_host(tray) == (host and registered)
 
 
-def test_linux_gtk_reports_only_from_its_event_loop(monkeypatch):
+def test_linux_gtk_reports_only_from_its_event_loop(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "platform", "linux")
-    callbacks = []
+    callbacks: list[Callable[[], object]] = []
     glib = SimpleNamespace(idle_add=callbacks.append)
     monkeypatch.setitem(sys.modules, "gi.repository", SimpleNamespace(GLib=glib))
     tray = _backend_tray("pystray._gtk")

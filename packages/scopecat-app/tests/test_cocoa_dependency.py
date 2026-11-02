@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from types import FunctionType, SimpleNamespace
 from typing import cast
@@ -26,7 +27,7 @@ def test_locked_cocoa_patch_constructs_with_shared_store_and_preserves_cookie_ap
     patched = cocoa_dependency.patch_cocoa(source)
     original_tree, patched_tree = ast.parse(source), ast.parse(patched)
 
-    def methods(tree):
+    def methods(tree: ast.Module):
         browser = next(
             node
             for node in tree.body
@@ -83,27 +84,31 @@ def test_wheel_rejects_unreviewed_dependency(tmp_path: Path):
 @pytest.mark.skipif(sys.platform == "win32", reason="Darwin dependency build tool")
 @pytest.mark.parametrize("close_before_dispatch", [False, True])
 def test_closed_window_releases_pending_javascript_without_webkit_completion(
-    close_before_dispatch,
+    close_before_dispatch: bool,
 ):
     """Execute the repaired method with a controllable Cocoa callback queue."""
     evaluate = cocoa_evaluate()
-    queued = []
+    queued: list[Callable[[], object]] = []
     scheduled = threading.Event()
     closed = threading.Event()
-    evaluated = []
+    evaluated: list[tuple[str, Callable[[str, None], object]]] = []
 
-    def call_after(callback):
+    def call_after(callback: Callable[[], object]):
         queued.append(callback)
         scheduled.set()
 
     evaluate.__globals__["AppHelper"] = SimpleNamespace(callAfter=call_after)
+
+    def record_javascript(script: str, callback: Callable[[str, None], object]):
+        evaluated.append((script, callback))
+
     view = SimpleNamespace(
         closed=closed,
         webview=SimpleNamespace(
-            evaluateJavaScript_completionHandler_=lambda *args: evaluated.append(args)
+            evaluateJavaScript_completionHandler_=record_javascript
         ),
     )
-    result = []
+    result: list[object] = []
     caller = threading.Thread(
         target=lambda: result.append(evaluate(view, "1 + 1", True)), daemon=True
     )
@@ -132,15 +137,19 @@ def test_closed_window_releases_pending_javascript_without_webkit_completion(
 @pytest.mark.skipif(sys.platform == "win32", reason="Darwin dependency build tool")
 def test_live_window_keeps_javascript_result():
     evaluate = cocoa_evaluate()
-    evaluate.__globals__["AppHelper"] = SimpleNamespace(
-        callAfter=lambda callback: callback()
-    )
+
+    def dispatch_immediately(callback: Callable[[], object]):
+        return callback()
+
+    evaluate.__globals__["AppHelper"] = SimpleNamespace(callAfter=dispatch_immediately)
+
+    def complete_javascript(_script: str, callback: Callable[[str, None], object]):
+        return callback('{"answer": 42}', None)
+
     view = SimpleNamespace(
         closed=threading.Event(),
         webview=SimpleNamespace(
-            evaluateJavaScript_completionHandler_=lambda _script, callback: callback(
-                '{"answer": 42}', None
-            )
+            evaluateJavaScript_completionHandler_=complete_javascript
         ),
     )
     assert evaluate(view, "script", True) == {"answer": 42}

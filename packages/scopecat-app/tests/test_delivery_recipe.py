@@ -4,6 +4,7 @@ import json
 import shutil
 import tomllib
 import zipfile
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -136,7 +137,7 @@ def build_tools(monkeypatch: pytest.MonkeyPatch) -> BuildCalls:
                 wheel.writestr(f"{module}/__init__.py", "# installed bytes\n")
 
     @contextmanager
-    def prepare(_repository, destination):
+    def prepare(_repository: Path, destination: Path):
         assert not (destination.parent / "wheels").exists()
         destination.mkdir()
         (destination / "runtime.json").write_text('{"python":"prepared"}')
@@ -144,17 +145,25 @@ def build_tools(monkeypatch: pytest.MonkeyPatch) -> BuildCalls:
 
     monkeypatch.setattr(delivery.toolchain, "prepare", prepare)
     monkeypatch.setattr(delivery, "run", run)
-    monkeypatch.setattr(delivery.shutil, "which", lambda _: None)
-    monkeypatch.setattr(
-        delivery.subprocess,
-        "check_output",
-        lambda command, **_: (
+
+    def missing_executable(_: object):
+        return None
+
+    monkeypatch.setattr(delivery.shutil, "which", missing_executable)
+
+    def clean_git_output(command: list[str], **_: object):
+        return (
             ""
             if command[1] == "status"
             else "123"
             if command[1] == "show"
             else "a" * 40
-        ),
+        )
+
+    monkeypatch.setattr(
+        delivery.subprocess,
+        "check_output",
+        clean_git_output,
     )
     return calls
 
@@ -297,7 +306,7 @@ def test_selected_public_root_rejects_package_escape_and_symlinks(
 
 
 @pytest.mark.parametrize("bad", ["../outside", "/absolute", "C:\\outside"])
-def test_recipe_paths_cannot_escape(recipe: Path, bad):
+def test_recipe_paths_cannot_escape(recipe: Path, bad: str):
     text = recipe.read_text().replace('lock_project="."', f"lock_project='{bad}'")
     recipe.write_text(text)
     with pytest.raises(ValueError, match="relative directories"):
@@ -341,7 +350,7 @@ def test_managed_build_retains_previous_success_on_failure_and_then_advances(
     assert resolve_delivery(home) == first
     run = delivery.run
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object):
         raise OSError("build failed")
 
     monkeypatch.setattr(delivery, "run", fail)
@@ -412,12 +421,15 @@ def test_unverified_completed_build_does_not_replace_current(
     first = delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
     build = delivery.build_delivery
 
-    def damaged(*args, **kwargs):
-        result = build(*args, **kwargs)
-        (result / "gui/index.html").write_text("damaged")
-        return result
+    def damage_build[**P](build: Callable[P, Path]) -> Callable[P, Path]:
+        def damaged(*args: P.args, **kwargs: P.kwargs) -> Path:
+            result = build(*args, **kwargs)
+            (result / "gui/index.html").write_text("damaged")
+            return result
 
-    monkeypatch.setattr(delivery, "build_delivery", damaged)
+        return damaged
+
+    monkeypatch.setattr(delivery, "build_delivery", damage_build(build))
     with pytest.raises(ValueError, match="交付文件缺失、被修改"):
         delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
     assert resolve_delivery(home) == first
@@ -461,10 +473,14 @@ def test_public_release_artifacts_feed_native_delivery(
     }
     path = artifacts / "preview.json"
     path.write_text(json.dumps(manifest))
+
+    def release_git_output(command: list[str], **_: object):
+        return "" if command[1] == "status" else "a" * 40
+
     monkeypatch.setattr(
         delivery.subprocess,
         "check_output",
-        lambda command, **_: "" if command[1] == "status" else "a" * 40,
+        release_git_output,
     )
     build_tools.clear()
     result = delivery.build_delivery(

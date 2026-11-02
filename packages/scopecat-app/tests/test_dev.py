@@ -25,7 +25,7 @@ def test_home_is_stable_canonical_external_and_worktree_specific(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(
-        dev_resources, "user_data_path", lambda *_a, **_k: tmp_path / "user"
+        dev_resources, "user_data_path", Mock(return_value=tmp_path / "user")
     )
     source = tmp_path / "source"
     source.mkdir()
@@ -150,7 +150,7 @@ def test_terminal_wait_restarts_only_after_idle(
     runtime = Mock()
     runtime.stop_if_idle.side_effect = [False, False, True]
     session = DesktopSession(runtime, threading.Event())
-    monkeypatch.setattr(dev, "source_stamp", lambda _: "source")
+    monkeypatch.setattr(dev, "source_stamp", Mock(return_value="source"))
     commands: queue.Queue[str] = queue.Queue()
     commands.put("w")
     start = Mock(side_effect=session.closing.set)
@@ -221,9 +221,15 @@ def test_frontend_failure_reports_without_stopping_background_and_can_quit(
     from types import SimpleNamespace
 
     logger = Mock()
-    logger.error.side_effect = lambda _message: reported.set()
-    monkeypatch.setattr(dev, "logging", SimpleNamespace(getLogger=lambda _name: logger))
-    monkeypatch.setattr(dev, "source_stamp", lambda _source: "source")
+
+    def report_failure(_message: object):
+        return reported.set()
+
+    logger.error.side_effect = report_failure
+    monkeypatch.setattr(
+        dev, "logging", SimpleNamespace(getLogger=Mock(return_value=logger))
+    )
+    monkeypatch.setattr(dev, "source_stamp", Mock(return_value="source"))
     frontend = Mock(returncode=1)
     frontend.poll.return_value = 1
     commands: queue.Queue[str] = queue.Queue()
@@ -296,10 +302,14 @@ def test_cached_payload_repairs_native_wheel_and_extraction(
     monkeypatch.setattr(
         dev_resources, "sys", SimpleNamespace(platform=platform, path=list(sys.path))
     )
-    monkeypatch.setattr(dev_resources, "source_identity", lambda _: "bytes")
-    monkeypatch.setattr(dev_resources, "resource_identity", lambda _: "identity")
+    monkeypatch.setattr(dev_resources, "source_identity", Mock(return_value="bytes"))
     monkeypatch.setattr(
-        dev_resources, "verify_resources", lambda _: {"sources": {"public": "bytes"}}
+        dev_resources, "resource_identity", Mock(return_value="identity")
+    )
+    monkeypatch.setattr(
+        dev_resources,
+        "verify_resources",
+        Mock(return_value={"sources": {"public": "bytes"}}),
     )
 
     def verify(wheels: Path) -> None:
@@ -411,9 +421,11 @@ def test_material_preparation_runs_only_export_and_two_source_builds(
         "sys",
         SimpleNamespace(platform="linux", executable=sys.executable),
     )
-    monkeypatch.setattr(author_materials, "version", lambda _: "locked")
-    monkeypatch.setattr(author_materials.toolchain, "baseline", lambda _: "3.15.1")
-    monkeypatch.setattr(delivery, "package_version", lambda *_a, **_k: None)
+    monkeypatch.setattr(author_materials, "version", Mock(return_value="locked"))
+    monkeypatch.setattr(
+        author_materials.toolchain, "baseline", Mock(return_value="3.15.1")
+    )
+    monkeypatch.setattr(delivery, "package_version", Mock(return_value=None))
     monkeypatch.setattr(delivery, "run", run)
     inputs = author_materials.prepare(
         source,
@@ -477,7 +489,7 @@ def prepared_source(
         )
 
     monkeypatch.setattr(dev_resources, "prepare_materials", materials)
-    monkeypatch.setattr(dev_resources, "_native_ready", lambda *_: True)
+    monkeypatch.setattr(dev_resources, "_native_ready", Mock(return_value=True))
     monkeypatch.setattr(
         dev_resources, "sys", SimpleNamespace(platform="linux", version=sys.version)
     )

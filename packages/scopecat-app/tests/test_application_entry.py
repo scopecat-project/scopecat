@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -13,18 +14,30 @@ from scopecat_app.application_runtime import ApplicationRuntime
 def test_select_existing_execution_environment_does_not_prepare_or_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    selected = []
+    selected: list[tuple[Path, Path]] = []
+
+    def record_selection(
+        _self: ApplicationRuntime, workspace: Path, python: Path
+    ) -> None:
+        selected.append((workspace, python))
+
     monkeypatch.setattr(
         ApplicationRuntime,
         "select_source_environment",
-        lambda _self, workspace, python: selected.append((workspace, python)),
+        record_selection,
     )
-    monkeypatch.setattr(
-        ApplicationRuntime, "start", lambda _: pytest.fail("must not start")
-    )
+
+    def unexpected_start(_runtime: ApplicationRuntime):
+        return pytest.fail("must not start")
+
+    monkeypatch.setattr(ApplicationRuntime, "start", unexpected_start)
+
+    def unexpected_prepare(*_args: object):
+        return pytest.fail("must not install dependencies")
+
     monkeypatch.setattr(
         "scopecat_app.author_environment.prepare_execution_environment",
-        lambda *_args: pytest.fail("must not install dependencies"),
+        unexpected_prepare,
     )
     source, python = tmp_path / "authors", tmp_path / "user-env/python"
     application.main(
@@ -76,12 +89,16 @@ def test_status_before_install_has_no_side_effects(
     ],
 )
 def test_only_explicit_open_launches_browser(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action, no_browser, opens
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    no_browser: bool,
+    opens: bool,
 ):
-    started = []
-    opened = []
+    started: list[Path] = []
+    opened: list[str] = []
 
-    def start(runtime):
+    def start(runtime: ApplicationRuntime):
         started.append(runtime.home)
         return SimpleNamespace(base_url="http://127.0.0.1:1234")
 
@@ -109,12 +126,16 @@ def test_unbound_source_does_not_start_or_open(
     owner = tmp_path / "home/runtime"
     owner.mkdir(parents=True)
     (owner / "scopecat.toml").write_text("[lab]\n")
-    monkeypatch.setattr(
-        ApplicationRuntime, "start", lambda _: pytest.fail("must not start")
-    )
-    monkeypatch.setattr(
-        application.webbrowser, "open", lambda _: pytest.fail("must not open")
-    )
+
+    def unexpected_start(_runtime: ApplicationRuntime):
+        return pytest.fail("must not start")
+
+    monkeypatch.setattr(ApplicationRuntime, "start", unexpected_start)
+
+    def unexpected_open(_url: str):
+        return pytest.fail("must not open")
+
+    monkeypatch.setattr(application.webbrowser, "open", unexpected_open)
     with pytest.raises(SystemExit) as failure:
         application.main(
             [
@@ -132,13 +153,15 @@ def test_unbound_source_does_not_start_or_open(
 def test_failed_start_retains_windowless_recovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    def fail(_runtime):
+    def fail(_runtime: ApplicationRuntime):
         raise ValueError("Please stop the recorded owner")
 
     monkeypatch.setattr(ApplicationRuntime, "start", fail)
-    monkeypatch.setattr(
-        application.webbrowser, "open", lambda _: pytest.fail("must not open")
-    )
+
+    def unexpected_open(_url: str):
+        return pytest.fail("must not open")
+
+    monkeypatch.setattr(application.webbrowser, "open", unexpected_open)
     with pytest.raises(SystemExit) as failure:
         application.main(["--home", str(tmp_path), "--action", "open"])
     assert failure.value.code == 2
@@ -146,7 +169,7 @@ def test_failed_start_retains_windowless_recovery(
 
 @pytest.mark.parametrize("same_interpreter", [True, False])
 def test_update_resources_follow_actual_selected_interpreter(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_interpreter
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_interpreter: bool
 ):
     import sys
     from pathlib import Path
@@ -156,19 +179,23 @@ def test_update_resources_follow_actual_selected_interpreter(
         if same_interpreter
         else tmp_path / "other/python",
         delivery_root=tmp_path / "payload",
-        model_dump_json=lambda **_kwargs: "{}",
+        model_dump_json=Mock(return_value="{}"),
     )
-    calls = []
-    monkeypatch.setattr(
-        ApplicationRuntime, "configure", lambda *_args, **_kwargs: selected
-    )
+    calls: list[tuple[Path, Path | None]] = []
+    monkeypatch.setattr(ApplicationRuntime, "configure", Mock(return_value=selected))
 
-    def qualify(_runtime, python, gui, **kwargs):
-        calls.append((python, kwargs["delivery_root"]))
+    def qualify(
+        _runtime: ApplicationRuntime,
+        python: Path,
+        gui: Path,
+        *,
+        delivery_root: Path | None,
+    ):
+        calls.append((python, delivery_root))
         return selected
 
     monkeypatch.setattr(ApplicationRuntime, "qualify", qualify)
-    monkeypatch.setattr(ApplicationRuntime, "select", lambda *_args: None)
+    monkeypatch.setattr(ApplicationRuntime, "select", Mock(return_value=None))
     application.main(["--home", str(tmp_path), "--action", "update"])
     assert calls == [
         (Path(sys.executable), selected.delivery_root if same_interpreter else None)
