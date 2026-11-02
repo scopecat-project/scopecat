@@ -26,7 +26,8 @@ def test_installed_sources_are_retained_and_local_edits_remain_refreshable(
         "lab_methods/__init__.py,,\nlab_methods/rabi.py,,\n"
         "lab_methods-1.0.dist-info/METADATA,,\n"
     )
-    monkeypatch.syspath_prepend(str(site))
+    # Pytest does not annotate syspath_prepend; this is a filesystem path.
+    monkeypatch.syspath_prepend(str(site))  # pyright: ignore[reportUnknownMemberType]
     project_root = tmp_path / "project"
     local = project_root / "src/user_experiments"
     local.mkdir(parents=True)

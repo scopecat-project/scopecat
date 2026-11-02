@@ -1,6 +1,8 @@
+# Lazy dataset sources carry untyped PyArrow RecordBatchReader/Table values.
+# Preserve the concrete Arrow callback/export contracts; the native dependency
+# cannot currently supply Unknown diagnostics useful to this adapter.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false, reportUnknownVariableType=false
-# pyright: reportUnnecessaryTypeIgnoreComment=false
 # pyright: reportPrivateUsage=false
 """Notebook-facing labeled views over durable measurement records."""
 

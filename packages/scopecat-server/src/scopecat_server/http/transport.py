@@ -1,5 +1,3 @@
-# pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
-# pyright: reportUnknownVariableType=false
 """FastAPI boundary for a daemon application service."""
 
 from __future__ import annotations
@@ -3110,17 +3108,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> Response:
         import pyarrow as pa
 
-        table, next_offset, snapshot_size = application.runs.measurement_arrow(
+        # PyArrow native Table/buffer/IPC objects do not ship type declarations.
+        # Keep the exception on this serialization boundary, not all HTTP routes.
+        table, next_offset, snapshot_size = application.runs.measurement_arrow(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             run_id, query
         )
-        sink = pa.BufferOutputStream()
-        with pa.ipc.new_stream(sink, table.schema) as writer:
-            writer.write_table(table)
+        sink = pa.BufferOutputStream()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        with pa.ipc.new_stream(sink, table.schema) as writer:  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType, reportUnknownVariableType]
+            writer.write_table(table)  # pyright: ignore[reportUnknownMemberType]
         headers = {_SNAPSHOT_SIZE_HEADER: str(snapshot_size)}
         if next_offset is not None:
             headers[_NEXT_OFFSET_HEADER] = str(next_offset)
         return Response(
-            content=sink.getvalue().to_pybytes(),
+            content=sink.getvalue().to_pybytes(),  # pyright: ignore[reportUnknownMemberType]
             media_type=_ARROW_STREAM_MEDIA_TYPE,
             headers=headers,
         )

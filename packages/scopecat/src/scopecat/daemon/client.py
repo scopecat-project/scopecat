@@ -1,5 +1,3 @@
-# pyright: reportUnknownMemberType=false, reportUnknownParameterType=false
-# pyright: reportUnknownVariableType=false
 """Synchronous transport client for one project daemon."""
 
 from __future__ import annotations
@@ -1052,7 +1050,11 @@ class DaemonClient:
                 body = cast("object", error.response.json())
             except ValueError:
                 raise error from None
-            if isinstance(body, dict) and body.get("code") == "sqlite_writer_busy":
+            if (
+                isinstance(body, dict)
+                and cast("dict[object, object]", body).get("code")
+                == "sqlite_writer_busy"
+            ):
                 raise ProcedureLeaseRenewalBusy(str(error)) from error
             raise
 
@@ -2462,23 +2464,24 @@ class DaemonClient:
             AttentionResolutionReceipt,
         )
 
-    def measurement_arrow(
+    # PyArrow native Table/IPC types are untyped; keep this exception at the boundary.
+    def measurement_arrow(  # pyright: ignore[reportUnknownParameterType]
         self,
         run_id: str,
         query: MeasurementArrowQuery,
-    ) -> tuple[pa.Table, int | None, int]:
+    ) -> tuple[pa.Table, int | None, int]:  # pyright: ignore[reportUnknownMemberType]
         response = self._request(
             "POST",
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/measurements/arrow",
             json=query.model_dump(mode="json"),
         )
-        table = pa.ipc.open_stream(response.content).read_all()
+        table = pa.ipc.open_stream(response.content).read_all()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         encoded_next_offset = response.headers.get(_NEXT_OFFSET_HEADER)
         next_offset = None if encoded_next_offset is None else int(encoded_next_offset)
         encoded_snapshot_size = response.headers.get(_SNAPSHOT_SIZE_HEADER)
         if encoded_snapshot_size is None:
             raise ValueError("measurement Arrow response has no snapshot size")
-        return table, next_offset, int(encoded_snapshot_size)
+        return table, next_offset, int(encoded_snapshot_size)  # pyright: ignore[reportUnknownVariableType]
 
     def measurement_live_preview(
         self, run_id: str, *, dataset_schema: MeasurementDatasetSchema

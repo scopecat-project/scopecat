@@ -1,3 +1,6 @@
+# PyArrow native arrays, buffers and scalar types lack usable type information.
+# This module is the buffer/array conversion boundary; avoid parallel Arrow
+# stubs or replacing its concrete library types with Any.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false
 # pyright: reportUnknownVariableType=false

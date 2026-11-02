@@ -17,7 +17,7 @@ extend = "../../pyproject.toml"
 # Chinese course resources are shipped alongside the English entry guide.
 ignore = ["RUF001", "RUF002", "RUF003"]
 
-[tool.ruff.lint.per-file-ignores]
+[tool.ruff.lint.extend-per-file-ignores]
 "**/*.ipynb" = ["E402"]  # Refresh must precede author imports.
 
 [tool.uv.build-backend]

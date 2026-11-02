@@ -84,7 +84,7 @@ def _register(client: TestClient, device_id: str = "signal") -> dict[str, Any]:
 def test_unavailable_driver_does_not_block_application_and_can_be_replaced(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    attempts = []
+    attempts: list[str] = []
 
     def unavailable(*_args: object) -> None:
         attempts.append("activate")
@@ -489,7 +489,7 @@ def test_invalid_connection_edit_does_not_disconnect_resident_device(
             )
         )
         runtime.application.instruments.close_session(session.session_id)
-        disconnected = []
+        disconnected: list[InstrumentHandle] = []
         original = endpoint.disconnect
 
         def track_disconnect(handle: InstrumentHandle) -> None:

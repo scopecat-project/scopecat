@@ -1,5 +1,7 @@
 """Native selected decoding agrees with the existing materialized entity semantics."""
 
+from typing import Any, cast
+
 import pytest
 from scopecat.kernel.entity import EntityRef
 from scopecat.measurements.dataset import Dataset
@@ -57,14 +59,17 @@ def test_native_selected_entities_preserve_order_missingness_and_evidence(
     evidence = selected[0].acquisition_evidence.for_variable("signal")
     assert isinstance(evidence, EntityAcquisitionEvidence)
     assert evidence.values[1] is None
-    table = (
-        dataset.project({"signal": "signal"}, diagnostics="full")
+    # PyArrow has no native Table stubs; equality below checks the real tables.
+    table = cast(
+        "Any",
+        dataset.project({"signal": "signal"}, diagnostics="full")  # pyright: ignore[reportUnknownMemberType]
         .select_entities("entity", entities)
-        .to_arrow()
+        .to_arrow(),
     )
-    expected_table = expected.project(
-        {"signal": "signal"}, diagnostics="full"
-    ).to_arrow()
+    expected_table = cast(
+        "Any",
+        expected.project({"signal": "signal"}, diagnostics="full").to_arrow(),  # pyright: ignore[reportUnknownMemberType]
+    )
     assert table.equals(expected_table, check_metadata=True)
 
 

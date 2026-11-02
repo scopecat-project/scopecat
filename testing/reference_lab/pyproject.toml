@@ -33,7 +33,7 @@ testpaths = ["tests"]
 [tool.ruff]
 extend = "../../pyproject.toml"
 src = ["src", "tests"]
-exclude = [
+extend-exclude = [
   ".scopecat-examples",
 ]
 

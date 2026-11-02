@@ -1,3 +1,6 @@
+# PyArrow and optional dataframe APIs lack complete native type information.
+# Keep these exceptions at the persistence/conversion boundary, preserving
+# concrete library types and existing schema/metadata validation.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false, reportUnknownVariableType=false
 """Arrow-backed derived datasets crossing the analysis persistence boundary."""

@@ -1,5 +1,3 @@
-# pyright: reportUnknownMemberType=false, reportUnknownParameterType=false
-# pyright: reportUnknownVariableType=false
 """Run records and read-side application service."""
 
 from __future__ import annotations
@@ -977,14 +975,16 @@ class RunService:
                 ),
             )
 
-    def measurement_arrow(
+    # PyArrow native Table has no type declarations; retain the real public type.
+    # Only this projection boundary needs Unknown exceptions.
+    def measurement_arrow(  # pyright: ignore[reportUnknownParameterType]
         self,
         run_id: str,
         query: MeasurementArrowQuery,
-    ) -> tuple[pa.Table, int | None, int]:
+    ) -> tuple[pa.Table, int | None, int]:  # pyright: ignore[reportUnknownMemberType]
         """Read and project one finite page from Arrow-backed measurement chunks."""
 
-        from scopecat.measurements.paging import project_measurement_page
+        from scopecat.measurements.paging import project_measurement_page  # pyright: ignore[reportUnknownVariableType]
 
         variable_ids = tuple(column.variable_id for column in query.columns)
         with self._config_errors():
@@ -1018,7 +1018,7 @@ class RunService:
                 content_hash="live-measurement-dataset",
             )
         try:
-            table = project_measurement_page(
+            table = project_measurement_page(  # pyright: ignore[reportUnknownVariableType]
                 items,
                 schema=schema,
                 entry=entry,
@@ -1030,7 +1030,7 @@ class RunService:
             )
         except (KeyError, TypeError, ValueError) as error:
             raise BackendConflict(str(error)) from error
-        metadata = dict(cast("Mapping[bytes, bytes]", table.schema.metadata or {}))
+        metadata = dict(cast("Mapping[bytes, bytes]", table.schema.metadata or {}))  # pyright: ignore[reportUnknownMemberType]
         metadata.update(
             {
                 b"scopecat.run_id": run_id.encode(),
@@ -1040,7 +1040,7 @@ class RunService:
                 b"scopecat.snapshot_size": str(snapshot_size).encode(),
             }
         )
-        return table.replace_schema_metadata(metadata), next_offset, snapshot_size
+        return table.replace_schema_metadata(metadata), next_offset, snapshot_size  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     def measurement_preview(
         self,

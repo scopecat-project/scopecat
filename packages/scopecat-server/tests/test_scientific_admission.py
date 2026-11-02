@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from scopecat.config.scientific_binding import bind_scientific_evidence
-from scopecat.control.models import RunPlanSummary
+from scopecat.control.models import ResourceKey, RunPlanSummary
 from scopecat.daemon.wire import (
     ParameterResolveCommand,
     RunSubmission,
@@ -716,7 +716,7 @@ def test_independent_setup_contexts_admit_without_global_selection(
                 ),
             }
         )
-        claims = []
+        claims: list[tuple[ResourceKey, ...]] = []
         run_ids: list[str] = []
         for name, selected in (("first", setup), ("second", alternate)):
             revision = application.setup.import_recipe(
