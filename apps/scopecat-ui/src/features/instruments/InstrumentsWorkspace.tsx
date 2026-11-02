@@ -1,6 +1,8 @@
+import { useDesktopAvailable } from "../application/DesktopSession";
+import { registerDeviceClose } from "./device-close";
 import { readOperatorSettings } from "../application/OperatorSettings";
 import * as Controls from "../../ui/Controls";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InstrumentSession } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
@@ -37,9 +39,23 @@ type OpenAttempt = {
 };
 
 type ConfigTarget = { kind: "add" } | { kind: "edit"; deviceId: string };
-export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable: boolean }) {
+export function InstrumentsWorkspace({
+  daemonUnavailable,
+  controlDeviceId,
+}: {
+  daemonUnavailable: boolean;
+  controlDeviceId?: string;
+}) {
+  const desktop = useDesktopAvailable();
+  const manageOnly = desktop && !controlDeviceId;
+  const [closingWindow, setClosingWindow] = useState(false);
+  const [windowError, setWindowError] = useState<string>();
+  const closeProblem = useRef(false);
+  const noteCloseProblem = useCallback((problem: boolean) => {
+    closeProblem.current = problem;
+  }, []);
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(controlDeviceId);
   const [session, setSession] = useState<InstrumentSession>();
   const sessionRef = useRef<InstrumentSession | undefined>(undefined);
   const [sessionError, setSessionError] = useState<string>();
@@ -61,7 +77,11 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       return {};
     }
   });
-  const tab = selectedId ? (tabs[selectedId] ?? "operations") : "operations";
+  const tab = controlDeviceId
+    ? "operations"
+    : selectedId
+      ? (tabs[selectedId] ?? "operations")
+      : "operations";
   const rememberTab = (deviceId: string, value: string) => {
     setTabs((current) => {
       const next = { ...current, [deviceId]: value };
@@ -81,6 +101,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     queryKey: ["devices"],
     queryFn: ({ signal }) => getDevices(signal),
     enabled: !daemonUnavailable,
+    refetchInterval: 3_000,
   });
   const devices = devicesQuery.data?.items ?? [];
   const firstDeviceId = devices[0]?.device.id;
@@ -104,6 +125,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       );
     },
     enabled: !daemonUnavailable && !!revision && selectedDevice?.device.state === "available",
+    refetchInterval: 3_000,
   });
   const selected = instrumentsQuery.data?.items.find((item) => item.instrument_id === selectedId);
   const catalog = useQuery({
@@ -118,10 +140,12 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   const loseSession = (message: string) => {
     sessionRef.current = undefined;
     setSession(undefined);
+    closeProblem.current = true;
     setSessionError(message);
     refresh();
   };
   const connect = useMutation({
+    mutationKey: ["device-control", selectedId],
     mutationFn: async (command: OpenAttempt) => {
       command.actor ??= (await readOperatorSettings()).operator;
       return openInstrumentSession(command.id, command.actor, command.setup, command.operation);
@@ -132,12 +156,15 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       sessionRef.current = opened;
       setSession(opened);
       setSessionError(undefined);
+      setWindowError(undefined);
+      closeProblem.current = false;
       openAttempt.current = undefined;
       refresh();
     },
     onError: (error) => setSessionError(errorMessage(error)),
   });
   const close = useMutation({
+    mutationKey: ["device-control", selectedId],
     mutationFn: ({ id, abort }: { id: string; abort: boolean; selectAfter?: string }) =>
       abort ? abortInstrumentSession(id) : closeInstrumentSession(id),
     retry: retryTransientInstrumentMutation,
@@ -148,6 +175,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
         setSession(undefined);
       }
       setSessionError(undefined);
+      setWindowError(undefined);
       if (selectAfter) selectDevice(selectAfter);
       refresh();
     },
@@ -188,16 +216,14 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   useEffect(() => {
     const release = () => {
       const current = sessionRef.current;
-      if (!current) return;
+      if (!current || queryClient.isMutating({ mutationKey: ["device-control"] })) return;
       sessionRef.current = undefined;
       void closeInstrumentSession(current.session_id, true).catch(() => {});
     };
-    window.addEventListener("beforeunload", release);
-    return () => {
-      window.removeEventListener("beforeunload", release);
-      release();
-    };
-  }, []);
+    // Browser unload cannot confirm a release. Cancellation must not end control;
+    // abnormal disappearance is covered by the server lease, not an implied stop.
+    return release;
+  }, [queryClient]);
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
@@ -243,6 +269,91 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     // Reconcile only after a fresh server response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instrumentsQuery.dataUpdatedAt, session?.session_id]);
+  useEffect(() => {
+    if (!controlDeviceId) return;
+    return registerDeviceClose(async (signal) => {
+      setClosingWindow(true);
+      setWindowError(undefined);
+      const thaw = () => setClosingWindow(false);
+      signal.addEventListener("abort", thaw, { once: true });
+      const pending = queryClient
+        .getMutationCache()
+        .findAll({ mutationKey: ["device-control", controlDeviceId], status: "pending" });
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (
+            signal.aborted ||
+            queryClient.isMutating({ mutationKey: ["device-control", controlDeviceId] }) === 0
+          ) {
+            unsubscribe();
+            signal.removeEventListener("abort", check);
+            resolve();
+          }
+        };
+        const unsubscribe = queryClient.getMutationCache().subscribe(check);
+        signal.addEventListener("abort", check, { once: true });
+        check();
+      });
+      if (signal.aborted) return "unknown";
+      if (
+        closeProblem.current ||
+        pending.some((mutation) => {
+          const data: unknown = mutation.state.data;
+          return (
+            mutation.state.status === "error" ||
+            (data !== null &&
+              typeof data === "object" &&
+              "status" in data &&
+              ["unknown", "not_applied", "not_collected", "not_invoked", "rejected"].includes(
+                String(data.status),
+              ))
+          );
+        })
+      ) {
+        setWindowError(
+          "操作失败或结果未知，窗口已保留。请先核查结果或使用原操作的恢复入口，再关闭。",
+        );
+        return "blocked";
+      }
+      const current = sessionRef.current;
+      if (current) {
+        try {
+          // No abort, physical disconnect, or command replay is part of closing.
+          await closeInstrumentSession(current.session_id);
+          if (sessionRef.current?.session_id === current.session_id) {
+            sessionRef.current = undefined;
+            setSession(undefined);
+          }
+          refresh();
+        } catch (error) {
+          setWindowError(`释放控制未确认：${errorMessage(error)}。请保留窗口并重试释放控制。`);
+          return "unknown";
+        }
+      }
+      return signal.aborted ? "unknown" : "saved";
+    });
+    // The current session is read from its authoritative ref after pending operations finish.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlDeviceId, queryClient]);
+  useEffect(() => {
+    if (!controlDeviceId) return;
+    const protect = (event: BeforeUnloadEvent) => {
+      if (
+        sessionRef.current ||
+        queryClient.isMutating({ mutationKey: ["device-control", controlDeviceId] })
+      ) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [controlDeviceId, queryClient]);
+  const deviceLabel = selectedDevice?.device.label;
+  useEffect(() => {
+    if (controlDeviceId && deviceLabel && desktop)
+      void window.pywebview?.api.set_window_title(`${deviceLabel} · 设备控制`).catch(() => {});
+  }, [controlDeviceId, deviceLabel, desktop]);
   const connectCurrent = () => {
     releaseConnection.reset();
     if (!revision || !selectedId) return;
@@ -271,6 +382,62 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     releaseConnection.reset();
     openAttempt.current = undefined;
   };
+  const inspector =
+    selected && selectedDevice?.device.state === "available" ? (
+      <InstrumentInspector
+        key={`${revision?.id}:${selected.instrument_id}`}
+        instrument={selected}
+        displayLabel={selectedDevice.device.label}
+        session={session}
+        sessionError={sessionError}
+        connectPending={connect.isPending}
+        closePending={close.isPending}
+        onConnect={connectCurrent}
+        onClose={() => session && close.mutate({ id: session.session_id, abort: false })}
+        onSessionLost={loseSession}
+        onCloseProblem={noteCloseProblem}
+        onDisconnectOwner={() => {
+          if (selected.owner_kind === "instrument_session" && selected.owner_id)
+            close.mutate({ id: selected.owner_id, abort: true });
+        }}
+      />
+    ) : !selectedDevice ? (
+      <p>设备不存在或正在加载，请在设备管理中检查登记。</p>
+    ) : instrumentsQuery.isFetching ? (
+      <p>正在读取设备能力…</p>
+    ) : null;
+  if (controlDeviceId)
+    return (
+      <section aria-label="设备控制" className="mx-auto max-w-6xl">
+        <header className="flex items-center justify-between border-b border-line p-3">
+          <h1 className="text-lg font-semibold">{selectedDevice?.device.label ?? "设备控制"}</h1>
+          <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
+        </header>
+        {closingWindow && <p role="status">正在等待当前操作完成并释放控制…</p>}
+        {windowError && <p role="alert">{windowError}</p>}
+        {(devicesQuery.error || accessQuery.error || instrumentsQuery.error) && (
+          <p role="alert">
+            {errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}
+          </p>
+        )}
+        {selected?.owner_kind === "run" &&
+          selected.owner_id &&
+          (desktop ? (
+            <Controls.Button
+              onClick={() => void window.pywebview?.api.open_run_window(selected.owner_id!)}
+            >
+              查看占用实验
+            </Controls.Button>
+          ) : (
+            <a className="underline" href={`?run=${encodeURIComponent(selected.owner_id)}#runs`}>
+              查看占用实验
+            </a>
+          ))}
+        <fieldset disabled={closingWindow} className="min-w-0">
+          {inspector}
+        </fieldset>
+      </section>
+    );
   return (
     <section className="grid gap-3" aria-labelledby="instruments-heading">
       <header className="flex flex-wrap items-center justify-between rounded-lg border border-line bg-panel p-4">
@@ -622,27 +789,33 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
             />
           )}
           <div hidden={tab !== "operations" || !!configTarget}>
-            {selected && selectedDevice?.device.state === "available" ? (
-              <InstrumentInspector
-                key={`${revision?.id}:${selected.instrument_id}`}
-                instrument={selected}
-                session={session}
-                sessionError={sessionError}
-                connectPending={connect.isPending}
-                closePending={close.isPending}
-                onConnect={connectCurrent}
-                onClose={() => session && close.mutate({ id: session.session_id, abort: false })}
-                onSessionLost={loseSession}
-                onDisconnectOwner={() => {
-                  if (selected.owner_kind === "instrument_session" && selected.owner_id)
-                    close.mutate({ id: selected.owner_id, abort: true });
-                }}
-              />
-            ) : !selectedDevice ? (
-              <p>选择设备以查看控制项。</p>
-            ) : instrumentsQuery.isFetching ? (
-              <p>正在读取设备能力…</p>
-            ) : null}
+            {manageOnly ? (
+              <section className="rounded-lg border border-line bg-panel p-4">
+                <Controls.Button
+                  disabled={!selectedDevice || !!configTarget}
+                  onClick={() => {
+                    if (!selectedId) return;
+                    setWindowError(undefined);
+                    const api = window.pywebview?.api;
+                    if (!api?.open_device_window) {
+                      setWindowError("当前桌面宿主不支持设备控制窗口，请更新宿主。");
+                      return;
+                    }
+                    void api
+                      .open_device_window(selectedId)
+                      .catch((error) => setWindowError(errorMessage(error)));
+                  }}
+                >
+                  打开控制窗口
+                </Controls.Button>
+                <p className="mt-2 text-sm text-text-dim">
+                  同一设备复用一个控制窗口。打开窗口不代表取得控制权。
+                </p>
+                {windowError && <p role="alert">{windowError}</p>}
+              </section>
+            ) : (
+              inspector
+            )}
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { prepareDeviceClose, releaseDeviceClose } from "../instruments/device-close";
 import {
   prepareLaunchClose,
   releaseLaunchClose,
@@ -70,6 +71,7 @@ interface DesktopAPI {
     repair?: boolean,
   ): Promise<NotebookJourney>;
   open_lesson_notebook(topic?: LessonTopic): Promise<void>;
+  open_device_window?(deviceId: string): Promise<void>;
   open_run_window(runId: string): Promise<void>;
   set_window_title(title: string): Promise<void>;
   open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
@@ -186,24 +188,31 @@ export function DesktopSession() {
       const requestId = detail.requestId;
       if (active.has(requestId)) return;
       active.add(requestId);
-      setCloseNotice("Saving experiment input before closing…");
-      void prepareLaunchClose(requestId).then(async (status) => {
-        if (!active.has(requestId)) return;
-        try {
-          const api = window.pywebview?.api;
-          if (!api?.complete_close_preflight)
-            throw new Error("Native close acknowledgement is unavailable.");
-          await api.complete_close_preflight(requestId, status);
-          if (active.has(requestId) && status !== "saved")
-            setCloseNotice(
-              "Window kept open: experiment input is not confirmed saved. Resolve recovery, save errors or conflicts before closing again.",
-            );
-        } catch (failure) {
-          // Only the host can release a close barrier. A failed reply is not permission to close.
-          if (active.has(requestId))
-            setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
-        }
-      });
+      setCloseNotice("正在等待操作完成、释放设备控制并确认输入…");
+      void Promise.all([prepareLaunchClose(requestId), prepareDeviceClose(requestId)]).then(
+        async (statuses) => {
+          const status: LaunchCloseStatus = statuses.includes("unknown")
+            ? "unknown"
+            : statuses.includes("blocked")
+              ? "blocked"
+              : "saved";
+          if (!active.has(requestId)) return;
+          try {
+            const api = window.pywebview?.api;
+            if (!api?.complete_close_preflight)
+              throw new Error("Native close acknowledgement is unavailable.");
+            await api.complete_close_preflight(requestId, status);
+            if (active.has(requestId) && status !== "saved")
+              setCloseNotice(
+                "窗口已保留：设备控制或输入尚未确认安全交接。请处理页面中的失败或未知结果后再关闭。",
+              );
+          } catch (failure) {
+            // Only the host can release a close barrier. A failed reply is not permission to close.
+            if (active.has(requestId))
+              setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
+          }
+        },
+      );
     };
     const release = (event: Event) => {
       const detail: unknown = (event as CustomEvent).detail;
@@ -216,6 +225,7 @@ export function DesktopSession() {
         return;
       active.delete(detail.requestId);
       releaseLaunchClose(detail.requestId);
+      releaseDeviceClose(detail.requestId);
       setCloseNotice(
         "message" in detail && typeof detail.message === "string" ? detail.message : undefined,
       );

@@ -42,6 +42,7 @@ vi.mock("./device-api", () => ({
   releaseDeviceConnection: vi.fn(),
 }));
 
+import { prepareDeviceClose, releaseDeviceClose } from "./device-close";
 import { InstrumentsWorkspace } from "./InstrumentsWorkspace";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import {
@@ -142,6 +143,116 @@ afterEach(() => {
 });
 
 describe("instrument workspace", () => {
+  it("desktop management opens a control window without mounting a writable copy", async () => {
+    const open = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("pywebview", { api: { open_device_window: open } });
+    renderWorkspace();
+    const button = await screen.findByRole("button", { name: "打开控制窗口" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(open).toHaveBeenNthCalledWith(1, "drive-source");
+    expect(open).toHaveBeenNthCalledWith(2, "drive-source");
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("control window stays on its device and closes only after release acknowledgement", async () => {
+    let finish!: () => void;
+    vi.mocked(closeInstrumentSession).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    expect(screen.queryByRole("complementary", { name: "已登记设备" })).not.toBeInTheDocument();
+    let result!: Promise<string>;
+    act(() => {
+      result = prepareDeviceClose("close-success");
+    });
+    await waitFor(() =>
+      expect(closeInstrumentSession).toHaveBeenCalledExactlyOnceWith("session-1"),
+    );
+    expect(screen.getByRole("button", { name: "释放控制" })).toBeDisabled();
+    await act(async () => {
+      finish();
+      expect(await result).toBe("saved");
+    });
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+    expect(releaseDeviceConnection).not.toHaveBeenCalled();
+    act(() => releaseDeviceClose("close-success"));
+    expect(await screen.findByRole("button", { name: "连接" })).toBeEnabled();
+  });
+
+  it("retains a failed close and permits an explicit retry without disconnecting", async () => {
+    vi.mocked(closeInstrumentSession).mockRejectedValueOnce(new Error("reply lost"));
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    await act(async () => {
+      expect(await prepareDeviceClose("close-failed")).toBe("unknown");
+    });
+    expect(screen.getByText(/释放控制未确认/)).toBeVisible();
+    act(() => releaseDeviceClose("close-failed"));
+    expect(screen.getByRole("button", { name: "释放控制" })).toBeEnabled();
+    await act(async () => {
+      expect(await prepareDeviceClose("close-retry")).toBe("saved");
+    });
+    act(() => releaseDeviceClose("close-retry"));
+    expect(closeInstrumentSession).toHaveBeenCalledTimes(2);
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it.each(["success", "failure", "timeout"])("waits for an in-flight read: %s", async (outcome) => {
+    let finish!: (state: InstrumentState) => void;
+    let fail!: (error: Error) => void;
+    vi.mocked(readInstrumentState).mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+    );
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
+    await waitFor(() => expect(readInstrumentState).toHaveBeenCalledTimes(1));
+    let result!: Promise<string>;
+    act(() => {
+      result = prepareDeviceClose("pending");
+    });
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    if (outcome === "timeout") {
+      act(() => releaseDeviceClose("pending"));
+      await act(async () => finish(instrumentState()));
+    } else {
+      await act(async () => {
+        if (outcome === "success") finish(instrumentState());
+        else fail(new Error("read failed"));
+        await result;
+      });
+      act(() => releaseDeviceClose("pending"));
+    }
+    expect(await result).toBe(
+      outcome === "success" ? "saved" : outcome === "timeout" ? "unknown" : "blocked",
+    );
+    expect(closeInstrumentSession).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
+    expect(readInstrumentState).toHaveBeenCalledTimes(1);
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("browser cancellation does not release the session", async () => {
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    const event = new Event("beforeunload", { cancelable: true });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+  });
+
   it("keeps configuration in the workbench and releases idle connections explicitly", async () => {
     vi.mocked(releaseDeviceConnection).mockResolvedValue({ instrument_ids: ["drive-source"] });
     renderWorkspace();
@@ -1640,7 +1751,7 @@ describe("instrument workspace", () => {
       items: [{ ...device, device: { ...device.device, label: "Renamed source" } }],
     });
     fireEvent.click(screen.getByRole("button", { name: /^刷新$/ }));
-    await screen.findByRole("heading", { name: "Renamed source" });
+    await screen.findByRole("heading", { name: "Renamed source", level: 3 });
     expect(screen.getByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
 
     const updated = structuredClone(device);
@@ -1648,7 +1759,7 @@ describe("instrument workspace", () => {
     updated.revision.content.connection.options = { gain: 2 };
     vi.mocked(getDevices).mockResolvedValue({ items: [updated] });
     fireEvent.click(screen.getByRole("button", { name: /^刷新$/ }));
-    await screen.findByRole("heading", { name: "Drive source" });
+    await screen.findByRole("heading", { name: "Drive source", level: 3 });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByText("此连接版本尚未测试。")).toBeVisible();
 
@@ -1685,7 +1796,7 @@ describe("instrument workspace", () => {
   });
 });
 
-function renderWorkspace() {
+function renderWorkspace(controlDeviceId?: string) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -1694,7 +1805,7 @@ function renderWorkspace() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <InstrumentsWorkspace daemonUnavailable={false} />
+      <InstrumentsWorkspace daemonUnavailable={false} controlDeviceId={controlDeviceId} />
     </QueryClientProvider>,
   );
 }

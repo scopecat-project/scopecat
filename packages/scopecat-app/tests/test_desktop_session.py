@@ -3,7 +3,7 @@
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -1045,3 +1045,90 @@ def test_file_picker_returns_selected_path_without_runtime_mutation():
     assert api.choose_file() == "C:/SDK Python/python.exe"
     assert window.create_file_dialog.call_args.kwargs == {"allow_multiple": False}
     assert runtime.mock_calls == []
+
+
+def test_device_window_identity_deduplicates_loading_navigation_and_two_devices(
+    monkeypatch,
+):
+    from webview.event import Event
+
+    def create(_title, **kwargs):
+        window = Mock()
+        window.get_current_url.return_value = None
+        window.initial_url = kwargs["url"]
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    session = DesktopSession(Mock(), threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    windows = DesktopWindows(session, Mock())
+    root = windows.create()
+    root.api.open_device_window("device-a")
+    first = windows.latest
+    root.api.open_device_window("device-a")
+    assert windows.latest is first
+    assert len(windows._views) == 2
+    assert first.device_id == "device-a"
+    assert "device-control=device-a" in first.window.initial_url
+    first.loaded.set()
+    first.window.get_current_url.return_value = "http://127.0.0.1:3210/other"
+    root.api.open_device_window("device-a")
+    assert windows.latest is first
+    root.api.open_device_window("device-b")
+    assert len(windows._views) == 3
+    assert windows.latest.device_id == "device-b"
+    with patch.object(session, "operation", side_effect=ValueError("exit pending")):
+        assert first.window.events.closing.set() is True
+        first.window.hide.assert_not_called()
+    first.window.events.closed.set()
+    root.api.open_device_window("device-a")
+    assert windows.latest is not first
+    assert len(windows._views) == 3
+
+
+@pytest.mark.parametrize(
+    "answer,status",
+    [(False, "saved"), (True, "blocked"), (True, "unknown"), (True, "saved")],
+)
+def test_last_device_window_only_hides_after_confirmed_release(answer, status):
+    _runtime, _session, windows, views = close_fixture()
+    view = views[0]
+    windows._views = [view]
+    view.device_id = "device-a"
+    view.window.create_confirmation_dialog.return_value = answer
+    acknowledge(view, status)
+    with patch.object(windows, "_hide_or_retain") as hide:
+        windows._close_view(view)
+        assert hide.call_count == (1 if answer and status == "saved" else 0)
+    view.window.destroy.assert_not_called()
+    assert view.close_request is None
+    assert not view.close_authorized
+
+
+def test_device_close_failure_retains_window_and_retry_uses_new_preflight():
+    _runtime, _session, windows, views = close_fixture()
+    view = views[0]
+    view.device_id = "device-a"
+    view.window.create_confirmation_dialog.return_value = True
+    acknowledge(view, "unknown")
+    windows._close_view(view)
+    view.window.destroy.assert_not_called()
+    acknowledge(view, "saved")
+    windows._close_view(view)
+    view.window.destroy.assert_called_once()
+    assert view.close_authorized
+
+
+def test_device_window_api_rejects_empty_identity_before_native_open():
+    session = DesktopSession(Mock(), threading.Event())
+    api = DesktopAPI(session, Mock())
+    api.open_device = Mock()
+    for value in (None, "", " ", "x" * 513):
+        with pytest.raises(ValueError, match="identity"):
+            api.open_device_window(value)
+    api.open_device.assert_not_called()

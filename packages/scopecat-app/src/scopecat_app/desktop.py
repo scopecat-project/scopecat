@@ -58,6 +58,7 @@ class DesktopAPI:
         self._file_lock = threading.Lock()
         self._unsupported: UnsupportedDataSpace | None = None
         self._page_thread: threading.Thread | None = None
+        self.open_device: Callable[[str], None] = lambda _id: None
         self.close_reply: Callable[[str, str], None] = lambda _id, _status: None
 
     def complete_close_preflight(self, requestId: str, status: str) -> None:
@@ -75,6 +76,17 @@ class DesktopAPI:
             raise ValueError("无效的 run 标识")
         with self._session.operation(allow_files=True):
             self._new_window(run_id)
+
+    def open_device_window(self, device_id: object) -> None:
+        """Open a registered-device control view, never a caller-supplied URL."""
+        if (
+            not isinstance(device_id, str)
+            or not device_id.strip()
+            or len(device_id) > 512
+        ):
+            raise ValueError("Invalid device identity")
+        with self._session.operation(allow_files=True):
+            self.open_device(device_id)
 
     def set_window_title(self, title: str) -> None:
         self._window().set_title(title)
@@ -658,6 +670,7 @@ class DesktopView:
     loaded: threading.Event
     request_quit: Callable[[], bool]
     initial_location: str | None = None
+    device_id: str | None = None
     close_request: str | None = None
     close_status: str | None = None
     close_reply_thread: threading.Thread | None = None
@@ -769,6 +782,16 @@ class DesktopWindows:
                     view.close_status = None
                     view.close_reply_thread = None
                     view.close_ready.clear()
+            for view in views:
+                if (
+                    view.device_id is not None
+                    and not view.window.create_confirmation_dialog(
+                        "关闭设备控制",
+                        "等待当前操作完成并释放手动控制后关闭？未应用的输入将丢弃。"
+                        "不会额外断开物理连接、停止或归零输出。",
+                    )
+                ):
+                    raise ValueError("Device control close cancelled; window retained")
             for view in views:
                 self._dispatch(
                     view, "scopecat:close-preflight", {"requestId": request_id}
@@ -897,7 +920,11 @@ class DesktopWindows:
         show_window(view.window)
 
     def create(
-        self, run_id: str | None = None, *, target: ApplicationOpenTarget | None = None
+        self,
+        run_id: str | None = None,
+        *,
+        target: ApplicationOpenTarget | None = None,
+        device_id: str | None = None,
     ) -> DesktopView:
         import webview
 
@@ -916,6 +943,19 @@ class DesktopWindows:
                 if location is None:
                     raise ValueError("Application is not connected")
                 location = object_location(location, target)
+            if device_id is not None:
+                if location is None:
+                    raise ValueError("Application is not connected")
+                base = urlsplit(location)
+                location = urlunsplit(
+                    (
+                        base.scheme,
+                        base.netloc,
+                        "/",
+                        urlencode({"device-control": device_id}),
+                        "",
+                    )
+                )
             api = DesktopAPI(
                 self._session, lambda: window, self._prepare, self.new_window
             )
@@ -950,7 +990,8 @@ class DesktopWindows:
             _hide, request_quit = _window_close_handlers(
                 window, self._session.closing, loaded
             )
-            view = DesktopView(window, api, loaded, request_quit, location)
+            view = DesktopView(window, api, loaded, request_quit, location, device_id)
+            api.open_device = self.new_device_window
 
             api.close_reply = lambda request_id, status: self._reply(
                 view, request_id, status
@@ -969,14 +1010,15 @@ class DesktopWindows:
                     return False
                 try:
                     with self._session.operation(allow_files=True), self._lock:
-                        destructive = len(self._views) > 1
+                        destructive = len(self._views) > 1 or view.device_id is not None
                     if destructive:
                         threading.Thread(
                             target=self._close_view, args=(view,), daemon=True
                         ).start()
                         return False
                 except ValueError:
-                    pass
+                    if view.device_id is not None:
+                        return False  # Never hide a controller whose close was not admitted.
                 threading.Thread(
                     target=self._hide_or_retain, args=(window,), daemon=True
                 ).start()
@@ -992,6 +1034,17 @@ class DesktopWindows:
             window.events.closed += closed
             self._views.append(view)
             return view
+
+    def new_device_window(self, device_id: str) -> None:
+        # Identity belongs to the native view, including during load/reconnect/hide.
+        # A URL match alone would allow duplicate controllers after navigation.
+        with self._lock:
+            view = next(
+                (item for item in self._views if item.device_id == device_id), None
+            )
+            if view is None:
+                view = self.create(device_id=device_id)
+        show_window(view.window)
 
     def new_window(self, run_id: str | None = None) -> None:
         if self._session.base_url is None:
