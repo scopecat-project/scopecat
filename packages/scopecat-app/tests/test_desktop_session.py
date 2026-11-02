@@ -1070,6 +1070,7 @@ def test_device_window_identity_deduplicates_loading_navigation_and_two_devices(
     root = windows.create()
     root.api.open_device_window("device-a")
     first = windows.latest
+    assert isinstance(first.window, Mock)
     root.api.open_device_window("device-a")
     assert windows.latest is first
     assert len(windows._views) == 2
