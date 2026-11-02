@@ -2185,9 +2185,9 @@ function session(overrides: Partial<InstrumentSession> = {}): InstrumentSession 
     configured_default_instrument_ids: [],
     descriptions: [instrument().description!],
     observed_state: [instrumentState()],
-    opened_at: "2026-07-27T09:00:00Z",
-    renewed_at: "2026-07-27T09:00:00Z",
-    expires_at: "2026-07-27T09:01:00Z",
+    opened_at: new Date().toISOString(),
+    renewed_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
     ...overrides,
   };
 }
@@ -2195,8 +2195,8 @@ function session(overrides: Partial<InstrumentSession> = {}): InstrumentSession 
 function sessionLease(overrides: Partial<InstrumentSessionLease> = {}): InstrumentSessionLease {
   return {
     session_id: "session-1",
-    renewed_at: "2026-07-27T09:01:00Z",
-    expires_at: "2026-07-27T09:02:00Z",
+    renewed_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
     ...overrides,
   };
 }
