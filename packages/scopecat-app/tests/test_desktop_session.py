@@ -1138,6 +1138,8 @@ def test_device_window_api_rejects_empty_identity_before_native_open():
 def test_application_reopen_restores_main_after_main_then_device_close(monkeypatch):
     from webview.event import Event
 
+    native_windows: list[Mock] = []
+
     def create(_title, **kwargs):
         window = Mock()
         window.initial_url = kwargs["url"]
@@ -1147,6 +1149,7 @@ def test_application_reopen_restores_main_after_main_then_device_close(monkeypat
             closed=Event(window, True),
         )
         window.destroy.side_effect = window.events.closed.set
+        native_windows.append(window)
         return window
 
     monkeypatch.setattr("webview.create_window", create)
@@ -1167,16 +1170,16 @@ def test_application_reopen_restores_main_after_main_then_device_close(monkeypat
     windows._close_view(main)
     assert main not in windows._views
     windows._close_view(device)
-    device.window.hide.assert_called_once()
-    device.window.destroy.assert_not_called()
+    native_windows[1].hide.assert_called_once()
+    native_windows[1].destroy.assert_not_called()
     assert device.close_request is None
     shown.reset_mock()
 
     windows.activate()
     reopened = windows.latest
     assert reopened.is_main and reopened.device_id is None
-    assert reopened.window.initial_url == session.page_url
-    assert "device-control" not in reopened.window.initial_url
+    assert native_windows[2].initial_url == session.page_url
+    assert "device-control" not in native_windows[2].initial_url
     shown.assert_called_once_with(reopened.window)
     assert len(windows._views) == 2
     assert device in windows._views
