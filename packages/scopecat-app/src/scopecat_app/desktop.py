@@ -762,6 +762,19 @@ class DesktopWindows:
             f"{{detail:{json.dumps(detail)}}}));"
         )
 
+    @staticmethod
+    def _confirm_device_close(views: tuple[DesktopView, ...]) -> None:
+        for view in views:
+            if (
+                view.device_id is not None
+                and not view.window.create_confirmation_dialog(
+                    "关闭设备控制",
+                    "等待当前操作完成并释放手动控制后关闭？未应用的输入将丢弃。"
+                    "不会额外断开物理连接、停止或归零输出。",
+                )
+            ):
+                raise ValueError("Device control close cancelled; window retained")
+
     @contextmanager
     def preflight(self, selected: DesktopView | None = None) -> Generator[None]:
         # This waits only in a bridge/background worker. Native closing callbacks
@@ -782,16 +795,7 @@ class DesktopWindows:
                     view.close_status = None
                     view.close_reply_thread = None
                     view.close_ready.clear()
-            for view in views:
-                if (
-                    view.device_id is not None
-                    and not view.window.create_confirmation_dialog(
-                        "关闭设备控制",
-                        "等待当前操作完成并释放手动控制后关闭？未应用的输入将丢弃。"
-                        "不会额外断开物理连接、停止或归零输出。",
-                    )
-                ):
-                    raise ValueError("Device control close cancelled; window retained")
+            self._confirm_device_close(views)
             for view in views:
                 self._dispatch(
                     view, "scopecat:close-preflight", {"requestId": request_id}
@@ -1018,7 +1022,8 @@ class DesktopWindows:
                         return False
                 except ValueError:
                     if view.device_id is not None:
-                        return False  # Never hide a controller whose close was not admitted.
+                        # A rejected close cannot hide a controller.
+                        return False
                 threading.Thread(
                     target=self._hide_or_retain, args=(window,), daemon=True
                 ).start()
