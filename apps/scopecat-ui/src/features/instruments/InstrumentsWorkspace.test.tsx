@@ -206,6 +206,9 @@ describe("instrument workspace", () => {
     vi.mocked(closeInstrumentSession).mockRejectedValueOnce(new Error("reply lost"));
     renderWorkspace("drive-source");
     await connectInstrument();
+    fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
+      target: { value: "6000000000" },
+    });
     await act(async () => {
       expect(await prepareDeviceClose("close-failed")).toBe("unknown");
     });
@@ -214,6 +217,12 @@ describe("instrument workspace", () => {
     expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
     act(() => releaseDeviceClose("close-failed"));
     expect(screen.getByRole("button", { name: "释放控制" })).toBeEnabled();
+    const reset = screen.getByRole("button", { name: "重置" });
+    expect(reset).toBeEnabled();
+    fireEvent.click(reset);
+    expect(screen.queryByText("已暂存 1 项属性")).not.toBeInTheDocument();
+    expect(readInstrumentState).not.toHaveBeenCalled();
+    expect(applyInstrumentState).not.toHaveBeenCalled();
     await act(async () => {
       expect(await prepareDeviceClose("close-retry")).toBe("saved");
     });
