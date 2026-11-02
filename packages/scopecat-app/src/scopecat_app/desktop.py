@@ -671,6 +671,7 @@ class DesktopView:
     request_quit: Callable[[], bool]
     initial_location: str | None = None
     device_id: str | None = None
+    is_main: bool = False
     close_request: str | None = None
     close_status: str | None = None
     close_reply_thread: threading.Thread | None = None
@@ -994,7 +995,15 @@ class DesktopWindows:
             _hide, request_quit = _window_close_handlers(
                 window, self._session.closing, loaded
             )
-            view = DesktopView(window, api, loaded, request_quit, location, device_id)
+            view = DesktopView(
+                window,
+                api,
+                loaded,
+                request_quit,
+                location,
+                device_id,
+                is_main=run_id is None and target is None and device_id is None,
+            )
             api.open_device = self.new_device_window
 
             api.close_reply = lambda request_id, status: self._reply(
@@ -1076,6 +1085,23 @@ class DesktopWindows:
                 view = self.create(target=target)
         # A bridge request can return while a new WebView loads. The retained
         # initial location deduplicates another request during that interval.
+        show_window(view.window)
+
+    def activate(self) -> None:
+        """An application reopen targets the workspace, not a retained controller."""
+        with self._lock:
+            if self._session.closing.is_set():
+                return
+            view = next(
+                (
+                    item
+                    for item in self._views
+                    if item.is_main and not item.close_authorized
+                ),
+                None,
+            )
+            if view is None:
+                view = self.create()
         show_window(view.window)
 
     def show(self) -> None:
@@ -1271,7 +1297,7 @@ def run(
                 icon_image,
                 "Scopecat",
                 menu=pystray.Menu(
-                    pystray.MenuItem("打开 Scopecat", windows.show, default=True),
+                    pystray.MenuItem("打开 Scopecat", windows.activate, default=True),
                     pystray.MenuItem("隐藏窗口（后台运行）", windows.hide),
                     pystray.MenuItem("新建窗口", new_window_from_menu),
                     pystray.MenuItem("退出 Scopecat", windows.request_quit),
@@ -1293,7 +1319,7 @@ def run(
                 stop_tray = start_tray(create_tray, windows.tray_changed)
                 install_window_menu()
                 install_reopen_handler(
-                    windows.show, windows.request_quit, closing.is_set
+                    windows.activate, windows.request_quit, closing.is_set
                 )
                 api.retry()
             except Exception as error:
@@ -1313,7 +1339,7 @@ def run(
                     if activate.exists():
                         requested_package = activate.read_text(encoding="utf-8")
                         activate.unlink(missing_ok=True)
-                        windows.show()
+                        windows.activate()
                         if requested_package != package_identity:
                             quit_current = (
                                 windows.latest.window.create_confirmation_dialog(
