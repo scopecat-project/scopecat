@@ -982,6 +982,7 @@ def test_pure_driver_validation_rejects_before_retiring_connection(
         assert "Upper bound must exceed lower bound" in response.text
         assert "invalid connection options" in response.text
         disconnect.assert_not_called()
-        assert runtime.application.devices.get("signal").device.head.revision_id == (
-            saved["device"]["head"]["revision_id"]
+        assert (
+            runtime.application.devices.get("signal").device.head.revision_id
+            == (saved["device"]["head"]["revision_id"])
         )

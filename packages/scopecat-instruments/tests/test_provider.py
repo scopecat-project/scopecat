@@ -621,3 +621,21 @@ def test_provider_connects_exact_requested_instrument() -> None:
     assert [item.instrument_id for item in description.instruments] == ["a", "b"]
     assert driver.instrument_id == "b"
     driver.disconnect()
+
+
+def test_option_validation_message_explains_field_without_echoing_supplied_value() -> (
+    None
+):
+    description = _describe_binding(
+        KEYSIGHT_E5080B,
+        TcpipSocketInstrumentConnection(
+            host="192.0.2.1",
+            port=5025,
+            options={"channel": "private-input-not-for-diagnostics"},
+        ),
+    )
+    issue = description.problems[0]
+    assert "channel:" in issue.message
+    assert "valid integer" in issue.message
+    assert "private-input-not-for-diagnostics" not in issue.model_dump_json()
+    assert "https://errors.pydantic.dev" not in issue.message

@@ -7,6 +7,8 @@ import { errorMessage } from "../../lib/presentation";
 import { getDriverSource, updateDriverSource, type DriverSourceUpdate } from "./device-api";
 import { createInstrumentCommandId } from "./instrument-api";
 
+class MissingOperatorError extends Error {}
+
 export function DriverSourcePanel({
   daemonUnavailable,
   sessionBusy,
@@ -26,16 +28,6 @@ export function DriverSourcePanel({
     window.addEventListener("pywebviewready", ready);
     return () => window.removeEventListener("pywebviewready", ready);
   }, []);
-  const picker = useMutation({
-    mutationFn: async () => native?.choose_directory(),
-    onSuccess: (chosen) => {
-      if (chosen) {
-        setDirectory(chosen);
-        attempt.current = undefined;
-        update.reset();
-      }
-    },
-  });
   const attempt = useRef<DriverSourceUpdate | undefined>(undefined);
   const source = useQuery({
     queryKey: ["driver-source"],
@@ -50,7 +42,7 @@ export function DriverSourcePanel({
         const actor = (await readOperatorSettings()).operator;
         if (!actor.trim()) {
           setNeedsOperator(true);
-          throw new Error(
+          throw new MissingOperatorError(
             "启用驱动需要记录操作署名。请在下方保存默认操作者，再点击启用；所选目录会保留。",
           );
         }
@@ -72,12 +64,23 @@ export function DriverSourcePanel({
       // An uncertain transport result must reuse its original operation ID.
       if (error instanceof ApiError && error.status === 409) attempt.current = undefined;
     },
-    onSettled: async () => {
+    onSettled: async (_result, error) => {
+      if (error instanceof MissingOperatorError) return;
       await Promise.all(
         ["driver-source", "devices", "instruments", "instrument-drivers", "device-drivers"].map(
           (key) => client.invalidateQueries({ queryKey: [key] }),
         ),
       );
+    },
+  });
+  const picker = useMutation({
+    mutationFn: async () => native?.choose_directory(),
+    onSuccess: (chosen) => {
+      if (chosen) {
+        setDirectory(chosen);
+        attempt.current = undefined;
+        update.reset();
+      }
     },
   });
   return (
