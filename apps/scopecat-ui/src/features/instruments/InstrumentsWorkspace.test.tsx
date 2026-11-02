@@ -157,6 +157,22 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
+  it("a fixed control view preserves experiment ownership and links to its run", async () => {
+    mockInventory({
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+      problems: [],
+      items: [instrument({ availability: "active", owner_kind: "run", owner_id: "run-42" })],
+    });
+    renderWorkspace("drive-source");
+    expect(await screen.findByText("手动控制不可用")).toBeVisible();
+    expect(screen.getByRole("link", { name: "查看占用实验" })).toHaveAttribute(
+      "href",
+      "?run=run-42#runs",
+    );
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
   it("control window stays on its device and closes only after release acknowledgement", async () => {
     let finish!: () => void;
     vi.mocked(closeInstrumentSession).mockImplementation(
@@ -194,6 +210,8 @@ describe("instrument workspace", () => {
       expect(await prepareDeviceClose("close-failed")).toBe("unknown");
     });
     expect(screen.getByText(/释放控制未确认/)).toBeVisible();
+    expect(screen.getByText("控制释放结果待确认")).toBeVisible();
+    expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
     act(() => releaseDeviceClose("close-failed"));
     expect(screen.getByRole("button", { name: "释放控制" })).toBeEnabled();
     await act(async () => {

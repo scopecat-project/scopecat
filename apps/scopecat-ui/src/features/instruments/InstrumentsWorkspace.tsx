@@ -50,6 +50,7 @@ export function InstrumentsWorkspace({
   const manageOnly = desktop && !controlDeviceId;
   const [closingWindow, setClosingWindow] = useState(false);
   const [windowError, setWindowError] = useState<string>();
+  const [releaseUnconfirmed, setReleaseUnconfirmed] = useState(false);
   const closeProblem = useRef(false);
   const noteCloseProblem = useCallback((problem: boolean) => {
     closeProblem.current = problem;
@@ -157,6 +158,7 @@ export function InstrumentsWorkspace({
       setSession(opened);
       setSessionError(undefined);
       setWindowError(undefined);
+      setReleaseUnconfirmed(false);
       closeProblem.current = false;
       openAttempt.current = undefined;
       refresh();
@@ -176,6 +178,7 @@ export function InstrumentsWorkspace({
       }
       setSessionError(undefined);
       setWindowError(undefined);
+      setReleaseUnconfirmed(false);
       if (selectAfter) selectDevice(selectAfter);
       refresh();
     },
@@ -324,8 +327,10 @@ export function InstrumentsWorkspace({
             sessionRef.current = undefined;
             setSession(undefined);
           }
+          setReleaseUnconfirmed(false);
           refresh();
         } catch (error) {
+          setReleaseUnconfirmed(true);
           setWindowError(`释放控制未确认：${errorMessage(error)}。请保留窗口并重试释放控制。`);
           return "unknown";
         }
@@ -390,6 +395,7 @@ export function InstrumentsWorkspace({
         displayLabel={selectedDevice.device.label}
         session={session}
         sessionError={sessionError}
+        releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connect.isPending}
         closePending={close.isPending}
         onConnect={connectCurrent}

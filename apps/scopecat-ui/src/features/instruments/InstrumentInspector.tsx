@@ -56,6 +56,7 @@ type DraftValue = InstrumentPropertyDraft;
 interface InstrumentInspectorProps {
   instrument: InstrumentView;
   displayLabel?: string;
+  releaseUnconfirmed?: boolean;
   session?: InstrumentSession;
   sessionError?: string;
   connectPending: boolean;
@@ -87,6 +88,7 @@ export function InstrumentInspector(props: InstrumentInspectorProps) {
 function InstrumentInspectorContent({
   instrument,
   displayLabel,
+  releaseUnconfirmed = false,
   session,
   sessionError,
   connectPending,
@@ -383,7 +385,7 @@ function InstrumentInspectorContent({
     configuredDefaultsMutation.isPending ||
     collectMutation.isPending ||
     invokeMutation.isPending;
-  const interactionDisabled = closePending || interactionPending;
+  const interactionDisabled = closePending || interactionPending || releaseUnconfirmed;
   const configuredDefaultsDisabled =
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
@@ -413,7 +415,11 @@ function InstrumentInspectorContent({
             <h2 className="m-0 text-[1.1rem] font-[650] tracking-[-0.025em]">
               {displayLabel ?? description?.label ?? instrumentId}
             </h2>
-            <AvailabilityBadge availability={instrument.availability} connected={connected} />
+            {releaseUnconfirmed ? (
+              <span>释放待确认</span>
+            ) : (
+              <AvailabilityBadge availability={instrument.availability} connected={connected} />
+            )}
           </div>
           {description?.description && (
             <p className="mt-[9px] mb-0 max-w-[760px] text-xs leading-[1.55] text-text-dim">
@@ -427,6 +433,7 @@ function InstrumentInspectorContent({
         instrument={instrument}
         session={session}
         connected={connected}
+        releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connectPending}
         closePending={closePending}
         interactionPending={interactionPending}
