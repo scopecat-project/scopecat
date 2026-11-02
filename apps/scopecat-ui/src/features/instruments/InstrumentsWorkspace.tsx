@@ -51,6 +51,8 @@ export function InstrumentsWorkspace({
   const [closingWindow, setClosingWindow] = useState(false);
   const [windowError, setWindowError] = useState<string>();
   const [releaseUnconfirmed, setReleaseUnconfirmed] = useState(false);
+  const [releasePending, setReleasePending] = useState(false);
+  const releaseInFlight = useRef<Promise<void> | undefined>(undefined);
   const closeProblem = useRef(false);
   const noteCloseProblem = useCallback((problem: boolean) => {
     closeProblem.current = problem;
@@ -219,7 +221,12 @@ export function InstrumentsWorkspace({
   useEffect(() => {
     const release = () => {
       const current = sessionRef.current;
-      if (!current || queryClient.isMutating({ mutationKey: ["device-control"] })) return;
+      if (
+        !current ||
+        releaseInFlight.current ||
+        queryClient.isMutating({ mutationKey: ["device-control"] })
+      )
+        return;
       sessionRef.current = undefined;
       void closeInstrumentSession(current.session_id, true).catch(() => {});
     };
@@ -319,16 +326,30 @@ export function InstrumentsWorkspace({
         return "blocked";
       }
       const current = sessionRef.current;
-      if (current) {
+      if (current || releaseInFlight.current) {
         try {
-          // No abort, physical disconnect, or command replay is part of closing.
-          await closeInstrumentSession(current.session_id);
-          if (sessionRef.current?.session_id === current.session_id) {
-            sessionRef.current = undefined;
-            setSession(undefined);
+          // Host timeout cancels the close attempt, not this HTTP operation.
+          // Every later preflight waits on the same release until it settles.
+          if (!releaseInFlight.current && current) {
+            setReleasePending(true);
+            setReleaseUnconfirmed(true);
+            releaseInFlight.current = closeInstrumentSession(current.session_id)
+              .then(() => {
+                if (sessionRef.current?.session_id === current.session_id) {
+                  sessionRef.current = undefined;
+                  setSession(undefined);
+                }
+                setReleaseUnconfirmed(false);
+                setSessionError(undefined);
+                closeProblem.current = false;
+                refresh();
+              })
+              .finally(() => {
+                releaseInFlight.current = undefined;
+                setReleasePending(false);
+              });
           }
-          setReleaseUnconfirmed(false);
-          refresh();
+          await releaseInFlight.current;
         } catch (error) {
           setReleaseUnconfirmed(true);
           setWindowError(`释放控制未确认：${errorMessage(error)}。请保留窗口并重试释放控制。`);
@@ -360,6 +381,7 @@ export function InstrumentsWorkspace({
       void window.pywebview?.api.set_window_title(`${deviceLabel} · 设备控制`).catch(() => {});
   }, [controlDeviceId, deviceLabel, desktop]);
   const connectCurrent = () => {
+    if (releaseInFlight.current) return;
     releaseConnection.reset();
     if (!revision || !selectedId) return;
     const key = `${revision.id}:${selectedId}`;
@@ -397,9 +419,13 @@ export function InstrumentsWorkspace({
         sessionError={sessionError}
         releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connect.isPending}
-        closePending={close.isPending}
+        closePending={close.isPending || releasePending}
         onConnect={connectCurrent}
-        onClose={() => session && close.mutate({ id: session.session_id, abort: false })}
+        onClose={() =>
+          !releaseInFlight.current &&
+          session &&
+          close.mutate({ id: session.session_id, abort: false })
+        }
         onSessionLost={loseSession}
         onCloseProblem={noteCloseProblem}
         onDisconnectOwner={() => {
@@ -420,6 +446,9 @@ export function InstrumentsWorkspace({
           <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
         </header>
         {closingWindow && <p role="status">正在等待当前操作完成并释放控制…</p>}
+        {!closingWindow && releasePending && (
+          <p role="status">仍在等待释放回执，暂不能重试或操作设备。</p>
+        )}
         {windowError && <p role="alert">{windowError}</p>}
         {(devicesQuery.error || accessQuery.error || instrumentsQuery.error) && (
           <p role="alert">
@@ -439,7 +468,7 @@ export function InstrumentsWorkspace({
               查看占用实验
             </a>
           ))}
-        <fieldset disabled={closingWindow} className="min-w-0">
+        <fieldset disabled={closingWindow || releasePending} className="min-w-0">
           {inspector}
         </fieldset>
       </section>

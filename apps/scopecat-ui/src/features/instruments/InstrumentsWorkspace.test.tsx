@@ -231,6 +231,57 @@ describe("instrument workspace", () => {
     expect(abortInstrumentSession).not.toHaveBeenCalled();
   });
 
+  it.each(["success", "failure"])(
+    "keeps a timed-out release frozen until its late %s receipt",
+    async (outcome) => {
+      let finish!: () => void;
+      let fail!: (error: Error) => void;
+      vi.mocked(closeInstrumentSession).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            finish = resolve;
+            fail = reject;
+          }),
+      );
+      renderWorkspace("drive-source");
+      await connectInstrument();
+      let first!: Promise<string>;
+      act(() => {
+        first = prepareDeviceClose("host-timeout");
+      });
+      await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(1));
+      act(() => releaseDeviceClose("host-timeout"));
+      expect(screen.getByText("控制释放结果待确认")).toBeVisible();
+      expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
+      const release = screen.getByRole("button", { name: "释放控制" });
+      expect(release).toBeDisabled();
+      fireEvent.click(release);
+      let repeated!: Promise<string>;
+      act(() => {
+        repeated = prepareDeviceClose("second-attempt");
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(closeInstrumentSession).toHaveBeenCalledTimes(1);
+      act(() => releaseDeviceClose("second-attempt"));
+      await act(async () => {
+        if (outcome === "success") finish();
+        else fail(new Error("late release failure"));
+        await Promise.all([first, repeated]);
+      });
+      expect(await first).toBe("unknown");
+      expect(await repeated).toBe("unknown");
+      expect(closeInstrumentSession).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole("button", { name: outcome === "success" ? "连接" : "释放控制" }),
+      ).toBeEnabled();
+      expect(screen.queryByText("控制释放结果待确认") !== null).toBe(outcome === "failure");
+      expect(readInstrumentState).not.toHaveBeenCalled();
+      expect(abortInstrumentSession).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(["success", "failure", "timeout"])("waits for an in-flight read: %s", async (outcome) => {
     let finish!: (state: InstrumentState) => void;
     let fail!: (error: Error) => void;
