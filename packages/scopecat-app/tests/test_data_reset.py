@@ -244,7 +244,7 @@ def test_interrupted_delete_requires_confirmation_and_verified_backup(
 
     original = Path.unlink
 
-    def fail_object(path: Path, *, missing_ok: bool = False):
+    def fail_object(path: Path, missing_ok: bool = False):
         if "objects" in path.parts:
             raise OSError("permission denied")
         return original(path, missing_ok=missing_ok)
@@ -341,7 +341,7 @@ def test_resume_refuses_unbacked_or_corrupt_content(
     runtime, error, prepare, backup = legacy
     unlink = Path.unlink
 
-    def interrupt(path: Path, *, missing_ok: bool = False):
+    def interrupt(path: Path, missing_ok: bool = False):
         if path.name == "control.sqlite3":
             raise OSError("permission denied")
         return unlink(path, missing_ok=missing_ok)
