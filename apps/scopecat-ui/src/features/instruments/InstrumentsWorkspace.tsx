@@ -554,6 +554,15 @@ export function InstrumentsWorkspace({
         />
       </details>
       {devicesQuery.error && <p role="alert">{errorMessage(devicesQuery.error)}</p>}
+      {devices.length === 0 && (
+        <p className="text-sm">
+          暂时没有设备或驱动？
+          <a className="underline" href="?lesson=parameters#help">
+            先用合成数据体验参数与扫描
+          </a>
+          ，无需先配置仪器。课程不是设备驱动模拟器。
+        </p>
+      )}
       {devices.length === 0 && !!catalog.data?.drivers.length && (
         <p className="rounded-lg border border-line bg-panel p-4">
           驱动已就绪。点击“添加设备”，选择驱动并填写连接设置；无需先创建实验。

@@ -42,7 +42,7 @@ def mean_iq(
         NDArray[np.complex128],
         sc.ArrayType(
             dtype="complex128", unit="ratio",
-            dimensions=(sc.ArrayDimension("shot", None),),
+            dimensions=(sc.ArrayDimension("shot", None, kind="shot"),),
         ),
     ],
 ) -> IQ:

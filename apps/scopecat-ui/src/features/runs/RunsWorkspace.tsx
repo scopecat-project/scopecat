@@ -430,6 +430,44 @@ export function RunsWorkspace({
   const activeCount = runs.filter((run) => ["accepted", "running"].includes(run.status)).length;
   const attentionCount = runs.filter((run) => run.status === "attention_required").length;
 
+  if (
+    !selectedRunId &&
+    runsQuery.isSuccess &&
+    runs.length === 0 &&
+    nextRunCursor === undefined &&
+    healthReachable
+  ) {
+    return (
+      <section
+        className="grid max-w-3xl gap-4 rounded-lg border border-line bg-panel p-6"
+        aria-label="开始使用"
+      >
+        <h2 className="text-xl font-semibold">还没有实验记录</h2>
+        <p>选择这次要做的事。查看页面不会连接设备或开始采集。</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid content-start gap-2 rounded-lg border border-line p-4">
+            <a className="font-semibold underline" href="?lesson=parameters#help">
+              无硬件先体验：参数与扫描课程
+            </a>
+            <p>运行合成扫描、查看结果，再编辑 Python。桌面应用会准备可编辑的 Notebook。</p>
+            <p className="text-sm text-text-dim">
+              课程带独立练习归属，不会替换设备驱动。需要 VS Code 的 Python / Jupyter 扩展。
+            </p>
+          </div>
+          <div className="grid content-start gap-2 rounded-lg border border-line p-4">
+            <a className="font-semibold underline" href="#instruments">
+              接入自己的设备与驱动
+            </a>
+            <p>选择驱动来源，添加设备，显式测试和调试。无需先建立实验 setup。</p>
+          </div>
+        </div>
+        <a className="underline" href="#launch">
+          已有实验代码：准备实验
+        </a>
+      </section>
+    );
+  }
+
   return (
     <>
       <div className={focused ? "hidden" : "mb-3 flex items-center gap-3"}>
@@ -770,9 +808,16 @@ export function RunsWorkspace({
             ) : runsQuery.isSuccess && runs.length === 0 ? (
               <div className="grid gap-3 p-6">
                 <h2 className="text-lg font-semibold">还没有实验记录</h2>
-                <p>首次使用可以先添加设备并测试连接，无需先创建实验。</p>
+                <p>选择这次要做的事。查看页面不会连接设备或开始采集。</p>
+                <a className="underline" href="?lesson=parameters#help">
+                  无硬件先体验：参数与扫描课程
+                </a>
+                <p className="text-sm text-text-dim">
+                  课程使用合成数据和独立练习归属，不会替换已启用的设备驱动。桌面应用可准备可编辑的
+                  Notebook。
+                </p>
                 <a className="underline" href="#instruments">
-                  配置设备与驱动
+                  接入自己的设备与驱动
                 </a>
                 <a className="underline" href="#launch">
                   准备实验

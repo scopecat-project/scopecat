@@ -1,37 +1,18 @@
 # Practice in Scopecat
 
-Open **Help → Start peak practice** in the workbench. You do not need a device,
-another application, a Python environment or a notebook kernel.
+A new application with no runs offers two starting points: **Connect your own devices and drivers**,
+or **Parameters and scans** in Help when you have no hardware yet. The device page also links to this course.
 
-## Try a scan and a manual decision
+The shipped course generates synthetic data. It is not a hardware driver simulator and does not install or replace
+your instrument backend. Courses retain their own practice ownership and **View this course's data** filter;
+they share the application without claiming existing experiment records. Preparing a course does not acquire data:
+run the Notebook's acquisition cell explicitly, then open the retained result in Scopecat.
 
-1. Start the practice and choose **Open practice task**.
-2. The task generates a synthetic frequency scan. When it asks for your judgment,
-   choose **Review curve and enter frequency**.
-3. Inspect the curve in Decisions. Select **Peak selected** and enter a frequency
-   in MHz, or choose **No clear peak** / **Unsure** and leave the frequency empty.
-4. Choose **Submit and continue**. If the answer is saved but continuation is
-   blocked, open the task to inspect its pause or failure; do not submit a new scan.
-   A practice choice is not a published calibration.
+Use the desktop application to prepare and open the editable Notebook in VS Code. Browser mode can inspect
+records and follow the application links, but cannot open a native folder chooser or prepare a desktop Notebook.
 
-You can close the page and return through Help. The existing task retains its
-scan and decision; opening it does not measure again. Start a new practice when
-you want a fresh attempt. Existing practices retain their original question and
-procedure version; start a new practice to use updated lesson hints.
-
-## Keep notes and finish
-
-The optional notes folder shown in Help opens directly in VS Code. It contains
-ordinary Markdown files; editing notes does not require a kernel or another
-service. **Export practice files** downloads a copy.
-
-Choose **Clear practice…** to stop that practice and remove its measurements,
-analyses and decisions. The default keeps your notes and edited files. Choose
-**Delete all files in this practice folder** only when you want those removed too.
-
-An unfinished cleanup stays visible with **Retry cleanup**. Other practices,
-ordinary measurements, device settings and source folders are not selected.
-Closing the workbench page alone does not clear anything.
+Earlier peak practices remain available for continuation and explicit cleanup. New peak-selection learning is
+in the **Procedures and human decisions** Notebook; the old standalone practice creation entry is retired.
 
 ## Clean up ordinary measurements
 
@@ -46,6 +27,19 @@ cleanup explains what retains it; it does not silently delete dependent results.
 file reclamation after an interruption. Record removal and file removal are
 reported separately. [Back up scientific records](../how-to/backup-and-restore.md)
 before deleting anything you intend to retain.
+
+## Read the teaching Rabi curve
+
+Newly prepared teaching material declares its local `shot` dimension explicitly. For a one-axis scan,
+the result page first shows the arithmetic shot mean for each available scan point. Complex IQ is averaged
+before magnitude or phase is calculated; the scan coordinate itself is not averaged. Expand **原始轨迹**
+to inspect the original traces. This display calculation does not replace or delete stored shots.
+
+The mean view uses complete dense arrays in the bounded preview (the usual seven points × 64 shots fit).
+Summaries, incomplete/unavailable arrays, other array axes and multidimensional scans are not silently reduced.
+The plot states the number of usable records and shots; missing scan points are not joined. This is not an
+online accumulated statistic or an exported analysis result. Existing edited course folders and old schemas
+are not automatically migrated or inferred from the string “shot”.
 
 ## Choose a Notebook route
 
