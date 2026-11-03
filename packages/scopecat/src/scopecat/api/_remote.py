@@ -1,5 +1,3 @@
-# pyright: reportUnknownMemberType=false, reportUnknownParameterType=false
-# pyright: reportUnknownVariableType=false
 """Remote run operations backed by the daemon HTTP transport."""
 
 from __future__ import annotations
@@ -196,13 +194,14 @@ class RemoteRunOperations:
             content=view.content_bytes(),
         )
 
-    def load_measurement_arrow_page(
+    # PyArrow native Table/IPC types are untyped; keep this exception at the boundary.
+    def load_measurement_arrow_page(  # pyright: ignore[reportUnknownParameterType]
         self,
         run_id: str,
         *,
         query: MeasurementArrowQuery,
-    ) -> tuple[pa.Table, int | None, int]:
-        return self.client.measurement_arrow(run_id, query)
+    ) -> tuple[pa.Table, int | None, int]:  # pyright: ignore[reportUnknownMemberType]
+        return self.client.measurement_arrow(run_id, query)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     def save_analysis(
         self,

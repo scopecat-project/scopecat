@@ -44,7 +44,7 @@ def test_new_table_unknowns_freeze_and_structural_history(
     try:
         with project.connect() as lab:
             assert lab.config.registry().entries == ()
-            notebook_imports.syspath_prepend(str(root / "src"))
+            notebook_imports.syspath_prepend(str(root / "src"))  # pyright: ignore[reportUnknownMemberType] - pytest leaves path unannotated.
             initial_setup = importlib.import_module("workspace_app").initial_setup
             setup = lab.setup.import_recipe(initial_setup(), name="probe-bench")
             empty = lab.parameters.save(

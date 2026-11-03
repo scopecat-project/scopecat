@@ -1,18 +1,25 @@
 """Native close keeps failure recovery in the same window, without a manager."""
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import Mock, call, patch
 
 import pytest
 
-from scopecat_app.desktop import DesktopAPI, DesktopWindows, _window_close_handlers
+from scopecat_app.desktop import (
+    DesktopAPI,
+    DesktopView,
+    DesktopWindows,
+    _window_close_handlers,
+)
 from scopecat_app.desktop_session import DesktopSession
 
 
 @pytest.mark.parametrize("stop", [False, True])
-def test_file_work_allows_other_windows_and_participates_in_quit(stop):
+def test_file_work_allows_other_windows_and_participates_in_quit(stop: bool):
     runtime = Mock()
     runtime.activity.return_value.model_dump.return_value = {}
     runtime.stop_if_idle.return_value = True
@@ -58,9 +65,9 @@ def test_native_windows_share_backend_and_keep_navigation(
 ):
     from webview.event import Event
 
-    created = []
+    created: list[tuple[Mock, dict[str, object]]] = []
 
-    def create(_title, **kwargs):
+    def create(_title: str, **kwargs: object):
         window = Mock()
         window.events = SimpleNamespace(
             loaded=Event(window, True),
@@ -162,7 +169,7 @@ def test_native_windows_share_backend_and_keep_navigation(
     ]
 
     # pywebview returns True from Event.set when a handler vetoes the close.
-    def confirm_close(script):
+    def confirm_close(script: str):
         if "scopecat:close-preflight" in script:
             assert first.close_request is not None
             first.api.complete_close_preflight(first.close_request, "saved")
@@ -231,7 +238,7 @@ def test_two_windows_share_quit_decision_and_operation_lock():
 
 @pytest.mark.parametrize("platform", ["darwin", "win32"])
 def test_window_close_hides_without_requesting_quit(
-    platform, monkeypatch: pytest.MonkeyPatch
+    platform: str, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr("scopecat_app.desktop.sys.platform", platform)
     window = Mock()
@@ -266,12 +273,19 @@ def test_new_source_preserves_existing_files(tmp_path: Path):
 def test_busy_source_creation_retains_folder_without_interrupting_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    def create_client_environment(*_: object) -> None:
+        return None
+
+    def prepare_execution_environment(*_: object) -> Path:
+        return tmp_path / "execution/python"
+
     monkeypatch.setattr(
-        "scopecat_app.author_environment.create_client_environment", lambda *_: None
+        "scopecat_app.author_environment.create_client_environment",
+        create_client_environment,
     )
     monkeypatch.setattr(
         "scopecat_app.author_environment.prepare_execution_environment",
-        lambda *_: tmp_path / "execution/python",
+        prepare_execution_environment,
     )
     runtime = Mock()
     runtime.stop_if_idle.return_value = False
@@ -286,7 +300,7 @@ def test_busy_source_creation_retains_folder_without_interrupting_work(
 
 
 @pytest.mark.parametrize("name", ["../outside", "..", "C:outside", "nested\\folder"])
-def test_new_source_name_cannot_escape_selected_parent(tmp_path: Path, name):
+def test_new_source_name_cannot_escape_selected_parent(tmp_path: Path, name: str):
     api = DesktopAPI(DesktopSession(Mock(), threading.Event()), Mock())
     with pytest.raises(ValueError, match="单个新目录"):
         api.create_source(str(tmp_path), name)
@@ -363,7 +377,7 @@ def test_waiting_exit_does_not_replace_an_in_progress_lifecycle_operation():
     assert closing.is_set()
 
 
-def finish_exit(api, background):
+def finish_exit(api: DesktopAPI, background: bool):
     bridge = threading.Thread(target=api.exit, args=(background,))
     bridge.start()
     bridge.join()
@@ -372,7 +386,7 @@ def finish_exit(api, background):
 
 
 @pytest.mark.parametrize("background", [True, False])
-def test_close_obeys_explicit_background_choice(background):
+def test_close_obeys_explicit_background_choice(background: bool):
     runtime = Mock()
     window = Mock()
     closing = threading.Event()
@@ -512,7 +526,7 @@ def test_interrupted_selection_can_retry_without_closing_window():
 
 
 @pytest.mark.parametrize("run_id", ["", "   ", None, 123, "x" * 513])
-def test_run_window_rejects_invalid_bridge_input(run_id):
+def test_run_window_rejects_invalid_bridge_input(run_id: object):
     session = DesktopSession(Mock(), threading.Event())
     create = Mock()
     api = DesktopAPI(session, Mock(), new_window=create)
@@ -572,15 +586,13 @@ def test_lost_wait_response_keeps_pending_exit_and_cancel_restores_admission():
         pass
 
 
-def close_fixture():
-    from scopecat_app.desktop import DesktopView
-
+def close_fixture() -> tuple[Mock, DesktopSession, DesktopWindows, list[DesktopView]]:
     runtime = Mock()
     runtime.stop_if_idle.return_value = True
     session = DesktopSession(runtime, threading.Event())
     windows = DesktopWindows(session, Mock())
     windows.preflight_timeout = 0.03
-    views = []
+    views: list[DesktopView] = []
     for _ in range(2):
         window = Mock()
         api = DesktopAPI(session, lambda window=window: window)
@@ -593,16 +605,22 @@ def close_fixture():
     return runtime, session, windows, views
 
 
-def acknowledge(view, status="saved"):
-    def dispatch(script):
+def mock_window(view: DesktopView) -> Mock:
+    assert isinstance(view.window, Mock)
+    return view.window
+
+
+def acknowledge(view: DesktopView, status: str = "saved"):
+    def dispatch(script: str):
         if "scopecat:close-preflight" in script:
+            assert view.close_request is not None
             view.api.complete_close_preflight(view.close_request, status)
 
-    view.window.run_js.side_effect = dispatch
+    mock_window(view).run_js.side_effect = dispatch
 
 
 @pytest.mark.parametrize("status", ["blocked", "unknown", None])
-def test_quit_preflight_failure_preserves_all_views_and_daemon(status):
+def test_quit_preflight_failure_preserves_all_views_and_daemon(status: str | None):
     runtime, session, windows, views = close_fixture()
     acknowledge(views[0])
     if status:
@@ -613,10 +631,10 @@ def test_quit_preflight_failure_preserves_all_views_and_daemon(status):
     runtime.stop_if_idle.assert_not_called()
     runtime.stop.assert_not_called()
     for view in views:
-        view.window.destroy.assert_not_called()
+        mock_window(view).destroy.assert_not_called()
         assert any(
             "close-release" in call.args[0]
-            for call in view.window.run_js.call_args_list
+            for call in mock_window(view).run_js.call_args_list
         )
     assert len(windows._views) == 2
 
@@ -632,7 +650,7 @@ def test_all_view_preflight_releases_after_busy_inspection_and_rechecks_stop():
     for view in views:
         assert any(
             "close-release" in call.args[0]
-            for call in view.window.run_js.call_args_list
+            for call in mock_window(view).run_js.call_args_list
         )
     acknowledge(views[1], "blocked")
     with pytest.raises(ValueError, match="confirmed"):
@@ -643,15 +661,16 @@ def test_all_view_preflight_releases_after_busy_inspection_and_rechecks_stop():
 def test_preflight_rejects_stale_ack_and_prevents_new_view():
     runtime, session, windows, views = close_fixture()
 
-    def dispatch(script):
+    def dispatch(script: str):
         if "scopecat:close-preflight" in script:
             views[0].api.complete_close_preflight("old-request", "saved")
             assert not views[0].close_ready.is_set()
             with pytest.raises(ValueError, match="saving"):
                 windows.create()
+            assert views[0].close_request is not None
             views[0].api.complete_close_preflight(views[0].close_request, "saved")
 
-    views[0].window.run_js.side_effect = dispatch
+    mock_window(views[0]).run_js.side_effect = dispatch
     acknowledge(views[1])
     with windows.preflight():
         assert not session.closing.is_set()
@@ -687,18 +706,20 @@ def test_close_reserves_last_view_until_actual_closed_event():
     windows._close_view(views[0])
     assert views[0].close_authorized
     assert len(windows._views) == 2
-    views[0].window.destroy.assert_called_once()
+    mock_window(views[0]).destroy.assert_called_once()
     windows._close_view(views[1])
-    views[1].window.destroy.assert_not_called()
-    views[1].window.hide.assert_called_once()
+    mock_window(views[1]).destroy.assert_not_called()
+    mock_window(views[1]).hide.assert_called_once()
     assert not session.closing.is_set()
     runtime.stop.assert_not_called()
 
 
-def test_reload_during_preflight_invalidates_old_page_ack(monkeypatch):
+def test_reload_during_preflight_invalidates_old_page_ack(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from webview.event import Event
 
-    def create(_title, **_kwargs):
+    def create(_title: str, **_kwargs: object):
         window = Mock()
         window.events = SimpleNamespace(
             loaded=Event(window, True),
@@ -714,7 +735,7 @@ def test_reload_during_preflight_invalidates_old_page_ack(monkeypatch):
     view = windows.create()
     assert isinstance(view.window, Mock)
 
-    def dispatch(script):
+    def dispatch(script: str):
         if "scopecat:close-preflight" in script:
             request = view.close_request
             assert request is not None
@@ -730,7 +751,7 @@ def test_reload_during_preflight_invalidates_old_page_ack(monkeypatch):
 
 
 @pytest.mark.parametrize("operation", ["request", "stop", "deferred"])
-def test_shutdown_revalidates_certificate_after_runtime_stop(operation):
+def test_shutdown_revalidates_certificate_after_runtime_stop(operation: str):
     runtime, session, _windows, views = close_fixture()
     for view in views:
         acknowledge(view)
@@ -751,14 +772,16 @@ def test_shutdown_revalidates_certificate_after_runtime_stop(operation):
             session.poll_exit()
     assert not session.closing.is_set()
     for view in views:
-        view.window.destroy.assert_not_called()
+        mock_window(view).destroy.assert_not_called()
         assert view.close_request is None
 
 
-def test_reload_between_authorization_and_destroy_vetoes_close(monkeypatch):
+def test_reload_between_authorization_and_destroy_vetoes_close(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from webview.event import Event
 
-    def create(_title, **_kwargs):
+    def create(_title: str, **_kwargs: object):
         window = Mock()
         window.events = SimpleNamespace(
             loaded=Event(window, True),
@@ -774,7 +797,7 @@ def test_reload_between_authorization_and_destroy_vetoes_close(monkeypatch):
     assert isinstance(first.window, Mock)
     acknowledge(first)
     acknowledge(second)
-    vetoed = []
+    vetoed: list[bool] = []
 
     def destroy():
         first.window.events.loaded.set()
@@ -790,10 +813,12 @@ def test_reload_between_authorization_and_destroy_vetoes_close(monkeypatch):
 
 
 @pytest.mark.parametrize("phase", ["join", "destroy"])
-def test_post_commit_reload_aborts_close_and_allows_existing_retry(monkeypatch, phase):
+def test_post_commit_reload_aborts_close_and_allows_existing_retry(
+    monkeypatch: pytest.MonkeyPatch, phase: str
+):
     from webview.event import Event
 
-    def create(_title, **_kwargs):
+    def create(_title: str, **_kwargs: object):
         window = Mock()
         window.events = SimpleNamespace(
             loaded=Event(window, True),
@@ -857,7 +882,9 @@ def test_post_commit_reload_aborts_close_and_allows_existing_retry(monkeypatch, 
 
 
 @pytest.mark.parametrize("available", [False, True])
-def test_last_reserved_view_retains_work_and_can_reopen(monkeypatch, available):
+def test_last_reserved_view_retains_work_and_can_reopen(
+    monkeypatch: pytest.MonkeyPatch, available: bool
+):
     runtime, session, windows, views = close_fixture()
     monkeypatch.setattr("webview.active_window", lambda: views[1].window)
     windows.tray_changed(available)
@@ -865,14 +892,16 @@ def test_last_reserved_view_retains_work_and_can_reopen(monkeypatch, available):
         acknowledge(view)
     windows._close_view(views[0])
     windows._close_view(views[1])
-    views[1].window.destroy.assert_not_called()
-    assert views[1].window.hide.call_count == int(available)
-    assert views[1].window.create_confirmation_dialog.call_count == int(not available)
+    mock_window(views[1]).destroy.assert_not_called()
+    assert mock_window(views[1]).hide.call_count == int(available)
+    assert mock_window(views[1]).create_confirmation_dialog.call_count == int(
+        not available
+    )
     assert not session.closing.is_set()
     runtime.stop.assert_not_called()
     runtime.stop_if_idle.assert_not_called()
     windows.show()
-    views[1].window.show.assert_called()
+    mock_window(views[1]).show.assert_called()
 
 
 def test_tray_loss_restores_hidden_views_without_stopping_work():
@@ -881,8 +910,8 @@ def test_tray_loss_restores_hidden_views_without_stopping_work():
     windows.hide()
     windows.tray_changed(False)
     for view in views:
-        view.window.hide.assert_called_once()
-        view.window.show.assert_called()
+        mock_window(view).hide.assert_called_once()
+        mock_window(view).show.assert_called()
     assert not session.closing.is_set()
     runtime.stop.assert_not_called()
     runtime.stop_if_idle.assert_not_called()
@@ -890,7 +919,7 @@ def test_tray_loss_restores_hidden_views_without_stopping_work():
 
 @pytest.mark.parametrize("platform", ["linux", "win32"])
 def test_desktop_starts_service_with_optional_import_unavailable(
-    monkeypatch, tmp_path, platform
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, platform: str
 ):
     import builtins
     import sys
@@ -901,9 +930,9 @@ def test_desktop_starts_service_with_optional_import_unavailable(
 
     monkeypatch.setattr(sys, "platform", platform)
     original_import = builtins.__import__
-    attempted = []
+    attempted: list[str] = []
 
-    def import_module(name, *args, **kwargs):
+    def import_module(name: str, *args: Any, **kwargs: Any):
         if name == "pystray":
             attempted.append(name)
             raise ImportError("optional backend unavailable")
@@ -925,9 +954,13 @@ def test_desktop_starts_service_with_optional_import_unavailable(
         return SimpleNamespace(base_url="http://localhost:1234")
 
     runtime.start.side_effect = start_service
-    monkeypatch.setattr(session, "finish_exit", lambda _destroy: True)
 
-    def start_native(supervise, **kwargs):
+    def finish_exit(_destroy: Callable[[], None]) -> bool:
+        return True
+
+    monkeypatch.setattr(session, "finish_exit", finish_exit)
+
+    def start_native(supervise: Callable[[], None], **kwargs: object):
         assert kwargs["menu"]  # Explicit Quit/status remain native menu actions.
         window.events.loaded.set()
         supervise()
@@ -939,12 +972,14 @@ def test_desktop_starts_service_with_optional_import_unavailable(
     assert attempted == ["pystray"]
 
 
-def test_no_tray_close_and_reopen_preserve_synthetic_background_work(monkeypatch):
+def test_no_tray_close_and_reopen_preserve_synthetic_background_work(
+    monkeypatch: pytest.MonkeyPatch,
+):
     runtime, session, windows, views = close_fixture()
     windows._views = [views[0]]
     monkeypatch.setattr("webview.active_window", lambda: views[0].window)
     proceed, completed = threading.Event(), threading.Event()
-    results = []
+    results: list[str] = []
 
     def work():
         if proceed.wait(2):
@@ -960,7 +995,7 @@ def test_no_tray_close_and_reopen_preserve_synthetic_background_work(monkeypatch
         windows.show()
         assert results == ["synthetic result"]
         assert not session.closing.is_set()
-        views[0].window.hide.assert_not_called()
+        mock_window(views[0]).hide.assert_not_called()
         runtime.stop.assert_not_called()
         runtime.stop_if_idle.assert_not_called()
     finally:
@@ -968,7 +1003,9 @@ def test_no_tray_close_and_reopen_preserve_synthetic_background_work(monkeypatch
         worker.join(2)
 
 
-def test_hide_does_not_block_synchronous_native_close_callback(monkeypatch):
+def test_hide_does_not_block_synchronous_native_close_callback(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from webview.event import Event
 
     window = Mock()
@@ -987,7 +1024,7 @@ def test_hide_does_not_block_synchronous_native_close_callback(monkeypatch):
     monkeypatch.setattr(windows, "_hide_or_retain", Mock())
     invoked, released, closed = threading.Event(), threading.Event(), threading.Event()
 
-    def native_hide(_window):
+    def native_hide(_window: object):
         invoked.set()
         assert released.wait(2)
 
@@ -1013,18 +1050,20 @@ def test_hide_does_not_block_synchronous_native_close_callback(monkeypatch):
 
 @pytest.mark.parametrize("regained", [False, True])
 def test_tray_loss_during_native_hide_cannot_leave_late_hidden_view(
-    monkeypatch, regained
+    monkeypatch: pytest.MonkeyPatch, regained: bool
 ):
     _, _, windows, views = close_fixture()
     windows._views = views[:1]
     windows.tray_changed(True)
-    actions = []
-    monkeypatch.setattr(
-        "scopecat_app.desktop.show_window", lambda _window: actions.append("show")
-    )
+    actions: list[str] = []
+
+    def native_show(_window: object) -> None:
+        actions.append("show")
+
+    monkeypatch.setattr("scopecat_app.desktop.show_window", native_show)
     monkeypatch.setattr(windows, "tray_status", Mock())
 
-    def native_hide(_window):
+    def native_hide(_window: object):
         windows.tray_changed(False)
         if regained:
             windows.tray_changed(True)
@@ -1048,11 +1087,11 @@ def test_file_picker_returns_selected_path_without_runtime_mutation():
 
 
 def test_device_window_identity_deduplicates_loading_navigation_and_two_devices(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     from webview.event import Event
 
-    def create(_title, **kwargs):
+    def create(_title: str, **kwargs: object):
         window = Mock()
         window.get_current_url.return_value = None
         window.initial_url = kwargs["url"]
@@ -1096,17 +1135,19 @@ def test_device_window_identity_deduplicates_loading_navigation_and_two_devices(
     "answer,status",
     [(False, "saved"), (True, "blocked"), (True, "unknown"), (True, "saved")],
 )
-def test_last_device_window_only_hides_after_confirmed_release(answer, status):
+def test_last_device_window_only_hides_after_confirmed_release(
+    answer: bool, status: str
+):
     _runtime, _session, windows, views = close_fixture()
     view = views[0]
     windows._views = [view]
     view.device_id = "device-a"
-    view.window.create_confirmation_dialog.return_value = answer
+    mock_window(view).create_confirmation_dialog.return_value = answer
     acknowledge(view, status)
     with patch.object(windows, "_hide_or_retain") as hide:
         windows._close_view(view)
         assert hide.call_count == (1 if answer and status == "saved" else 0)
-    view.window.destroy.assert_not_called()
+    mock_window(view).destroy.assert_not_called()
     assert view.close_request is None
     assert not view.close_authorized
 
@@ -1115,13 +1156,13 @@ def test_device_close_failure_retains_window_and_retry_uses_new_preflight():
     _runtime, _session, windows, views = close_fixture()
     view = views[0]
     view.device_id = "device-a"
-    view.window.create_confirmation_dialog.return_value = True
+    mock_window(view).create_confirmation_dialog.return_value = True
     acknowledge(view, "unknown")
     windows._close_view(view)
-    view.window.destroy.assert_not_called()
+    mock_window(view).destroy.assert_not_called()
     acknowledge(view, "saved")
     windows._close_view(view)
-    view.window.destroy.assert_called_once()
+    mock_window(view).destroy.assert_called_once()
     assert view.close_authorized
 
 
@@ -1135,12 +1176,14 @@ def test_device_window_api_rejects_empty_identity_before_native_open():
     api.open_device.assert_not_called()
 
 
-def test_application_reopen_restores_main_after_main_then_device_close(monkeypatch):
+def test_application_reopen_restores_main_after_main_then_device_close(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from webview.event import Event
 
     native_windows: list[Mock] = []
 
-    def create(_title, **kwargs):
+    def create(_title: str, **kwargs: object):
         window = Mock()
         window.initial_url = kwargs["url"]
         window.events = SimpleNamespace(
@@ -1190,7 +1233,9 @@ def test_application_reopen_restores_main_after_main_then_device_close(monkeypat
     runtime.stop.assert_not_called()
 
 
-def test_activation_selects_existing_main_without_resuming_device_or_run(monkeypatch):
+def test_activation_selects_existing_main_without_resuming_device_or_run(
+    monkeypatch: pytest.MonkeyPatch,
+):
     runtime, session, windows, views = close_fixture()
     views[0].is_main = True
     views[1].device_id = "device-a"
@@ -1199,7 +1244,7 @@ def test_activation_selects_existing_main_without_resuming_device_or_run(monkeyp
     windows.activate()
     shown.assert_called_once_with(views[0].window)
     for view in views:
-        view.window.run_js.assert_not_called()
+        mock_window(view).run_js.assert_not_called()
     assert runtime.mock_calls == []
     session.closing.set()
     shown.reset_mock()

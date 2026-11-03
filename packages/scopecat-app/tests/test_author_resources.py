@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -125,7 +126,7 @@ def test_projection_has_own_identity_and_keeps_full_delivery(
 @pytest.mark.parametrize(
     "extra", ["toolchain/python.tar", "wheels/numpy-1.whl", "build.lock"]
 )
-def test_extra_delivery_files_are_rejected(delivery: Path, tmp_path: Path, extra):
+def test_extra_delivery_files_are_rejected(delivery: Path, tmp_path: Path, extra: str):
     resource = build_author_resources(delivery, tmp_path / "author")
     (resource / extra).write_text("unexpected")
     with pytest.raises(ValueError, match="多余"):
@@ -328,10 +329,10 @@ def test_uv_manages_pinned_python_without_shell_changes(
     selection: Selection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     runtime, source, resource = selection
-    calls = []
+    calls: list[list[str]] = []
     python = tmp_path / "managed/bin/python"
 
-    def run(command):
+    def run(command: list[str]):
         calls.append(command)
         if "-c" in command:
             return json.dumps(
@@ -357,15 +358,14 @@ def test_uv_manages_pinned_python_without_shell_changes(
     "mode", ["incompatible", "application", "based-on-application"]
 )
 def test_explicit_python_is_checked_before_use(
-    selection: Selection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode
+    selection: Selection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
 ):
     runtime, source, resource = selection
     python = tmp_path / "user/bin/python"
     app = runtime.installation().python
-    monkeypatch.setattr(
-        author_python,
-        "run",
-        lambda _c: json.dumps(
+
+    def probe_python(_command: list[str]) -> str:
+        return json.dumps(
             {
                 "version": "3.13.9" if mode == "incompatible" else "3.14.7",
                 "base": str(
@@ -375,7 +375,12 @@ def test_explicit_python_is_checked_before_use(
                 ),
                 "executable": str(app if mode == "application" else python),
             }
-        ),
+        )
+
+    monkeypatch.setattr(
+        author_python,
+        "run",
+        probe_python,
     )
     with pytest.raises(ValueError, match=r"不满足|应用内部"):
         author_python.resolve(runtime, source, resource, python=python)
@@ -385,9 +390,9 @@ def test_offline_missing_python_never_downloads(
     selection: Selection, monkeypatch: pytest.MonkeyPatch
 ):
     runtime, source, resource = selection
-    calls = []
+    calls: list[list[str]] = []
 
-    def missing(command):
+    def missing(command: list[str]):
         calls.append(command)
         raise ValueError("missing")
 
@@ -404,9 +409,9 @@ def test_unavailable_python_download_explains_explicit_choice_without_fallback(
     retained = source / ".venv" / "retained.txt"
     retained.parent.mkdir()
     retained.write_text("existing client")
-    calls = []
+    calls: list[list[str]] = []
 
-    def missing(command):
+    def missing(command: list[str]):
         calls.append(command)
         raise ValueError("No download found for request")
 
@@ -429,11 +434,20 @@ def test_workspace_pin_overrides_recipe_and_latest_is_rejected(
     runtime, source, resource = selection
     pin = source / ".python-version"
     pin.write_text("3.14.8\n")
-    calls = []
-    monkeypatch.setattr(
-        author_python, "run", lambda c: calls.append(c) or "/managed/python"
-    )
-    monkeypatch.setattr(author_python, "check", lambda _r, _w, p: p)
+    calls: list[list[str]] = []
+
+    def record_command(command: list[str]) -> str:
+        calls.append(command)
+        return "/managed/python"
+
+    monkeypatch.setattr(author_python, "run", record_command)
+
+    def accept_python(
+        _runtime: ApplicationRuntime, _workspace: Path, python: Path
+    ) -> Path:
+        return python
+
+    monkeypatch.setattr(author_python, "check", accept_python)
     assert author_python.resolve(runtime, source, resource) == Path("/managed/python")
     assert calls[0][3] == "3.14.8"
     pin.write_text("latest")
@@ -447,9 +461,11 @@ def test_recipe_uses_probed_runtime_version_and_rejects_target_mismatch(
 ):
     target = bundle.target_identity()
     info = {"version": "3.14.99", "target": target}
-    monkeypatch.setattr(
-        resource_builder.subprocess, "check_output", lambda *_a, **_kw: json.dumps(info)
-    )
+
+    def probe_runtime(*_a: object, **_kw: object):
+        return json.dumps(info)
+
+    monkeypatch.setattr(resource_builder.subprocess, "check_output", probe_runtime)
     recipe = resource_builder._recipe(tmp_path / "packaged-python", target)
     assert recipe["python"] == "3.14.99" + (
         "t" if target["free_threaded"] == "True" else ""
@@ -472,7 +488,11 @@ def test_python_identity_tracks_same_path_binary_library_and_abi(
         "version": "3.14.7",
         "abi": "cpython-314",
     }
-    monkeypatch.setattr(author_python, "run", lambda _c: json.dumps(info))
+
+    def probe_runtime(_command: list[str]) -> str:
+        return json.dumps(info)
+
+    monkeypatch.setattr(author_python, "run", probe_runtime)
     first = author_python.identity(binary)
     binary.write_bytes(b"replacement")
     second = author_python.identity(binary)
@@ -514,10 +534,14 @@ def test_native_explicit_projection_feeds_windows_installer(
     for name, digest in inputs.files.items():
         assert projected["files"][name] == verified["files"][name] == digest
     monkeypatch.setattr(native_package.sys, "platform", "win32")
-    monkeypatch.setattr(native_package.shutil, "which", lambda _: "ISCC.exe")
-    scripts = []
 
-    def compile_installer(command):
+    def which_stub(_: str) -> str:
+        return "ISCC.exe"
+
+    monkeypatch.setattr(native_package.shutil, "which", which_stub)
+    scripts: list[str] = []
+
+    def compile_installer(command: list[str]):
         script = Path(command[1])
         scripts.append(script.read_text(encoding="utf-8-sig"))
         (script.parent / "Scopecat-Setup.exe").write_bytes(b"installer")
@@ -543,7 +567,9 @@ def test_native_explicit_projection_feeds_windows_installer(
         ("sources", {"public": "wrong-batch"}),
     ],
 )
-def test_native_inputs_reject_missing_or_wrong_identity(delivery: Path, field, value):
+def test_native_inputs_reject_missing_or_wrong_identity(
+    delivery: Path, field: str, value: object
+):
     manifest = delivery / bundle.MANIFEST
     document = json.loads(manifest.read_text())
     document[field] = value
@@ -562,7 +588,7 @@ def test_native_inputs_reject_missing_or_wrong_identity(delivery: Path, field, v
     ],
 )
 def test_native_inputs_reject_mismatched_python_provenance(
-    delivery: Path, field, value
+    delivery: Path, field: str, value: object
 ):
     manifest = delivery / bundle.MANIFEST
     document = json.loads(manifest.read_text())
@@ -582,8 +608,24 @@ def test_native_staging_identity_change_stops_before_install(
     monkeypatch.setattr(native_package.sys, "platform", "win32")
     copy = shutil.copytree
 
-    def changed_copy(source, destination, *args, **kwargs):
-        result = copy(source, destination, *args, **kwargs)
+    def changed_copy(
+        source: str | os.PathLike[str],
+        destination: str | os.PathLike[str],
+        symlinks: bool = False,
+        ignore: Callable[[str, list[str]], Iterable[str]] | None = None,
+        copy_function: Callable[[str, str], object] = shutil.copy2,
+        ignore_dangling_symlinks: bool = False,
+        dirs_exist_ok: bool = False,
+    ):
+        result = copy(
+            source,
+            destination,
+            symlinks,
+            ignore,
+            copy_function,
+            ignore_dangling_symlinks,
+            dirs_exist_ok,
+        )
         manifest = Path(destination) / bundle.MANIFEST
         if manifest.is_file():
             document = json.loads(manifest.read_text())
@@ -606,7 +648,11 @@ def test_native_recipe_must_match_portable_python_provenance(
     inputs = resource_builder.native_author_inputs(
         delivery, bundle.verify_bundle(delivery)
     )
-    monkeypatch.setattr(resource_builder, "_recipe", lambda *_: {"python": "3.15.99"})
+
+    def recipe_stub(*_: object) -> dict[str, str]:
+        return {"python": "3.15.99"}
+
+    monkeypatch.setattr(resource_builder, "_recipe", recipe_stub)
     with pytest.raises(ValueError, match="recipe does not match provenance"):
         build_author_resources(inputs, tmp_path / "author")
     assert not (tmp_path / "author").exists()

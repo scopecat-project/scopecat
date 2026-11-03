@@ -1,5 +1,7 @@
 """Patched-source sequencing contracts, not a substitute for native WebView2."""
 
+from __future__ import annotations
+
 import ast
 import base64
 import csv
@@ -7,10 +9,12 @@ import hashlib
 import importlib.metadata
 import io
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier, Lock
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from scripts.app_build import windows_dependency
@@ -30,20 +34,26 @@ def source_pair() -> tuple[bytes, bytes]:
 
 
 class Task:
-    def __init__(self):
+    def __init__(self) -> None:
         self.IsCanceled = False
         self.IsFaulted = False
-        self.Exception = None
+        self.Exception: str | None = None
         self.completed = False
-        self.continuations = []
+        self.continuations: list[
+            tuple[Callable[[Task], None], list[tuple[Callable[[Task], None], Task]]]
+        ] = []
 
-    def ContinueWith(self, callback, scheduler):
+    def ContinueWith(
+        self,
+        callback: Callable[[Task], None],
+        scheduler: list[tuple[Callable[[Task], None], Task]],
+    ) -> None:
         if self.completed:
             scheduler.append((callback, self))
         else:
             self.continuations.append((callback, scheduler))
 
-    def complete(self, failure=None):
+    def complete(self, failure: str | None = None) -> None:
         self.IsCanceled = failure == "cancelled"
         self.IsFaulted = failure == "faulted"
         self.Exception = failure
@@ -54,21 +64,23 @@ class Task:
 
 
 class Action:
-    def __class_getitem__(cls, item):
+    def __class_getitem__(
+        cls, item: object
+    ) -> Callable[[Callable[[Task], None]], Callable[[Task], None]]:
         return lambda callback: callback
 
 
-def drain(view):
+def drain(view: Any) -> None:
     while view.syncContextTaskScheduler:
         callback, task = view.syncContextTaskScheduler.pop(0)
         callback(task)
 
 
 @pytest.fixture
-def browser_class(source_pair: tuple[bytes, bytes]):
+def browser_class(source_pair: tuple[bytes, bytes]) -> type[Any]:
     # This class is extracted from hash-checked vendor source and executed with
-    # CLR stand-ins below. Its dynamic surface is intentional; keep diagnostics
-    # visible rather than pretending it is the installed Windows WebView class.
+    # CLR stand-ins below. Any is confined to this executable vendor/CLR boundary;
+    # it is not the installed Windows WebView class.
     tree = ast.parse(source_pair[1])
     browser = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     names = {
@@ -85,7 +97,7 @@ def browser_class(source_pair: tuple[bytes, bytes]):
         if isinstance(node, ast.Assign)
         or (isinstance(node, ast.FunctionDef) and node.name in names)
     ]
-    scope = {
+    scope: dict[str, Any] = {
         "Lock": Lock,
         "os": __import__("os"),
         "Task": Task,
@@ -107,44 +119,54 @@ def browser_class(source_pair: tuple[bytes, bytes]):
 class Profile:
     ProfileName = "Default"
 
-    def __init__(self, *, error=False):
-        self.calls = []
+    def __init__(self, *, error: bool = False) -> None:
+        self.calls: list[str] = []
         self.task = Task()
         self.error = error
 
-    def ClearBrowsingDataAsync(self, kinds):
+    def ClearBrowsingDataAsync(self, kinds: str) -> Task:
         self.calls.append(kinds)
         if self.error:
             raise RuntimeError("cannot begin clear")
         return self.task
 
 
-def make_view(browser_class, profile, folder="host-a", *, private=True):
+def make_view(
+    browser_class: type[Any],
+    profile: Profile,
+    folder: str = "host-a",
+    *,
+    private: bool = True,
+) -> Any:
     view = browser_class()
     view._private_store_ready = not private
     view._pending_navigation = None
     view.syncContextTaskScheduler = []
     view.pywebview_window = SimpleNamespace(real_url="https://initial", html=None)
+
+    def navigate(value: str) -> None:
+        view.webview.Source = value
+
     view.webview = SimpleNamespace(
         IsDisposed=False,
         Source=None,
         CoreWebView2=SimpleNamespace(
             Profile=profile,
             Environment=SimpleNamespace(UserDataFolder=folder),
-            NavigateToString=lambda value: setattr(view.webview, "Source", value),
+            NavigateToString=navigate,
         ),
     )
     return view
 
 
 def test_pending_peers_wait_for_one_completed_clear_and_later_peer_reuses_it(
-    browser_class,
+    browser_class: type[Any],
 ):
     profile = Profile()
     views = [make_view(browser_class, profile) for _ in range(6)]
     barrier = Barrier(len(views))
 
-    def initialize(view):
+    def initialize(view: Any) -> None:
         barrier.wait()
         view._initialize_private_store()
 
@@ -171,7 +193,9 @@ def test_pending_peers_wait_for_one_completed_clear_and_later_peer_reuses_it(
 
 
 @pytest.mark.parametrize("failure", ["faulted", "cancelled", "synchronous"])
-def test_failed_initialization_never_navigates_or_retries(browser_class, failure):
+def test_failed_initialization_never_navigates_or_retries(
+    browser_class: type[Any], failure: str
+):
     profile = Profile(error=failure == "synchronous")
     first = make_view(browser_class, profile)
     first._initialize_private_store()
@@ -188,7 +212,7 @@ def test_failed_initialization_never_navigates_or_retries(browser_class, failure
     assert profile.calls == ["cookies-only"]
 
 
-def test_distinct_profile_keys_initialize_independently(browser_class):
+def test_distinct_profile_keys_initialize_independently(browser_class: type[Any]):
     profiles = [Profile() for _ in range(3)]
     profiles[2].ProfileName = "Other"
     views = [
@@ -205,7 +229,7 @@ def test_distinct_profile_keys_initialize_independently(browser_class):
     assert all(v.webview.Source is None for v in views[1:])
 
 
-def test_nonprivate_navigation_and_closed_pending_view(browser_class):
+def test_nonprivate_navigation_and_closed_pending_view(browser_class: type[Any]):
     profile = Profile()
     public = make_view(browser_class, profile, private=False)
     public.load_url("https://public")
@@ -222,7 +246,7 @@ def test_nonprivate_navigation_and_closed_pending_view(browser_class):
 
 
 def test_explicit_cookie_api_is_unchanged(source_pair: tuple[bytes, bytes]):
-    def methods(source):
+    def methods(source: bytes) -> dict[str, ast.FunctionDef]:
         browser = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef))
         return {n.name: n for n in browser.body if isinstance(n, ast.FunctionDef)}
 
@@ -263,10 +287,12 @@ def test_shared_wheel_writer_records_every_member_reproducibly(tmp_path: Path):
 
 
 @pytest.mark.parametrize("private", [True, False])
-def test_debug_initial_navigation_uses_its_own_webview(browser_class, private):
+def test_debug_initial_navigation_uses_its_own_webview(
+    browser_class: type[Any], private: bool
+):
     profile = Profile()
     view = make_view(browser_class, profile, private=private)
-    opened = []
+    opened: list[Any] = []
     view.webview.CoreWebView2.OpenDevToolsWindow = lambda: opened.append(view)
     scope = browser_class._load_initial_content.__globals__
     scope["_state"]["debug"] = True

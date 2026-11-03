@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import scopecat as sc
+from reference_lab.provider import (
+    MultiChannelVirtualDcSource,
+    ReferenceLabProvider,
+)
 from scopecat.records.config import InstrumentBindingSpec, VirtualInstrumentConnection
 from scopecat.records.instrument import CommandChannelBinding
 from scopecat.sdk.instruments import (
@@ -14,11 +18,6 @@ from scopecat.sdk.instruments import (
 )
 from scopecat_instruments.members import DC_BIAS_TARGET_VOLTAGE
 from scopecat_instruments.virtual import VirtualLabWorld
-
-from reference_lab.provider import (
-    MultiChannelVirtualDcSource,
-    ReferenceLabProvider,
-)
 
 
 def test_virtual_provider_catalog_and_connection_use_exact_bindings() -> None:

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import httpx2
 import pytest
+
 import scopecat as sc
+from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 from scopecat.application import LabApplication
 from scopecat.project import load_project
 from scopecat_instruments import dc_source, rf_source
 from scopecat_server.lifecycle import start_project, stop_project
-
-from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 
 
 def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(

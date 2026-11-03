@@ -1,6 +1,7 @@
 """Coordinated wheel identities preserve platform constraints."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from packaging.version import Version
@@ -20,7 +21,7 @@ from scripts.app_build.release_identity import (
         ("0.3.0-rc.4", "0.3.0rc4"),
     ],
 )
-def test_public_version_conversions(public, python):
+def test_public_version_conversions(public: str, python: str) -> None:
     identity = ReleaseIdentity(public, 9)
     identity.require_release()
     assert identity.pep440 == python
@@ -36,12 +37,12 @@ def test_public_version_conversions(public, python):
 @pytest.mark.parametrize(
     "version", ["01.2.3", "0.3", "0.3.0-rc.0", "0.3.0+foo", "0.3.0-dev.1", "65536.0.0"]
 )
-def test_invalid_public_versions(version):
+def test_invalid_public_versions(version: str) -> None:
     with pytest.raises(ValueError, match="Public version"):
         ReleaseIdentity(version, 1)
 
 
-def test_placeholder_cannot_be_released(tmp_path: Path):
+def test_placeholder_cannot_be_released(tmp_path: Path) -> None:
     path = tmp_path / "release.toml"
     path.write_text('version="0.0.0"\nbuild_number=0\n')
     assert read_release(path).build_number == 0
@@ -50,7 +51,7 @@ def test_placeholder_cannot_be_released(tmp_path: Path):
 
 
 @pytest.mark.parametrize("number", [True, -1, 65536])
-def test_invalid_native_build(number):
+def test_invalid_native_build(number: int) -> None:
     with pytest.raises(ValueError, match="build_number"):
         ReleaseIdentity("0.3.0", number)
 
@@ -61,7 +62,9 @@ def test_native_build_number_respects_macos_single_field_limit() -> None:
         ReleaseIdentity("0.3.0", 10000)
 
 
-def test_historical_source_without_release_file_only_allows_preview(tmp_path: Path):
+def test_historical_source_without_release_file_only_allows_preview(
+    tmp_path: Path,
+) -> None:
     missing = tmp_path / "release.toml"
     assert read_source_identity(missing) == ReleaseIdentity("0.0.0", 0)
     with pytest.raises(FileNotFoundError):
@@ -79,7 +82,7 @@ def test_historical_source_without_release_file_only_allows_preview(tmp_path: Pa
 )
 def test_build_ui_version_and_independent_source_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, public: str | None, release: bool
-):
+) -> None:
     import importlib.util
     import json
     import subprocess
@@ -124,22 +127,28 @@ def test_build_ui_version_and_independent_source_identity(
         )
     original_run = module.subprocess.run
 
-    built_versions = []
+    built_versions: list[str] = []
 
-    def run(command, **kwargs):
+    # Pass through subprocess options, including text mode used by check_output.
+    def run(
+        command: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[bytes] | subprocess.CompletedProcess[str]:
         if command[0] == "pnpm":
             if command[1:] == ["run", "build"]:
                 built_versions.append(
                     json.loads((kwargs["cwd"] / "package.json").read_text())["version"]
                 )
-            return subprocess.CompletedProcess(command, 0)
+            return subprocess.CompletedProcess[bytes](command, 0)
         return original_run(command, **kwargs)
 
     # This fixture isolates historical release identity and builds no wheels.
     # Portable runtime supply is covered by test_build_runtime and native CI.
     from contextlib import nullcontext
 
-    monkeypatch.setattr(module, "prepare", lambda *_: nullcontext(Path(sys.executable)))
+    def prepared_runtime(*_: object) -> nullcontext[Path]:
+        return nullcontext(Path(sys.executable))
+
+    monkeypatch.setattr(module, "prepare", prepared_runtime)
     monkeypatch.setattr(module, "PACKAGES", ())
     monkeypatch.setattr(module.subprocess, "run", run)
     manifest = module.build(repository, tmp_path / "preview", release=release)
@@ -174,7 +183,9 @@ def test_build_ui_version_and_independent_source_identity(
         ("win32", "aarch64", "windows-arm64.exe"),
     ],
 )
-def test_installer_names_use_qualified_target(platform, machine, expected):
+def test_installer_names_use_qualified_target(
+    platform: str, machine: str, expected: str
+) -> None:
     from scripts.app_build.release_identity import installer_filename
 
     assert (
@@ -185,7 +196,7 @@ def test_installer_names_use_qualified_target(platform, machine, expected):
     )
 
 
-def test_installer_names_reject_unknown_target():
+def test_installer_names_reject_unknown_target() -> None:
     from scripts.app_build.release_identity import installer_filename
 
     with pytest.raises(ValueError, match="Unsupported"):

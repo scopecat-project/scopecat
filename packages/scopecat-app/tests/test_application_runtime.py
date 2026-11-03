@@ -88,9 +88,9 @@ def test_select_existing_environment_validates_before_publishing(
     python = tmp_path / "environment/python"
     python.parent.mkdir()
     python.symlink_to(sys.executable)
-    checked = []
+    checked: list[tuple[Path, Path]] = []
 
-    def capture(root, interpreter):
+    def capture(root: Path, interpreter: Path):
         checked.append((root, interpreter))
 
     monkeypatch.setattr("scopecat_server.author_environment.capture", capture)
@@ -102,7 +102,7 @@ def test_select_existing_environment_validates_before_publishing(
     assert checked == [(source, python)]
     before = location.read_bytes()
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object):
         raise ValueError("incompatible execution environment")
 
     monkeypatch.setattr("scopecat_server.author_environment.capture", fail)
@@ -119,7 +119,7 @@ def test_two_sources_share_empty_application_without_owning_it(
     from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
     running = application.start()
-    sources = []
+    sources: list[tuple[Path, str]] = []
     for name in ("first", "second"):
         root = tmp_path / name
         (root / "src").mkdir(parents=True)
@@ -240,7 +240,7 @@ def test_interrupted_selection_is_fenced_and_retryable(
     )
     write = application_runtime.write_state
 
-    def fail_selection(path, content):
+    def fail_selection(path: Path, content: str):
         if path == application.selection:
             raise OSError("interrupted selection")
         write(path, content)
@@ -305,7 +305,7 @@ def test_blank_real_backend_restarts_without_registering_authors(tmp_path: Path)
 
 
 @pytest.mark.parametrize("layout", ["orphan", "mixed"])
-def test_ambiguous_existing_home_is_not_replaced(tmp_path: Path, layout):
+def test_ambiguous_existing_home_is_not_replaced(tmp_path: Path, layout: str):
     home = tmp_path / "home"
     home.mkdir()
     if layout == "orphan":

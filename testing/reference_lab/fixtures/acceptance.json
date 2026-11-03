@@ -1824,7 +1824,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:d9a842c6b14386c6f60c38adf29ed2d75c514974b672984a68a35311a1572081",
+        "config_source_hash": "sha256:1b09f69e27801b3a4558c56f4eaca1661cdc11911438cf04e1f7da716b84eb2d",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1966,8 +1966,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:0b5679006c4392e95f767249b53050e62db1f18151b563536985bb0fc6e1effe",
-          "revision_id": "resolved:0b5679006c4392e95f767249b53050e62db1f18151b563536985bb0fc6e1effe"
+          "content_hash": "sha256:911ef3588e2b6fe54e4e9c5ad7a644238f3b49809d8b0767ae9d7683d8456147",
+          "revision_id": "resolved:911ef3588e2b6fe54e4e9c5ad7a644238f3b49809d8b0767ae9d7683d8456147"
         }
       }
     },

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 from testing.app_support import project
+from testing.app_support.ipython_typing import execution_shell
+from testing.app_support.notebook_typing import cells as notebook_cells
 
 from scopecat.daemon.endpoint import DaemonEndpointError
 from scopecat_tutorials.lessons import TOPICS
@@ -20,7 +22,7 @@ def test_lesson_source_is_self_contained_and_never_starts_an_implicit_service(
 
     monkeypatch.setenv("IPYTHONDIR", str(tmp_path / "ipython"))
 
-    shell = InteractiveShell()
+    shell = execution_shell(InteractiveShell())
     monkeypatch.setattr("IPython.get_ipython", lambda: shell)
     root = tmp_path / topic
     project.create_project(root, topic=topic)
@@ -125,7 +127,7 @@ def test_generated_material_matches_reviewed_source_and_cannot_overlay_edits(
 
 @pytest.mark.parametrize("topic", ["refresh", "compute"])
 def test_editing_verifier_follows_cell_ids_after_insertions(tmp_path: Path, topic: str):
-    from nbformat import read, v4, write
+    from testing.app_support.notebook_typing import read, v4, write
     from testing.app_support.project import create_project
     from testing.app_support.verify_editing import (
         REFRESH_EDIT,
@@ -136,12 +138,12 @@ def test_editing_verifier_follows_cell_ids_after_insertions(tmp_path: Path, topi
     root = create_project(tmp_path / topic, topic=topic).parent
     path = root / f"notebooks/{topic}.ipynb"
     original = read(path, as_version=4)
-    original.cells.insert(0, v4.new_markdown_cell("An added introduction"))
-    original.cells.insert(7, v4.new_code_cell("learner_note = 'keep me'"))
+    notebook_cells(original).insert(0, v4.new_markdown_cell("An added introduction"))
+    notebook_cells(original).insert(7, v4.new_code_cell("learner_note = 'keep me'"))
     write(original, path)
     document = editing_notebook(root, topic)
-    originals = {cell.id: cell.source for cell in original.cells}
-    actual = {cell.id: cell.source for cell in document.cells}
+    originals = {cell.id: cell.source for cell in notebook_cells(original)}
+    actual = {cell.id: cell.source for cell in notebook_cells(document)}
     if topic == "compute":
         originals["compute-select"] = "number = session.run_number(mean)"
         reopened = reopen_cells(root)
@@ -149,10 +151,14 @@ def test_editing_verifier_follows_cell_ids_after_insertions(tmp_path: Path, topi
         assert reopened[1] == originals["compute-history"]
         assert reopened[3] == reopened[5] == originals["compute-7"]
     else:
-        target = next(i for i, c in enumerate(document.cells) if c.id == "refresh-5")
-        assert document.cells[target - 1].source == REFRESH_EDIT
+        target = next(
+            i for i, c in enumerate(notebook_cells(document)) if c.id == "refresh-5"
+        )
+        assert notebook_cells(document)[target - 1].source == REFRESH_EDIT
     assert {cell_id: actual[cell_id] for cell_id in originals} == originals
-    assert [c.id for c in document.cells if c.id in originals] == list(originals)
+    assert [c.id for c in notebook_cells(document) if c.id in originals] == list(
+        originals
+    )
 
 
 @pytest.mark.parametrize(
@@ -168,14 +174,16 @@ def test_editing_verifier_follows_cell_ids_after_insertions(tmp_path: Path, topi
 def test_editing_verifier_rejects_missing_cell_id(
     tmp_path: Path, topic: str, cell_id: str, reopen: bool
 ):
-    from nbformat import read, write
+    from testing.app_support.notebook_typing import read, write
     from testing.app_support.project import create_project
     from testing.app_support.verify_editing import editing_notebook, reopen_cells
 
     root = create_project(tmp_path / topic, topic=topic).parent
     path = root / f"notebooks/{topic}.ipynb"
     document = read(path, as_version=4)
-    document.cells = [cell for cell in document.cells if cell.id != cell_id]
+    document["cells"] = [
+        cell for cell in notebook_cells(document) if cell.id != cell_id
+    ]
     write(document, path)
     with pytest.raises(ValueError, match=cell_id):
         if reopen:

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from IPython.core.interactiveshell import InteractiveShell
+from testing.app_support.ipython_typing import execution_shell
 
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
@@ -22,7 +23,7 @@ def prior_project_import(tmp_path: Path) -> Iterator[None]:
 def test_notebook_managed_procedure(
     tmp_path: Path, notebook_imports: pytest.MonkeyPatch
 ) -> None:
-    shell = InteractiveShell()
+    shell = execution_shell(InteractiveShell())
     notebook_module = importlib.import_module("scopecat.notebook_workspace")
     notebook_imports.setattr(notebook_module, "_shell", lambda: shell)
     project = initialize_project(tmp_path / "notebook-procedure")
@@ -73,5 +74,8 @@ session.close()
     finally:
         workspace = shell.user_ns.get("session")
         if workspace is not None:
+            from scopecat.notebook_workspace import NotebookSession
+
+            assert isinstance(workspace, NotebookSession)
             workspace.close()
         stop_project(project)

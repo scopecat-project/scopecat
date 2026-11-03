@@ -11,6 +11,8 @@ from typing import cast
 import httpx2
 import pytest
 from pydantic import ValidationError
+
+from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
 from scopecat.api.lab import LabClient
 from scopecat.api.run import RunHandle
 from scopecat.application import LabApplication
@@ -30,8 +32,6 @@ from scopecat.records.scientific_selection import (
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.authoring import source_workspace_id
 from scopecat_testkit.project_loading import isolated_project_imports
-
-from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
 
 
 @dataclass(frozen=True)

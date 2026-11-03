@@ -1,3 +1,6 @@
+# PyArrow schemas/arrays and optional dataframe adapters are incompletely typed.
+# Keep these exceptions at the ecosystem conversion boundary rather than
+# replacing concrete library APIs with incomplete local protocols.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false, reportUnknownVariableType=false
 """Adapter-neutral measurement projections and ecosystem exports."""

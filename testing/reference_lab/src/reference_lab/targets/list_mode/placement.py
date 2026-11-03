@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from itertools import chain, islice
 from typing import Protocol
 
-from scopecat.kernel.content_identity import sha256_json_hash
-
 from reference_lab.targets.list_mode.model import (
     ListModeDeviceSnapshot,
     ListModePlacementCandidate,
@@ -16,6 +14,7 @@ from reference_lab.targets.list_mode.model import (
     ListModePlacementRejection,
     ListModeSignalPlacement,
 )
+from scopecat.kernel.content_identity import sha256_json_hash
 
 type LogicalSignalKey = tuple[str, str, str]
 

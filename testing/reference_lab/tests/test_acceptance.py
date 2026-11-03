@@ -11,6 +11,9 @@ from typing import cast
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
+
+from reference_lab.acceptance import acceptance_json_matches
+from reference_lab.configuration import EXAMPLE_ROOT
 from scopecat.application.launch import LaunchPreview
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.daemon.reviews import ReviewSessionView
@@ -23,9 +26,6 @@ from scopecat.inspection import PlannedInstrumentSetting
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.measurement import MeasurementDatasetSchema, MeasurementScalar
-
-from reference_lab.acceptance import acceptance_json_matches
-from reference_lab.configuration import EXAMPLE_ROOT
 
 FIXTURE = EXAMPLE_ROOT / "fixtures" / "acceptance.json"
 

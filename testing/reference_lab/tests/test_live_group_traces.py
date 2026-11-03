@@ -6,12 +6,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from scopecat.application.author_project import AuthorProject
-from scopecat.project import load_project
-from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 from reference_lab_authors.authored.group_traces import DecayFit, ResonanceMinimum
+from scopecat.application.author_project import AuthorProject
+from scopecat.project import load_project
+from scopecat_server.lifecycle import start_project, stop_project
 
 pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
 

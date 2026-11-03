@@ -30,13 +30,6 @@ strict_config = true
 strict_markers = true
 testpaths = ["tests"]
 
-[tool.ruff]
-extend = "../../pyproject.toml"
-src = ["src", "tests"]
-exclude = [
-  ".scopecat-examples",
-]
-
 [tool.uv.build-backend]
 module-name = ["reference_lab", "reference_lab_authors"]
 

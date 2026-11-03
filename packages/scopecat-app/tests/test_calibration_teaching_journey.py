@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from testing.app_support.notebook_typing import cells as notebook_cells
 from testing.app_support.project import create_project
 
 
@@ -375,12 +376,15 @@ assert report.items[2].selection.reason == "no_matching_evidence"
 
 @pytest.mark.parametrize("topic", ["calibration", "joint-calibration"])
 def test_managed_calibration_shipped_kernel(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic, author_kernel_python: Path
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    topic: str,
+    author_kernel_python: Path,
 ):
     import json
 
     from nbclient import NotebookClient
-    from nbformat import read, v4, write
+    from testing.app_support.notebook_typing import read, v4, write
     from testing.app_support.verify_editing import _cell_index
 
     from scopecat_app.application_runtime import ApplicationRuntime
@@ -417,12 +421,12 @@ def test_managed_calibration_shipped_kernel(
     # Observe the learner's actual close call, not a substituted binding/cell.
     # The independent observer waits while that session is closed, proving the
     # real worker keeps executing without a live Notebook client.
-    notebook.cells.insert(
-        _cell_index(notebook.cells, anchor_id),
+    notebook_cells(notebook).insert(
+        _cell_index(notebook_cells(notebook), anchor_id),
         v4.new_code_cell(_OBSERVE_RUNNING_DISCONNECT),
     )
-    notebook.cells.append(v4.new_code_cell(_MANAGED_CHECKS))
-    notebook.cells.append(v4.new_code_cell(_SAVE_EVIDENCE))
+    notebook_cells(notebook).append(v4.new_code_cell(_MANAGED_CHECKS))
+    notebook_cells(notebook).append(v4.new_code_cell(_SAVE_EVIDENCE))
     history_id = {
         "calibration": "calibration-history",
         "joint-calibration": "joint-history",
@@ -430,7 +434,7 @@ def test_managed_calibration_shipped_kernel(
     reopen = v4.new_notebook(
         cells=[
             v4.new_code_cell("import scopecat as sc\nsession = sc.notebook()"),
-            notebook.cells[_cell_index(notebook.cells, history_id)],
+            notebook_cells(notebook)[_cell_index(notebook_cells(notebook), history_id)],
             v4.new_code_cell(_REOPEN_CHECKS),
         ]
     )

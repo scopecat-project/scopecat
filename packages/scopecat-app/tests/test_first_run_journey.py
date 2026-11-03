@@ -30,7 +30,7 @@ def test_author_source_run_and_reopen_direct_workbench(
         open_project(source).runtime_binding.data_root
         == runtime.instance.runtime_binding.data_root
     )
-    opened = []
+    opened: list[str] = []
     monkeypatch.setattr(application.webbrowser, "open", opened.append)
     environment = dict(os.environ)
     for name in ("PYTHONHOME", "PYTHONPATH", "SCOPECAT_DAEMON_URL"):

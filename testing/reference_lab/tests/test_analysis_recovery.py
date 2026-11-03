@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import pytest
+
+from reference_lab.configuration import EXAMPLE_ROOT
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
     ProcedureSubmitCommand,
@@ -10,8 +12,6 @@ from scopecat.automation import (
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.records.parameter_revision import ParameterRevision
-
-from reference_lab.configuration import EXAMPLE_ROOT
 
 
 def test_failed_analysis_recovers_without_reacquisition(

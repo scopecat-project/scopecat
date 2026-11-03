@@ -9,6 +9,13 @@ from typing import Literal, cast, override
 
 import numpy as np
 from numpy.typing import NDArray
+
+from reference_lab.physical_policies import (
+    AwgChannelId,
+    IqOffsetCouplingPolicy,
+    OutputOffsetCouplingGroup,
+    OutputOffsetRequirement,
+)
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.setup import SetupRevisionRef
@@ -31,13 +38,6 @@ from scopecat_quantum.pulses import (
 )
 from scopecat_quantum.timing_corrections import TimingCorrectionSnapshot
 from scopecat_quantum.waveforms import RealizedEventTiming, TimingQuantizationMode
-
-from reference_lab.physical_policies import (
-    AwgChannelId,
-    IqOffsetCouplingPolicy,
-    OutputOffsetCouplingGroup,
-    OutputOffsetRequirement,
-)
 
 
 @dataclass(frozen=True, slots=True, order=True)

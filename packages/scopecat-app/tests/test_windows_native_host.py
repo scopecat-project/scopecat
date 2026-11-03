@@ -21,9 +21,11 @@ def test_development_host_reads_and_renames_long_author_paths(
 ):
     source = tmp_path / "checkout"
     source.mkdir()
-    monkeypatch.setattr(
-        dev_host_windows, "development_home", lambda _: tmp_path / "cache"
-    )
+
+    def development_cache(_: object):
+        return tmp_path / "cache"
+
+    monkeypatch.setattr(dev_host_windows, "development_home", development_cache)
     executable = dev_host_windows.build_host(source)
     directory = tmp_path / ("author-" + "a" * 40) / ("resources-" + "b" * 40)
     wheel = directory / ("scopecat-" + "c" * 80 + ".whl")
@@ -133,9 +135,11 @@ def test_development_host_preserves_venv_and_editable_source(
 ):
     source = tmp_path / "checkout 中文"
     source.mkdir()
-    monkeypatch.setattr(
-        dev_host_windows, "development_home", lambda _: tmp_path / "cache"
-    )
+
+    def development_cache(_: object):
+        return tmp_path / "cache"
+
+    monkeypatch.setattr(dev_host_windows, "development_home", development_cache)
     executable = dev_host_windows.build_host(source)
     module = source / "editable_probe.py"
     module.write_text("VALUE = 7\n")

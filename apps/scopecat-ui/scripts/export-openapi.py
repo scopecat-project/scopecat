@@ -4,11 +4,24 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
 
+from scopecat.kernel.json_types import JsonValue
 from scopecat.kernel.units import UNIT_KINDS, UNIT_SCALE_TO_BASE
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.application import DaemonApplication
+
+
+class _Components(TypedDict):
+    schemas: dict[str, JsonValue]
+
+
+class _OpenAPI(TypedDict):
+    openapi: str
+    info: JsonValue
+    paths: dict[str, dict[str, JsonValue]]
+    components: _Components
+
 
 OUTPUT = Path(__file__).parent.parent / ".generated" / "ui-api.openapi.json"
 
@@ -279,8 +292,9 @@ def main() -> None:
     )
     # Route registration only closes over the backend; schema generation never calls it.
     app = create_app(cast("DaemonApplication", object()))
-    openapi = app.openapi()
-    paths: dict[str, dict[str, object]] = {}
+    # FastAPI returns unstructured Any; these are the OpenAPI sections we consume.
+    openapi = cast("_OpenAPI", cast("object", app.openapi()))
+    paths: dict[str, dict[str, JsonValue]] = {}
     for path, method in sorted(_OPERATIONS):
         paths.setdefault(path, {})[method] = openapi["paths"][path][method]
 
@@ -309,8 +323,8 @@ def main() -> None:
 
 
 def _reachable_components(
-    value: object,
-    components: dict[str, object],
+    value: JsonValue,
+    components: dict[str, JsonValue],
     *,
     roots: set[str] | None = None,
 ) -> set[str]:
@@ -325,7 +339,7 @@ def _reachable_components(
     return found
 
 
-def _component_refs(value: object) -> set[str]:
+def _component_refs(value: JsonValue) -> set[str]:
     if isinstance(value, dict):
         ref = value.get("$ref")
         found = (

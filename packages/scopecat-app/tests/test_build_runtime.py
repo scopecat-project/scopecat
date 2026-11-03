@@ -14,8 +14,11 @@ from scripts.app_build import toolchain
 
 
 @pytest.fixture
-def repository(tmp_path, monkeypatch):
-    monkeypatch.setattr(toolchain, "_cache_root", lambda _: tmp_path / "cache")
+def repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def cache_root(_: Path) -> Path:
+        return tmp_path / "cache"
+
+    monkeypatch.setattr(toolchain, "_cache_root", cache_root)
     (tmp_path / ".python-version").write_text(platform.python_version() + "\n")
     (tmp_path / "uv.lock").write_text(
         f'[[package]]\nname="uv"\nversion="{version("uv")}"\n'
@@ -24,18 +27,24 @@ def repository(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("selected", ["3.15", "3.15.0rc2", "3.14.0", "3.15.0t"])
-def test_baseline_rejects_drift(repository, selected, monkeypatch):
+def test_baseline_rejects_drift(
+    repository: Path, selected: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(toolchain.platform, "python_version", lambda: "3.15.0")
     (repository / ".python-version").write_text(selected)
     with pytest.raises(ValueError, match=r"exact stable|Build Python drift"):
         toolchain.baseline(repository)
 
 
-def test_uv_drift_fails_before_supply(repository, monkeypatch):
+def test_uv_drift_fails_before_supply(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     (repository / "uv.lock").write_text('[[package]]\nname="uv"\nversion="0.0.1"\n')
-    monkeypatch.setattr(
-        toolchain.subprocess, "run", lambda *_a, **_k: pytest.fail("supply lookup")
-    )
+
+    def unexpected_lookup(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("supply lookup")
+
+    monkeypatch.setattr(toolchain.subprocess, "run", unexpected_lookup)
     with (
         pytest.raises(ValueError, match="Build uv drift"),
         toolchain.prepare(repository, repository / "toolchain"),
@@ -43,10 +52,13 @@ def test_uv_drift_fails_before_supply(repository, monkeypatch):
         pytest.fail("prepared mismatched uv")
 
 
-def test_missing_supply_is_specific_and_early(repository, monkeypatch):
-    monkeypatch.setattr(
-        toolchain.subprocess, "run", lambda *_a, **_k: SimpleNamespace(stdout="[]")
-    )
+def test_missing_supply_is_specific_and_early(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def empty_supply(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(stdout="[]")
+
+    monkeypatch.setattr(toolchain.subprocess, "run", empty_supply)
     with (
         pytest.raises(ValueError, match=r"supply unavailable.*uv=.*found 0"),
         toolchain.prepare(repository, repository / "toolchain"),
@@ -59,9 +71,9 @@ def test_missing_supply_is_specific_and_early(repository, monkeypatch):
     "failure", [None, "download", "relocation", "variant", "target"]
 )
 def test_prepare_archives_clean_base_and_retains_supply(
-    repository, monkeypatch, failure
-):
-    commands = []
+    repository: Path, monkeypatch: pytest.MonkeyPatch, failure: str | None
+) -> None:
+    commands: list[list[str]] = []
     selected = {
         "key": "cpython-exact-test",
         "implementation": "cpython",
@@ -81,7 +93,7 @@ def test_prepare_archives_clean_base_and_retains_supply(
         selected["arch"] = "wrong-architecture"
     relative = "python.exe" if os.name == "nt" else "bin/python3"
 
-    def run(command, **_kwargs):
+    def run(command: list[str], **_kwargs: object):
         commands.append(command)
         if command[1:3] == ["python", "list"]:
             return SimpleNamespace(stdout=json.dumps([selected]))
@@ -162,11 +174,11 @@ def test_prepare_archives_clean_base_and_retains_supply(
 
 @pytest.mark.parametrize("count", [0, 2])
 def test_catalog_check_rejects_nonunique_supply_without_install(
-    repository, monkeypatch, count
-):
-    commands = []
+    repository: Path, monkeypatch: pytest.MonkeyPatch, count: int
+) -> None:
+    commands: list[list[str]] = []
 
-    def run(command, **_kwargs):
+    def run(command: list[str], **_kwargs: object):
         commands.append(command)
         assert command[1:3] == ["python", "list"]
         return SimpleNamespace(stdout=json.dumps([{}] * count))
@@ -179,7 +191,7 @@ def test_catalog_check_rejects_nonunique_supply_without_install(
     assert len(commands) == 1
 
 
-def test_bytecode_survives_relocation_and_checks_source_hash(tmp_path):
+def test_bytecode_survives_relocation_and_checks_source_hash(tmp_path: Path) -> None:
     import importlib.util
     import marshal
     import sys
@@ -211,7 +223,7 @@ def test_bytecode_survives_relocation_and_checks_source_hash(tmp_path):
         (moved / source.name).write_text("value = 23\n")
 
 
-def test_invalid_shipped_python_fails_precompilation(tmp_path):
+def test_invalid_shipped_python_fails_precompilation(tmp_path: Path) -> None:
     import sys
 
     from scripts.app_build.runtime_install import compile_bytecode

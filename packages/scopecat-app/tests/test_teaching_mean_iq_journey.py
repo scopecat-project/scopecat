@@ -8,7 +8,9 @@ from typing import Annotated
 
 import numpy as np
 import pytest
+from nbformat import NotebookNode
 from numpy.typing import NDArray
+from testing.app_support.notebook_typing import cells as notebook_cells
 from testing.app_support.project import create_project
 
 import scopecat as sc
@@ -38,7 +40,7 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
                 "my_experiment.setup"
             ).open_parameters
             params = open_parameters(session)
-            notebook_imports.syspath_prepend(str(root / "src"))
+            notebook_imports.syspath_prepend(str(root / "src"))  # pyright: ignore[reportUnknownMemberType] - pytest leaves path unannotated.
             imported = importlib.import_module("my_experiment.teaching").teaching_rabi
             teaching_rabi = session.load_experiment(imported)
             old_request = teaching_rabi()
@@ -128,10 +130,10 @@ def test_shipped_editing_lessons(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     notebook_imports: pytest.MonkeyPatch,
-    topic,
+    topic: str | None,
 ):
     from nbclient import NotebookClient
-    from nbformat import read, v4, write
+    from testing.app_support.notebook_typing import read, v4, write
     from testing.app_support.verify_editing import (
         REFRESH_REOPEN_CELLS,
         editing_notebook,
@@ -195,7 +197,7 @@ def test_shipped_editing_lessons(
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     project = sc.open_project(root)
 
-    def execute(name, document):
+    def execute(name: str, document: NotebookNode):
         start_project(project, timeout=120)
         try:
             NotebookClient(
@@ -217,7 +219,7 @@ def test_shipped_editing_lessons(
 
     if topic is None:
         groups = read(groups_path(root), as_version=4)
-        groups.cells.append(v4.new_code_cell(GROUP_CHECKS))
+        notebook_cells(groups).append(v4.new_code_cell(GROUP_CHECKS))
         execute("groups", groups)
     for name in topics:
         if name == "compute" and topic is None:

@@ -5,11 +5,12 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import nbformat
 import pytest
 from IPython.core.interactiveshell import InteractiveShell
-from jupyter_client import KernelManager
+from jupyter_client.manager import KernelManager
 from nbclient import NotebookClient
+from testing.app_support import notebook_typing as nbformat
+from testing.app_support.ipython_typing import execution_shell
 from testing.app_support.project import create_project
 
 from scopecat.project import open_project
@@ -20,7 +21,7 @@ def test_notebook_workspace_cells(
     tmp_path: Path, notebook_imports: pytest.MonkeyPatch
 ) -> None:
     notebook_module = importlib.import_module("scopecat.notebook_workspace")
-    shell = InteractiveShell()
+    shell = execution_shell(InteractiveShell())
     notebook_imports.setattr(notebook_module, "_shell", lambda: shell)
     root = tmp_path / "notebook"
     create_project(root)
@@ -43,7 +44,7 @@ def test_notebook_workspace_cells(
     # Only the selected execution interpreter can identify a runnable revision.
     from scopecat.execution_environment import execution_packages
 
-    def reject_client_execution_capture(*args, **kwargs):
+    def reject_client_execution_capture(*args: object, **kwargs: object):
         raise AssertionError("Client attempted to capture execution dependencies")
 
     notebook_imports.setattr(
@@ -62,7 +63,7 @@ def test_notebook_workspace_cells(
 
         actual_distribution = execution_environment.distribution
 
-        def incompatible_sdk(name):
+        def incompatible_sdk(name: str):
             dist = actual_distribution(name)
             return (
                 SimpleNamespace(version="0.1.99", requires=dist.requires)

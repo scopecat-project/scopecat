@@ -1,3 +1,6 @@
+# PyArrow Table/RecordBatchReader types are untyped, including the callbacks
+# used by lazy run projections. Preserve these concrete public Arrow types;
+# other argument/type contract diagnostics remain enabled.
 # pyright: reportUnknownMemberType=false, reportUnknownParameterType=false
 # pyright: reportUnknownVariableType=false
 """Run facade handles for notebook workflows."""

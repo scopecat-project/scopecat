@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from typing import Any
 from unittest.mock import Mock
 
 import numpy as np
@@ -86,7 +87,7 @@ receipt = CollectReceipt(
         for index, phase in enumerate(ProblemPhase)
     ),
 )
-samples = []
+samples: list[dict[str, object]] = []
 application = Mock()
 # No lifespan: workers and devices must not be started by this contract fixture.
 client = TestClient(create_app(application))
@@ -123,10 +124,12 @@ for sample in (
     )
     content = response.content
     assert content == encode_collect_receipt(sample)
-    expected = json.loads(sample.model_dump_json())
+    expected: dict[str, Any] = json.loads(sample.model_dump_json())
     # The UI omits availability for fully available arrays.
     # Do not erase actual diagnostics.
-    for value in (expected.get("readback") or {}).get("values", {}).values():
+    readback: dict[str, Any] = expected.get("readback") or {}
+    readback_values: dict[str, Any] = readback.get("values", {})
+    for value in readback_values.values():
         if value.get("kind") == "array" and value.get("availability") is None:
             value.pop("availability", None)
     samples.append(

@@ -17,9 +17,13 @@ from scopecat_app.notebook_journey import (
     save_journey,
 )
 
+type RegisteredCourse = tuple[Mock, NotebookJourney, Path, DataCleanupPreview, Mock]
+
 
 @pytest.fixture
-def registered_course(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def registered_course(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> RegisteredCourse:
     runtime = Mock(home=tmp_path / "home", root=tmp_path / "service")
     runtime.status.return_value.record.base_url = "http://127.0.0.1:1234"
     directory = tmp_path / "edited-course"
@@ -52,7 +56,11 @@ def registered_course(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             ),
         ).model_dump_json()
     )
-    monkeypatch.setattr(cleanup, "author_bindings_path", lambda _root: registry)
+
+    def bindings_path(_root: Path) -> Path:
+        return registry
+
+    monkeypatch.setattr(cleanup, "author_bindings_path", bindings_path)
     scope = PracticeScope(
         id="course",
         title="Course",
@@ -81,7 +89,7 @@ def registered_course(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_default_clear_keeps_edits_and_explicit_discard_removes_only_owned_folder(
-    registered_course, tmp_path: Path
+    registered_course: RegisteredCourse, tmp_path: Path
 ):
     runtime, course, registry, preview, _ = registered_course
     outside = tmp_path / "outside"
@@ -104,7 +112,9 @@ def test_default_clear_keeps_edits_and_explicit_discard_removes_only_owned_folde
     assert cleanup.clear(runtime, "parameters", command)["cleared"]
 
 
-def test_replaced_directory_is_refused_before_data_request(registered_course):
+def test_replaced_directory_is_refused_before_data_request(
+    registered_course: RegisteredCourse,
+):
     runtime, course, _, preview, post = registered_course
     course.directory.rename(course.directory.with_name("original"))
     course.directory.mkdir()
@@ -119,7 +129,7 @@ def test_replaced_directory_is_refused_before_data_request(registered_course):
 
 
 def test_failed_source_removal_resumes_exact_quarantined_directory(
-    registered_course, monkeypatch: pytest.MonkeyPatch
+    registered_course: RegisteredCourse, monkeypatch: pytest.MonkeyPatch
 ):
     runtime, course, registry, preview, _ = registered_course
     remove = cleanup.shutil.rmtree
@@ -139,7 +149,7 @@ def test_failed_source_removal_resumes_exact_quarantined_directory(
     assert not LocalAuthorWorkspaces.model_validate_json(registry.read_bytes()).items
 
 
-def test_old_unowned_receipt_is_not_adopted(registered_course):
+def test_old_unowned_receipt_is_not_adopted(registered_course: RegisteredCourse):
     runtime, course, _, preview, post = registered_course
     save_journey(
         receipt_path(runtime, "parameters"),
@@ -155,7 +165,10 @@ def test_old_unowned_receipt_is_not_adopted(registered_course):
 @pytest.mark.parametrize("retained", [False, True])
 @pytest.mark.parametrize("target_inside", [False, True])
 def test_shared_interpreter_link_and_target_block_before_data_request(
-    registered_course, tmp_path: Path, retained: bool, target_inside: bool
+    registered_course: RegisteredCourse,
+    tmp_path: Path,
+    retained: bool,
+    target_inside: bool,
 ):
     runtime, course, registry, preview, post = registered_course
     other = tmp_path / "other-author"
@@ -192,7 +205,9 @@ def test_shared_interpreter_link_and_target_block_before_data_request(
 
 
 @pytest.mark.parametrize("relation", ["ancestor", "descendant", "same"])
-def test_overlapping_registered_source_blocks_discard(registered_course, relation: str):
+def test_overlapping_registered_source_blocks_discard(
+    registered_course: RegisteredCourse, relation: str
+):
     runtime, course, registry, preview, post = registered_course
     other = {
         "ancestor": course.directory.parent,
@@ -224,7 +239,10 @@ def test_overlapping_registered_source_blocks_discard(registered_course, relatio
 
 @pytest.mark.parametrize("replacement", ["directory", "symlink", "dangling-symlink"])
 def test_quarantine_retry_preserves_replacement_and_registration(
-    registered_course, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, replacement: str
+    registered_course: RegisteredCourse,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    replacement: str,
 ):
     runtime, course, registry, preview, post = registered_course
     remove = cleanup.shutil.rmtree
@@ -258,7 +276,7 @@ def test_quarantine_retry_preserves_replacement_and_registration(
 
 
 def test_replacement_during_removal_is_not_unregistered(
-    registered_course, monkeypatch: pytest.MonkeyPatch
+    registered_course: RegisteredCourse, monkeypatch: pytest.MonkeyPatch
 ):
     runtime, course, registry, preview, _ = registered_course
     remove = cleanup.shutil.rmtree

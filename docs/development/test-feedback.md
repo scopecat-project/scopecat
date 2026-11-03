@@ -73,6 +73,16 @@ workspace exceptions. Probe candidate rules before changing policy; fix real
 boundaries rather than adding casts or relocating ignores. Record one-time audit
 counts, timings, validation and unresolved findings in the issue/PR, not here.
 
+Application tests participate in the same warning-failing type-check command as
+runtime code, without a diagnostic baseline. Their execution environment permits
+`Any` at dynamic test-double and serialized-input boundaries, and private access
+needed to patch the application's dependencies. Ordinary fixture parameters,
+callbacks and helpers still need useful types: unknown types, invalid arguments,
+missing members and unsafe optional access remain checked. Prefer standard typing
+and existing models over casts that merely assert unverified structure. A platform
+API exception belongs at its narrow boundary, with a reason; it must not disable
+unknown-type checks for the whole test package.
+
 ## Required CI and manual acceptance
 
 [CI](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/ci.yml)

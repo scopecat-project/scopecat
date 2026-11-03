@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 from nbclient import NotebookClient
-from nbformat import v4, write
+from nbformat import NotebookNode
+from testing.app_support.notebook_typing import cells as notebook_cells
+from testing.app_support.notebook_typing import v4, write
 from testing.app_support.project import create_project
 from testing.app_support.verify_editing import (
     REFRESH_REOPEN_CELLS,
@@ -37,7 +39,7 @@ def test_editing_lessons_share_application_and_reopen_after_restart(
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     monkeypatch.setenv("IPYTHONDIR", str(tmp_path / "ipython"))
 
-    def execute(root, name, document):
+    def execute(root: Path, name: str, document: NotebookNode):
         _, environment = kernel_command(
             root, python=str(author_kernel_python), source_path=False
         )
@@ -58,16 +60,18 @@ def test_editing_lessons_share_application_and_reopen_after_restart(
         for topic, root in roots.items():
             document = editing_notebook(root, topic)
             if topic == "refresh":
-                document.cells.insert(
-                    _cell_index(document.cells, "refresh-2"),
+                notebook_cells(document).insert(
+                    _cell_index(notebook_cells(document), "refresh-2"),
                     v4.new_code_cell(evidence + _ORDINARY_INPUT),
                 )
-            document.cells.insert(
-                _cell_index(document.cells, f"{topic}-2") + 1,
+            notebook_cells(document).insert(
+                _cell_index(notebook_cells(document), f"{topic}-2") + 1,
                 v4.new_code_cell(evidence + _LESSON_IDENTITY),
             )
-            document.cells.append(v4.new_code_cell(evidence + _SAVE_ISOLATION))
-            document.cells.insert(
+            notebook_cells(document).append(
+                v4.new_code_cell(evidence + _SAVE_ISOLATION)
+            )
+            notebook_cells(document).insert(
                 2,
                 v4.new_code_cell(f"assert session.base_url == {record.base_url!r}"),
             )

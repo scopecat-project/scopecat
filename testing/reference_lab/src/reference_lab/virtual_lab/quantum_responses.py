@@ -5,11 +5,6 @@ from __future__ import annotations
 import math
 from typing import cast
 
-from scopecat import Quantity
-from scopecat_quantum import authoring as quantum
-from scopecat_quantum.program_targets import PreparedQuantumTargetEntry
-from scopecat_quantum.targets import TargetAcquisitionAddress
-
 from reference_lab.point_values import QuantumLabPointValues
 from reference_lab.targets.list_mode import AcquisitionResponse
 from reference_lab.virtual_lab.responses.drag_beta import (
@@ -27,6 +22,10 @@ from reference_lab.workflows.ramsey import (
     parallel_two_qubit_ramsey_program,
     ramsey_program,
 )
+from scopecat import Quantity
+from scopecat_quantum import authoring as quantum
+from scopecat_quantum.program_targets import PreparedQuantumTargetEntry
+from scopecat_quantum.targets import TargetAcquisitionAddress
 
 
 def quantum_lab_response(

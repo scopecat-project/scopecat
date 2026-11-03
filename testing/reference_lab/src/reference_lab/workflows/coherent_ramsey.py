@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import numpy as np
-import scopecat as sc
 from numpy.typing import NDArray
 
+import scopecat as sc
 from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import prepare_quantum_hardware
 from reference_lab.workflows.ramsey import ramsey_program

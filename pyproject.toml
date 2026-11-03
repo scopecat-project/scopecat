@@ -43,6 +43,7 @@ notebook = [
 include = [
   "apps/scopecat-ui/e2e/fixtures/admit_procedure.py",
   "apps/scopecat-ui/e2e/fixtures/controlled_experiment.py",
+  "apps/scopecat-ui/scripts/export-openapi.py",
   "packages/scopecat/src",
   "packages/scopecat/tests",
   "packages/scopecat-tutorials/src",
@@ -54,6 +55,7 @@ include = [
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/src",
   "packages/scopecat-quantum/tests",
+  "packages/scopecat-quantum/examples/quantity_recipe.py",
   "testing/reference_lab/src",
   "testing/reference_lab/tests",
   "testing/fixtures/retained-signal/src",
@@ -76,6 +78,7 @@ exclude = [
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "recommended"
+failOnWarnings = true
 extraPaths = [
   ".",
   "testing/fixtures/retained-signal/src",
@@ -106,12 +109,15 @@ reportUnreachable = "hint"
 # roots must precede their parent projects.
 [[tool.basedpyright.executionEnvironments]]
 root = "packages/scopecat-app/tests"
-# Keep dynamic fixture/JSON warnings visible without blocking this newly covered
-# test root. Errors still fail; other roots retain their existing warning gate.
-failOnWarnings = false
+# Test doubles and deliberately malformed serialized inputs cross dynamic APIs.
+# Permit explicit Any at those boundaries, as in the core tests, while keeping
+# Unknown, argument, member and optional checks active for ordinary test code.
+reportAny = "none"
+reportExplicitAny = "none"
 # Lifecycle and packaging tests intentionally inspect private state and helpers.
-# Keep argument/member/optional checks active, including for test doubles.
+# They also patch module imports at the location where the application uses them.
 reportPrivateUsage = "none"
+reportPrivateLocalImportUsage = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "testing/reference_lab/tests"
@@ -126,8 +132,6 @@ root = "packages/scopecat-server/tests"
 reportAny = "none"
 reportExplicitAny = "none"
 reportPrivateUsage = "none"
-reportUnknownMemberType = "none"
-reportUnknownVariableType = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "testing/scopecat-testkit/src"
@@ -135,11 +139,6 @@ root = "testing/scopecat-testkit/src"
 reportAny = "none"
 # White-box fixtures construct bound programs and inspect project-loader state.
 reportPrivateUsage = "none"
-
-[[tool.basedpyright.executionEnvironments]]
-root = "packages/scopecat-server/src"
-# Worker entry functions are referenced from other modules, not their owner file.
-reportUnusedFunction = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "packages/scopecat-instruments/tests"
@@ -396,6 +395,7 @@ select = [
   "LOG",
   "PERF102",
   "PERF402",
+  "PGH004",
   "PIE",
   "PLC0206",
   "PLE",

@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 from nbclient import NotebookClient
-from nbformat import read, v4, write
+from testing.app_support.notebook_typing import cells as notebook_cells
+from testing.app_support.notebook_typing import read, v4, write
 from testing.app_support.project import create_project
 from testing.app_support.verify_groups import (
     ADD_ANALYSIS,
@@ -23,7 +24,7 @@ def test_grouped_teaching_restart(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     notebook_imports: pytest.MonkeyPatch,
-    topic,
+    topic: str,
 ):
     root = create_project(tmp_path / "分组 教材", topic=topic).parent
     path = lesson_path(root)
@@ -60,7 +61,7 @@ def test_grouped_teaching_restart(
     _, environment = kernel_command(root, source_path=False)
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     notebook = read(path, as_version=4)
-    notebook.cells.append(
+    notebook_cells(notebook).append(
         v4.new_code_cell(GROUP_CHECKS + "\nassert before_runs == {run.id}\n")
     )
     reopen = v4.new_notebook(

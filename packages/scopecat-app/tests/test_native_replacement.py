@@ -16,7 +16,7 @@ spec.loader.exec_module(probe)
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_selection_uses_candidate_runtime(tmp_path: Path, legacy):
+def test_selection_uses_candidate_runtime(tmp_path: Path, legacy: bool):
     home = tmp_path / "isolated home"
     data = home / "data"
     state = data if legacy else data / "state"

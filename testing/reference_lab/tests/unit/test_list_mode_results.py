@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from scopecat_quantum._ids import AcquisitionSlotId, TargetCompileEntryId
-from scopecat_quantum.targets import TargetAcquisitionAddress
-
 from reference_lab.targets.list_mode.execution_model import (
     DigitizerResultBatch,
     DigitizerResultChunk,
 )
+from scopecat_quantum._ids import AcquisitionSlotId, TargetCompileEntryId
+from scopecat_quantum.targets import TargetAcquisitionAddress
 
 from ._list_mode_test_support import (
     MeasurementArray,

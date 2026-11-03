@@ -5,19 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import cast
 
-from scopecat.kernel.json_types import JsonValue
-from scopecat.sdk.domain import (
-    DomainExecutionReceipt,
-    DomainExecutionResult,
-    DomainInstrumentExecutor,
-    DomainInvocationSpec,
-    DomainResultValue,
-)
-from scopecat_quantum.program_results import (
-    MappedQuantumTarget,
-    QuantumTargetResultAddress,
-)
-
 from reference_lab.targets.list_mode.circuit_runtime import (
     correlate_list_mode_run,
     realize_measurements,
@@ -32,6 +19,18 @@ from reference_lab.targets.list_mode.execution_model import (
 from reference_lab.targets.list_mode.model import (
     ListModeArtifact,
     acquisition_slot_identity_payload,
+)
+from scopecat.kernel.json_types import JsonValue
+from scopecat.sdk.domain import (
+    DomainExecutionReceipt,
+    DomainExecutionResult,
+    DomainInstrumentExecutor,
+    DomainInvocationSpec,
+    DomainResultValue,
+)
+from scopecat_quantum.program_results import (
+    MappedQuantumTarget,
+    QuantumTargetResultAddress,
 )
 
 type MappedListModeTarget = MappedQuantumTarget[ListModeArtifact]

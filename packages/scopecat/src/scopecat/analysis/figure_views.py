@@ -1,3 +1,6 @@
+# Figure projection consumes an untyped PyArrow Table and its native row export.
+# Retain the existing numeric validation below; Unknown propagation from Arrow
+# does not justify weakening or duplicating that runtime contract.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
 # pyright: reportUnknownVariableType=false
 """Bounded, unit-aware figure projection; statistics remain project-owned."""

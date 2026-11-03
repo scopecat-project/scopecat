@@ -10,6 +10,7 @@ from unittest.mock import Mock
 import pytest
 
 from scopecat_app import author_environment as environments
+from scopecat_app.application_runtime import ApplicationRuntime
 
 type Preparation = tuple[Mock, Path, list[list[str]], Mock]
 
@@ -18,7 +19,11 @@ type Preparation = tuple[Mock, Path, list[list[str]], Mock]
 @pytest.mark.parametrize("stage", ["install", "ensurepip"])
 @pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
 def test_interrupted_client_preparation_preserves_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rebuild, stage, failure
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rebuild: bool,
+    stage: str,
+    failure: type[BaseException],
 ):
     workspace = tmp_path / "authors"
     workspace.mkdir()
@@ -29,11 +34,18 @@ def test_interrupted_client_preparation_preserves_retry(
         python.parent.mkdir(parents=True)
         python.write_bytes(b"original interpreter")
     runtime = Mock()
-    monkeypatch.setattr(environments, "_bundle", lambda _: tmp_path)
-    monkeypatch.setattr(environments, "resolve", lambda *_, **__: Path("base"))
+
+    def bundle_path(_: ApplicationRuntime) -> Path:
+        return tmp_path
+
+    def resolve(*_: object, **__: object) -> Path:
+        return Path("base")
+
+    monkeypatch.setattr(environments, "_bundle", bundle_path)
+    monkeypatch.setattr(environments, "resolve", resolve)
     interrupted = failure("preparation interrupted")
 
-    def install(*args, **kwargs):
+    def install(*args: object, **kwargs: object) -> None:
         python.parent.mkdir(parents=True)
         python.write_bytes(b"candidate interpreter")
         if stage == "install":
@@ -41,12 +53,19 @@ def test_interrupted_client_preparation_preserves_retry(
 
     installer = Mock(side_effect=install)
     monkeypatch.setattr(environments, "_install_client", installer)
-    monkeypatch.setattr(environments, "check", lambda _r, _w, p: p)
+
+    def check(_runtime: ApplicationRuntime, _workspace: Path, python: Path) -> Path:
+        return python
+
+    monkeypatch.setattr(environments, "check", check)
     monkeypatch.setattr(environments, "_retain_client_requirements", Mock())
     ensurepip = Mock(side_effect=interrupted if stage == "ensurepip" else None)
-    monkeypatch.setattr(
-        environments, "_run", lambda c: ensurepip(c) if "ensurepip" in c else None
-    )
+
+    def run(command: list[str]) -> None:
+        if "ensurepip" in command:
+            ensurepip(command)
+
+    monkeypatch.setattr(environments, "_run", run)
 
     with pytest.raises(failure, match="preparation interrupted") as raised:
         environments.create_client_environment(runtime, workspace, rebuild=rebuild)
@@ -94,15 +113,25 @@ def preparation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Preparation:
         python=Path("application-python"),
         environment={"scopecat": "1", "server": "1"},
     )
-    monkeypatch.setattr(environments, "_bundle", lambda _: bundle)
+
+    def bundle_path(_: ApplicationRuntime) -> Path:
+        return bundle
+
+    monkeypatch.setattr(environments, "_bundle", bundle_path)
     monkeypatch.setattr(environments, "find_uv_bin", lambda: "uv")
-    monkeypatch.setattr(environments, "resolve", lambda *_, **__: Path("base"))
+
+    def resolve(*_: object, **__: object) -> Path:
+        return Path("base")
+
+    monkeypatch.setattr(environments, "resolve", resolve)
     (bundle / "wheels").mkdir()
     for name in ("scopecat", "scopecat_server"):
         (bundle / "wheels" / f"{name}-1-py3-none-any.whl").touch()
-    monkeypatch.setattr(
-        environments, "identity", lambda _: {"binary_sha256": "original"}
-    )
+
+    def identity(_: Path) -> dict[str, object]:
+        return {"binary_sha256": "original"}
+
+    monkeypatch.setattr(environments, "identity", identity)
     calls: list[list[str]] = []
 
     def run(command: list[str]) -> None:
@@ -139,7 +168,7 @@ def test_short_candidates_reuse_full_identity_receipts(preparation: Preparation)
 
 @pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
 def test_failed_candidate_preserves_other_environments(
-    preparation: Preparation, failure
+    preparation: Preparation, failure: type[BaseException]
 ):
     runtime, source, _, capture = preparation
     retained = runtime.home / "environments/e-retained/runtime"
@@ -161,13 +190,12 @@ def test_concurrent_preparation_publishes_one_candidate_per_identity(
     preparation: Preparation,
 ):
     runtime, source, calls, capture = preparation
+
+    def prepare(_index: int) -> Path:
+        return environments.prepare_execution_environment(runtime, source)
+
     with ThreadPoolExecutor(max_workers=2) as workers:
-        results = list(
-            workers.map(
-                lambda _: environments.prepare_execution_environment(runtime, source),
-                range(2),
-            )
-        )
+        results = list(workers.map(prepare, range(2)))
     assert results[0] == results[1]
     capture.assert_called_once()
     assert sum("install" in command for command in calls) == 1
@@ -203,7 +231,9 @@ def test_online_newer_dependency_cannot_override_delivery_lock(
     index = tmp_path / "index"
     (index / "schema-runtime").mkdir(parents=True)
 
-    def wheel(directory, name, version, dependencies=()):
+    def wheel(
+        directory: Path, name: str, version: str, dependencies: tuple[str, ...] = ()
+    ) -> Path:
         normalized = name.replace("-", "_")
         path = directory / f"{normalized}-{version}-py3-none-any.whl"
         info = f"{normalized}-{version}.dist-info"
@@ -239,8 +269,16 @@ def test_online_newer_dependency_cannot_override_delivery_lock(
     runtime.installation.return_value = SimpleNamespace(
         python=Path(sys.executable), environment={"scopecat": "1", "server": "1"}
     )
-    monkeypatch.setattr(environments, "_bundle", lambda _: bundle)
-    monkeypatch.setattr(environments, "resolve", lambda *_, **__: Path(sys.executable))
+
+    def bundle_path(_: ApplicationRuntime) -> Path:
+        return bundle
+
+    monkeypatch.setattr(environments, "_bundle", bundle_path)
+
+    def resolve(*_: object, **__: object) -> Path:
+        return Path(sys.executable)
+
+    monkeypatch.setattr(environments, "resolve", resolve)
     monkeypatch.setattr("scopecat_server.author_environment.capture", Mock())
     monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "uv-cache"))
     monkeypatch.setenv("UV_NO_CONFIG", "true")
@@ -407,9 +445,11 @@ def test_changed_interpreter_identity_does_not_reuse_candidate(
 ):
     runtime, source, calls, _capture = preparation
     before = environments.prepare_execution_environment(runtime, source)
-    monkeypatch.setattr(
-        environments, "identity", lambda _: {"binary_sha256": "replaced"}
-    )
+
+    def identity(_: Path) -> dict[str, object]:
+        return {"binary_sha256": "replaced"}
+
+    monkeypatch.setattr(environments, "identity", identity)
     after = environments.prepare_execution_environment(runtime, source)
     assert after != before
     assert sum("install" in command for command in calls) == 2

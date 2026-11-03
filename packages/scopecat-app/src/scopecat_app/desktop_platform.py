@@ -1,4 +1,7 @@
-# PyObjC exposes Cocoa symbols dynamically, without Python type declarations.
+# Cocoa/PyGObject expose symbols dynamically; pystray selects private backend
+# objects at runtime. Keep missing native imports/attributes and their Unknown
+# chains at this platform boundary instead of inventing cross-platform stubs.
+# Public orchestration uses typed Window, Icon, and Callable interfaces.
 # pyright: reportAttributeAccessIssue=false, reportMissingImports=false
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false
 # pyright: reportUnknownArgumentType=false

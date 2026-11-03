@@ -49,7 +49,9 @@ from scopecat_server.services.application_open import ApplicationOpenService
         ),
     ],
 )
-def test_host_routes_exact_objects_at_its_own_gui_origin(page, target, query, fragment):
+def test_host_routes_exact_objects_at_its_own_gui_origin(
+    page: str, target: ApplicationOpenTarget, query: dict[str, list[str]], fragment: str
+):
     location = urlsplit(object_location(page, target))
     assert location.netloc == urlsplit(page).netloc
     assert parse_qs(location.query) == (
@@ -75,7 +77,7 @@ def test_windows_use_development_page_and_focus_exact_existing_target():
     view.window.show.assert_called()
 
 
-def client_for(service):
+def client_for(service: ApplicationOpenService):
     client = Mock(spec=DaemonClient)
     client.base_url = "http://127.0.0.1:3210"
     client.health.return_value = DaemonHealth(

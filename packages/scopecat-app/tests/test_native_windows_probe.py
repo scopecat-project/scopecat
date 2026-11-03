@@ -5,11 +5,12 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Generator
 from datetime import UTC, datetime
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import httpx2
 import psutil
@@ -29,7 +30,7 @@ spec.loader.exec_module(probe)
 @pytest.mark.parametrize("business_status", ["passed", "failed"])
 @pytest.mark.parametrize("exit_fails", [False, True])
 def test_probe_persists_business_result_before_normal_exit(
-    tmp_path, business_status, exit_fails
+    tmp_path: Path, business_status: str, exit_fails: bool
 ):
     output = tmp_path / "result.json"
     evidence = {"status": business_status, "error": "original business evidence"}
@@ -63,10 +64,10 @@ def test_probe_normal_exit_uses_preflight_and_joins_request_before_destroy(
     from scopecat_app.desktop_session import DesktopSession
 
     session = DesktopSession(ApplicationRuntime(tmp_path), threading.Event())
-    events = []
+    events: list[str] = []
 
     @contextmanager
-    def preflight():
+    def preflight() -> Generator[None]:
         events.append("preflight")
         if refuse:
             raise ValueError("input not saved")
@@ -116,15 +117,17 @@ def reset_host_function(name: str) -> ast.FunctionDef:
         (True, "http://localhost/", True),
     ],
 )
-def test_reset_navigation_waits_for_loaded_event(loaded, url, expected):
+def test_reset_navigation_waits_for_loaded_event(
+    loaded: bool, url: str | None, expected: bool
+):
     function = reset_host_function("backend_navigation_ready")
     code = compile(
         ast.Module(body=[function], type_ignores=[]), "reset-navigation", "exec"
     )
-    scope = {}
+    scope: dict[str, Any] = {}
     exec(code, scope)  # noqa: S102 - repository-owned readiness predicate
 
-    def current_url():
+    def current_url() -> str | None:
         assert loaded, "must not call the blocking API before the loaded event"
         return url
 
@@ -148,24 +151,24 @@ def test_reset_navigation_waits_for_loaded_event(loaded, url, expected):
         ("状态未知（future_status）", False, False),
     ],
 )
-def test_reset_readiness_requires_health_completion(connection, loading, expected):
+def test_reset_readiness_requires_health_completion(
+    connection: str | None, loading: bool, expected: bool
+):
     function = reset_host_function("workspace_ready")
     code = compile(ast.Module(body=[function], type_ignores=[]), "reset-ready", "exec")
-    scope = {}
+    scope: dict[str, Any] = {}
     exec(code, scope)  # noqa: S102 - repository-owned readiness predicate
-    window = SimpleNamespace(
-        evaluate_js=lambda _: {
-            "mounted": True,
-            "connection": connection,
-            "loading": loading,
-        }
-    )
+
+    def evaluate_js(_script: str) -> dict[str, object]:
+        return {"mounted": True, "connection": connection, "loading": loading}
+
+    window = SimpleNamespace(evaluate_js=evaluate_js)
     assert bool(scope["workspace_ready"](window)) is expected
 
 
 @pytest.mark.parametrize("exit_fails", [False, True])
 def test_reset_exit_retains_business_result_before_wait_and_preflight(
-    tmp_path, exit_fails
+    tmp_path: Path, exit_fails: bool
 ):
     # Execute the actual generated observer's finally block without a native GUI.
     import traceback
@@ -177,29 +180,32 @@ def test_reset_exit_retains_business_result_before_wait_and_preflight(
     code = compile(ast.Module(body=body, type_ignores=[]), "reset-exit", "exec")
     result = {"status": "failed", "error": "original business failure"}
     output = tmp_path / "reset.json"
-    calls = []
+    calls: list[str] = []
 
-    def wait(check, label):
+    def wait(check: Callable[[], bool], label: str):
         assert json.loads(output.read_text())["business_status"] == "failed"
         assert check()
         calls.append("ready")
 
-    def exit_application(background):
+    def exit_application(background: bool):
         assert background is False
         calls.append("exit")
         if exit_fails:
             raise ValueError("save rejected")
 
-    scope = {
+    def ready(_target: object) -> bool:
+        return True
+
+    scope: dict[str, Any] = {
         "home": tmp_path,
         "stage": "reset",
         "result": result,
         "json": json,
         "traceback": traceback,
         "wait": wait,
-        "workspace_ready": lambda _: True,
+        "workspace_ready": ready,
         "window": SimpleNamespace(
-            evaluate_js=lambda _: True,
+            evaluate_js=ready,
             _js_api=SimpleNamespace(exit=exit_application),
         ),
     }
@@ -290,12 +296,12 @@ raise SystemExit(7)
             [sys.executable, "-c", code, str(receipt)], reports / "host.log", timeout=5
         )
     identity = json.loads(receipt.read_text())
-    stopped = []
-    monkeypatch.setattr(
-        probe,
-        "ApplicationRuntime",
-        lambda _: SimpleNamespace(stop=lambda: stopped.append(True)),
-    )
+    stopped: list[bool] = []
+
+    def runtime(_root: Path) -> SimpleNamespace:
+        return SimpleNamespace(stop=lambda: stopped.append(True))
+
+    monkeypatch.setattr(probe, "ApplicationRuntime", runtime)
     try:
         assert psutil.pid_exists(identity["pid"])
         # Never kill a recycled PID merely because the recorded number matches.
@@ -320,7 +326,7 @@ raise SystemExit(7)
     ],
 )
 def test_probe_refuses_local_or_mismatched_runner(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setting, value
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setting: str, value: str
 ):
     hosted_runner(tmp_path, monkeypatch)
     monkeypatch.setenv(setting, value)
@@ -349,7 +355,10 @@ def test_probe_requires_home_below_disposable_runner_temp(
 @pytest.mark.parametrize("fail_cleanup", [False, True])
 @pytest.mark.parametrize("host_failure", ["exit", "timeout", "teardown"])
 def test_host_failure_overrides_partial_pass_and_retains_reports(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_cleanup, host_failure
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fail_cleanup: bool,
+    host_failure: str,
 ):
     hosted_runner(tmp_path, monkeypatch)
     app, home = tmp_path / "app", tmp_path / "home"
@@ -359,18 +368,18 @@ def test_host_failure_overrides_partial_pass_and_retains_reports(
     home.mkdir()
     (app / "bundle.json").write_text("{}")
     monkeypatch.setattr(probe.sys, "platform", "win32")
-    monkeypatch.setattr(
-        probe,
-        "ApplicationRuntime",
-        lambda _: SimpleNamespace(
+
+    def runtime(_root: Path) -> SimpleNamespace:
+        return SimpleNamespace(
             installation=lambda: SimpleNamespace(
                 delivery_root=app, python=Path(sys.executable)
             )
-        ),
-    )
-    calls = []
+        )
 
-    def run(command, log, *, timeout):
+    monkeypatch.setattr(probe, "ApplicationRuntime", runtime)
+    calls: list[list[str]] = []
+
+    def run(command: list[str], log: Path, *, timeout: float):
         calls.append(command)
         log.write_text("diagnostic")
         if len(calls) == 1:
@@ -504,7 +513,8 @@ class WindowsStorageProbe(Protocol):
 
 @pytest.fixture
 def windows_storage_probe(monkeypatch: pytest.MonkeyPatch) -> WindowsStorageProbe:
-    monkeypatch.syspath_prepend(str(SCRIPT.parent))
+    # pytest leaves the path parameter untyped; this call supplies a concrete str.
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))  # pyright: ignore[reportUnknownMemberType]
     storage_spec = spec_from_file_location(
         "verify_windows_storage", SCRIPT.with_name("verify_windows_storage.py")
     )
@@ -531,7 +541,11 @@ def test_windows_storage_embedded_host_compiles(
     ],
 )
 def test_windows_storage_rejects_incomplete_host_evidence(
-    tmp_path: Path, windows_storage_probe: WindowsStorageProbe, exit_code, report, error
+    tmp_path: Path,
+    windows_storage_probe: WindowsStorageProbe,
+    exit_code: int,
+    report: dict[str, object] | None,
+    error: type[Exception],
 ):
     """Failure-report validation only; these child processes are not WebViews."""
     if report is not None:
@@ -562,7 +576,7 @@ def test_windows_storage_host_wait_is_bounded(
 
 @pytest.mark.parametrize("surface", ["cookies", "document", "http", "marker"])
 def test_windows_storage_cookie_or_marker_loss_fails(
-    windows_storage_probe: WindowsStorageProbe, surface
+    windows_storage_probe: WindowsStorageProbe, surface: str
 ):
     """Validate rejection of recorded loss, not native browser behavior."""
     observed: dict[str, object] = {
@@ -631,7 +645,7 @@ def test_windows_storage_aggregate_retains_setup_error(
 ):
     hosted_runner(tmp_path, monkeypatch)
 
-    def fail_setup(*args):
+    def fail_setup(*args: object):
         raise RuntimeError("fixture setup failed")
 
     monkeypatch.setattr(windows_storage_probe, "_verify", fail_setup)
@@ -669,16 +683,23 @@ def test_window_diagnostics_retains_initialization_failure_before_cleanup(
     )
     window.native = SimpleNamespace(browser=SimpleNamespace(webview=control))
     monkeypatch.setattr(probe.sys, "platform", "win32")
-    monkeypatch.setattr(probe, "browser_processes", lambda: {"processes": []})
-    monkeypatch.setattr(
-        probe,
-        "import_module",
-        lambda _: SimpleNamespace(
+
+    def browser_processes() -> dict[str, list[object]]:
+        return {"processes": []}
+
+    monkeypatch.setattr(probe, "browser_processes", browser_processes)
+
+    def version(_folder: object) -> str:
+        return "123.4"
+
+    def native_module(_name: str) -> SimpleNamespace:
+        return SimpleNamespace(
             CoreWebView2Environment=SimpleNamespace(
-                GetAvailableBrowserVersionString=lambda _: "123.4"
+                GetAvailableBrowserVersionString=version
             )
-        ),
-    )
+        )
+
+    monkeypatch.setattr(probe, "import_module", native_module)
     diagnostics.attach(window)
     window.events.initialized.set("edgechromium")
     window.events.before_show.set()
@@ -764,7 +785,9 @@ def test_window_diagnostics_unavailable_does_not_replace_acceptance_failure(
 
 
 @pytest.mark.parametrize("fail", [False, True])
-def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, fail):
+def test_native_author_probe_runs_ipython_cells_and_propagates_errors(
+    tmp_path: Path, fail: bool
+):
     from scripts.verify_native_application import AUTHOR_NOTEBOOK_CHECK
 
     foreign = tmp_path / "foreign-build-venv"

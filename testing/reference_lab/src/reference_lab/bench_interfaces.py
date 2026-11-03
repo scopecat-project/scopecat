@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Protocol
 
+from reference_lab.payloads import (
+    AWG_PROGRAM_SCHEMA_ID,
+    DIGITIZER_PROGRAM_SCHEMA_ID,
+    TRIGGER_PROGRAM_SCHEMA_ID,
+)
 from scopecat.kernel.quantity import Quantity
 from scopecat.sdk.instruments.declarations import (
     Member,
@@ -20,12 +25,6 @@ from scopecat.sdk.instruments.declarations import (
     member,
     operation,
     result_schema,
-)
-
-from reference_lab.payloads import (
-    AWG_PROGRAM_SCHEMA_ID,
-    DIGITIZER_PROGRAM_SCHEMA_ID,
-    TRIGGER_PROGRAM_SCHEMA_ID,
 )
 
 type AwgRunMode = Literal["once", "continuous"]

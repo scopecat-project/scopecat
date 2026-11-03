@@ -9,6 +9,20 @@ from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
+
+from reference_lab.targets.list_mode.model import (
+    AwgChannelWaveform,
+    ListModeArtifact,
+    ListModeCompilationTrace,
+    ListModeEntry,
+    ListModeEventPlacement,
+    ListModePlacementCandidate,
+    ListModePlacementConstraint,
+    acquisition_slot_identity_payload,
+    awg_waveform_identity_payload,
+    pulse_event_identity_payload,
+    signal_key,
+)
 from scopecat.inspection import (
     CompiledArtifactInspection,
     CompiledInspectionBounds,
@@ -26,20 +40,6 @@ from scopecat.inspection import (
     CompiledWorkEstimate,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
-
-from reference_lab.targets.list_mode.model import (
-    AwgChannelWaveform,
-    ListModeArtifact,
-    ListModeCompilationTrace,
-    ListModeEntry,
-    ListModeEventPlacement,
-    ListModePlacementCandidate,
-    ListModePlacementConstraint,
-    acquisition_slot_identity_payload,
-    awg_waveform_identity_payload,
-    pulse_event_identity_payload,
-    signal_key,
-)
 
 
 @dataclass(frozen=True, slots=True)
