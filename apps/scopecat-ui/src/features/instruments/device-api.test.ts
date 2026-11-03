@@ -35,6 +35,7 @@ it("saves a reviewed device revision without creating an experiment setup", asyn
     connection: content,
     actor: "operator",
     note: "New cable",
+    reactivate: false,
   };
   await saveDevice(command);
   expect(fetch).toHaveBeenCalledOnce();

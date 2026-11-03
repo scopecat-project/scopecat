@@ -61,5 +61,9 @@ prepared = session.prepare(experiment, parameters=session.params)
 重命名只改变显示名称。停用设备会保留记录，并阻止新工作解析到该设备。
 停用成功后，其地址可以分配给替换设备；旧实验快照仍引用原来已停用的设备。
 
+同一设备重新启用会保留 ID，生成新的连接修订；旧实验快照不变，也不能仅因重新启用而恢复有效。
+保留原 binding 的 setup 可以重新准备，解析新的连接修订，无需重画逻辑路由。
+真正换成另一台设备时才需要明确改绑新登记。重新启用不自动连接、测试或下发参数。
+
 不使用实验配置、直接通过 Python 控制设备时，参见[控制仪器](control-instruments.md)。
 编辑参数请参见[参数分支](parameter-branches.md)。

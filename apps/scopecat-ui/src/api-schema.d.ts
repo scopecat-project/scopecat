@@ -6372,6 +6372,11 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * Reactivate
+             * @default false
+             */
+            reactivate: boolean;
             revision_id: components["schemas"]["NonEmptyText"];
         };
         DeviceSchemaId: string;

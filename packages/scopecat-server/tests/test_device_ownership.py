@@ -986,3 +986,207 @@ def test_pure_driver_validation_rejects_before_retiring_connection(
             runtime.application.devices.get("signal").device.head.revision_id
             == (saved["device"]["head"]["revision_id"])
         )
+
+
+def test_reactivate_keeps_identity_and_history_without_connecting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    endpoint = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=endpoint) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        original = _register(client)
+        snapshot = _setup(client, "before-disable")
+        assert (
+            client.post(
+                "/api/v1/devices/signal/retirement",
+                json={"expected_head": original["device"]["head"]},
+            ).status_code
+            == 200
+        )
+
+        def unexpected_connect(*_args: object, **_kwargs: object) -> None:
+            pytest.fail("reactivation must not connect hardware")
+
+        monkeypatch.setattr(endpoint, "connect", unexpected_connect)
+        command = {
+            "device_id": "signal",
+            "label": original["device"]["label"],
+            "revision_id": "signal-reactivated",
+            "connection": original["revision"]["content"],
+            "expected_head": original["device"]["head"],
+            "actor": "operator",
+            "reactivate": True,
+        }
+        assert (
+            client.post(
+                "/api/v1/devices", json={**command, "reactivate": False}
+            ).status_code
+            == 409
+        )
+        response = client.post("/api/v1/devices", json=command)
+        assert response.status_code == 200, response.text
+        restored = response.json()
+        assert restored["device"]["id"] == "signal"
+        assert restored["device"]["state"] == "available"
+        assert restored["revision"]["previous"] == original["device"]["head"]
+        assert restored["device"]["head"] != original["device"]["head"]
+        assert restored["last_connection_test"] is None
+        assert len(runtime.application.devices.list()) == 1
+        assert runtime.application.setup.get(snapshot.id) == snapshot
+        with pytest.raises(BackendConflict, match="changed; prepare"):
+            runtime.application.setup.require_available(snapshot.ref)
+        refreshed = runtime.application.setup.resolve(snapshot.resolution.definition_id)
+        assert refreshed.setup.routing == snapshot.setup.routing
+        assert (
+            refreshed.resolution.devices[0]
+            == runtime.application.devices.get("signal").device.head
+        )
+        assert client.post("/api/v1/devices", json=command).json() == restored
+        # A late retry must not undo a subsequent explicit disable.
+        assert (
+            client.post(
+                "/api/v1/devices/signal/retirement",
+                json={"expected_head": restored["device"]["head"]},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post("/api/v1/devices", json=command).json()["device"]["state"]
+            == "retired"
+        )
+
+
+def test_reactivation_rechecks_alias_ownership_and_driver(tmp_path: Path) -> None:
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=_endpoint()) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        original = _register(client)
+        content = {
+            **original["revision"]["content"],
+            "access_aliases": ["bench:shared"],
+        }
+        edit = {
+            "device_id": "signal",
+            "label": "Signal source",
+            "revision_id": "signal-v2",
+            "connection": content,
+            "expected_head": original["device"]["head"],
+            "actor": "operator",
+        }
+        saved = client.post("/api/v1/devices", json=edit).json()
+        assert (
+            client.post(
+                "/api/v1/devices/signal/retirement",
+                json={"expected_head": saved["device"]["head"]},
+            ).status_code
+            == 200
+        )
+        replacement = client.post(
+            "/api/v1/devices",
+            json={
+                **edit,
+                "device_id": "other",
+                "revision_id": "other-v1",
+                "expected_head": None,
+            },
+        )
+        assert replacement.status_code == 200, replacement.text
+        restore = {
+            **edit,
+            "revision_id": "signal-v3",
+            "expected_head": saved["device"]["head"],
+            "reactivate": True,
+        }
+        conflict = client.post("/api/v1/devices", json=restore)
+        assert (
+            conflict.status_code == 409 and "belongs to device other" in conflict.text
+        )
+        assert runtime.application.devices.get("signal").device.state == "retired"
+        assert (
+            runtime.application.devices.get("signal").device.head
+            == runtime.application.devices.get("signal").revision.ref
+            and runtime.application.devices.get("signal").device.head.revision_id
+            == "signal-v2"
+        )
+        invalid_driver = {
+            **content,
+            "driver": {
+                **original["revision"]["content"]["driver"],
+                "artifact_hash": "sha256:" + "0" * 64,
+            },
+        }
+        assert (
+            client.post(
+                "/api/v1/devices", json={**restore, "connection": invalid_driver}
+            ).status_code
+            == 409
+        )
+        assert (
+            client.post(
+                "/api/v1/devices",
+                json={**restore, "device_id": "new", "expected_head": None},
+            ).status_code
+            == 409
+        )
+
+
+@pytest.mark.parametrize("state", ["active", "quarantined", "queued"])
+def test_reactivation_checks_durable_blockers_in_write_transaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str
+) -> None:
+    from sqlite3 import Connection
+
+    from scopecat.control.models import InventoryMigrationBlocker
+
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=_endpoint()) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        original = _register(client)
+        assert (
+            client.post(
+                "/api/v1/devices/signal/retirement",
+                json={"expected_head": original["device"]["head"]},
+            ).status_code
+            == 200
+        )
+        blocker = InventoryMigrationBlocker.model_validate(
+            {
+                "key": {"kind": "instrument", "id": "device:signal"},
+                "owner_kind": "run" if state == "queued" else "instrument_session",
+                "owner_id": "existing-owner",
+                "state": state,
+            }
+        )
+
+        def blockers(
+            connection: Connection, _keys: object
+        ) -> tuple[InventoryMigrationBlocker, ...]:
+            assert connection.in_transaction
+            return (blocker,)
+
+        monkeypatch.setattr(
+            runtime.application.devices.control,
+            "inventory_migration_blockers_in_transaction",
+            blockers,
+        )
+        response = client.post(
+            "/api/v1/devices",
+            json={
+                "device_id": "signal",
+                "label": "Signal source",
+                "revision_id": "restore-blocked",
+                "connection": original["revision"]["content"],
+                "expected_head": original["device"]["head"],
+                "actor": "operator",
+                "reactivate": True,
+            },
+        )
+        assert response.status_code == 409, response.text
+        assert "existing-owner" in response.text
+        current = runtime.application.devices.get("signal")
+        assert current.device.state == "retired"
+        assert current.device.head.revision_id == "signal-v1"

@@ -128,6 +128,7 @@ class DeviceRepository:
         label: str,
         revision: DeviceConnectionRevision,
         expected_head: DeviceRevisionRef | None,
+        reactivate: bool = False,
     ) -> tuple[DeviceView, bool, set[str]]:
         try:
             current = self.get(revision.device_id)
@@ -152,7 +153,9 @@ class DeviceRepository:
             raise ValueError(
                 "device connection changed; reload and review before saving"
             )
-        if current is not None and current.state == "retired":
+        if reactivate and (current is None or current.state != "retired"):
+            raise ValueError("only a retired device can be reactivated")
+        if current is not None and current.state == "retired" and not reactivate:
             raise ValueError("retired device cannot accept a new connection")
         aliases = set(revision.content.access_aliases)
         address = connection_access_alias(revision.content.connection)
@@ -181,9 +184,13 @@ class DeviceRepository:
         label: str,
         revision: DeviceConnectionRevision,
         expected_head: DeviceRevisionRef | None,
+        reactivate: bool = False,
     ) -> DeviceView:
         view, new_revision, aliases = self.validate_save(
-            label=label, revision=revision, expected_head=expected_head
+            label=label,
+            revision=revision,
+            expected_head=expected_head,
+            reactivate=reactivate,
         )
         if not new_revision:
             return self.view(view.device.id)

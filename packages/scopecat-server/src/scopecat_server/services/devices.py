@@ -358,6 +358,7 @@ class DeviceService:
                     label=command.label,
                     revision=revision,
                     expected_head=command.expected_head,
+                    reactivate=command.reactivate,
                 )
                 try:
                     current = repository.view(command.device_id)
@@ -372,6 +373,23 @@ class DeviceService:
                         )
                     return current
             self._validate_description(command)
+            if command.reactivate:
+                # Retirement already drained the old resident connection. Reclaim
+                # the registration under the same actor/admission fence, without
+                # creating a device-access setup or opening hardware.
+                with (
+                    self.actors.begin_retirement(
+                        (device_resource_key(command.device_id),)
+                    ),
+                    self.control.write_transaction() as connection,
+                ):
+                    self._require_drained(connection, command.device_id)
+                    return DeviceRepository(connection).save(
+                        label=command.label,
+                        revision=revision,
+                        expected_head=command.expected_head,
+                        reactivate=True,
+                    )
             with (
                 self._maintenance(
                     command.device_id, command.expected_head
