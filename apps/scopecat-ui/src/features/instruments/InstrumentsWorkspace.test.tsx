@@ -2624,3 +2624,119 @@ it("keeps connection drafts editable after driver validation without calling it 
   expect(within(dialog).getByLabelText("主机")).toHaveValue("192.0.2.24");
   expect(within(dialog).getByRole("button", { name: "保存设备" })).toBeEnabled();
 });
+
+it("keeps disabled devices in history and opens desktop details only on demand", async () => {
+  vi.stubGlobal("pywebview", { api: { open_device_window: vi.fn() } });
+  const active = registeredDevice(instrument());
+  const retired = registeredDevice(instrument({ instrument_id: "disabled-source" }));
+  retired.device.state = "retired";
+  retired.device.label = "Disabled source";
+  vi.mocked(getDevices).mockResolvedValue({ items: [active, retired] });
+  renderWorkspace();
+  await screen.findByRole("table", { name: "已登记设备" });
+  await screen.findByTitle("查看仪器 drive-source");
+  expect(screen.queryByText("Disabled source")).not.toBeInTheDocument();
+  expect(screen.queryByRole("navigation", { name: "设备详情" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTitle("查看仪器 drive-source"));
+  await screen.findByRole("button", { name: "编辑设备" });
+  fireEvent.click(screen.getByRole("button", { name: "收起详情" }));
+  expect(screen.queryByRole("navigation", { name: "设备详情" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("显示设备"), { target: { value: "retired" } });
+  fireEvent.click(await screen.findByTitle("查看仪器 disabled-source"));
+  await screen.findByRole("button", { name: "重新启用" });
+  expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "打开控制窗口" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "停用设备" })).not.toBeInTheDocument();
+  expect(openInstrumentSession).not.toHaveBeenCalled();
+  expect(testDeviceConnection).not.toHaveBeenCalled();
+});
+
+it("cancels reactivation locally and preserves its draft after a rejected save", async () => {
+  const retired = registeredDevice(instrument());
+  retired.device.state = "retired";
+  vi.mocked(getDevices).mockResolvedValue({ items: [retired] });
+  vi.mocked(saveDevice).mockRejectedValueOnce(
+    new ApiError("device access alias belongs to another device", 409),
+  );
+  renderWorkspace();
+  fireEvent.change(await screen.findByLabelText("显示设备"), { target: { value: "retired" } });
+  fireEvent.click(await screen.findByRole("button", { name: "重新启用" }));
+  let editor = await screen.findByRole("region", { name: "重新启用设备" });
+  fireEvent.click(within(editor).getByRole("button", { name: "取消" }));
+  expect(saveDevice).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "重新启用" }));
+  editor = await screen.findByRole("region", { name: "重新启用设备" });
+  await waitFor(() =>
+    expect(within(editor).getByRole("button", { name: "保存并启用" })).toBeEnabled(),
+  );
+  fireEvent.click(within(editor).getByRole("button", { name: "保存并启用" }));
+  await within(editor).findByRole("alert");
+  expect(within(editor).getByRole("button", { name: "保存并启用" })).toBeEnabled();
+  expect(saveDevice).toHaveBeenCalledWith(
+    expect.objectContaining({
+      device_id: retired.device.id,
+      expected_head: retired.device.head,
+      reactivate: true,
+      connection: retired.revision.content,
+    }),
+  );
+  expect(renameDevice).not.toHaveBeenCalled();
+  expect(testDeviceConnection).not.toHaveBeenCalled();
+  expect(openInstrumentSession).not.toHaveBeenCalled();
+});
+
+it("does not reselect a disabled device while the list refresh is pending", async () => {
+  vi.mocked(getDevices)
+    .mockResolvedValueOnce({ items: [registeredDevice(instrument())] })
+    .mockImplementation(() => new Promise(() => {}));
+  renderWorkspace();
+  const disable = await screen.findByRole("button", { name: "停用设备" });
+  await waitFor(() => expect(disable).toBeEnabled());
+  fireEvent.click(disable);
+  await waitFor(() => expect(retireDevice).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByTitle("查看仪器 drive-source")).not.toBeInTheDocument());
+  expect(screen.queryByRole("navigation", { name: "设备详情" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "重新启用" })).not.toBeInTheDocument();
+});
+
+it("shows the current disabled state when a reactivation retry was followed by another disable", async () => {
+  const retired = registeredDevice(instrument());
+  retired.device.state = "retired";
+  vi.mocked(getDevices).mockResolvedValue({ items: [retired] });
+  vi.mocked(saveDevice).mockResolvedValue(retired);
+  renderWorkspace();
+  fireEvent.change(await screen.findByLabelText("显示设备"), { target: { value: "retired" } });
+  fireEvent.click(await screen.findByRole("button", { name: "重新启用" }));
+  const editor = await screen.findByRole("region", { name: "重新启用设备" });
+  await waitFor(() =>
+    expect(within(editor).getByRole("button", { name: "保存并启用" })).toBeEnabled(),
+  );
+  fireEvent.click(within(editor).getByRole("button", { name: "保存并启用" }));
+  await screen.findByText("提交已确认，但设备当前已停用。请核对后再决定是否重新启用。");
+  expect(screen.getByLabelText("显示设备")).toHaveValue("retired");
+  expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
+  expect(testDeviceConnection).not.toHaveBeenCalled();
+});
+
+it("warns about a name shared with history without assuming physical identity", async () => {
+  const retired = registeredDevice(instrument());
+  retired.device.state = "retired";
+  retired.device.label = "Bench source";
+  vi.mocked(getDevices).mockResolvedValue({ items: [retired] });
+  renderWorkspace();
+  const add = await screen.findByRole("button", { name: "添加设备" });
+  await waitFor(() => expect(add).toBeEnabled());
+  fireEvent.click(add);
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText("设备名称"), {
+    target: { value: "Bench source" },
+  });
+  expect(within(dialog).getByText(/已有同名设备（包括已停用记录）/)).toHaveTextContent(
+    "名称相同不代表同一物理设备",
+  );
+  await waitFor(() =>
+    expect(within(dialog).getByRole("button", { name: "保存设备" })).toBeEnabled(),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  expect(saveDevice).not.toHaveBeenCalled();
+});

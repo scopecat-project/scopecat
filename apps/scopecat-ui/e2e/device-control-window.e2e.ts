@@ -102,9 +102,8 @@ test("device control windows hand off sessions without sharing writable views", 
       };
     });
     await page.reload();
-    await page.getByRole("button", { name: "操作", exact: true }).click();
-    await page.getByRole("button", { name: "打开控制窗口", exact: true }).click();
-    await page.getByRole("button", { name: "打开控制窗口", exact: true }).click();
+    await page.getByRole("button", { name: "打开控制窗口", exact: true }).first().click();
+    await page.getByRole("button", { name: "打开控制窗口", exact: true }).first().click();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toHaveCount(0);
     expect(await page.evaluate("openedDevices.length")).toBe(2);
     await capture(page, "01-device-management");
@@ -181,6 +180,42 @@ test("device control windows hand off sessions without sharing writable views", 
     await outsider.getByRole("button", { name: "释放控制", exact: true }).click();
     await controls[1].getByRole("button", { name: "释放控制", exact: true }).click();
     await expect(controls[1].getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    // Main management is one table, with history kept out of the daily list.
+    await page.getByTitle(`查看仪器 ${devices[0].device.id}`).click();
+    await page.getByRole("button", { name: "停用设备", exact: true }).click();
+    await expect(page.getByTitle(`查看仪器 ${devices[0].device.id}`)).toHaveCount(0);
+    await page.getByLabel("显示设备").selectOption("retired");
+    await page.getByTitle(`查看仪器 ${devices[0].device.id}`).click();
+    await expect(page.getByRole("button", { name: "测试连接", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "重新启用", exact: true }).click();
+    let restore = page.getByRole("region", { name: "重新启用设备", exact: true });
+    await restore.getByRole("button", { name: "取消", exact: true }).click();
+    await page.getByRole("button", { name: "重新启用", exact: true }).click();
+    restore = page.getByRole("region", { name: "重新启用设备", exact: true });
+    await restore.getByRole("button", { name: "保存并启用", exact: true }).click();
+    await expect(restore).toBeHidden();
+    await expect(page.getByLabel("显示设备")).toHaveValue("available");
+    await expect(
+      page.getByText("连接配置已保存，尚未测试。请点击“测试连接”；保存不代表设备状态已读回。", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    const restoredDevices: DeviceView[] = (
+      await (await page.request.get(`${url}/api/v1/devices`)).json()
+    ).items;
+    expect(restoredDevices).toHaveLength(2);
+    const restored = restoredDevices.find((item) => item.device.id === devices[0].device.id)!;
+    expect(restored.device.state).toBe("available");
+    expect(restored.revision.id).not.toBe(devices[0].revision.id);
+    expect(restored.revision.previous).toEqual(devices[0].device.head);
+    expect(restored.last_connection_test).toBeNull();
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate("document.documentElement.scrollWidth")).toBeLessThanOrEqual(
+        width,
+      );
+      await capture(page, `device-table-restored-${width}`);
+    }
   } finally {
     for (const control of controls) await control.close({ runBeforeUnload: false });
     if (daemon! && daemon.exitCode === null) await stop();

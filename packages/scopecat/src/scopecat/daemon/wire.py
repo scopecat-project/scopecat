@@ -302,6 +302,7 @@ class DeviceSaveCommand(_WireModel):
     expected_head: DeviceRevisionRef | None
     actor: NonEmptyText
     note: str = ""
+    reactivate: bool = False
 
 
 class DeviceRenameCommand(_WireModel):

@@ -51,8 +51,10 @@ export function InstrumentConfigDialog({
   onCancel,
   onPublished,
   embedded = false,
+  registeredDevices = [],
 }: {
   embedded?: boolean;
+  registeredDevices?: DeviceView[];
   device?: DeviceView;
   catalog: DriverCatalog;
   description?: InstrumentDescription;
@@ -60,6 +62,7 @@ export function InstrumentConfigDialog({
   onPublished: (saved: DeviceView) => void | Promise<void>;
 }) {
   const [device] = useState(suppliedDevice);
+  const reactivate = device?.device.state === "retired";
   const [draftGeneration, setDraftGeneration] = useState(0);
   const existing = device?.revision.content;
   const first =
@@ -67,6 +70,12 @@ export function InstrumentConfigDialog({
     catalog.drivers[0];
   const [deviceId] = useState(() => device?.device.id ?? createInstrumentCommandId("device"));
   const [label, setLabel] = useState(device?.device.label ?? "");
+  const sameName = registeredDevices.filter(
+    (item) =>
+      item.device.id !== deviceId &&
+      label.trim() !== "" &&
+      item.device.label.trim() === label.trim(),
+  );
   const [driverId, setDriverId] = useState(first?.driver_id ?? "");
   const [connection, setConnection] = useState(() =>
     initialConnection(existing?.connection, first),
@@ -166,6 +175,7 @@ export function InstrumentConfigDialog({
         safety: { ...safety, safe_state: safeState },
       };
       if (
+        !reactivate &&
         !restored &&
         !connectionSaveStarted.current &&
         device &&
@@ -185,6 +195,7 @@ export function InstrumentConfigDialog({
         expected_head: device?.device.head ?? null,
         note,
         connection: content,
+        reactivate,
       };
       const key = JSON.stringify(input);
       if (attempt.current?.key !== key) {
@@ -252,12 +263,16 @@ export function InstrumentConfigDialog({
     <>
       <header className="shrink-0 border-b border-line p-4">
         {embedded ? (
-          <h3 className={dialogTitle}>编辑设备</h3>
+          <h3 className={dialogTitle}>{reactivate ? "重新启用设备" : "编辑设备"}</h3>
         ) : (
-          <Dialog.Title className={dialogTitle}>{device ? "编辑设备" : "添加设备"}</Dialog.Title>
+          <Dialog.Title className={dialogTitle}>
+            {reactivate ? "重新启用设备" : device ? "编辑设备" : "添加设备"}
+          </Dialog.Title>
         )}
         <p className={dialogDescription}>
-          编辑中的值是草稿。保存后再显式测试该连接版本，不会自动应用仪器属性。
+          {reactivate
+            ? "确认连接设置后重新启用同一设备，保留历史。保存不会连接设备；之后请显式测试，相关实验需重新准备。"
+            : "编辑中的值是草稿。保存后再显式测试该连接版本，不会自动应用仪器属性。"}
         </p>
       </header>
       <div className="min-h-0 overflow-y-auto">
@@ -288,6 +303,13 @@ export function InstrumentConfigDialog({
             设备名称
             <Controls.Input value={label} onChange={(event) => setLabel(event.target.value)} />
           </Controls.Field>
+          {sameName.length > 0 && (
+            <p role="status" className="text-sm">
+              已有同名设备
+              {sameName.some((item) => item.device.state === "retired") ? "（包括已停用记录）" : ""}
+              。如是同一设备，请取消并从原记录重新启用或编辑；如是不同设备，可使用更容易区分的名称。名称相同不代表同一物理设备。
+            </p>
+          )}
           <Controls.Field>
             驱动
             <Controls.Select
@@ -444,7 +466,9 @@ export function InstrumentConfigDialog({
                 ))}
               </dl>
               <p>
-                保存会关闭此设备的旧空闲连接，并执行驱动规定的断开动作。保存后请测试新连接，相关实验需重新检查准备。
+                {reactivate
+                  ? "将以这些设置重新启用设备；不会连接或应用仪器属性。"
+                  : "保存会关闭此设备的旧空闲连接，并执行驱动规定的断开动作。保存后请测试新连接，相关实验需重新检查准备。"}
               </p>
             </section>
           )}
@@ -456,14 +480,17 @@ export function InstrumentConfigDialog({
           取消
         </button>
         <button className={primaryButton} disabled={!valid || busy} onClick={() => void save()}>
-          {busy ? "正在保存…" : "保存设备"}
+          {busy ? "正在保存…" : reactivate ? "保存并启用" : "保存设备"}
         </button>
       </footer>
     </>
   );
   if (embedded)
     return (
-      <section aria-label="编辑设备" className="min-w-0 rounded-lg border border-line bg-panel">
+      <section
+        aria-label={reactivate ? "重新启用设备" : "编辑设备"}
+        className="min-w-0 rounded-lg border border-line bg-panel"
+      >
         {content}
       </section>
     );
