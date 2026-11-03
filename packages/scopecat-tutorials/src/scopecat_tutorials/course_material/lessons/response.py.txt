@@ -14,7 +14,7 @@ def shot_array(shots: int) -> sc.ArrayType:
     return sc.ArrayType(
         dtype="complex128",
         unit="ratio",
-        dimensions=(sc.ArrayDimension("shot", shots),),
+        dimensions=(sc.ArrayDimension("shot", shots, kind="shot"),),
     )
 
 

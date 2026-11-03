@@ -29,6 +29,7 @@ import {
   measurementTraceChart,
   measurementTraceStatus,
   planMeasurementCharts,
+  measurementShotMeanCharts,
   type MeasurementChartPlan,
   type MeasurementChartSeries,
   type MeasurementEntityAxis,
@@ -221,6 +222,10 @@ export function MeasurementDataPreview({
     slice,
     slicePlan,
   ]);
+  const shotMeanCharts = useMemo(
+    () => measurementShotMeanCharts(preview.items, preview.schema),
+    [preview.items, preview.schema],
+  );
   const selectedTracePlan =
     tracePlans.find((plan) => plan.id === selectedTracePlanId) ?? tracePlans[0];
   // Run changes already remount MeasurementRecords. Reset within a run when the
@@ -235,6 +240,10 @@ export function MeasurementDataPreview({
     preview.schema?.point_domain,
     preview.schema?.dimensions,
   ]);
+  const [traceDisclosure, setTraceDisclosure] = useState<{ scope: string; open: boolean }>();
+  const rawTraceOpen =
+    traceDisclosure?.scope === viewScope ? traceDisclosure.open : shotMeanCharts.length === 0;
+  const [meanSelection, setMeanSelection] = useState<{ scope: string; id: string }>();
   const [tableOpen, setTableOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const tableRecords = slicePlan ? (slice?.items ?? []) : preview.items;
@@ -604,46 +613,66 @@ export function MeasurementDataPreview({
         </div>
       )}
 
+      {shotMeanCharts.length > 0 && (
+        <MeasurementChartPicker
+          key={`shot-mean:${viewScope}`}
+          interactionScope={viewScope}
+          charts={shotMeanCharts}
+          requestedChartId={meanSelection?.scope === viewScope ? meanSelection.id : undefined}
+          onChartChange={(id) => setMeanSelection({ scope: viewScope, id })}
+        />
+      )}
       {tracePlans.length > 0 && (
-        <div
-          className={classes(
-            "border-b border-line p-2.5",
-            focused && "flex min-h-64 flex-1 flex-col",
-          )}
-          data-testid="measurement-trace-preview"
-        >
-          <p className="mb-2 text-xs text-text-dim">
-            Each query reads a finite saved snapshot; refreshing issues a new query.
-          </p>
-          <div
-            className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-text-dim"
-            hidden={charts.length === 1}
+        <details open={rawTraceOpen}>
+          <summary
+            className="px-3 py-2 text-sm cursor-pointer"
+            onClick={(event) => {
+              event.preventDefault();
+              setTraceDisclosure({ scope: viewScope, open: !rawTraceOpen });
+            }}
           >
-            <Field>
-              Trace
-              <Select
-                aria-label="Measurement trace"
-                className="max-w-[min(70vw,420px)]"
-                onChange={(event) => onTracePlanChange?.(event.target.value)}
-                value={selectedTracePlan?.id ?? ""}
-              >
-                {tracePlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            原始轨迹
+          </summary>
+          <div
+            className={classes(
+              "border-b border-line p-2.5",
+              focused && "flex min-h-64 flex-1 flex-col",
+            )}
+            data-testid="measurement-trace-preview"
+          >
+            <p className="mb-2 text-xs text-text-dim">
+              Each query reads a finite saved snapshot; refreshing issues a new query.
+            </p>
+            <div
+              className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-text-dim"
+              hidden={charts.length === 1}
+            >
+              <Field>
+                Trace
+                <Select
+                  aria-label="Measurement trace"
+                  className="max-w-[min(70vw,420px)]"
+                  onChange={(event) => onTracePlanChange?.(event.target.value)}
+                  value={selectedTracePlan?.id ?? ""}
+                >
+                  {tracePlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <MeasurementTraceResult
+              key={`${viewScope}:${selectedTracePlan?.id}`}
+              interactionScope={viewScope}
+              preview={tracePreview}
+              pending={tracePending}
+              refreshing={traceRefreshing}
+              error={traceError}
+            />
           </div>
-          <MeasurementTraceResult
-            key={`${viewScope}:${selectedTracePlan?.id}`}
-            interactionScope={viewScope}
-            preview={tracePreview}
-            pending={tracePending}
-            refreshing={traceRefreshing}
-            error={traceError}
-          />
-        </div>
+        </details>
       )}
 
       {charts.length > 0 ? (

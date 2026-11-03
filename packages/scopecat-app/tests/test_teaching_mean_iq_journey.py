@@ -54,6 +54,12 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
             raw_id = raw.id
             shots = np.asarray(raw.measurements()["iq"].require_values())
             assert shots.shape == (7, 64)
+            shot_axes = [
+                axis
+                for axis in raw.measurements().schema.dimensions
+                if axis.kind == "shot"
+            ]
+            assert len(shot_axes) == 1 and shot_axes[0].size == 64
             source = root / "src/my_experiment/teaching.py"
             text = source.read_text(encoding="utf-8").replace(
                 "from my_experiment.response import response",
@@ -63,7 +69,7 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
                 "@sc.compute\n"
                 "def mean_iq(iq: Annotated[NDArray[np.complex128], sc.ArrayType(\n"
                 '    dtype="complex128", unit="ratio",\n'
-                '    dimensions=(sc.ArrayDimension("shot", None),),\n'
+                '    dimensions=(sc.ArrayDimension("shot", None, kind="shot"),),\n'
                 ")]) -> Annotated[\n"
                 '    complex, sc.ScalarType(sc.ComplexType(unit="ratio"))\n'
                 "]:\n"

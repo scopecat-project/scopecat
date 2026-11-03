@@ -81,7 +81,10 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
       <h3 id="notebook-journey-heading" className="font-semibold">
         通过 Notebook 学习
       </h3>
-      <p>从“参数与扫描”开始，或继续已准备的课程。</p>
+      <p>从“参数与扫描”开始：准备 Notebook → 运行合成扫描 → 在应用中查看结果 → 编辑后再运行。</p>
+      <p className="text-sm text-text-dim">
+        这是模拟练习，不需要仪器驱动或连接硬件。课程数据带有独立练习归属；使用“查看本课数据”辨认结果，不会替换设备配置或认领既有实验记录。
+      </p>
       <CourseBrowser topic={topic} busy={busy} />
       <NotebookJourneyCourse
         key={topic}

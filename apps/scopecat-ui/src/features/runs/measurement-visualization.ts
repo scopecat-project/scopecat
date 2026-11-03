@@ -261,6 +261,98 @@ export function planMeasurementCharts(
   return [...gridPlans, ...colorPlans, ...entityPlans, ...scalarPlans];
 }
 
+/** Display-only means for an explicitly declared shot axis in a one-axis scan.
+ * Only complete dense arrays are eligible. Never average a trace downsample,
+ * array summary, unavailable sample, or an axis inferred from its name.
+ */
+export function measurementShotMeanCharts(
+  records: MeasurementRecord[],
+  schema?: MeasurementDatasetSchema,
+): MeasurementChartPlan[] {
+  if (
+    !schema ||
+    schema.point_domain.kind !== "product_grid" ||
+    schema.point_domain.axes.length !== 1
+  )
+    return [];
+  const variables = variableDescriptors(schema);
+  const axisId = schema.point_domain.axes[0]!.id;
+  const coordinate = variables.find(
+    (item) =>
+      item.id === axisId &&
+      item.role === "coordinate" &&
+      item.dims.length === 1 &&
+      isRealNumericVariable(item),
+  );
+  if (!coordinate) return [];
+  return orderObservables(variables, schema).flatMap((observable) => {
+    if (
+      observable.role !== "observable" ||
+      observable.dims.length !== 2 ||
+      !isNumericVariable(observable)
+    )
+      return [];
+    const shot = schema.dimensions.find((dimension) => dimension.id === observable.dims[1]);
+    if (shot?.kind !== "shot") return [];
+    const counts: number[] = [];
+    const projected: MeasurementRecord[] = records.flatMap((record) => {
+      if (numericScalar(valueFor(record, coordinate)) === undefined) return [];
+      const value = record.observables[observable.id];
+      if (
+        value?.kind !== "array" ||
+        value.shape.length !== 1 ||
+        value.availability ||
+        !Array.isArray(value.values)
+      )
+        return [];
+      const count = value.shape[0]!;
+      if (
+        count === 0 ||
+        value.values.length !== count ||
+        (shot.size != null && shot.size !== count)
+      )
+        return [];
+      let real = 0;
+      let imag = 0;
+      for (const leaf of value.values) {
+        if (typeof leaf === "number" && Number.isFinite(leaf)) real += leaf / count;
+        else {
+          const components = complexComponents(leaf);
+          if (!components) return [];
+          real += components.real / count;
+          imag += components.imag / count;
+        }
+      }
+      if (!Number.isFinite(real) || !Number.isFinite(imag)) return [];
+      counts.push(count);
+      return [
+        {
+          ...record,
+          observables: {
+            [observable.id]: {
+              kind: "scalar" as const,
+              dtype: value.dtype,
+              unit: value.unit,
+              value: value.dtype.startsWith("complex") ? { real, imag } : real,
+            },
+          },
+        },
+      ];
+    });
+    if (!projected.length) return [];
+    const averaged = { ...observable, dims: ["point"], label: `${observable.label} · shot 平均` };
+    const sizes = [...new Set(counts)];
+    return scalarChart(projected, variables, averaged, schema, coordinate.id).map((chart) => ({
+      ...chart,
+      id: `shot-mean:${chart.id}`,
+      grid: undefined,
+      fixedCoordinates: undefined,
+      kind: "scatter" as const,
+      note: `按 ${shot.label ?? shot.id} 轴逐点算术平均；${sizes.length === 1 ? `每点 ${sizes[0]} shots` : `每点 ${Math.min(...sizes)}–${Math.max(...sizes)} shots`}。${projected.length}/${records.length} 个已读取记录可计算；不平均扫描轴，缺失点不连线。复数先平均再取幅度/相位；原始数据未改写。`,
+    }));
+  });
+}
+
 /** Choose bounded server projection axes for one product-grid slice. */
 export function measurementSlicePlan(
   schema?: MeasurementDatasetSchema,
