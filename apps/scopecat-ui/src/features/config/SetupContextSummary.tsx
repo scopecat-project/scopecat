@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Named scroll regions need keyboard access. */
 import { useQuery } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
 import { getSetupRevision } from "./setup-api";
