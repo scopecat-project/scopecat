@@ -16,6 +16,7 @@ from scopecat.daemon.wire import (
     SampleReviseCommand,
 )
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import (
     SampleRelation,
@@ -265,6 +266,52 @@ def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None
     assert sample.record.active_revision == 3
     assert sample.run_count == 1
     assert snapshot.samples == (binding,)
+
+
+def test_switching_samples_keeps_each_runs_sample_and_setup_after_restart(
+    tmp_path: Path,
+) -> None:
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        lab = LabClient(client)
+        lab.setup.import_recipe(
+            ExecutableSetupSnapshot.from_config(_config()), name="initial"
+        )
+        snapshots: list[RunSnapshot] = []
+        for sample_id in ("chip-a", "chip-b"):
+            response = transport.post(
+                "/api/v1/samples",
+                json=SampleCreateCommand(
+                    operation_id=f"create:{sample_id}",
+                    sample_id=sample_id,
+                    kind="die",
+                    actor="operator",
+                    content=SampleRevisionDraft(display_name=sample_id),
+                ).model_dump(mode="json"),
+            )
+            assert response.status_code == 201
+            admission = runtime.application.submit_run(
+                _submission(runtime, sample_id).model_copy(
+                    update={"submission_id": f"run:{sample_id}"}
+                )
+            )
+            snapshots.append(admission.snapshot)
+        first, second = snapshots
+        assert first.samples[0].sample_id == "chip-a"
+        assert second.samples[0].sample_id == "chip-b"
+        # Selecting another specimen does not rewrite or verify the physical route.
+        assert first.execution_setup == second.execution_setup
+        assert first.config_content_hash == second.config_content_hash
+
+    with LocalDaemonRuntime(tmp_path) as restarted:
+        for snapshot in snapshots:
+            retained = restarted.application.runs.get_run(snapshot.run_id).snapshot
+            assert retained.samples == snapshot.samples
+            assert retained.execution_setup == snapshot.execution_setup
+            assert retained.config_content_hash == snapshot.config_content_hash
 
 
 def test_sample_ids_are_url_safe_stable_identifiers(tmp_path: Path) -> None:

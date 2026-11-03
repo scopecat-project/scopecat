@@ -1,5 +1,5 @@
 import { Field, Input, Button, Select, Notice } from "../../ui/Controls";
-import { selectedBatch } from "./scientific-selection";
+import { selectedBatch, subjectLabel } from "./scientific-selection";
 import { useId, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getSamples } from "../samples/sample-api";
@@ -50,6 +50,10 @@ export function MeasurementContext({
       className="border border-line rounded p-3 space-y-3"
     >
       <legend className="font-semibold">本页测量上下文</legend>
+      <p aria-label="当前样品或对象">{subjectLabel(draft.selection)}</p>
+      <p className="text-sm">
+        换样品后请核对下方设备与用途。切换样品不会自动修改路由；已有运行保留原快照。
+      </p>
       <ParameterBranchPicker
         value={configuration}
         projectId={projectId}
