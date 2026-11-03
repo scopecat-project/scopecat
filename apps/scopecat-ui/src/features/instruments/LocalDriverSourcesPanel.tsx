@@ -233,7 +233,8 @@ export function LocalDriverSourcesPanel(props: {
                   </Controls.Button>
                 </div>
                 <p className="text-sm text-text-dim">
-                  停用前请先停用使用此来源的设备。停用保留快照和历史；其他来源不能接管这些驱动 ID。
+                  停用前请先停用使用此来源的设备。停用保留快照和历史引用；同时启用的来源不能包含重复驱动
+                  ID。
                 </p>
               </li>
             ))}

@@ -126,6 +126,20 @@ def test_simulated_device_and_multiple_sources_survive_restart(tmp_path: Path) -
             assert session[
                 instrument("rf", RFOutputClient)
             ].frequency.read() == Quantity(5e9, "Hz")
+        lab_device = devices.register(
+            label="Second source software device",
+            device_id="lab-device",
+            connection=DeviceConnection(
+                driver=next(
+                    item
+                    for item in devices.drivers()
+                    if item.provider_id == "tests.spawned_provider"
+                ),
+                connection=VirtualInstrumentConnection(),
+            ),
+        )
+        assert devices.test_connection(lab_device).status == "connected"
+        devices.retire(lab_device)
         # Duplicate driver IDs cannot rebind devices or historical references.
         with pytest.raises(DaemonConflictError, match="driver ID conflict"):
             devices.manage_driver_source(
@@ -158,6 +172,55 @@ def test_simulated_device_and_multiple_sources_survive_restart(tmp_path: Path) -
             )
         )
         assert not disabled.sources[1].enabled
+        service = runtime.application.driver_sources
+        service.manage(
+            DriverSourceCommand(
+                operation_id="copy",
+                expected_previous="disable",
+                source_id="lab-copy",
+                source_root=str(source),
+                actor="operator",
+            )
+        )
+        assert (
+            runtime.application.devices.driver_ref(
+                lab_device.revision.content.driver.driver_id
+            )
+            != lab_device.revision.content.driver
+        )
+        assert (
+            runtime.application.devices.get("lab-device").device.head
+            == lab_device.device.head
+        )
+        with pytest.raises(BackendConflict, match="driver ID conflict"):
+            service.manage(
+                DriverSourceCommand(
+                    operation_id="colliding-enable",
+                    expected_previous="copy",
+                    source_id="lab",
+                    action="enable",
+                    actor="operator",
+                )
+            )
+        service.manage(
+            DriverSourceCommand(
+                operation_id="disable-copy",
+                expected_previous="copy",
+                source_id="lab-copy",
+                action="disable",
+                actor="operator",
+            )
+        )
+        refreshed_disabled = service.manage(
+            DriverSourceCommand(
+                operation_id="refresh-disabled",
+                expected_previous="disable-copy",
+                source_id="lab",
+                source_root=str(source),
+                actor="operator",
+            )
+        )
+        assert not refreshed_disabled.sources[1].enabled
     shutil.rmtree(source)
     with LocalDaemonRuntime(project) as runtime:
         service = runtime.application.driver_sources
@@ -165,7 +228,7 @@ def test_simulated_device_and_multiple_sources_survive_restart(tmp_path: Path) -
         enabled = service.manage(
             DriverSourceCommand(
                 operation_id="enable",
-                expected_previous="disable",
+                expected_previous="refresh-disabled",
                 source_id="lab",
                 action="enable",
                 actor="operator",
@@ -333,3 +396,22 @@ def test_legacy_identity_and_public_sources_publish_atomically(
             runtime.application.devices.get("legacy-device").device.head
             == refreshed.device.head
         )
+
+
+@pytest.mark.parametrize(
+    "error",
+    [ValueError("dependency version changed"), OSError("execution Python missing")],
+)
+def test_legacy_source_failure_preserves_repair_control(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    def unavailable(*_args: object) -> None:
+        raise error
+
+    monkeypatch.setattr("scopecat_server.runtime.restore_driver_source", unavailable)
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        response = client.get("/api/v1/devices/driver-sources")
+        assert response.status_code == 200
+        assert response.json()["unmanaged_backend"]
+        assert response.json()["errors"] == {"application": str(error)}
+        assert client.get("/api/v1/devices/driver-source").status_code == 200

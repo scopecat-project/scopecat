@@ -221,7 +221,8 @@ while device implementation references include the individual source identity an
 retained implementation hash. Legacy single-source references keep their original
 hash and provider. Adding an unrelated source does not revise existing devices.
 
-Driver IDs are unique across retained sources, including disabled ones. Conflicting
+Driver IDs are unique across enabled sources. Disabled sources retain their identity;
+reactivation checks conflicts again, and historical references never route by name alone. Conflicting
 payload codec descriptors also reject publication. Handles route to their creating
 worker and cannot cross generations. All source mutations currently use the existing
 global maintenance fence and drain idle connections; this deliberately does not add

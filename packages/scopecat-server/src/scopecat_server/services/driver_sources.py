@@ -160,7 +160,7 @@ class DriverSourceService:
         collection = self.repository.collection()
         try:
             endpoint = self.devices.endpoint
-        except InstrumentBackendError as error:
+        except (InstrumentBackendError, ValueError, OSError) as error:
             # Preserve the original source repair control when an older worker
             # cannot start. Do not infer an implementation identity from its name.
             return LocalDriverSourceState(
@@ -200,6 +200,68 @@ class DriverSourceService:
             )
         )
 
+    def _capture_source(
+        self, request: DriverSourceCommand, existing: LocalDriverSource | None
+    ) -> tuple[
+        LocalDriverSource, SubprocessInstrumentBackendEndpoint | None, dict[str, str]
+    ]:
+        if existing is None and request.source_id == "legacy":
+            raise BackendConflict(
+                "legacy is reserved for retained single-source references"
+            )
+        if request.builtin is not None:
+            if request.source_root is not None:
+                raise BackendConflict(
+                    "choose either a built-in source or a local project"
+                )
+            source = Path(f"builtin:{request.builtin}")
+        elif request.source_root:
+            source = Path(request.source_root).resolve()
+        else:
+            raise BackendConflict("choose a local driver project or a built-in source")
+        if existing is not None and existing.builtin != request.builtin:
+            raise BackendConflict(
+                "a source cannot change between built-in and local; "
+                "add a separate source"
+            )
+        python = Path(sys.executable).absolute()
+        captured = (
+            capture_builtin(request.builtin, python)
+            if request.builtin is not None
+            else capture_driver(source, python)
+        )
+        bundle = captured.bundle
+        digest = self.store.objects.put(bundle.model_dump_json().encode()).digest
+        candidate: SubprocessInstrumentBackendEndpoint | None = _start_worker(
+            self.root, bundle, captured.factory, python
+        )
+        selection = DriverSourceSelection(
+            request=DriverSourceUpdate(
+                operation_id=request.operation_id,
+                source_root=str(source),
+                actor=request.actor,
+            ),
+            python=str(python),
+            code_revision=bundle.manifest.ref,
+            factory=captured.factory,
+            artifact_hash=candidate.artifact_hash,
+        )
+        entry = LocalDriverSource(
+            id=request.source_id,
+            enabled=existing.enabled if existing else True,
+            builtin=request.builtin,
+            selection=selection,
+            legacy_identity=existing.legacy_identity if existing else False,
+            driver_ids=tuple(
+                driver.driver_id for driver in candidate.driver_catalog.drivers
+            ),
+        )
+        bundles = {bundle.manifest.ref.content_hash: digest}
+        if not entry.enabled:
+            candidate.shutdown()
+            candidate = None
+        return entry, candidate, bundles
+
     def manage(self, request: DriverSourceCommand) -> DriverSourceCollection:
         with self._lock:
             recorded = self.repository.collection(request.operation_id)
@@ -223,60 +285,8 @@ class DriverSourceService:
             bundles: dict[str, str] = {}
             candidate: SubprocessInstrumentBackendEndpoint | None = None
             if request.action == "capture":
-                if existing is None and request.source_id == "legacy":
-                    raise BackendConflict(
-                        "legacy is reserved for retained single-source references"
-                    )
-                if request.builtin is not None:
-                    if request.source_root is not None:
-                        raise BackendConflict(
-                            "choose either a built-in source or a local project"
-                        )
-                    source = Path(f"builtin:{request.builtin}")
-                elif request.source_root:
-                    source = Path(request.source_root).resolve()
-                else:
-                    raise BackendConflict(
-                        "choose a local driver project or a built-in source"
-                    )
-                if existing is not None and existing.builtin != request.builtin:
-                    raise BackendConflict(
-                        "a source cannot change between built-in and local; "
-                        "add a separate source"
-                    )
-                python = Path(sys.executable).absolute()
-                captured = (
-                    capture_builtin(request.builtin, python)
-                    if request.builtin is not None
-                    else capture_driver(source, python)
-                )
-                bundle = captured.bundle
-                digest = self.store.objects.put(
-                    bundle.model_dump_json().encode()
-                ).digest
-                candidate = _start_worker(self.root, bundle, captured.factory, python)
-                selection = DriverSourceSelection(
-                    request=DriverSourceUpdate(
-                        operation_id=request.operation_id,
-                        source_root=str(source),
-                        actor=request.actor,
-                    ),
-                    python=str(python),
-                    code_revision=bundle.manifest.ref,
-                    factory=captured.factory,
-                    artifact_hash=candidate.artifact_hash,
-                )
-                entries[request.source_id] = LocalDriverSource(
-                    id=request.source_id,
-                    enabled=True,
-                    builtin=request.builtin,
-                    selection=selection,
-                    legacy_identity=existing.legacy_identity if existing else False,
-                    driver_ids=tuple(
-                        driver.driver_id for driver in candidate.driver_catalog.drivers
-                    ),
-                )
-                bundles[bundle.manifest.ref.content_hash] = digest
+                entry, candidate, bundles = self._capture_source(request, existing)
+                entries[request.source_id] = entry
             else:
                 if request.source_root is not None or request.builtin is not None:
                     raise BackendConflict(
@@ -289,10 +299,13 @@ class DriverSourceService:
                 )
             workers: dict[str, InstrumentBackendEndpoint] = {}
             try:
-                # Disabled sources reserve their IDs too: another source must never
-                # take over a device or historical reference by name.
+                # Only enabled catalogs participate in routing. Retired devices
+                # retain their exact source identity even if another source later
+                # provides the same driver ID.
                 owners: dict[str, str] = {}
                 for entry in entries.values():
+                    if not entry.enabled:
+                        continue
                     for driver_id in entry.driver_ids:
                         if driver_id in owners:
                             raise BackendConflict(
@@ -300,8 +313,6 @@ class DriverSourceService:
                                 f"{owners[driver_id]} and {entry.id}"
                             )
                         owners[driver_id] = entry.id
-                    if not entry.enabled:
-                        continue
                     endpoint = (
                         candidate
                         if entry.id == request.source_id and candidate is not None
