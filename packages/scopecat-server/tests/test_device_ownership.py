@@ -273,6 +273,7 @@ def test_backend_publication_failure_rolls_back_all_device_heads(
 ) -> None:
     previous = _endpoint()
     replacement = _endpoint()
+    monkeypatch.setattr(replacement, "_artifact_hash", "sha256:" + "0" * 64)
     with (
         LocalDaemonRuntime(tmp_path, instrument_endpoint=previous) as runtime,
         TestClient(runtime.app()) as client,

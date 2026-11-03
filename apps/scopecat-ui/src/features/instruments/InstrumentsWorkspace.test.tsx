@@ -21,6 +21,7 @@ import {
   getDevices,
   getDeviceDrivers,
   getDriverSource,
+  getLocalDriverSources,
   prepareDeviceAccess,
   saveDevice,
   testDeviceConnection,
@@ -33,6 +34,8 @@ vi.mock("./device-api", () => ({
   getDevices: vi.fn(),
   getDeviceDrivers: vi.fn(),
   getDriverSource: vi.fn(),
+  getLocalDriverSources: vi.fn(),
+  manageLocalDriverSource: vi.fn(),
   updateDriverSource: vi.fn(),
   prepareDeviceAccess: vi.fn(),
   saveDevice: vi.fn(),
@@ -81,6 +84,10 @@ beforeEach(() => {
   sessionStorage.clear();
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   vi.mocked(getDriverSource).mockResolvedValue({ active: null });
+  vi.mocked(getLocalDriverSources).mockResolvedValue({
+    unmanaged_backend: false,
+    collection: { provider_id: "scopecat.local-sources", sources: [] },
+  });
   mockInventory({
     setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     problems: [],
@@ -2597,7 +2604,7 @@ it("opens the source entry for an empty application without implying installed d
   renderWorkspace();
   await screen.findByText("尚未启用设备驱动。请先选择驱动来源。");
   expect(screen.getByText("驱动来源与可用驱动").closest("details")).toHaveAttribute("open");
-  expect(screen.getByRole("button", { name: "检查并启用驱动" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "启用模拟设备体验（无硬件）" })).toBeVisible();
   expect(screen.queryByText("正在使用已安装驱动。")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "打开控制窗口" })).not.toBeInTheDocument();
 });

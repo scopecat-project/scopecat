@@ -844,6 +844,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/driver-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Local Driver Sources */
+        get: operations["local_driver_sources_api_v1_devices_driver_sources_get"];
+        put?: never;
+        /** Manage Local Driver Sources */
+        post: operations["manage_local_driver_sources_api_v1_devices_driver_sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices/drivers": {
         parameters: {
             query?: never;
@@ -6517,6 +6535,46 @@ export interface components {
              */
             kind: "driver_managed";
         };
+        /** DriverSourceCollection */
+        DriverSourceCollection: {
+            /** Operation Id */
+            operation_id?: string | null;
+            /**
+             * Provider Id
+             * @default scopecat.local-sources
+             */
+            provider_id: string;
+            request?: components["schemas"]["DriverSourceCommand"] | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["LocalDriverSource"][];
+        };
+        /**
+         * DriverSourceCommand
+         * @description One compare-and-swap operation on the local source collection.
+         */
+        DriverSourceCommand: {
+            /**
+             * Action
+             * @default capture
+             * @enum {string}
+             */
+            action: "capture" | "enable" | "disable";
+            /** Actor */
+            actor: string;
+            /** Builtin */
+            builtin?: ("public" | "simulation") | null;
+            /** Expected Previous */
+            expected_previous?: string | null;
+            /** Operation Id */
+            operation_id: string;
+            /** Source Id */
+            source_id: string;
+            /** Source Root */
+            source_root?: string | null;
+        };
         /** DriverSourceSelection */
         DriverSourceSelection: {
             artifact_hash: components["schemas"]["Sha256ContentHash"];
@@ -8458,6 +8516,39 @@ export interface components {
             kind: "linear";
             start: components["schemas"]["StatePropertyRef"];
             stop: components["schemas"]["StatePropertyRef"];
+        };
+        /** LocalDriverSource */
+        LocalDriverSource: {
+            /** Builtin */
+            builtin?: ("public" | "simulation") | null;
+            /** Driver Ids */
+            driver_ids: string[];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Legacy Identity
+             * @default false
+             */
+            legacy_identity: boolean;
+            selection: components["schemas"]["DriverSourceSelection"];
+        };
+        /** LocalDriverSourceState */
+        LocalDriverSourceState: {
+            collection: components["schemas"]["DriverSourceCollection"];
+            /** Errors */
+            errors?: {
+                [key: string]: string;
+            };
+            /**
+             * Unmanaged Backend
+             * @default false
+             */
+            unmanaged_backend: boolean;
         };
         LocationPathItem: string | number;
         /**
@@ -15341,6 +15432,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DriverSourceSelection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    local_driver_sources_api_v1_devices_driver_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalDriverSourceState"];
+                };
+            };
+        };
+    };
+    manage_local_driver_sources_api_v1_devices_driver_sources_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverSourceCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverSourceCollection"];
                 };
             };
             /** @description Validation Error */

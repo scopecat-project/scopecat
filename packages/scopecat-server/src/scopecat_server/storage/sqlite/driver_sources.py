@@ -4,7 +4,7 @@ import sqlite3
 from typing import cast
 
 from scopecat.records.author_revision import AuthorRevisionBundle
-from scopecat.records.driver_source import DriverSourceSelection
+from scopecat.records.driver_source import DriverSourceCollection, DriverSourceSelection
 
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
@@ -94,4 +94,61 @@ class DriverSourceRepository:
             "INSERT INTO driver_source_head VALUES (1, ?) "
             "ON CONFLICT(singleton) DO UPDATE SET operation_id=excluded.operation_id",
             (selection.request.operation_id,),
+        )
+
+    def collection(
+        self, operation_id: str | None = None
+    ) -> DriverSourceCollection | None:
+        with self.store.sqlite.read_connection() as connection:
+            if operation_id is not None:
+                row = _one(
+                    connection.execute(
+                        "SELECT record_json FROM driver_source_collections "
+                        "WHERE operation_id=?",
+                        (operation_id,),
+                    )
+                )
+            else:
+                row = _one(
+                    connection.execute(
+                        "SELECT record_json FROM driver_source_collections "
+                        "WHERE operation_id=(SELECT operation_id "
+                        "FROM driver_source_collection_head WHERE singleton=1)"
+                    )
+                )
+        return (
+            None
+            if row is None
+            else DriverSourceCollection.model_validate_json(cast("str", row[0]))
+        )
+
+    def publish_collection(
+        self,
+        connection: sqlite3.Connection,
+        collection: DriverSourceCollection,
+        bundles: dict[str, str],
+    ) -> None:
+        assert collection.request is not None
+        row = _one(
+            connection.execute(
+                "SELECT operation_id FROM driver_source_collection_head "
+                "WHERE singleton=1"
+            )
+        )
+        previous = None if row is None else cast("str", row[0])
+        if previous != collection.request.expected_previous:
+            raise ValueError("driver sources changed; reload before retrying")
+        for content_hash, digest in bundles.items():
+            connection.execute(
+                "INSERT OR IGNORE INTO author_revisions VALUES (?, ?)",
+                (content_hash, digest),
+            )
+        connection.execute(
+            "INSERT INTO driver_source_collections VALUES (?, ?)",
+            (collection.operation_id, collection.model_dump_json()),
+        )
+        connection.execute(
+            "INSERT INTO driver_source_collection_head VALUES (1, ?) "
+            "ON CONFLICT(singleton) DO UPDATE SET operation_id=excluded.operation_id",
+            (collection.operation_id,),
         )

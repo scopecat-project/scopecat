@@ -211,3 +211,22 @@ capabilities cannot be rebound to registered real devices. Clear its owned tasks
 workers, device instances and records without deleting shared driver installations,
 normal device registrations or user-owned exports. Combine this with #616 before
 ordinary-user and physical qualification; no Task Manager recovery is acceptable.
+
+### Local source collection
+
+The local source collection journals immutable selections and publishes its head in
+one transaction with affected device revisions. Each source owns a separate existing
+instrument worker. The routing endpoint preserves a stable host provider identity,
+while device implementation references include the individual source identity and
+retained implementation hash. Legacy single-source references keep their original
+hash and provider. Adding an unrelated source does not revise existing devices.
+
+Driver IDs are unique across enabled sources. Disabled sources retain their identity;
+reactivation checks conflicts again, and historical references never route by name alone. Conflicting
+payload codec descriptors also reject publication. Handles route to their creating
+worker and cannot cross generations. All source mutations currently use the existing
+global maintenance fence and drain idle connections; this deliberately does not add
+live replacement of busy drivers. Disabling a source requires its devices to be retired.
+A failed restoration is diagnosed per source, without substituting another source for
+its driver IDs. Built-in public and simulation sources are ordinary captured source
+bundles owned by the instrument distribution, not implicit fallback backends.

@@ -911,7 +911,10 @@ def _instrument_worker_main(  # pyright: ignore[reportUnusedFunction]
                         error=_RpcError(
                             kind="unavailable",
                             code="instrument_worker_start_failed",
-                            message="instrument worker failed to start",
+                            message=(
+                                "instrument worker failed to start "
+                                f"({type(error).__name__}): {str(error)[:512]}"
+                            ),
                             diagnostic=diagnostic_reference({"operation": "startup"}),
                         ),
                     ),

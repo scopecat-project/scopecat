@@ -19,6 +19,7 @@ dependencies = [
 [dependency-groups]
 test = [
   "pytest>=9",
+  "scopecat-instruments==0.1.0",
   "scopecat-quantum==0.1.0",
   "scopecat-testkit[server]==0.1.0",
 ]
@@ -40,5 +41,6 @@ src = ["src", "tests"]
 
 [tool.uv.sources]
 scopecat = { workspace = true }
+scopecat-instruments = { workspace = true }
 scopecat-quantum = { workspace = true }
 scopecat-testkit = { workspace = true }

@@ -10,7 +10,7 @@ import { connectionOptionFields } from "./connection-fields";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import { InstrumentInspector } from "./InstrumentInspector";
 import { DeviceTable } from "./DeviceTable";
-import { DriverSourcePanel } from "./DriverSourcePanel";
+import { LocalDriverSourcesPanel } from "./LocalDriverSourcesPanel";
 import {
   getDevices,
   prepareDeviceAccess,
@@ -548,7 +548,7 @@ export function InstrumentsWorkspace({
             <li key={driver.driver_id}>{driver.label}</li>
           ))}
         </ul>
-        <DriverSourcePanel
+        <LocalDriverSourcesPanel
           daemonUnavailable={daemonUnavailable}
           sessionBusy={busy || !!session}
           hasDrivers={!!catalog.data?.drivers.length}
