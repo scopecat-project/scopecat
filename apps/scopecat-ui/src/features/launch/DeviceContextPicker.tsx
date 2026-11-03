@@ -3,6 +3,7 @@ import { secondaryButton } from "../../ui/styles";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getSetupDefinitions, getSetupRevision, resolveSetupDefinition } from "../config/setup-api";
 import type { ScientificSelection } from "./scientific-selection";
+import { SetupContextSummary } from "../config/SetupContextSummary";
 
 type Parameters = Extract<ScientificSelection["configuration"], { kind: "parameters" }>;
 
@@ -91,6 +92,7 @@ export function DeviceContextPicker({
       )}
       {revisions.isSuccess && items.length === 0 && <p>暂无已保存配置，请在参数与绑定中创建。</p>}
       <p className="text-sm">仅应用于本页。选择不会连接设备，也不会改变已提交任务。</p>
+      {value.setup && <SetupContextSummary revision={value.setup} />}
     </div>
   );
 }

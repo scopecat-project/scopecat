@@ -8,6 +8,7 @@ import type { components } from "../../api-schema";
 import { formatCoordinateValue } from "../inspections/coordinate-codec";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { apiClient, apiData } from "../../api-client";
+import { SetupContextSummary } from "../config/SetupContextSummary";
 
 /** A read of the selected run, never the current editor or latest configuration. */
 export function RunSnapshotDetails({ runId }: { runId: string }) {
@@ -110,6 +111,9 @@ export function RunSnapshotDetails({ runId }: { runId: string }) {
             scenario={evidence.snapshot.scientific_binding.scenario}
             label="Retained execution scenario"
           />
+          {evidence.snapshot.execution_setup && (
+            <SetupContextSummary revision={evidence.snapshot.execution_setup} />
+          )}
           <section
             aria-label="Reuse historical configuration"
             className="space-y-2 border-t border-line pt-3"
