@@ -2969,6 +2969,7 @@ dependencies = [
 [package.dev-dependencies]
 test = [
     { name = "pytest" },
+    { name = "scopecat-instruments" },
     { name = "scopecat-quantum" },
     { name = "scopecat-testkit", extra = ["server"] },
 ]
@@ -2989,6 +2990,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 test = [
     { name = "pytest", specifier = ">=9" },
+    { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
     { name = "scopecat-quantum", editable = "packages/scopecat-quantum" },
     { name = "scopecat-testkit", extras = ["server"], editable = "testing/scopecat-testkit" },
 ]

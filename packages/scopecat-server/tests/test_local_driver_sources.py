@@ -2,6 +2,7 @@
 
 import shutil
 import sqlite3
+from importlib.metadata import version
 from pathlib import Path
 
 import httpx2
@@ -80,6 +81,12 @@ def test_simulated_device_and_multiple_sources_survive_restart(tmp_path: Path) -
         )
         initial = devices.manage_driver_source(command)
         assert devices.manage_driver_source(command) == initial
+        retained = runtime.application.driver_sources.repository.bundle(
+            initial.sources[0].selection
+        )
+        assert retained.manifest.packages["scopecat-instruments"] == version(
+            "scopecat-instruments"
+        )
         assert all(".virtual." in item.driver_id for item in devices.drivers())
         reference = next(
             item

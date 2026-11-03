@@ -2,4 +2,4 @@
 instrument_backend = "local_drivers.backend:create_backend"
 [authors]
 source_roots = ["src"]
-dependencies = ["scopecat-instruments==0.1.0"]
+dependencies = ["scopecat-instruments"]
