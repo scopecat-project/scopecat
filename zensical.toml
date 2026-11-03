@@ -37,6 +37,7 @@ nav = [
     { "为集合中的运行编号" = "how-to/record-collections.md" },
     { "整理研究历史" = "how-to/research-history.md" },
     { "控制仪器" = "how-to/control-instruments.md" },
+    { "从设备到 Python" = "how-to/device-to-python.md" },
     { "使用测量数据" = "how-to/use-measurement-data.md" },
     { "打开与共享数据文件" = "how-to/open-and-share-data.md" },
     { "比较保留的运行" = "how-to/retained-run-comparison.md" },
