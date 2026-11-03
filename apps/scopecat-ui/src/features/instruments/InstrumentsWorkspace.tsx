@@ -452,6 +452,7 @@ export function InstrumentsWorkspace({
         key={`${revision?.id}:${selected.instrument_id}`}
         instrument={selected}
         displayLabel={selectedDevice.device.label}
+        registeredDeviceId={selectedDevice.device.id}
         session={session}
         sessionError={sessionError}
         releaseUnconfirmed={releaseUnconfirmed}

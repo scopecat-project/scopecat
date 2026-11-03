@@ -137,6 +137,9 @@ with sc.open_project(".").connect(operator="alice") as lab:
 
 ## 在设备页发现与调用能力
 
+设备页的 **在 Python 中使用此设备** 提供已验证能力的可选择复制代码，明确区分即时调用和实验声明。
+首批 Network sweep 的 setup、修改参数、运行和重开见[从登记设备到 Python 实验](device-to-python.md)。
+
 设备页按驱动已有契约展示属性、操作（operation）和采集（acquisition）。查看页面或展开帮助不会连接
 设备或发送设备命令。没有声明能力时，先查驱动文档或版本，不要靠 **连接** 探索未声明的功能。
 

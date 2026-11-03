@@ -49,6 +49,7 @@ import {
   acquisitionKey,
   operationKey,
 } from "./InstrumentInterfaceControls";
+import { DevicePythonGuide } from "./DevicePythonGuide";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
 
 type DraftValue = InstrumentPropertyDraft;
@@ -56,6 +57,7 @@ type DraftValue = InstrumentPropertyDraft;
 interface InstrumentInspectorProps {
   instrument: InstrumentView;
   displayLabel?: string;
+  registeredDeviceId?: string;
   releaseUnconfirmed?: boolean;
   session?: InstrumentSession;
   sessionError?: string;
@@ -88,6 +90,7 @@ export function InstrumentInspector(props: InstrumentInspectorProps) {
 function InstrumentInspectorContent({
   instrument,
   displayLabel,
+  registeredDeviceId,
   releaseUnconfirmed = false,
   session,
   sessionError,
@@ -511,6 +514,9 @@ function InstrumentInspectorContent({
                       : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
             </p>
             <AuthorWorkflowLinks />
+            {registeredDeviceId && (
+              <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
+            )}
           </div>
 
           {(description.interfaces ?? []).length > 0 ||
