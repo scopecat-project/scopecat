@@ -49,7 +49,12 @@ print(author.setup.list())
 ```
 
 ```python
-from scopecat.records.config import ResourceRoleSpec, ResourceRoute, RoutingEndpoint, RoutingGraph
+from scopecat.records.config import (
+    ResourceRoleSpec,
+    ResourceRoute,
+    RoutingEndpoint,
+    RoutingGraph,
+)
 from scopecat.records.setup import SetupInstrumentBinding
 
 base_setup_name = "initial"  # replace with the starter setup you inspected
@@ -57,19 +62,28 @@ base_setup_name = "initial"  # replace with the starter setup you inspected
 device_id = "paste-registered-virtual-vna-id"
 base = author.setup.definition(base_setup_name).definition
 binding = SetupInstrumentBinding(
-    id="demo-vna", device_id=device_id,
-    run_start="preserve", success_action="release", failure_action="abort_and_release",
+    id="demo-vna",
+    device_id=device_id,
+    run_start="preserve",
+    success_action="release",
+    failure_action="abort_and_release",
 )
 # These lifecycle choices apply to this virtual-only exercise, not physical equipment.
 routing = RoutingGraph(
     roles=[ResourceRoleSpec(id="demo-readout", description="Synthetic VNA exercise")],
-    routes=[ResourceRoute(
-        id="demo-vna-route", instrument_id="demo-vna", role_id="demo-readout",
-        endpoints=[RoutingEndpoint(interface_id="scopecat.network_sweep/v1")],
-    )],
+    routes=[
+        ResourceRoute(
+            id="demo-vna-route",
+            instrument_id="demo-vna",
+            role_id="demo-readout",
+            endpoints=[RoutingEndpoint(interface_id="scopecat.network_sweep/v1")],
+        )
+    ],
 )
 definition = base.model_copy(update={"instruments": (binding,), "routing": routing})
-setup = author.setup.save(definition, name="virtual-vna-demo", note="Virtual-only exercise")
+setup = author.setup.save(
+    definition, name="virtual-vna-demo", note="Virtual-only exercise"
+)
 ```
 
 此练习有意只保留一个虚拟仪器绑定和一条路由，不应对日常实验 setup 直接照抄。
