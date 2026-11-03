@@ -7,32 +7,9 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-import scopecat as sc
-from scopecat.compiler.bind import bind_program
-from scopecat.compiler.frontend.resolution import compile_invocation
-from scopecat.config.environment import build_config_environment
-from scopecat.execution.evidence import (
-    domain_execution_evidence_ref,
-    instrument_state_evidence_ref,
-)
-from scopecat.execution.local.program import ApplyStateOperation
-from scopecat.execution.program import RunCoverageEffect, RunDomainJob
-from scopecat.inspection import CompiledProgramInspectionQuery
-from scopecat.kernel.errors import CheckFailed
-from scopecat.measurements.results import MeasurementArray
-from scopecat.planning.compilation import compile_run_program
-from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
-from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.execution import InstrumentStateEvidence
-from scopecat.sdk.domain import DomainExecutionEvidence
-from scopecat_quantum import authoring as quantum
-from scopecat_quantum.measurement_computes import (
-    BinaryIqProbabilityProducts,
-)
-from scopecat_testkit.instrument_host import compose_test_instruments
-from scopecat_testkit.server.in_process_lab import in_process_lab
 
 import reference_lab.compiler as reference_compiler_module
+import scopecat as sc
 from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT,
     ANALOG_WAVEFORM_OUTPUT_ENABLED,
@@ -73,6 +50,29 @@ from reference_lab.workflows.drag_beta_calibration import (
 )
 from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
 from reference_lab.workflows.ramsey_experiments import q0_fixed_if_lo_sweep
+from scopecat.compiler.bind import bind_program
+from scopecat.compiler.frontend.resolution import compile_invocation
+from scopecat.config.environment import build_config_environment
+from scopecat.execution.evidence import (
+    domain_execution_evidence_ref,
+    instrument_state_evidence_ref,
+)
+from scopecat.execution.local.program import ApplyStateOperation
+from scopecat.execution.program import RunCoverageEffect, RunDomainJob
+from scopecat.inspection import CompiledProgramInspectionQuery
+from scopecat.kernel.errors import CheckFailed
+from scopecat.measurements.results import MeasurementArray
+from scopecat.planning.compilation import compile_run_program
+from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
+from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.execution import InstrumentStateEvidence
+from scopecat.sdk.domain import DomainExecutionEvidence
+from scopecat_quantum import authoring as quantum
+from scopecat_quantum.measurement_computes import (
+    BinaryIqProbabilityProducts,
+)
+from scopecat_testkit.instrument_host import compose_test_instruments
+from scopecat_testkit.server.in_process_lab import in_process_lab
 
 
 @quantum.program(id="reference_lab.test.parallel_set_readout")

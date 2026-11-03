@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
+
 from scopecat.sdk.payloads import PayloadContract
 from scopecat.sdk.structured_payloads import (
     FrozenFloat64Vector,

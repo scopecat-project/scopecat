@@ -4,8 +4,21 @@ from __future__ import annotations
 
 from typing import cast
 
-import scopecat as sc
 from pydantic import JsonValue
+
+import scopecat as sc
+from reference_lab.bench_devices import (
+    VIRTUAL_AWG_DRIVER_ID,
+    VIRTUAL_AWG_DRIVER_SPEC,
+    VIRTUAL_DIGITIZER_DRIVER_ID,
+    VIRTUAL_DIGITIZER_DRIVER_SPEC,
+    VIRTUAL_TIMING_CONTROLLER_DRIVER_ID,
+    VIRTUAL_TIMING_CONTROLLER_DRIVER_SPEC,
+    BenchSignalWorld,
+    VirtualAwg,
+    VirtualDigitizer,
+    VirtualTimingController,
+)
 from scopecat.records.instrument import CommandChannelBinding
 from scopecat.records.measurement import (
     MeasurementAcquisitionValue,
@@ -53,19 +66,6 @@ from scopecat_instruments.members import (
     DC_SOURCE_OUTPUT_ENABLED,
 )
 from scopecat_instruments.virtual import VirtualDcSource, VirtualLabWorld
-
-from reference_lab.bench_devices import (
-    VIRTUAL_AWG_DRIVER_ID,
-    VIRTUAL_AWG_DRIVER_SPEC,
-    VIRTUAL_DIGITIZER_DRIVER_ID,
-    VIRTUAL_DIGITIZER_DRIVER_SPEC,
-    VIRTUAL_TIMING_CONTROLLER_DRIVER_ID,
-    VIRTUAL_TIMING_CONTROLLER_DRIVER_SPEC,
-    BenchSignalWorld,
-    VirtualAwg,
-    VirtualDigitizer,
-    VirtualTimingController,
-)
 
 FLUX_SOURCE_IDS = ("flux-dac-a", "flux-dac-b")
 FLUX_SOURCE_ID = FLUX_SOURCE_IDS[0]

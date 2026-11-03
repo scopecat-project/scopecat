@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from scopecat.planning.catalog import InstrumentContractCatalog
-from scopecat.planning.system import ExperimentSystem
-from scopecat.records.config import ConfigProfileSnapshot
-
 from reference_lab.compiler import QuantumLabCompiler
 from reference_lab.payloads import reference_lab_payload_codecs
 from reference_lab.targets.list_mode import (
@@ -13,6 +9,9 @@ from reference_lab.targets.list_mode import (
     configured_list_mode_target,
 )
 from reference_lab.virtual_lab.execution import virtual_quantum_job_runtime
+from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.planning.system import ExperimentSystem
+from scopecat.records.config import ConfigProfileSnapshot
 
 
 def reference_lab_system(

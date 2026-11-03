@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from reference_lab.bench_interfaces import (
+    ANALOG_WAVEFORM_OUTPUT,
+    DIGITIZER_INPUT,
+)
 from scopecat.planning.routing import endpoint_entity_ids
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat_instruments.members import RF_OUTPUT
@@ -13,11 +17,6 @@ from scopecat_quantum.pulses import (
     AcquireSignal,
     DriveSignal,
     ReadoutSignal,
-)
-
-from reference_lab.bench_interfaces import (
-    ANALOG_WAVEFORM_OUTPUT,
-    DIGITIZER_INPUT,
 )
 
 LIST_MODE_TARGET_KIND = "reference_lab.list-mode"

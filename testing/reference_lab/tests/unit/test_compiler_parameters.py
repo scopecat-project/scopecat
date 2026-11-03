@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+from reference_lab.quantum_compilation.compiler_parameters import (
+    QuantumCompilerParameters,
+)
+from reference_lab.quantum_compilation.pulse_profile import QUANTUM_PULSE_PROFILE
 from scopecat import Quantity
 from scopecat.kernel.entity import EntityRef
 from scopecat_quantum._ids import CircuitOperationId, QubitId
 from scopecat_quantum.circuits import verify_circuit_operations
 from scopecat_quantum.gates import GateCall
 from scopecat_quantum.standard_gates import X90
-
-from reference_lab.quantum_compilation.compiler_parameters import (
-    QuantumCompilerParameters,
-)
-from reference_lab.quantum_compilation.pulse_profile import QUANTUM_PULSE_PROFILE
 
 
 def _parameters(*, beta: float) -> QuantumCompilerParameters:

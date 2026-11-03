@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, cast
 
 import numpy as np
+
 import scopecat as sc
 from scopecat.measurements.dataset import Dataset
 from scopecat_instruments import NetworkSweepProducts, network_sweep

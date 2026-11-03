@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scopecat.application import LabBootstrap
-
 from reference_lab.configuration import initial_setup
+from scopecat.application import LabBootstrap
 
 if TYPE_CHECKING:
     from scopecat.application import LabApplication
@@ -25,8 +24,6 @@ def create_bootstrap(project_root: Path) -> LabBootstrap:
 def create_application(_project_root: Path) -> LabApplication:
     """Compose notebook and project-worker execution capabilities."""
 
-    from scopecat.application import LabApplication
-
     from reference_lab.lab import reference_lab_system
     from reference_lab.workflows.analysis_recovery import (
         failed_temperature_analysis,
@@ -36,6 +33,7 @@ def create_application(_project_root: Path) -> LabApplication:
     from reference_lab_authors.temperature_diagnostic import (
         temperature_diagnostic_procedure,
     )
+    from scopecat.application import LabApplication
 
     return LabApplication(
         author_modules=(

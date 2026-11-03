@@ -10,9 +10,6 @@ from typing import override
 
 import numpy as np
 from numpy.typing import NDArray
-from scopecat.kernel.content_identity import sha256_json_hash
-from scopecat_quantum._ids import TargetCompileEntryId
-from scopecat_quantum.targets import TargetAcquisitionAddress
 
 from reference_lab.targets.list_mode.execution_model import (
     AcquisitionResponse,
@@ -22,6 +19,9 @@ from reference_lab.targets.list_mode.model import (
     DigitizerAcquisitionWindow,
     acquisition_slot_identity_payload,
 )
+from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat_quantum._ids import TargetCompileEntryId
+from scopecat_quantum.targets import TargetAcquisitionAddress
 
 
 @dataclass(frozen=True, slots=True)

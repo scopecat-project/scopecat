@@ -7,7 +7,6 @@ from __future__ import annotations
 from typing import Annotated, cast
 
 import scopecat as sc
-
 from reference_lab.quantum_runner import quantum_capture
 from reference_lab.workflows.ramsey import ramsey_program
 from reference_lab.workflows.ramsey_experiments import RamseyDataset

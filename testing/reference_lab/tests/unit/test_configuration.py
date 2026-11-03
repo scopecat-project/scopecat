@@ -1,18 +1,8 @@
 from __future__ import annotations
 
 import pytest
-import scopecat as sc
-from scopecat.config.parameter_resolution import validate_parameter_snapshot
-from scopecat.kernel.quantity import Quantity
-from scopecat.planning.catalog import InstrumentContractCatalog
-from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
-from scopecat.records.config import ConfigProfileSnapshot, ResourceRoute
-from scopecat.records.parameter import (
-    TableParameterValue,
-)
-from scopecat_quantum._ids import QubitId
-from scopecat_quantum.pulses import DriveSignal
 
+import scopecat as sc
 from reference_lab.bench_interfaces import (
     DIGITIZER_FETCH_PROGRAM_IQ,
     DIGITIZER_INPUT,
@@ -33,6 +23,16 @@ from reference_lab.targets.configuration import (
     configured_rf_outputs,
 )
 from reference_lab.targets.list_mode import configured_list_mode_target
+from scopecat.config.parameter_resolution import validate_parameter_snapshot
+from scopecat.kernel.quantity import Quantity
+from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
+from scopecat.records.config import ConfigProfileSnapshot, ResourceRoute
+from scopecat.records.parameter import (
+    TableParameterValue,
+)
+from scopecat_quantum._ids import QubitId
+from scopecat_quantum.pulses import DriveSignal
 
 
 def _instrument_catalog(config: ConfigProfileSnapshot) -> InstrumentContractCatalog:

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import scopecat as sc
 from pydantic import BaseModel, ConfigDict, field_validator
+
+import scopecat as sc
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.automation import procedure
 from scopecat.kernel.entity import EntityRef

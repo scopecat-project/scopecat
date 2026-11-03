@@ -7,13 +7,6 @@ from typing import Literal
 import numpy as np
 import pytest
 from numpy.typing import NDArray
-from scopecat.sdk.instruments.execution import RunHardwareInvoke
-from scopecat_quantum.pulses import Delay, Sequence
-from scopecat_quantum.targets import TargetCompileRequest
-from scopecat_quantum.timing_corrections import (
-    SignalTimeShift,
-    TimingCorrectionSnapshot,
-)
 
 from reference_lab.payloads import (
     AWG_PROGRAM_PAYLOAD,
@@ -24,6 +17,13 @@ from reference_lab.payloads import (
 from reference_lab.targets.list_mode.compiler import ListModeTargetCompiler
 from reference_lab.targets.list_mode.inspection import ArtifactInspectionBounds
 from reference_lab.targets.list_mode.model import ListModeArtifact
+from scopecat.sdk.instruments.execution import RunHardwareInvoke
+from scopecat_quantum.pulses import Delay, Sequence
+from scopecat_quantum.targets import TargetCompileRequest
+from scopecat_quantum.timing_corrections import (
+    SignalTimeShift,
+    TimingCorrectionSnapshot,
+)
 
 from ._list_mode_test_support import (
     DRIVE_Q0,

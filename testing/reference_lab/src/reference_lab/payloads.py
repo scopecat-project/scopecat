@@ -9,14 +9,14 @@ from typing import Annotated, ClassVar, Literal, Self, cast
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+
+from reference_lab.virtual_lab.capture_payload import VIRTUAL_CAPTURE_QUEUE_PAYLOAD
 from scopecat.kernel.numpy_storage import freeze_ndarray
 from scopecat.sdk.payloads import PayloadCodecRegistry, PayloadContract
 from scopecat.sdk.structured_payloads import (
     FrozenFloat64Vector,
     pydantic_buffer_bundle_codec,
 )
-
-from reference_lab.virtual_lab.capture_payload import VIRTUAL_CAPTURE_QUEUE_PAYLOAD
 
 AWG_PROGRAM_SCHEMA_ID = "reference_lab.awg_program.v4"
 DIGITIZER_PROGRAM_SCHEMA_ID = "reference_lab.digitizer_program.v1"

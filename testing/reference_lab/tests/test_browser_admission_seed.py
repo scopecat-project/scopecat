@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from reference_lab.configuration import initial_parameters, initial_setup
 from scopecat.api.lab import LabClient
 from scopecat.daemon.client import DaemonClient
 from scopecat.project import load_project
 from scopecat_server.lifecycle import start_project, stop_project
-
-from reference_lab.configuration import initial_parameters, initial_setup
 
 ROOT = Path(__file__).resolve().parents[3]
 SEED = ROOT / "apps/scopecat-ui/e2e/fixtures/admit_procedure.py"

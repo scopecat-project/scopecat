@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import scopecat as sc
+from reference_lab.parameters import LoGroupParameters, QubitParameters
+from reference_lab.physical_policies import ensure_grouped_iq_offsets
 from scopecat.kernel.entity import EntityRef
 from scopecat_instruments import rf_source
 from scopecat_quantum import authoring as quantum
@@ -12,9 +14,6 @@ from scopecat_quantum.measurement_computes import (
     IqCentroid,
     binary_iq_probabilities,
 )
-
-from reference_lab.parameters import LoGroupParameters, QubitParameters
-from reference_lab.physical_policies import ensure_grouped_iq_offsets
 
 Q0 = EntityRef(id="q0", kind="logical_qubit")
 Q1 = EntityRef(id="q1", kind="logical_qubit")

@@ -9,6 +9,37 @@ from typing import cast
 
 import numpy as np
 import pytest
+
+from reference_lab.configuration import bootstrap_config
+from reference_lab.physical_policies import (
+    IQ_OFFSET_COUPLING_POLICY_ID,
+    IqOffsetCouplingGroupDefinition,
+    IqOffsetPolicyDefinition,
+    OutputOffsetRequirement,
+    grouped_iq_offset_policy,
+)
+from reference_lab.provider import ReferenceLabProvider
+from reference_lab.targets.list_mode import (
+    ArtifactInspectionBounds,
+    ListModeArtifact,
+    ListModeCompilationCachePolicy,
+    ListModeDeviceSnapshot,
+    ListModePlacementDecision,
+    ListModeTarget,
+    ListModeTargetCompiler,
+    build_list_mode_artifact_inspection_snapshot,
+    configured_list_mode_target,
+)
+from reference_lab.targets.list_mode.circuit_runtime import (
+    realize_integrated_iq_chunks,
+    realize_integrated_iq_value,
+)
+from reference_lab.targets.list_mode.device_execution import InstrumentListModeRuntime
+from reference_lab.targets.list_mode.model import (
+    IqMixerCalibration,
+    IqOutputBinding,
+    OutputSignal,
+)
 from scopecat import Quantity
 from scopecat.inspection import CompiledArtifactInspection, CompiledProgramInspection
 from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
@@ -61,37 +92,6 @@ from scopecat_quantum.waveforms import (
     Float64ReferenceRenderer,
     RenderedWaveforms,
     SampledWaveformPlan,
-)
-
-from reference_lab.configuration import bootstrap_config
-from reference_lab.physical_policies import (
-    IQ_OFFSET_COUPLING_POLICY_ID,
-    IqOffsetCouplingGroupDefinition,
-    IqOffsetPolicyDefinition,
-    OutputOffsetRequirement,
-    grouped_iq_offset_policy,
-)
-from reference_lab.provider import ReferenceLabProvider
-from reference_lab.targets.list_mode import (
-    ArtifactInspectionBounds,
-    ListModeArtifact,
-    ListModeCompilationCachePolicy,
-    ListModeDeviceSnapshot,
-    ListModePlacementDecision,
-    ListModeTarget,
-    ListModeTargetCompiler,
-    build_list_mode_artifact_inspection_snapshot,
-    configured_list_mode_target,
-)
-from reference_lab.targets.list_mode.circuit_runtime import (
-    realize_integrated_iq_chunks,
-    realize_integrated_iq_value,
-)
-from reference_lab.targets.list_mode.device_execution import InstrumentListModeRuntime
-from reference_lab.targets.list_mode.model import (
-    IqMixerCalibration,
-    IqOutputBinding,
-    OutputSignal,
 )
 
 Q0 = QubitId("q0")

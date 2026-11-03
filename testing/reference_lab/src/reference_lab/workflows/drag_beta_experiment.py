@@ -4,14 +4,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 import scopecat as sc
-from scopecat import Quantity
-from scopecat_quantum.measurement_computes import BinaryIqProbabilityProducts
-
 from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import quantum_capture
 from reference_lab.workflows.drag_beta_calibration import (
     drag_beta_program,
 )
+from scopecat import Quantity
+from scopecat_quantum.measurement_computes import BinaryIqProbabilityProducts
 
 DRAG_BETA_SHOTS = 64
 DRAG_BETA_SPAN = Quantity(1.0, "ns")

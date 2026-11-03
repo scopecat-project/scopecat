@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated, cast
 
-from scopecat import Quantity, QuantityType, ScalarType
-from scopecat_quantum import authoring as q
-
 from reference_lab.workflows.drag_beta_calibration import (
     drag_gate_pulse,
     drag_readout_pulse,
 )
+from scopecat import Quantity, QuantityType, ScalarType
+from scopecat_quantum import authoring as q
 
 _READOUT_DURATION = Quantity(8, "ns")
 

@@ -7,6 +7,12 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
+
+from reference_lab.targets.list_mode.execution_model import (
+    DigitizerResultBatch,
+    ListModeRun,
+)
+from reference_lab.targets.list_mode.model import ListModeArtifact
 from scopecat.measurements.results import (
     MeasurementAcquisitionValue,
     MeasurementArray,
@@ -19,12 +25,6 @@ from scopecat_quantum.program_results import (
     MappedQuantumTarget,
     QuantumTargetResultAddress,
 )
-
-from reference_lab.targets.list_mode.execution_model import (
-    DigitizerResultBatch,
-    ListModeRun,
-)
-from reference_lab.targets.list_mode.model import ListModeArtifact
 
 _RESPONSE_UNIT = "ratio"
 

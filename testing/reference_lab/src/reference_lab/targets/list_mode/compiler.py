@@ -20,49 +20,6 @@ from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from time import perf_counter
 
-from scopecat.kernel.content_identity import content_fingerprint, sha256_json_hash
-from scopecat_quantum._ids import (
-    TargetArtifactId,
-    TargetCompileEntryId,
-    TargetCompilerId,
-)
-from scopecat_quantum.flux import (
-    FluxWaveformPlan,
-    plan_flux_waveforms,
-    render_flux_waveforms,
-)
-from scopecat_quantum.pulses import (
-    Acquire,
-    Delay,
-    DriveSignal,
-    FluxSignal,
-    Play,
-    ReadoutSignal,
-    ScheduledPulseProgram,
-    ShiftPhase,
-)
-from scopecat_quantum.realtime import ScheduledBlock
-from scopecat_quantum.targets import (
-    TargetCompilationError,
-    TargetCompilationIssue,
-    TargetCompilationIssueDimension,
-    TargetCompileEntry,
-    TargetCompileRequest,
-)
-from scopecat_quantum.timing_corrections import apply_timing_corrections
-from scopecat_quantum.waveforms import (
-    SAMPLED_WAVEFORM_SEMANTICS_ID,
-    Float64ReferenceRenderer,
-    IqMatrix,
-    SampledOutputBinding,
-    SampledWaveformPlan,
-    SampleGrid,
-    TimingQuantizationPolicy,
-    WaveformPlanningError,
-    factor_phase_parameterized_waveforms,
-    plan_sampled_waveforms,
-)
-
 from reference_lab.targets.list_mode.iq_semantics import (
     INTEGRATED_IQ_SEMANTICS_ID,
 )
@@ -116,6 +73,48 @@ from reference_lab.targets.list_mode.placement import (
     ListModePlacementDecision,
     ListModePlacementError,
     ListModePlacementProvider,
+)
+from scopecat.kernel.content_identity import content_fingerprint, sha256_json_hash
+from scopecat_quantum._ids import (
+    TargetArtifactId,
+    TargetCompileEntryId,
+    TargetCompilerId,
+)
+from scopecat_quantum.flux import (
+    FluxWaveformPlan,
+    plan_flux_waveforms,
+    render_flux_waveforms,
+)
+from scopecat_quantum.pulses import (
+    Acquire,
+    Delay,
+    DriveSignal,
+    FluxSignal,
+    Play,
+    ReadoutSignal,
+    ScheduledPulseProgram,
+    ShiftPhase,
+)
+from scopecat_quantum.realtime import ScheduledBlock
+from scopecat_quantum.targets import (
+    TargetCompilationError,
+    TargetCompilationIssue,
+    TargetCompilationIssueDimension,
+    TargetCompileEntry,
+    TargetCompileRequest,
+)
+from scopecat_quantum.timing_corrections import apply_timing_corrections
+from scopecat_quantum.waveforms import (
+    SAMPLED_WAVEFORM_SEMANTICS_ID,
+    Float64ReferenceRenderer,
+    IqMatrix,
+    SampledOutputBinding,
+    SampledWaveformPlan,
+    SampleGrid,
+    TimingQuantizationPolicy,
+    WaveformPlanningError,
+    factor_phase_parameterized_waveforms,
+    plan_sampled_waveforms,
 )
 
 _RESULT_BYTES_PER_VALUE = 17

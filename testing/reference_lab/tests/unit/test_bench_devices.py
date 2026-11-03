@@ -2,15 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from scopecat.records.config import InstrumentBindingSpec, VirtualInstrumentConnection
-from scopecat.sdk.instruments import (
-    DriverOperation,
-    DriverPayload,
-    DriverStateReadback,
-    DriverSuccess,
-    InstrumentProviderContext,
-)
-from scopecat_instruments.members import REFERENCE_CLOCK
 
 from reference_lab.bench_devices import (
     BenchSignalWorld,
@@ -36,6 +27,15 @@ from reference_lab.payloads import (
     TriggerProgramEntryDocument,
 )
 from reference_lab.provider import ReferenceLabProvider
+from scopecat.records.config import InstrumentBindingSpec, VirtualInstrumentConnection
+from scopecat.sdk.instruments import (
+    DriverOperation,
+    DriverPayload,
+    DriverStateReadback,
+    DriverSuccess,
+    InstrumentProviderContext,
+)
+from scopecat_instruments.members import REFERENCE_CLOCK
 
 
 def test_virtual_trigger_programs_execute_complete_device_programs() -> None:

@@ -6,11 +6,6 @@ import sys
 from pathlib import Path
 
 import scopecat as sc
-from scopecat.config.resolution import compose_configuration
-from scopecat.planning.catalog import InstrumentContractCatalog
-from scopecat.records.config import config_content_hash, instrument_bindings
-from scopecat.sdk.instruments import InstrumentProviderContext
-
 from reference_lab.application import create_application, create_bootstrap
 from reference_lab.backend import create_backend
 from reference_lab.configuration import (
@@ -18,6 +13,10 @@ from reference_lab.configuration import (
     bootstrap_config,
     initial_parameters,
 )
+from scopecat.config.resolution import compose_configuration
+from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.config import config_content_hash, instrument_bindings
+from scopecat.sdk.instruments import InstrumentProviderContext
 
 
 def test_reference_lab_manifest_discovers_separate_bootstrap_and_application() -> None:

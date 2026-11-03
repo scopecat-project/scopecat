@@ -6,13 +6,6 @@ from dataclasses import dataclass
 from typing import cast
 
 import scopecat as sc
-from scopecat.kernel.entity import EntityRef
-from scopecat.program.measurement_types import MeasurementArrayData
-from scopecat_instruments import rf_source
-from scopecat_quantum.measurement_computes import (
-    BinaryIqProbabilityProducts,
-)
-
 from reference_lab.parameters import LoGroupParameters, QubitParameters
 from reference_lab.quantum_runner import (
     prepare_quantum_hardware,
@@ -21,6 +14,12 @@ from reference_lab.quantum_runner import (
 from reference_lab.workflows.ramsey import (
     parallel_two_qubit_ramsey_program,
     ramsey_program,
+)
+from scopecat.kernel.entity import EntityRef
+from scopecat.program.measurement_types import MeasurementArrayData
+from scopecat_instruments import rf_source
+from scopecat_quantum.measurement_computes import (
+    BinaryIqProbabilityProducts,
 )
 
 Q0 = EntityRef(id="q0", kind="logical_qubit")

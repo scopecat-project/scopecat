@@ -4,13 +4,6 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from scopecat import Quantity
-from scopecat.records.parameter_revision import ParameterRevisionRef
-from scopecat.records.setup import SetupRevisionRef
-from scopecat_quantum._ids import PulseEventId, PulseProgramId, QubitId
-from scopecat_quantum.flux import FluxCorrection, FluxCorrectionSnapshot
-from scopecat_quantum.pulses import Constant, FluxSignal, Play, PulseProgram, schedule
-from scopecat_quantum.targets import TargetCompilationError
 
 from reference_lab.physical_policies import (
     IqOffsetCouplingPolicy,
@@ -19,6 +12,13 @@ from reference_lab.physical_policies import (
 )
 from reference_lab.targets.list_mode.inspection import ArtifactInspectionBounds
 from reference_lab.targets.list_mode.model import ListModeTarget
+from scopecat import Quantity
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.setup import SetupRevisionRef
+from scopecat_quantum._ids import PulseEventId, PulseProgramId, QubitId
+from scopecat_quantum.flux import FluxCorrection, FluxCorrectionSnapshot
+from scopecat_quantum.pulses import Constant, FluxSignal, Play, PulseProgram, schedule
+from scopecat_quantum.targets import TargetCompilationError
 
 from ._list_mode_test_support import (
     InstrumentListModeRuntime,

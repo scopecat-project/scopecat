@@ -5,15 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-import scopecat as sc
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from scopecat.api.procedures import LabProcedureContext
-from scopecat.api.run import RunHandle
-from scopecat.automation import AnalysisPublicationOutputRef, RunOutputRef, procedure
-from scopecat.daemon.views import ParameterResolution
-from scopecat.kernel.frozen import thaw_json_value
-from scopecat.records.parameter_branch import ParameterBranch
 
+import scopecat as sc
 from reference_lab.workflows.drag_beta_analysis import drag_beta_analysis
 from reference_lab.workflows.drag_beta_experiment import (
     DragBetaQubit,
@@ -25,6 +19,12 @@ from reference_lab.workflows.drag_beta_verification import (
     DragBetaVerification,
     evaluate_drag_beta_candidate,
 )
+from scopecat.api.procedures import LabProcedureContext
+from scopecat.api.run import RunHandle
+from scopecat.automation import AnalysisPublicationOutputRef, RunOutputRef, procedure
+from scopecat.daemon.views import ParameterResolution
+from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.parameter_branch import ParameterBranch
 
 
 class DragBranchCalibrationIntent(BaseModel):

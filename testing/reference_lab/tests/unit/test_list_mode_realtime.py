@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from scopecat import Quantity
 from scopecat_quantum._ids import (
     AcquisitionSlotId,

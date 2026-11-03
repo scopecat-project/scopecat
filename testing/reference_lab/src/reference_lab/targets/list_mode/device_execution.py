@@ -7,36 +7,6 @@ from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
-from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
-from scopecat.kernel.errors import OperationFailure
-from scopecat.kernel.quantity import Quantity
-from scopecat.kernel.state import PayloadRef, StateValue
-from scopecat.records.instrument import state_member_ref, state_member_target
-from scopecat.records.measurement import MeasurementArray, MeasurementUnavailable
-from scopecat.sdk.domain import (
-    DomainInstrumentExecutor,
-    DomainResidencyAddress,
-    DomainResidencyRequirement,
-    DomainStateAddress,
-    DomainStateRequirement,
-)
-from scopecat.sdk.instruments import PropertyRef
-from scopecat.sdk.instruments.commands import (
-    CollectAxisRequest,
-    CollectResultRequest,
-    InstrumentOperationArgument,
-    InstrumentStateAssignment,
-)
-from scopecat.sdk.instruments.execution import (
-    RunHardwareApply,
-    RunHardwareBatch,
-    RunHardwareBatchReceipt,
-    RunHardwareCollect,
-    RunHardwareCollectBinding,
-    RunHardwareInvoke,
-)
-from scopecat_instruments.members import REFERENCE_CLOCK_REFERENCE_SOURCE
-from scopecat_quantum.targets import TargetAcquisitionAddress
 
 from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT_AMPLITUDE,
@@ -106,6 +76,36 @@ from reference_lab.targets.list_mode.model import (
     MaterializedAwgProgram,
     PhaseSynthesizedAwgProgram,
 )
+from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
+from scopecat.kernel.errors import OperationFailure
+from scopecat.kernel.quantity import Quantity
+from scopecat.kernel.state import PayloadRef, StateValue
+from scopecat.records.instrument import state_member_ref, state_member_target
+from scopecat.records.measurement import MeasurementArray, MeasurementUnavailable
+from scopecat.sdk.domain import (
+    DomainInstrumentExecutor,
+    DomainResidencyAddress,
+    DomainResidencyRequirement,
+    DomainStateAddress,
+    DomainStateRequirement,
+)
+from scopecat.sdk.instruments import PropertyRef
+from scopecat.sdk.instruments.commands import (
+    CollectAxisRequest,
+    CollectResultRequest,
+    InstrumentOperationArgument,
+    InstrumentStateAssignment,
+)
+from scopecat.sdk.instruments.execution import (
+    RunHardwareApply,
+    RunHardwareBatch,
+    RunHardwareBatchReceipt,
+    RunHardwareCollect,
+    RunHardwareCollectBinding,
+    RunHardwareInvoke,
+)
+from scopecat_instruments.members import REFERENCE_CLOCK_REFERENCE_SOURCE
+from scopecat_quantum.targets import TargetAcquisitionAddress
 
 
 @dataclass(frozen=True, slots=True)

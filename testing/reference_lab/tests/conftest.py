@@ -9,14 +9,14 @@ from types import ModuleType
 from uuid import uuid4
 
 import pytest
+
+from reference_lab.configuration import bootstrap_config
 from scopecat.api.lab import LabClient
 from scopecat.daemon.client import DaemonClient
 from scopecat.project import load_project
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
-
-from reference_lab.configuration import bootstrap_config
 
 EXAMPLE_ROOT = Path(__file__).parents[1]
 

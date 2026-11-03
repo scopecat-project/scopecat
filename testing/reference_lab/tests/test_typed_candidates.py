@@ -8,6 +8,23 @@ from typing import Literal
 
 import httpx2
 import pytest
+
+from reference_lab.application import create_application
+from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
+from reference_lab.workflows.drag_beta_analysis import drag_beta_analysis
+from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
+from reference_lab.workflows.drag_beta_verification import (
+    DRAG_BETA_VERIFICATION_SCHEMA,
+    drag_beta_candidate_verification,
+)
+from reference_lab.workflows.drag_branch_calibration import (
+    JOINT_DRAG_DECISION_SCHEMA,
+    DragBranchCalibrationIntent,
+    DragBranchCalibrationRejected,
+    drag_branch_calibration,
+    verify_joint_drag,
+)
+from reference_lab.workflows.production_drag_gate import production_drag_experiment
 from scopecat.api.parameter_candidates import (
     ParameterCandidate,
     VerifiedParameterCandidate,
@@ -35,23 +52,6 @@ from scopecat.records.run import (
 )
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat_server.lifecycle import start_project, stop_project
-
-from reference_lab.application import create_application
-from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
-from reference_lab.workflows.drag_beta_analysis import drag_beta_analysis
-from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
-from reference_lab.workflows.drag_beta_verification import (
-    DRAG_BETA_VERIFICATION_SCHEMA,
-    drag_beta_candidate_verification,
-)
-from reference_lab.workflows.drag_branch_calibration import (
-    JOINT_DRAG_DECISION_SCHEMA,
-    DragBranchCalibrationIntent,
-    DragBranchCalibrationRejected,
-    drag_branch_calibration,
-    verify_joint_drag,
-)
-from reference_lab.workflows.production_drag_gate import production_drag_experiment
 
 from .conftest import ReferenceLabDaemon
 

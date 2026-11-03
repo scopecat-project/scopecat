@@ -16,10 +16,6 @@ from typing import cast, override
 
 import numpy as np
 from numpy.typing import NDArray
-from scopecat import Quantity
-from scopecat.kernel.content_identity import sha256_json_hash
-from scopecat_quantum._ids import TargetCompileEntryId
-from scopecat_quantum.targets import TargetAcquisitionAddress
 
 from reference_lab.targets.list_mode.execution_model import (
     AcquisitionResponse,
@@ -29,6 +25,10 @@ from reference_lab.targets.list_mode.model import (
     DigitizerAcquisitionWindow,
     acquisition_slot_identity_payload,
 )
+from scopecat import Quantity
+from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat_quantum._ids import TargetCompileEntryId
+from scopecat_quantum.targets import TargetAcquisitionAddress
 
 _OPTIMUM_BETA_NS = 0.75
 _BASELINE = 0.04

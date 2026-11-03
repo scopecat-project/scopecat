@@ -5,17 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, cast
 
-import scopecat as sc
 from pydantic import BaseModel, ConfigDict, Field
-from scopecat.kernel.entity import EntityRef
-from scopecat.kernel.quantity import Quantity
-from scopecat.planning.catalog import InstrumentContractCatalog
-from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
-from scopecat.records.parameter import TableParameterValue
-from scopecat.sdk.instruments import InstrumentDescription
-from scopecat_quantum._ids import TargetId
-from scopecat_quantum.pulses import AcquireSignal
 
+import scopecat as sc
 from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT,
     AWG_ARM_PROGRAM,
@@ -76,6 +68,14 @@ from reference_lab.targets.list_mode.model import (
     TimingDomainPreparation,
     signal_key,
 )
+from scopecat.kernel.entity import EntityRef
+from scopecat.kernel.quantity import Quantity
+from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.parameter import TableParameterValue
+from scopecat.sdk.instruments import InstrumentDescription
+from scopecat_quantum._ids import TargetId
+from scopecat_quantum.pulses import AcquireSignal
 
 
 class _CapabilityModel(BaseModel):

@@ -9,16 +9,8 @@ from typing import Annotated, SupportsFloat, cast
 
 import numpy as np
 import polars as pl
-import scopecat as sc
-from scopecat import Quantity
-from scopecat.measurements.results import Dataset
-from scopecat.records.analysis import (
-    AnalysisDatasetViewSource,
-    AnalysisFigureLayerSpec,
-    AnalysisFigureProjection,
-    AnalysisUncertaintyProjection,
-)
 
+import scopecat as sc
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.drag_beta_calibration import (
     NEGATIVE_CANDIDATE_ID,
@@ -27,6 +19,14 @@ from reference_lab.workflows.drag_beta_calibration import (
 from reference_lab.workflows.drag_beta_experiment import (
     DragBetaQubit,
     drag_beta_experiment,
+)
+from scopecat import Quantity
+from scopecat.measurements.results import Dataset
+from scopecat.records.analysis import (
+    AnalysisDatasetViewSource,
+    AnalysisFigureLayerSpec,
+    AnalysisFigureProjection,
+    AnalysisUncertaintyProjection,
 )
 
 _DRAG_BETA_FIT_MODEL_ID = "reference_lab.drag_beta.shared_n2_quadratic.v1"
