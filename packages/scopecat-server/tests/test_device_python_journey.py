@@ -57,6 +57,8 @@ device = author.devices.register(label="Synthetic VNA", connection=DeviceConnect
 """
             + setup_code
             + """
+assert setup.setup.scenario == scenario
+assert author.setup.definition(base_setup_name).definition.scenario == base.scenario
 author.refresh()
 from scopecat_lab.authored.capture import capture
 from scopecat_lab.authored.parameters import open_parameters
@@ -100,6 +102,9 @@ author.close()
 receipt = Path(Path("receipt.txt").read_text())
 run = author.reopen(receipt).wait(timeout=120).result()
 assert run.id == Path("run-id.txt").read_text()
+assert run.snapshot.scientific_binding.scenario.label == "Virtual VNA sweep"
+assert run.snapshot.scientific_binding.scenario.model_id == "scopecat.virtual.vna"
+assert run.snapshot.scientific_binding.scenario.limitations
 assert len(run.measurements()["frequency"].require_magnitudes("GHz")[0]) == 51
 author.close()
 """

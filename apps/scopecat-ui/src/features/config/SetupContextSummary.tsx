@@ -38,7 +38,7 @@ export function SetupContextSummary({
   return (
     <section
       aria-label="设备与逻辑用途"
-      className="space-y-2 rounded border border-line p-3 text-sm"
+      className="min-w-0 space-y-2 rounded border border-line p-3 text-sm"
     >
       <p>
         <strong>实验配置：</strong>
@@ -46,8 +46,8 @@ export function SetupContextSummary({
       </p>
       <p className="break-all">固定版本：{data.id}</p>
       <p>以下是所选配置的记录，不代表当前样品已接线或设备正在连接。</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="实验设备表格">
+        <table className="w-full min-w-[40rem] text-left [&_th]:px-2 [&_td]:px-2 [&_td]:align-top">
           <caption className="text-left font-semibold">实验设备与逻辑用途</caption>
           <thead>
             <tr>
@@ -61,8 +61,8 @@ export function SetupContextSummary({
               const assigned = routes.filter((route) => route.instrument_id === instrument.id);
               return (
                 <tr key={instrument.id}>
-                  <td>{instrument.id}</td>
-                  <td className="break-all">{instrument.driver_id}</td>
+                  <td className="whitespace-nowrap">{instrument.id}</td>
+                  <td className="whitespace-nowrap font-mono text-xs">{instrument.driver_id}</td>
                   <td>
                     {assigned.length ? (
                       <ul>

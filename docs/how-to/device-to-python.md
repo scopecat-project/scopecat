@@ -56,6 +56,7 @@ from scopecat.records.config import (
     RoutingGraph,
 )
 from scopecat.records.setup import SetupInstrumentBinding
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 
 base_setup_name = "initial"  # replace with the starter setup you inspected
 # Replace with the registered Virtual VNA ID shown on the device page.
@@ -80,11 +81,27 @@ routing = RoutingGraph(
         )
     ],
 )
-definition = base.model_copy(update={"instruments": (binding,), "routing": routing})
+scenario = SoftwareExecutionScenario(
+    id="virtual-vna-demo",
+    label="Virtual VNA sweep",
+    model_id="scopecat.virtual.vna",
+    model_version="v1",
+    capabilities=("Synthetic complex S-parameter sweeps",),
+    limitations=(
+        "Synthetic response, not a physical sample or instrument measurement.",
+    ),
+)
+definition = base.model_copy(
+    update={"instruments": (binding,), "routing": routing, "scenario": scenario}
+)
 setup = author.setup.save(
     definition, name="virtual-vna-demo", note="Virtual-only exercise"
 )
 ```
+
+场景信息会保存在 setup 和运行来源中，不只是界面标题。这里显式替换 starter 的
+Analytic signal experiment，声明公开虚拟 VNA v1 的合成扫描；不填未知的随机种子或模型设置。
+已有教程 setup 请另存新名称并重新准备，不改写旧运行的场景记录。
 
 此练习有意只保留一个虚拟仪器绑定和一条路由，不应对日常实验 setup 直接照抄。
 在 **参数与绑定 → 实验 setup** 查看保存的新版本和绑定。拓扑及路由编辑仍使用 Python。
