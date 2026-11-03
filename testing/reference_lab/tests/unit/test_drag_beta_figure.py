@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from scopecat import Quantity
 
 from reference_lab.workflows.drag_beta_analysis import (
     DragBetaFit,
     DragBetaObservation,
     drag_beta_fit_curve,
 )
+from scopecat import Quantity
 
 
 def test_fit_curve_retains_amplification_and_declares_residual_scale_bounds() -> None:

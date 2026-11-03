@@ -636,7 +636,8 @@ def test_ragged_point_cloud_run_survives_daemon_and_worker_boundaries(
         batches = list(
             cast(
                 "Iterator[_ArrowRecordBatch]",
-                persisted.measurements().project().to_record_batch_reader(batch_size=2),
+                # PyArrow has no native stubs; runtime assertions cover this boundary.
+                persisted.measurements().project().to_record_batch_reader(batch_size=2),  # pyright: ignore[reportUnknownMemberType]
             )
         )
 
@@ -667,7 +668,7 @@ def test_ragged_point_cloud_run_survives_daemon_and_worker_boundaries(
     )
 
     if find_spec("pyarrow") is not None:
-        table = cast("_ArrowTable", dataset.project().to_arrow())
+        table = cast("_ArrowTable", dataset.project().to_arrow())  # pyright: ignore[reportUnknownMemberType]
         assert table["trace"].to_pylist() == [
             [2.0, 2.1],
             [4.0, 4.1, 4.2, 4.3],

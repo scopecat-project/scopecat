@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 import scopecat as sc
+from reference_lab.application import create_application
+from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.parameters import BiasProfile, ChannelCalibration
 from scopecat.records.execution import InstrumentStateEvidence
 from scopecat.records.measurement import (
     EntityAcquisitionEvidence,
@@ -22,10 +26,6 @@ from scopecat_instruments import (
     network_sweep,
     temperature_readout,
 )
-
-from reference_lab.application import create_application
-from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.parameters import BiasProfile, ChannelCalibration
 
 
 @sc.experiment

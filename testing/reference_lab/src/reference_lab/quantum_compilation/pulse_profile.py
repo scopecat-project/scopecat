@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import math
 
+from reference_lab.quantum_compilation.compiler_parameters import (
+    QuantumCompilerParameters,
+    QubitPulseParameters,
+)
 from scopecat import Quantity
 from scopecat_quantum import authoring as quantum
 from scopecat_quantum.pulse_recipes import (
@@ -12,11 +16,6 @@ from scopecat_quantum.pulse_recipes import (
     map_qubit_pulse_recipes,
 )
 from scopecat_quantum.standard_gates import X90, XM90
-
-from reference_lab.quantum_compilation.compiler_parameters import (
-    QuantumCompilerParameters,
-    QubitPulseParameters,
-)
 
 
 def _drag_gate_fragment(

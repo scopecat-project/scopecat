@@ -2,15 +2,15 @@
 
 from typing import cast
 
-import scopecat as sc
 from pydantic import BaseModel, ConfigDict
-from scopecat.api.procedures import LabProcedureContext
-from scopecat.automation import ProcedureRecoveryAdapter, RunOutputRef, procedure
 
+import scopecat as sc
 from reference_lab_authors.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
     temperature_diagnostic,
 )
+from scopecat.api.procedures import LabProcedureContext
+from scopecat.automation import ProcedureRecoveryAdapter, RunOutputRef, procedure
 
 
 @sc.analysis_step(id="reference_lab.temperature_summary")

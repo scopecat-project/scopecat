@@ -7,6 +7,24 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from numpy.typing import NDArray
+
+from reference_lab.payloads import (
+    AWG_PROGRAM_PAYLOAD,
+    DIGITIZER_PROGRAM_PAYLOAD,
+    MaterializedAwgProgramDocument,
+)
+from reference_lab.physical_policies import (
+    AwgChannelId,
+    IqOffsetCouplingPolicy,
+    OutputOffsetCouplingGroup,
+    OutputOffsetRequirement,
+)
+from reference_lab.targets.list_mode.execution_model import ListModeRun
+from reference_lab.targets.list_mode.inspection import ArtifactInspectionBounds
+from reference_lab.targets.list_mode.model import (
+    ListModeTarget,
+    OutputChannelPreparation,
+)
 from scopecat import Quantity
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.setup import SetupRevisionRef
@@ -34,24 +52,6 @@ from scopecat_quantum.pulses import (
     schedule,
 )
 from scopecat_quantum.targets import TargetCompilationError
-
-from reference_lab.payloads import (
-    AWG_PROGRAM_PAYLOAD,
-    DIGITIZER_PROGRAM_PAYLOAD,
-    MaterializedAwgProgramDocument,
-)
-from reference_lab.physical_policies import (
-    AwgChannelId,
-    IqOffsetCouplingPolicy,
-    OutputOffsetCouplingGroup,
-    OutputOffsetRequirement,
-)
-from reference_lab.targets.list_mode.execution_model import ListModeRun
-from reference_lab.targets.list_mode.inspection import ArtifactInspectionBounds
-from reference_lab.targets.list_mode.model import (
-    ListModeTarget,
-    OutputChannelPreparation,
-)
 
 from ._list_mode_test_support import (
     ACQUIRE_Q0,

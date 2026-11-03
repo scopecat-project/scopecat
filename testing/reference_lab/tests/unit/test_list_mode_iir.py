@@ -5,13 +5,13 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from numpy.typing import NDArray
+
+from reference_lab.payloads import AWG_PROGRAM_PAYLOAD, MaterializedAwgProgramDocument
+from reference_lab.targets.list_mode.model import ListModeTarget
 from scopecat.sdk.instruments.execution import RunHardwareInvoke
 from scopecat_quantum.flux import FluxCorrection
 from scopecat_quantum.iir import inverse_exponential_sos
 from scopecat_quantum.targets import TargetCompilationError
-
-from reference_lab.payloads import AWG_PROGRAM_PAYLOAD, MaterializedAwgProgramDocument
-from reference_lab.targets.list_mode.model import ListModeTarget
 
 from ._list_mode_test_support import (
     InstrumentListModeRuntime,

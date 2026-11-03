@@ -8,8 +8,6 @@ client process and a real daemon; no editable imports or physical devices are
 required. Package wheels must already be installed in the selected interpreter.
 """
 
-# pyright: reportUnknownArgumentType=false
-
 from __future__ import annotations
 
 import argparse
@@ -74,7 +72,8 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
                 .artifact(
                     "report", text="Retained snapshot analysis", filename="report.txt"
                 )
-                .dataset("points", pa.table({"x": [0.0, 1.0], "y": [1.0, 2.0]}))
+                # PyArrow has no native stubs; runtime assertions cover this boundary.
+                .dataset("points", pa.table({"x": [0.0, 1.0], "y": [1.0, 2.0]}))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                 .figure(dataset="points", kind="scatter", x="x", y="y")
                 .save()
             )
@@ -83,7 +82,7 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
                 .result()
                 .dataset(
                     "fit",
-                    pa.table(
+                    pa.table(  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                         {
                             "x": [0.0, 1.0],
                             "y": [1.0, 2.0],

@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from typing import Annotated, Protocol, SupportsFloat, cast
 
 import numpy as np
-import scopecat as sc
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares  # pyright: ignore[reportUnknownVariableType]
-from scopecat.measurements.results import Dataset
 
+import scopecat as sc
 from reference_lab.parameters import ReadoutResonator
 from reference_lab.workflows.flux_spectroscopy import FLUX_SPECTROSCOPY
+from scopecat.measurements.results import Dataset
 
 FLUX_SPECTROSCOPY_ANALYSIS_ID = "reference_lab.flux_spectroscopy.analysis"
 FLUX_SPECTROSCOPY_FIT_REVIEW_ID = "reference_lab.flux_spectroscopy.fit-review"

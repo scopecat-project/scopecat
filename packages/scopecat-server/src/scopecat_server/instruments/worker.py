@@ -859,7 +859,8 @@ class SubprocessInstrumentBackendEndpoint:
             self._connection.close()
 
 
-def _instrument_worker_main(
+# Loaded by name in worker_process.py so the child process imports the backend lazily.
+def _instrument_worker_main(  # pyright: ignore[reportUnusedFunction]
     connection: _ByteConnection,
     project_root: str,
     instrument_backend_spec: str,

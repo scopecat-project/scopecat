@@ -1,5 +1,3 @@
-# pyright: reportUnknownMemberType=false, reportUnknownParameterType=false
-# pyright: reportUnknownVariableType=false
 """Shared projection boundary for finite measurement pages."""
 
 from __future__ import annotations
@@ -22,7 +20,8 @@ from scopecat.records.measurement import (
 )
 
 
-def project_measurement_page(
+# PyArrow native Table/IPC types are untyped; keep this exception at the boundary.
+def project_measurement_page(  # pyright: ignore[reportUnknownParameterType]
     records: Sequence[MeasurementRecord],
     *,
     schema: MeasurementDatasetSchema,
@@ -32,12 +31,12 @@ def project_measurement_page(
     diagnostics: ProjectionDiagnostics,
     include_identity: bool,
     layout: ProjectionLayout,
-) -> pa.Table:
+) -> pa.Table:  # pyright: ignore[reportUnknownMemberType]
     """Project a selected-schema page through the canonical ecosystem adapter."""
 
     selected_schema = select_measurement_schema(schema, tuple(columns.values()))
-    return (
-        Dataset(
+    return (  # pyright: ignore[reportUnknownVariableType]
+        Dataset(  # pyright: ignore[reportUnknownMemberType]
             raw=MeasurementDataset(
                 dataset_schema=selected_schema,
                 records=records,

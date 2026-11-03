@@ -1,5 +1,3 @@
-# pyright: reportUnknownArgumentType=false
-
 from __future__ import annotations
 
 import json
@@ -11,7 +9,7 @@ from contextlib import ExitStack
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier, Event, Thread
-from typing import Literal, Never, cast
+from typing import Any, Literal, Never, cast
 
 import pyarrow as pa
 import pytest
@@ -365,8 +363,9 @@ def _analysis_command(proposal: ParameterChangeProposal) -> AnalysisSaveCommand:
                 kind="dataset",
                 id="fits",
                 title="fit data",
-                content=DerivedDataset.from_arrow(
-                    pa.table({"bias": [1.0, 2.0], "signal": [3.0, 4.0]}),
+                # PyArrow has no native stubs; runtime assertions cover this boundary.
+                content=DerivedDataset.from_arrow(  # pyright: ignore[reportUnknownMemberType]
+                    pa.table({"bias": [1.0, 2.0], "signal": [3.0, 4.0]}),  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                     fields={"bias": AnalysisField(role="coordinate")},
                 ).to_payload(),
             ),
@@ -3448,9 +3447,8 @@ def test_effect_is_fenced_and_terminal_updates_control(
             for item in projected.json()["items"]:
                 assert not item["coordinates"]
                 assert set(item["observables"]) == set(selected)
-                original = measurement_records[item["point_index"]].model_dump(
-                    mode="json"
-                )
+                point_index: int = item["point_index"]
+                original = measurement_records[point_index].model_dump(mode="json")
                 assert item["observables"] == {
                     key: original["observables"][key] for key in selected
                 }
@@ -3520,7 +3518,11 @@ def test_effect_is_fenced_and_terminal_updates_control(
         assert measurement_arrow.status_code == 200
         assert measurement_arrow.headers["x-scopecat-next-offset"] == "2"
         assert measurement_arrow.headers["x-scopecat-snapshot-size"] == "4"
-        arrow_table = pa.ipc.open_stream(measurement_arrow.content).read_all()
+        # PyArrow has no native Table stubs; the assertions below check its data.
+        arrow_table = cast(
+            "Any",
+            pa.ipc.open_stream(measurement_arrow.content).read_all(),  # pyright: ignore[reportUnknownMemberType]
+        )
         assert arrow_table.schema.names == [
             "point_index",
             "logical_point_id",
@@ -3743,12 +3745,14 @@ def test_effect_and_terminal_publication_roll_back_with_control(
                     ),
                 )
 
-        rolled_back, _, _ = runtime.application.runs.measurement_arrow(
+        # PyArrow has no native Table stubs; the assertions below check its data.
+        rolled_back, _, _ = runtime.application.runs.measurement_arrow(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             admission.run_id,
             MeasurementArrowQuery(
                 columns=(MeasurementArrowColumn(name="signal", variable_id="signal"),)
             ),
         )
+        rolled_back = cast("Any", rolled_back)
         assert rolled_back.num_rows == 0
         runtime.application.executor.flush_measurements(
             admission.run_id,
@@ -4340,13 +4344,15 @@ def test_interrupted_measurements_close_or_continue_without_losing_saved_records
             )
         )
         assert fragments[1].dataset_content_hash == expected_dataset_content_hash
-        table, _, _ = runtime.application.runs.measurement_arrow(
+        # PyArrow has no native Table stubs; the assertions below check its data.
+        table, _, _ = runtime.application.runs.measurement_arrow(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             run_id,
             MeasurementArrowQuery(
                 columns=(MeasurementArrowColumn(name="signal", variable_id="signal"),),
                 diagnostics="full",
             ),
         )
+        table = cast("Any", table)
         assert table.column("point_index").to_pylist() == [0, 1]
         if not segmented:
             assert table.column("signal").to_pylist() == [1.0, 2.0]
@@ -4562,12 +4568,14 @@ def test_measurement_acknowledgment_loss_and_replay_boundaries(
         assert sealed.dataset_content_hash == measurement_dataset_content_hash(
             header_content_hash=header.content_hash, record_content_hashes=hashes
         )
-        table, _, _ = runtime.application.runs.measurement_arrow(
+        # PyArrow has no native Table stubs; the assertions below check its data.
+        table, _, _ = runtime.application.runs.measurement_arrow(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             run_id,
             MeasurementArrowQuery(
                 columns=(MeasurementArrowColumn(name="signal", variable_id="signal"),)
             ),
         )
+        table = cast("Any", table)
         assert table.column("point_index").to_pylist() == [0, 1]
         assert table.column("signal").to_pylist() == [1.0, 2.0]
 
@@ -4669,7 +4677,8 @@ def test_entity_selected_arrow_http_preserves_run_identity_and_page_watermark(
         }
         response = client.post(f"/api/v1/runs/{run_id}/measurements/arrow", json=query)
         assert response.status_code == 200, response.text
-        table = pa.ipc.open_stream(response.content).read_all()
+        # PyArrow has no native Table stubs; the assertions below check its data.
+        table = cast("Any", pa.ipc.open_stream(response.content).read_all())  # pyright: ignore[reportUnknownMemberType]
         metadata = table.schema.metadata
         assert metadata is not None
         assert metadata[b"scopecat.run_id"] == run_id.encode()
@@ -4699,13 +4708,13 @@ def test_entity_selected_arrow_http_preserves_run_identity_and_page_watermark(
             },
         )
         assert pinned.status_code == 200, pinned.text
-        assert pa.ipc.open_stream(pinned.content).read_all().num_rows == 0
+        assert pa.ipc.open_stream(pinned.content).read_all().num_rows == 0  # pyright: ignore[reportUnknownMemberType]
         fresh = client.post(
             f"/api/v1/runs/{run_id}/measurements/arrow", json={**query, "offset": 1}
         )
         assert fresh.status_code == 200, fresh.text
         assert fresh.headers["x-scopecat-snapshot-size"] == "2"
-        assert pa.ipc.open_stream(fresh.content).read_all().num_rows == 1
+        assert pa.ipc.open_stream(fresh.content).read_all().num_rows == 1  # pyright: ignore[reportUnknownMemberType]
 
         trace = client.post(
             f"/api/v1/runs/{run_id}/measurements/traces/query",

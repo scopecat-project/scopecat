@@ -6,40 +6,9 @@ from dataclasses import dataclass, field
 from typing import cast
 
 import numpy as np
-import scopecat as sc
 from numpy.typing import NDArray
-from scopecat.program.measurement_types import MeasurementDType
-from scopecat.records.measurement import (
-    MeasurementAcquisitionValue,
-    MeasurementArray,
-)
-from scopecat.sdk.instruments import (
-    AcquisitionResultRef,
-    DriverAcquisition,
-    DriverConnectionSpec,
-    DriverOperation,
-    DriverOutcome,
-    DriverPayload,
-    DriverReadback,
-    DriverScalar,
-    DriverSpec,
-    DriverStatePatch,
-    DriverStateReadback,
-    DriverStateReadRequest,
-    DriverSuccess,
-    InstrumentDescription,
-    ObjectInstrumentDriver,
-    PropertyRef,
-    implements,
-    instrument_component,
-    instrument_driver,
-    interface_mount,
-    state_readback,
-)
-from scopecat.sdk.instruments.declarations import compile_interface
-from scopecat_instruments.interface_declarations import ReferenceClockInterface
-from scopecat_instruments.members import REFERENCE_CLOCK_REFERENCE_SOURCE
 
+import scopecat as sc
 from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT_AMPLITUDE,
     ANALOG_WAVEFORM_OUTPUT_ENABLED,
@@ -84,6 +53,37 @@ from reference_lab.targets.list_mode.iq_semantics import (
 )
 from reference_lab.virtual_lab.capture_payload import VirtualCaptureQueueDocument
 from reference_lab.virtual_lab.capture_plant import VirtualCaptureSourceInterface
+from scopecat.program.measurement_types import MeasurementDType
+from scopecat.records.measurement import (
+    MeasurementAcquisitionValue,
+    MeasurementArray,
+)
+from scopecat.sdk.instruments import (
+    AcquisitionResultRef,
+    DriverAcquisition,
+    DriverConnectionSpec,
+    DriverOperation,
+    DriverOutcome,
+    DriverPayload,
+    DriverReadback,
+    DriverScalar,
+    DriverSpec,
+    DriverStatePatch,
+    DriverStateReadback,
+    DriverStateReadRequest,
+    DriverSuccess,
+    InstrumentDescription,
+    ObjectInstrumentDriver,
+    PropertyRef,
+    implements,
+    instrument_component,
+    instrument_driver,
+    interface_mount,
+    state_readback,
+)
+from scopecat.sdk.instruments.declarations import compile_interface
+from scopecat_instruments.interface_declarations import ReferenceClockInterface
+from scopecat_instruments.members import REFERENCE_CLOCK_REFERENCE_SOURCE
 
 type BenchSamples = NDArray[np.float64]
 VIRTUAL_AWG_DRIVER_ID = "reference_lab.virtual.awg"

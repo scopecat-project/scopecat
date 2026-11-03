@@ -7,6 +7,33 @@ from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 import scopecat as sc
+from reference_lab.parameters import QubitParameters
+from reference_lab.point_values import QuantumLabPointValues
+from reference_lab.quantum_compilation.compiler_parameters import (
+    QuantumCompilerParameters,
+)
+from reference_lab.quantum_compilation.pulse_profile import QUANTUM_PULSE_PROFILE
+from reference_lab.targets.configuration import (
+    LIST_MODE_TARGET_KIND,
+)
+from reference_lab.targets.list_mode import (
+    ConfiguredRoutePlacementProvider,
+    ListModeArtifact,
+    ListModeCompilationTrace,
+    ListModeDomainJobRuntime,
+    ListModePlacementProvider,
+    ListModeRun,
+    ListModeTarget,
+    ListModeTargetCompiler,
+    MappedListModeTarget,
+    build_list_mode_artifact_inspection_snapshot,
+    list_mode_measurement_invocation_spec,
+    list_mode_realtime_write_footprint,
+    list_mode_setup_residency_requirements,
+    list_mode_setup_state_invalidations,
+    list_mode_state_requirements,
+    realize_executed_measurements,
+)
 from scopecat.inspection import (
     CompiledArtifactInspection,
     CompiledProgramInspectionQuery,
@@ -48,34 +75,6 @@ from scopecat_quantum.pulse_implementations import ResolvedPulseImplementations
 from scopecat_quantum.pulse_recipes import PulseRecipeMaterializationCache
 from scopecat_quantum.realtime import ScheduledBlock
 from scopecat_quantum.targets import TargetCompileEntry
-
-from reference_lab.parameters import QubitParameters
-from reference_lab.point_values import QuantumLabPointValues
-from reference_lab.quantum_compilation.compiler_parameters import (
-    QuantumCompilerParameters,
-)
-from reference_lab.quantum_compilation.pulse_profile import QUANTUM_PULSE_PROFILE
-from reference_lab.targets.configuration import (
-    LIST_MODE_TARGET_KIND,
-)
-from reference_lab.targets.list_mode import (
-    ConfiguredRoutePlacementProvider,
-    ListModeArtifact,
-    ListModeCompilationTrace,
-    ListModeDomainJobRuntime,
-    ListModePlacementProvider,
-    ListModeRun,
-    ListModeTarget,
-    ListModeTargetCompiler,
-    MappedListModeTarget,
-    build_list_mode_artifact_inspection_snapshot,
-    list_mode_measurement_invocation_spec,
-    list_mode_realtime_write_footprint,
-    list_mode_setup_residency_requirements,
-    list_mode_setup_state_invalidations,
-    list_mode_state_requirements,
-    realize_executed_measurements,
-)
 
 _QUANTUM_LAB_TARGET_COMPILER_ID = TargetCompilerId("reference-lab.list-mode-target.v2")
 _INITIAL_BATCH_SIZE = 1

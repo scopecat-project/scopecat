@@ -6,8 +6,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import scopecat as sc
-from scopecat.kernel.entity import EntityRef
-
 from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT,
     ANALOG_WAVEFORM_OUTPUT_OFFSET,
@@ -17,6 +15,7 @@ from reference_lab.parameters import (
     AwgOutputBaseline,
     IqChainParameters,
 )
+from scopecat.kernel.entity import EntityRef
 
 IQ_OFFSET_COUPLING_POLICY_ID = "reference_lab.iq-offset.coupling-groups.v2"
 

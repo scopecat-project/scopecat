@@ -6,11 +6,10 @@ from dataclasses import dataclass
 from typing import Annotated, cast
 
 import scopecat as sc
-from scopecat.api.run import RunHandle
-from scopecat.measurements.results import Dataset
-
 from reference_lab.workflows.drag_beta_analysis import drag_beta_observation_frame
 from reference_lab.workflows.drag_beta_experiment import DragBetaQubit
+from scopecat.api.run import RunHandle
+from scopecat.measurements.results import Dataset
 
 DRAG_BETA_VERIFICATION_KEY = "drag-beta-candidate-verification"
 DRAG_BETA_MINIMUM_IMPROVEMENT = 0.001

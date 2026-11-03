@@ -5,17 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 
 import scopecat as sc
-from scopecat import Quantity, QuantityType
-from scopecat_quantum import authoring as quantum
-from scopecat_quantum.measurement_computes import BinaryIqProbabilityProducts
-from scopecat_quantum.standard_gates import X90, XM90
-
 from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import quantum_capture
 from reference_lab.workflows.drag_beta_calibration import (
     drag_gate_pulse,
     drag_readout_pulse,
 )
+from scopecat import Quantity, QuantityType
+from scopecat_quantum import authoring as quantum
+from scopecat_quantum.measurement_computes import BinaryIqProbabilityProducts
+from scopecat_quantum.standard_gates import X90, XM90
 
 PRODUCTION_DRAG_GATE_SHOTS = 32
 

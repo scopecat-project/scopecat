@@ -7,7 +7,28 @@ from uuid import UUID
 
 import numpy as np
 import pytest
+
 import scopecat as sc
+from reference_lab.application import create_application
+from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
+from reference_lab.parameters import ReadoutResonator
+from reference_lab.provider import FLUX_SOURCE_ID, ReferenceLabProvider
+from reference_lab.workflows.flux_spectroscopy import (
+    BIAS_POINTS,
+    BIAS_START,
+    BIAS_STOP,
+    TRACE_POINTS,
+    FluxSpectroscopyDataset,
+    flux_spectroscopy,
+)
+from reference_lab.workflows.flux_spectroscopy_analysis import (
+    FLUX_SPECTROSCOPY_FIT_REVIEW_SCHEMA,
+    RESONATOR_TRACE_FIT_SCHEMA,
+    fit_flux_spectroscopy,
+    fit_resonator_trace,
+    flux_spectroscopy_analysis,
+    flux_spectroscopy_fit_review,
+)
 from scopecat.kernel.errors import RunIndeterminate
 from scopecat.program.bindings import EnsureStateIntent
 from scopecat.records.analysis import (
@@ -34,27 +55,6 @@ from scopecat.sdk.instruments import (
 from scopecat_instruments.virtual import VirtualNetworkAnalyzer
 from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.server.in_process_lab import in_process_lab
-
-from reference_lab.application import create_application
-from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
-from reference_lab.parameters import ReadoutResonator
-from reference_lab.provider import FLUX_SOURCE_ID, ReferenceLabProvider
-from reference_lab.workflows.flux_spectroscopy import (
-    BIAS_POINTS,
-    BIAS_START,
-    BIAS_STOP,
-    TRACE_POINTS,
-    FluxSpectroscopyDataset,
-    flux_spectroscopy,
-)
-from reference_lab.workflows.flux_spectroscopy_analysis import (
-    FLUX_SPECTROSCOPY_FIT_REVIEW_SCHEMA,
-    RESONATOR_TRACE_FIT_SCHEMA,
-    fit_flux_spectroscopy,
-    fit_resonator_trace,
-    flux_spectroscopy_analysis,
-    flux_spectroscopy_fit_review,
-)
 
 
 def test_complex_notch_fit_recovers_delay_and_ignores_one_outlier() -> None:

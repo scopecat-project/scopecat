@@ -43,6 +43,7 @@ notebook = [
 include = [
   "apps/scopecat-ui/e2e/fixtures/admit_procedure.py",
   "apps/scopecat-ui/e2e/fixtures/controlled_experiment.py",
+  "apps/scopecat-ui/scripts/export-openapi.py",
   "packages/scopecat/src",
   "packages/scopecat/tests",
   "packages/scopecat-tutorials/src",
@@ -54,6 +55,7 @@ include = [
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/src",
   "packages/scopecat-quantum/tests",
+  "packages/scopecat-quantum/examples/quantity_recipe.py",
   "testing/reference_lab/src",
   "testing/reference_lab/tests",
   "testing/fixtures/retained-signal/src",
@@ -130,8 +132,6 @@ root = "packages/scopecat-server/tests"
 reportAny = "none"
 reportExplicitAny = "none"
 reportPrivateUsage = "none"
-reportUnknownMemberType = "none"
-reportUnknownVariableType = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "testing/scopecat-testkit/src"
@@ -139,11 +139,6 @@ root = "testing/scopecat-testkit/src"
 reportAny = "none"
 # White-box fixtures construct bound programs and inspect project-loader state.
 reportPrivateUsage = "none"
-
-[[tool.basedpyright.executionEnvironments]]
-root = "packages/scopecat-server/src"
-# Worker entry functions are referenced from other modules, not their owner file.
-reportUnusedFunction = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "packages/scopecat-instruments/tests"
@@ -400,6 +395,7 @@ select = [
   "LOG",
   "PERF102",
   "PERF402",
+  "PGH004",
   "PIE",
   "PLC0206",
   "PLE",

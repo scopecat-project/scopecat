@@ -1,5 +1,3 @@
-# pyright: reportUnknownArgumentType=false
-
 from __future__ import annotations
 
 import sqlite3
@@ -209,7 +207,8 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
                     context.result("Candidate verification")
                     .dataset(
                         "comparison",
-                        pa.table(
+                        # PyArrow has no native stubs; assertions check the data.
+                        pa.table(  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                             {
                                 "role": ["baseline", "candidate"],
                                 "run_id": [baseline.id, candidate.id],
@@ -263,7 +262,7 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
                 == candidate.measurements().entry.content_hash
             )
             assert revised.fact("candidate-improved").value is True
-            assert revised.dataset("comparison").table.to_pylist() == [
+            assert revised.dataset("comparison").table.to_pylist() == [  # pyright: ignore[reportUnknownMemberType]
                 {
                     "role": "baseline",
                     "run_id": baseline.id,
@@ -560,7 +559,7 @@ def test_project_analysis_allocates_distinct_revisions_for_concurrent_saves(
         with TestClient(runtime.app()) as transport:
             lab = LabClient(_daemon_client(transport))
             run = lab.get_run(run_id)
-            pending = []
+            pending: list[Analysis] = []
             for verdict in ("first", "second"):
                 context = lab.analysis(
                     "Concurrent comparison",
@@ -617,7 +616,7 @@ def test_project_analysis_consumes_project_datasets_facts_and_artifacts(
             )
             source = (
                 source_context.result()
-                .dataset("summary", pa.table({"signal": [0.8]}))
+                .dataset("summary", pa.table({"signal": [0.8]}))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                 .fact("accepted", True)
                 .artifact(
                     "report",
@@ -639,8 +638,9 @@ def test_project_analysis_consumes_project_datasets_facts_and_artifacts(
                 consumer_context.result()
                 .fact(
                     "consumed",
-                    bool(accepted.value)
-                    and summary.table.num_rows == 1
+                    # The composed condition includes the untyped Arrow row count.
+                    bool(accepted.value)  # pyright: ignore[reportUnknownArgumentType]
+                    and summary.table.num_rows == 1  # pyright: ignore[reportUnknownMemberType]
                     and bool(report.text()),
                 )
                 .save()
@@ -950,7 +950,7 @@ def _compare_entity_runs(baseline: Dataset, candidate: Dataset) -> DerivedDatase
     before = np.ma.asarray(left["signal"].values[0])
     after = np.ma.asarray(right["signal"].values[0])
     return derived_dataset(
-        pa.table(
+        pa.table(  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
             {
                 "entity": [entity.id for entity in index.values],
                 "baseline": before.tolist(),
@@ -1002,7 +1002,7 @@ def test_cross_run_entity_comparison_freezes_sources_and_survives_restart(
                 "candidate": [10.0, None, 30.0, 40.0],
                 "delta": [9.0, None, 27.0, None],
             }
-            assert published.dataset("comparison").table.to_pydict() == expected
+            assert published.dataset("comparison").table.to_pydict() == expected  # pyright: ignore[reportUnknownMemberType]
             inputs = [item.model_dump(mode="json") for item in published.inputs]
             assert {item["run_id"] for item in inputs} == {baseline_id, candidate_id}
             assert {item["content_hash"] for item in inputs} == {
@@ -1020,7 +1020,7 @@ def test_cross_run_entity_comparison_freezes_sources_and_survives_restart(
         restored = LabClient(_daemon_client(transport)).published_analysis(
             publication_id
         )
-        assert restored.dataset("comparison").table.to_pydict() == expected
+        assert restored.dataset("comparison").table.to_pydict() == expected  # pyright: ignore[reportUnknownMemberType]
         assert [item.model_dump(mode="json") for item in restored.inputs] == inputs
 
 

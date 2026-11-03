@@ -7,21 +7,6 @@ from typing import Annotated, Protocol, cast, override
 
 import numpy as np
 from numpy.typing import NDArray
-from scopecat.kernel.state import PayloadRef, StateValue
-from scopecat.sdk.domain import (
-    DomainInstrumentExecutor,
-)
-from scopecat.sdk.instruments.commands import InstrumentOperationArgument
-from scopecat.sdk.instruments.declarations import (
-    argument,
-    compile_interface,
-    declared_argument_ref,
-    declared_operation_ref,
-    instrument_interface,
-    operation,
-)
-from scopecat.sdk.instruments.execution import RunHardwareBatch, RunHardwareInvoke
-from scopecat_quantum.targets import TargetAcquisitionAddress
 
 from reference_lab.targets.list_mode.execution_model import (
     AcquisitionResponse,
@@ -45,6 +30,21 @@ from reference_lab.virtual_lab.capture_payload import (
     VirtualCaptureQueueDocument,
     VirtualCaptureTraceDocument,
 )
+from scopecat.kernel.state import PayloadRef, StateValue
+from scopecat.sdk.domain import (
+    DomainInstrumentExecutor,
+)
+from scopecat.sdk.instruments.commands import InstrumentOperationArgument
+from scopecat.sdk.instruments.declarations import (
+    argument,
+    compile_interface,
+    declared_argument_ref,
+    declared_operation_ref,
+    instrument_interface,
+    operation,
+)
+from scopecat.sdk.instruments.execution import RunHardwareBatch, RunHardwareInvoke
+from scopecat_quantum.targets import TargetAcquisitionAddress
 
 
 @instrument_interface(

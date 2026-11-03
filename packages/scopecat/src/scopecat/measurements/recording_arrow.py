@@ -1,3 +1,6 @@
+# PyArrow native schema, array and IPC operations lack usable type information.
+# Keep these exceptions in the codec boundary rather than duplicating Arrow
+# stubs or weakening its concrete types to Any.
 # pyright: reportUnknownArgumentType=false, reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false, reportUnknownVariableType=false
 """Shared schema-driven Arrow IPC codec for measurement recording batches."""
