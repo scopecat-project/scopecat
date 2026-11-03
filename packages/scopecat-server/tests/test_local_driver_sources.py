@@ -304,11 +304,32 @@ def test_legacy_identity_and_public_sources_publish_atomically(
         assert not any(
             ".virtual." in driver for driver in collected.sources[1].driver_ids
         )
+        backend = source / "src/worker_fixture/backend.py"
+        backend.write_text(
+            backend.read_text().replace(
+                'implementation_version = "v1"', 'implementation_version = "v2"'
+            )
+        )
+        service.manage(
+            DriverSourceCommand(
+                operation_id="refresh",
+                expected_previous="public",
+                source_id="legacy",
+                source_root=str(source),
+                actor="operator",
+            )
+        )
+        refreshed = runtime.application.devices.get("legacy-device")
+        assert refreshed.revision.previous == registered.device.head
+        assert refreshed.revision.content.driver != reference
     shutil.rmtree(source)
     with LocalDaemonRuntime(project) as runtime:
         assert runtime.application.driver_sources.sources().errors == {}
-        assert runtime.application.devices.driver_ref(reference.driver_id) == reference
+        assert (
+            runtime.application.devices.driver_ref(reference.driver_id)
+            == refreshed.revision.content.driver
+        )
         assert (
             runtime.application.devices.get("legacy-device").device.head
-            == registered.device.head
+            == refreshed.device.head
         )

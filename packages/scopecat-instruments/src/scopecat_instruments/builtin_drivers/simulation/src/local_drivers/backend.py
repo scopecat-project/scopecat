@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from scopecat.sdk.instruments import InstrumentBackend
+
 from scopecat_instruments.package_manifest import PACKAGE_MANIFEST
 from scopecat_instruments.provider import ConfiguredInstrumentProvider
 
