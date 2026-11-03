@@ -42,6 +42,7 @@ vi.mock("./device-api", () => ({
   releaseDeviceConnection: vi.fn(),
 }));
 
+import { prepareDeviceClose, releaseDeviceClose } from "./device-close";
 import { InstrumentsWorkspace } from "./InstrumentsWorkspace";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import {
@@ -142,6 +143,194 @@ afterEach(() => {
 });
 
 describe("instrument workspace", () => {
+  it("desktop management opens a control window without mounting a writable copy", async () => {
+    const open = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("pywebview", { api: { open_device_window: open } });
+    renderWorkspace();
+    const button = await screen.findByRole("button", { name: "打开控制窗口" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(open).toHaveBeenNthCalledWith(1, "drive-source");
+    expect(open).toHaveBeenNthCalledWith(2, "drive-source");
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("a fixed control view preserves experiment ownership and links to its run", async () => {
+    mockInventory({
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+      problems: [],
+      items: [instrument({ availability: "active", owner_kind: "run", owner_id: "run-42" })],
+    });
+    renderWorkspace("drive-source");
+    expect(await screen.findByText("手动控制不可用")).toBeVisible();
+    expect(screen.getByRole("link", { name: "查看占用实验" })).toHaveAttribute(
+      "href",
+      "?run=run-42#runs",
+    );
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("control window stays on its device and closes only after release acknowledgement", async () => {
+    let finish!: () => void;
+    vi.mocked(closeInstrumentSession).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    expect(screen.queryByRole("complementary", { name: "已登记设备" })).not.toBeInTheDocument();
+    let result!: Promise<string>;
+    act(() => {
+      result = prepareDeviceClose("close-success");
+    });
+    await waitFor(() =>
+      expect(closeInstrumentSession).toHaveBeenCalledExactlyOnceWith("session-1"),
+    );
+    expect(screen.getByRole("button", { name: "释放控制" })).toBeDisabled();
+    await act(async () => {
+      finish();
+      expect(await result).toBe("saved");
+    });
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+    expect(releaseDeviceConnection).not.toHaveBeenCalled();
+    act(() => releaseDeviceClose("close-success"));
+    expect(await screen.findByRole("button", { name: "连接" })).toBeEnabled();
+  });
+
+  it("retains a failed close and permits an explicit retry without disconnecting", async () => {
+    vi.mocked(closeInstrumentSession).mockRejectedValueOnce(new Error("reply lost"));
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
+      target: { value: "6000000000" },
+    });
+    await act(async () => {
+      expect(await prepareDeviceClose("close-failed")).toBe("unknown");
+    });
+    expect(screen.getByText(/释放控制未确认/)).toBeVisible();
+    expect(screen.getByText("控制释放结果待确认")).toBeVisible();
+    expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
+    act(() => releaseDeviceClose("close-failed"));
+    expect(screen.getByRole("button", { name: "释放控制" })).toBeEnabled();
+    const reset = screen.getByRole("button", { name: "重置" });
+    expect(reset).toBeEnabled();
+    fireEvent.click(reset);
+    expect(screen.queryByText("已暂存 1 项属性")).not.toBeInTheDocument();
+    expect(readInstrumentState).not.toHaveBeenCalled();
+    expect(applyInstrumentState).not.toHaveBeenCalled();
+    await act(async () => {
+      expect(await prepareDeviceClose("close-retry")).toBe("saved");
+    });
+    act(() => releaseDeviceClose("close-retry"));
+    expect(closeInstrumentSession).toHaveBeenCalledTimes(2);
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it.each(["success", "failure"])(
+    "keeps a timed-out release frozen until its late %s receipt",
+    async (outcome) => {
+      let finish!: () => void;
+      let fail!: (error: Error) => void;
+      vi.mocked(closeInstrumentSession).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            finish = resolve;
+            fail = reject;
+          }),
+      );
+      renderWorkspace("drive-source");
+      await connectInstrument();
+      let first!: Promise<string>;
+      act(() => {
+        first = prepareDeviceClose("host-timeout");
+      });
+      await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(1));
+      act(() => releaseDeviceClose("host-timeout"));
+      expect(screen.getByText("控制释放结果待确认")).toBeVisible();
+      expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
+      const release = screen.getByRole("button", { name: "释放控制" });
+      expect(release).toBeDisabled();
+      fireEvent.click(release);
+      let repeated!: Promise<string>;
+      act(() => {
+        repeated = prepareDeviceClose("second-attempt");
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(closeInstrumentSession).toHaveBeenCalledTimes(1);
+      act(() => releaseDeviceClose("second-attempt"));
+      await act(async () => {
+        if (outcome === "success") finish();
+        else fail(new Error("late release failure"));
+        await Promise.all([first, repeated]);
+      });
+      expect(await first).toBe("unknown");
+      expect(await repeated).toBe("unknown");
+      expect(closeInstrumentSession).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole("button", { name: outcome === "success" ? "连接" : "释放控制" }),
+      ).toBeEnabled();
+      expect(screen.queryByText("控制释放结果待确认") !== null).toBe(outcome === "failure");
+      expect(readInstrumentState).not.toHaveBeenCalled();
+      expect(abortInstrumentSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["success", "failure", "timeout"])("waits for an in-flight read: %s", async (outcome) => {
+    let finish!: (state: InstrumentState) => void;
+    let fail!: (error: Error) => void;
+    vi.mocked(readInstrumentState).mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+    );
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
+    await waitFor(() => expect(readInstrumentState).toHaveBeenCalledTimes(1));
+    let result!: Promise<string>;
+    act(() => {
+      result = prepareDeviceClose("pending");
+    });
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    if (outcome === "timeout") {
+      act(() => releaseDeviceClose("pending"));
+      await act(async () => finish(instrumentState()));
+    } else {
+      await act(async () => {
+        if (outcome === "success") finish(instrumentState());
+        else fail(new Error("read failed"));
+        await result;
+      });
+      act(() => releaseDeviceClose("pending"));
+    }
+    expect(await result).toBe(
+      outcome === "success" ? "saved" : outcome === "timeout" ? "unknown" : "blocked",
+    );
+    expect(closeInstrumentSession).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
+    expect(readInstrumentState).toHaveBeenCalledTimes(1);
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("browser cancellation does not release the session", async () => {
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    const event = new Event("beforeunload", { cancelable: true });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+  });
+
   it("keeps configuration in the workbench and releases idle connections explicitly", async () => {
     vi.mocked(releaseDeviceConnection).mockResolvedValue({ instrument_ids: ["drive-source"] });
     renderWorkspace();
@@ -1640,7 +1829,7 @@ describe("instrument workspace", () => {
       items: [{ ...device, device: { ...device.device, label: "Renamed source" } }],
     });
     fireEvent.click(screen.getByRole("button", { name: /^刷新$/ }));
-    await screen.findByRole("heading", { name: "Renamed source" });
+    await screen.findByRole("heading", { name: "Renamed source", level: 3 });
     expect(screen.getByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
 
     const updated = structuredClone(device);
@@ -1648,7 +1837,7 @@ describe("instrument workspace", () => {
     updated.revision.content.connection.options = { gain: 2 };
     vi.mocked(getDevices).mockResolvedValue({ items: [updated] });
     fireEvent.click(screen.getByRole("button", { name: /^刷新$/ }));
-    await screen.findByRole("heading", { name: "Drive source" });
+    await screen.findByRole("heading", { name: "Drive source", level: 3 });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByText("此连接版本尚未测试。")).toBeVisible();
 
@@ -1685,7 +1874,7 @@ describe("instrument workspace", () => {
   });
 });
 
-function renderWorkspace() {
+function renderWorkspace(controlDeviceId?: string) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -1694,7 +1883,7 @@ function renderWorkspace() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <InstrumentsWorkspace daemonUnavailable={false} />
+      <InstrumentsWorkspace daemonUnavailable={false} controlDeviceId={controlDeviceId} />
     </QueryClientProvider>,
   );
 }
@@ -1996,9 +2185,9 @@ function session(overrides: Partial<InstrumentSession> = {}): InstrumentSession 
     configured_default_instrument_ids: [],
     descriptions: [instrument().description!],
     observed_state: [instrumentState()],
-    opened_at: "2026-07-27T09:00:00Z",
-    renewed_at: "2026-07-27T09:00:00Z",
-    expires_at: "2026-07-27T09:01:00Z",
+    opened_at: new Date().toISOString(),
+    renewed_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
     ...overrides,
   };
 }
@@ -2006,8 +2195,8 @@ function session(overrides: Partial<InstrumentSession> = {}): InstrumentSession 
 function sessionLease(overrides: Partial<InstrumentSessionLease> = {}): InstrumentSessionLease {
   return {
     session_id: "session-1",
-    renewed_at: "2026-07-27T09:01:00Z",
-    expires_at: "2026-07-27T09:02:00Z",
+    renewed_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
     ...overrides,
   };
 }
@@ -2394,3 +2583,44 @@ function getConnectionEditor() {
 async function findConnectionEditor() {
   return waitFor(getConnectionEditor);
 }
+
+it("opens the source entry for an empty application without implying installed drivers or a control target", async () => {
+  vi.mocked(getDevices).mockResolvedValue({ items: [] });
+  vi.mocked(getInstruments).mockResolvedValue({
+    setup: { revision_id: "empty", content_hash: "sha256:empty" },
+    problems: [],
+    items: [],
+  });
+  vi.mocked(getDriverCatalog).mockRejectedValue(
+    new ApiError("project does not configure an instrument backend", 409),
+  );
+  renderWorkspace();
+  await screen.findByText("尚未启用设备驱动。请先选择驱动来源。");
+  expect(screen.getByText("驱动来源与可用驱动").closest("details")).toHaveAttribute("open");
+  expect(screen.getByRole("button", { name: "检查并启用驱动" })).toBeVisible();
+  expect(screen.queryByText("正在使用已安装驱动。")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "打开控制窗口" })).not.toBeInTheDocument();
+});
+
+it("keeps connection drafts editable after driver validation without calling it a version conflict", async () => {
+  const registered = registeredDevice(
+    instrument({
+      driver_id: "keysight.pna",
+      connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
+    }),
+  );
+  vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
+  vi.mocked(saveDevice).mockRejectedValueOnce(
+    new ApiError("invalid connection options: upper bound must exceed lower bound", 409),
+  );
+  renderWorkspace();
+  fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
+  const dialog = await findConnectionEditor();
+  fireEvent.change(within(dialog).getByLabelText("主机"), { target: { value: "192.0.2.24" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
+  const error = await within(dialog).findByRole("alert");
+  expect(error).toHaveTextContent("驱动参数未通过检查");
+  expect(error).not.toHaveTextContent("关闭");
+  expect(within(dialog).getByLabelText("主机")).toHaveValue("192.0.2.24");
+  expect(within(dialog).getByRole("button", { name: "保存设备" })).toBeEnabled();
+});

@@ -16,11 +16,13 @@ type OptionValue =
 interface OptionField {
   id: string;
   label: string;
-  type: "array" | "boolean" | "integer" | "number" | "object" | "string";
+  type: "array" | "boolean" | "integer" | "number" | "object" | "string" | "unsupported";
   defaultValue?: OptionValue;
   required: boolean;
   minimum?: number;
   maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
   description?: string;
   choices?: string[];
   choiceLabels?: Record<string, string>;
@@ -61,6 +63,9 @@ export function TcpConnectionFields({
         minimum={0.001}
         onChange={(timeout_seconds) => onChange({ ...connection, timeout_seconds })}
       />
+      <p className="col-span-full text-sm text-text-dim">
+        端口和超时的初始值是通用值，请按仪器实际连接设置核对。
+      </p>
     </div>
   );
 }
@@ -203,6 +208,13 @@ export function OptionInput({
   onChange: (value: OptionValue | undefined) => void;
   onValidityChange: (valid: boolean) => void;
 }) {
+  if (field.type === "unsupported")
+    return (
+      <p role="alert">
+        {field.label}：此驱动参数的定义暂不支持编辑，请更新驱动定义或应用。
+        {field.required ? "这是必填参数，不能跳过保存。" : "已有值将保留。"}
+      </p>
+    );
   if (field.type === "boolean") {
     return (
       <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
@@ -592,6 +604,7 @@ export function connectionIsValid(connection: InstrumentConnection): boolean {
 
 export function optionsAreValid(options: ConnectionOptions, fields: OptionField[]): boolean {
   return fields.every((field) => {
+    if (field.type === "unsupported") return !field.required;
     const value = options[field.id] ?? field.defaultValue;
     if (value === undefined || value === null) return !field.required;
     if (field.type === "boolean") return typeof value === "boolean";
@@ -609,9 +622,33 @@ export function optionsAreValid(options: ConnectionOptions, fields: OptionField[
       Number.isFinite(value) &&
       (field.type !== "integer" || Number.isInteger(value)) &&
       (field.minimum === undefined || value >= field.minimum) &&
-      (field.maximum === undefined || value <= field.maximum)
+      (field.maximum === undefined || value <= field.maximum) &&
+      (field.exclusiveMinimum === undefined || value > field.exclusiveMinimum) &&
+      (field.exclusiveMaximum === undefined || value < field.exclusiveMaximum)
     );
   });
+}
+
+// Resolve only local schema references. Never fetch remote schemas or loop on cycles.
+function resolveOptionSchema(
+  root: Record<string, unknown>,
+  value: unknown,
+  seen = new Set<string>(),
+): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.$ref !== "string") return value;
+  const ref = value.$ref;
+  if (!ref.startsWith("#/") || seen.has(ref)) return undefined;
+  let target: unknown = root;
+  for (const part of ref.slice(2).split("/")) {
+    const key = part.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (!isRecord(target) || !Object.hasOwn(target, key)) return undefined;
+    target = target[key];
+  }
+  const resolved = resolveOptionSchema(root, target, new Set([...seen, ref]));
+  if (!resolved) return undefined;
+  const { $ref: _, ...annotations } = value;
+  return { ...resolved, ...annotations };
 }
 
 // Driver options stay opaque; the editor projects their top-level JSON Schema fields.
@@ -640,23 +677,35 @@ export function connectionOptionFields(
         for (const id of schema.then.required) if (typeof id === "string") required.add(id);
     }
   }
-  return Object.entries(schema.properties).flatMap(([id, value]) => {
-    if (!isRecord(value)) return [];
-    const shape = Array.isArray(value.anyOf)
-      ? value.anyOf.find((item) => isRecord(item) && item.type !== "null")
-      : value;
-    if (!isRecord(shape)) return [];
-    const type = shape.type;
+  const properties = { ...schema.properties };
+  for (const id of required) if (!Object.hasOwn(properties, id)) properties[id] = {};
+  return Object.entries(properties).flatMap<OptionField>(([id, raw]) => {
+    const value = resolveOptionSchema(schema, raw) ?? (isRecord(raw) ? raw : {});
+    const variants = Array.isArray(value.anyOf)
+      ? value.anyOf
+          .map((item) => resolveOptionSchema(schema, item))
+          .filter((item) => item?.type !== "null")
+      : undefined;
+    const shape = variants ? (variants.length === 1 ? variants[0] : undefined) : value;
+    const candidateType = shape?.type;
     if (
-      type !== "array" &&
-      type !== "boolean" &&
-      type !== "integer" &&
-      type !== "number" &&
-      type !== "object" &&
-      type !== "string"
+      !shape ||
+      !["array", "boolean", "integer", "number", "object", "string"].includes(String(candidateType))
     ) {
-      return [];
+      return [
+        {
+          id,
+          label: typeof value.title === "string" ? value.title : titleCase(id),
+          type: "unsupported" as const,
+          required: required.has(id),
+          sensitive:
+            value.writeOnly === true ||
+            value.format === "password" ||
+            /password|secret|token|credential|api[_-]?key/i.test(id),
+        },
+      ];
     }
+    const type = candidateType as Exclude<OptionField["type"], "unsupported">;
     return [
       {
         id,
@@ -695,8 +744,12 @@ export function connectionOptionFields(
           /password|secret|token|credential|api[_-]?key/i.test(id),
         minLength: typeof shape.minLength === "number" ? shape.minLength : undefined,
         minProperties: typeof shape.minProperties === "number" ? shape.minProperties : undefined,
-        minimum: typeof value.minimum === "number" ? value.minimum : undefined,
-        maximum: typeof value.maximum === "number" ? value.maximum : undefined,
+        minimum: typeof shape.minimum === "number" ? shape.minimum : undefined,
+        maximum: typeof shape.maximum === "number" ? shape.maximum : undefined,
+        exclusiveMinimum:
+          typeof shape.exclusiveMinimum === "number" ? shape.exclusiveMinimum : undefined,
+        exclusiveMaximum:
+          typeof shape.exclusiveMaximum === "number" ? shape.exclusiveMaximum : undefined,
       },
     ];
   });

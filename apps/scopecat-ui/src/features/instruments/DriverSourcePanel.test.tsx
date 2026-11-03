@@ -31,14 +31,17 @@ beforeEach(() => {
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   vi.mocked(getDriverSource).mockResolvedValue({ active: selection });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function show(sessionBusy = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");
   render(
     <QueryClientProvider client={client}>
-      <DriverSourcePanel daemonUnavailable={false} sessionBusy={sessionBusy} />
+      <DriverSourcePanel daemonUnavailable={false} sessionBusy={sessionBusy} hasDrivers />
     </QueryClientProvider>,
   );
   return invalidate;
@@ -121,5 +124,63 @@ it("requires the current manual session to be released", async () => {
 });
 
 vi.mock("../application/OperatorSettings", () => ({
+  OperatorSettings: ({ onSaved }: { onSaved: () => void }) => (
+    <button
+      onClick={() => {
+        vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "Ada" });
+        onSaved();
+      }}
+    >
+      保存默认操作者
+    </button>
+  ),
   readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "local-operator" })),
 }));
+
+it("selects a source using the native picker without enabling it until submission", async () => {
+  const choose = vi.fn().mockResolvedValueOnce("/chosen/source").mockResolvedValueOnce(null);
+  vi.stubGlobal("pywebview", { api: { choose_directory: choose } });
+  show();
+  await screen.findByText("当前驱动源码：/lab/source");
+  fireEvent.click(screen.getByRole("button", { name: "选择源码目录" }));
+  await waitFor(() => expect(screen.getByLabelText("驱动源码目录")).toHaveValue("/chosen/source"));
+  expect(updateDriverSource).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "选择源码目录" }));
+  await waitFor(() => expect(choose).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText("驱动源码目录")).toHaveValue("/chosen/source");
+});
+
+it("keeps manual input without advertising a picker in browser mode", async () => {
+  show();
+  await screen.findByText("当前驱动源码：/lab/source");
+  expect(screen.queryByRole("button", { name: "选择源码目录" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("驱动源码目录")).toBeEnabled();
+});
+
+it("does not submit an empty attribution or lose the chosen source", async () => {
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 0, operator: "" });
+  show();
+  await screen.findByText("当前驱动源码：/lab/source");
+  fireEvent.click(screen.getByRole("button", { name: "从源码更新" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("启用驱动需要记录操作署名");
+  expect(updateDriverSource).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("驱动源码目录")).toHaveValue("/lab/source");
+});
+
+it("returns from inline attribution settings with the source draft intact and requires explicit activation", async () => {
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 0, operator: "" });
+  vi.mocked(updateDriverSource).mockImplementation(async (request) => ({ ...selection, request }));
+  show();
+  await screen.findByText("当前驱动源码：/lab/source");
+  fireEvent.change(screen.getByLabelText("驱动源码目录"), { target: { value: "/new/project" } });
+  fireEvent.click(screen.getByRole("button", { name: "从源码更新" }));
+  fireEvent.click(await screen.findByRole("button", { name: "保存默认操作者" }));
+  expect(screen.getByLabelText("驱动源码目录")).toHaveValue("/new/project");
+  expect(updateDriverSource).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByRole("button", { name: "从源码更新" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "从源码更新" }));
+  await screen.findByRole("status");
+  expect(updateDriverSource).toHaveBeenCalledWith(
+    expect.objectContaining({ source_root: "/new/project", actor: "Ada" }),
+  );
+});

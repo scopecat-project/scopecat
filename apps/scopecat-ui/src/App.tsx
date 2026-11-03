@@ -95,6 +95,29 @@ const DecisionWorkspace = lazy(async () => {
 });
 
 export default function App() {
+  const deviceId = new URL(window.location.href).searchParams.get("device-control");
+  return deviceId ? <DeviceControlApp deviceId={deviceId} /> : <WorkspaceApp />;
+}
+
+function DeviceControlApp({ deviceId }: { deviceId: string }) {
+  const health = useQuery({
+    queryKey: ["health"],
+    queryFn: ({ signal }) => getHealth(signal),
+    refetchInterval: 5_000,
+  });
+  return (
+    <main className="min-h-screen bg-canvas p-3">
+      <DesktopSession />
+      <Suspense fallback={<p>正在加载设备控制…</p>}>
+        <InstrumentsWorkspace controlDeviceId={deviceId} daemonUnavailable={health.isError} />
+      </Suspense>
+      <DesktopZoom />
+      <DesktopFind />
+    </main>
+  );
+}
+
+function WorkspaceApp() {
   const queryClient = useQueryClient();
   const activeQueries = useIsFetching();
   const [handoff, setHandoff] = useState<{

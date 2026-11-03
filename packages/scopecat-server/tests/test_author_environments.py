@@ -207,3 +207,21 @@ def test_retained_tasks_use_their_environment_after_selection_and_restart(
         assert importlib.util.find_spec("author_extra") is None
     finally:
         stop_project(project)
+
+
+@pytest.mark.parametrize("kind", ["missing", "no-manifest", "no-driver"])
+def test_driver_source_check_explains_project_selection(
+    tmp_path: Path, kind: str
+) -> None:
+    source = tmp_path / "source"
+    if kind != "missing":
+        source.mkdir()
+    if kind == "no-driver":
+        (source / "scopecat.toml").write_text("[lab]\n")
+    expected = {
+        "missing": "存在的驱动项目目录",
+        "no-manifest": "所选目录及其上级没有 scopecat.toml",
+        "no-driver": "未声明可启用的驱动来源",
+    }[kind]
+    with pytest.raises(ValueError, match=expected):
+        author_environment.capture_driver(source, Path(sys.executable).absolute())

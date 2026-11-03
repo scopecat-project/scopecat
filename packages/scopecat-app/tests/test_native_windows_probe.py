@@ -247,6 +247,62 @@ def test_probe_wait_has_a_deadline():
         probe.wait_for(lambda: False, "bridge unavailable", timeout=0)
 
 
+@pytest.mark.parametrize(
+    "shown_at,loaded_at,healthy_at,error",
+    [
+        (5.0, 34.0, 34.0, None),
+        (None, None, None, "Native window did not show"),
+        (0.0, None, None, "Healthy workspace did not mount"),
+        (0.0, 1.0, None, "Healthy workspace did not mount"),
+    ],
+)
+def test_workspace_probe_waits_for_native_events_before_javascript(
+    monkeypatch: pytest.MonkeyPatch,
+    shown_at: float | None,
+    loaded_at: float | None,
+    healthy_at: float | None,
+    error: str | None,
+):
+    clock = [0.0]
+    evaluations: list[float] = []
+
+    def advance(seconds: float) -> None:
+        clock[0] += seconds
+
+    def shown() -> bool:
+        return shown_at is not None and clock[0] >= shown_at
+
+    def loaded() -> bool:
+        return loaded_at is not None and clock[0] >= loaded_at
+
+    window = SimpleNamespace(
+        events=SimpleNamespace(
+            shown=SimpleNamespace(is_set=shown),
+            loaded=SimpleNamespace(is_set=loaded),
+        )
+    )
+
+    def evaluate(target: object, script: str) -> bool:
+        assert target is window and shown() and loaded()
+        assert "window.pywebview?.api" in script and "已连接" in script
+        evaluations.append(clock[0])
+        return healthy_at is not None and clock[0] >= healthy_at
+
+    monkeypatch.setattr(
+        probe, "time", SimpleNamespace(monotonic=lambda: clock[0], sleep=advance)
+    )
+    monkeypatch.setattr(probe, "evaluate", evaluate)
+    if error:
+        with pytest.raises(TimeoutError, match=error):
+            probe.wait_for_workspace(window)
+    else:
+        probe.wait_for_workspace(window)
+        assert evaluations and evaluations[0] > 20
+    if loaded_at is None:
+        assert evaluations == []
+    assert clock[0] <= 40.1
+
+
 def test_probe_nonzero_exit_preserves_diagnostic(tmp_path: Path):
     log = tmp_path / "host.log"
     with pytest.raises(subprocess.CalledProcessError):

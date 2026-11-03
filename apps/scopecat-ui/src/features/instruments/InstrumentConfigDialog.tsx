@@ -207,7 +207,14 @@ export function InstrumentConfigDialog({
       if (saved) {
         setError(`设备已保存，但视图无法刷新。请重试。 ${errorMessage(cause)}`);
       } else if (cause instanceof ApiError && cause.status === 409) {
-        setError(`保存冲突。请关闭并重新打开设备，核对当前配置。 ${errorMessage(cause)}`);
+        const message = errorMessage(cause);
+        setError(
+          message.includes("device connection changed; reload and review before saving")
+            ? "连接版本冲突：已被其他操作修改。请关闭并重新打开设备，核对最新配置。"
+            : message.startsWith("invalid connection options:")
+              ? `驱动参数未通过检查，请修改本页参数后重试。${message.slice("invalid connection options:".length)}`
+              : `本次保存未完成，已保留所填内容。${message}`,
+        );
       } else if (cause instanceof ApiError && (cause.status === undefined || cause.status >= 500)) {
         setError(
           `保存尚未确认。不作修改直接重试可检查同一次提交。编辑会开始新提交，可能需要核对当前配置。 ${errorMessage(cause)}`,
@@ -220,6 +227,27 @@ export function InstrumentConfigDialog({
       setBusy(false);
     }
   };
+  const renderOption = (field: (typeof fields)[number]) => (
+    <OptionInput
+      key={`${draftGeneration}:${driverId}:${connection.kind}:${field.id}`}
+      field={field}
+      value={jsonOptionValue(options[field.id])}
+      onChange={(value) => {
+        const next = { ...options };
+        if (value === undefined) delete next[field.id];
+        else next[field.id] = value;
+        setConnection({ ...connection, options: next });
+      }}
+      onValidityChange={(fieldValid) =>
+        setInvalidOptions((current) => {
+          const next = new Set(current);
+          if (fieldValid) next.delete(field.id);
+          else next.add(field.id);
+          return next;
+        })
+      }
+    />
+  );
   const content = (
     <>
       <header className="shrink-0 border-b border-line p-4">
@@ -315,27 +343,23 @@ export function InstrumentConfigDialog({
           {fields.length > 0 && (
             <fieldset>
               <legend>驱动选项</legend>
-              {fields.map((field) => (
-                <OptionInput
-                  key={`${draftGeneration}:${driverId}:${connection.kind}:${field.id}`}
-                  field={field}
-                  value={jsonOptionValue(options[field.id])}
-                  onChange={(value) => {
-                    const next = { ...options };
-                    if (value === undefined) delete next[field.id];
-                    else next[field.id] = value;
-                    setConnection({ ...connection, options: next });
-                  }}
-                  onValidityChange={(fieldValid) =>
-                    setInvalidOptions((current) => {
-                      const next = new Set(current);
-                      if (fieldValid) next.delete(field.id);
-                      else next.add(field.id);
-                      return next;
-                    })
-                  }
-                />
-              ))}
+              {fields.some((field) => !optionsAreValid(options, [field])) && (
+                <p className="text-sm text-text-dim">
+                  保存前请填写或检查：
+                  {fields
+                    .filter((field) => !optionsAreValid(options, [field]))
+                    .map((field) => field.label)
+                    .join("、")}
+                  。
+                </p>
+              )}
+              {fields.filter((field) => field.required).map(renderOption)}
+              {fields.some((field) => !field.required) && (
+                <details>
+                  <summary>可选参数与默认值</summary>
+                  {fields.filter((field) => !field.required).map(renderOption)}
+                </details>
+              )}
             </fieldset>
           )}
           <details open={connection.kind === "driver_managed"}>

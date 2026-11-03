@@ -16,6 +16,7 @@ export function InstrumentSessionPanel({
   instrument,
   session,
   connected,
+  releaseUnconfirmed = false,
   connectPending,
   closePending,
   interactionPending,
@@ -36,6 +37,7 @@ export function InstrumentSessionPanel({
   instrument: InstrumentView;
   session?: InstrumentSession;
   connected: boolean;
+  releaseUnconfirmed?: boolean;
   connectPending: boolean;
   closePending: boolean;
   interactionPending: boolean;
@@ -64,7 +66,9 @@ export function InstrumentSessionPanel({
             <Cable size={16} />
           </span>
           <div className="grid gap-1">
-            <strong className="text-xs text-text-soft">交互会话已连接</strong>
+            <strong className="text-xs text-text-soft">
+              {releaseUnconfirmed ? "控制释放结果待确认" : "交互会话已连接"}
+            </strong>
             <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
               打开时间 {formatRelative(session.opened_at)}
             </small>
@@ -91,7 +95,7 @@ export function InstrumentSessionPanel({
             type="button"
             className={secondaryButton}
             onClick={onRefresh}
-            disabled={interactionPending || closePending || !stateAvailable}
+            disabled={interactionPending || closePending || releaseUnconfirmed || !stateAvailable}
             title={
               !stateAvailable
                 ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from scopecat.daemon.wire import InstrumentSessionOpenCommand, SetupSaveCommand
 from scopecat.project import load_project
-from scopecat.records.config import RoutingGraph, Topology
+from scopecat.records.config import InstrumentBindingSpec, RoutingGraph, Topology
 from scopecat.records.setup import (
     SetupDefinition,
     SetupInstrumentBinding,
@@ -924,3 +924,65 @@ def test_previous_connection_draft_creates_new_revision_without_hardware_access(
                 )
             )
         assert not endpoint._connections
+
+
+def test_pure_driver_validation_rejects_before_retiring_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+    from unittest.mock import Mock
+
+    from scopecat.sdk.problems import Problem, ProblemPhase
+
+    endpoint = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=endpoint) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        saved = _register(client)
+        setup = runtime.application.devices.access_setup("signal")
+        session = runtime.application.instruments.open_session(
+            InstrumentSessionOpenCommand(
+                setup=setup.ref,
+                actor="operator",
+                operation_id="open",
+                instrument_ids=("signal",),
+            )
+        )
+        runtime.application.instruments.close_session(session.session_id)
+        original = endpoint.describe
+
+        def reject(bindings: tuple[InstrumentBindingSpec, ...]):
+            return replace(
+                original(bindings),
+                problems=(
+                    Problem(
+                        code="driver.invalid_bounds",
+                        phase=ProblemPhase.CONFIGURATION,
+                        message="Upper bound must exceed lower bound",
+                    ),
+                ),
+            )
+
+        disconnect = Mock(wraps=endpoint.disconnect)
+        monkeypatch.setattr(endpoint, "disconnect", disconnect)
+        monkeypatch.setattr(endpoint, "describe", reject)
+        response = client.post(
+            "/api/v1/devices",
+            json={
+                "device_id": "signal",
+                "label": "Signal",
+                "revision_id": "invalid-description",
+                "expected_head": saved["device"]["head"],
+                "actor": "operator",
+                "connection": saved["revision"]["content"],
+            },
+        )
+        assert response.status_code == 409
+        assert "Upper bound must exceed lower bound" in response.text
+        assert "invalid connection options" in response.text
+        disconnect.assert_not_called()
+        assert (
+            runtime.application.devices.get("signal").device.head.revision_id
+            == (saved["device"]["head"]["revision_id"])
+        )

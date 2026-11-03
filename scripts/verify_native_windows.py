@@ -271,6 +271,26 @@ def evaluate(window: webview.Window, script: str) -> object:
     return cast("object", window.evaluate_js(script))
 
 
+def wait_for_workspace(window: webview.Window) -> None:
+    # pywebview starts its callback before creating the native window. Avoid
+    # evaluate_js's internal 20-second wait until the page has actually loaded.
+    wait_for(window.events.shown.is_set, "Native window did not show", timeout=10)
+    wait_for(
+        lambda: (
+            window.events.loaded.is_set()
+            and evaluate(
+                window,
+                "Boolean(window.pywebview?.api && "
+                "document.querySelector('[aria-label=\"刷新项目数据\"]') && "
+                "document.querySelector('.workspace-top [role=status]')"
+                "?.textContent.trim() === '已连接')",
+            )
+            is True
+        ),
+        "Healthy workspace did not mount",
+    )
+
+
 def text_content(window: webview.Window, test_id: str) -> str:
     return str(
         evaluate(
@@ -941,20 +961,7 @@ def smoke(home: Path) -> None:
 
         def exercise() -> None:
             try:
-                wait_for(
-                    lambda: (
-                        evaluate(
-                            first.window,
-                            "Boolean(window.pywebview?.api && "
-                            "document.querySelector("
-                            "'[aria-label=\"刷新项目数据\"]') && "
-                            "document.querySelector('.workspace-top [role=status]')"
-                            "?.textContent.trim() === '已连接')",
-                        )
-                        is True
-                    ),
-                    "Healthy workspace did not mount",
-                )
+                wait_for_workspace(first.window)
                 evidence["startup_seconds"] = time.monotonic() - started
                 for label in ("决策 / Decisions", "运行详情 / Runs"):
                     click_navigation(first.window, label)

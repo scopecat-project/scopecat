@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, CircleOff, LoaderCircle, RotateCcw } from "lucide-react";
 import type {
@@ -55,6 +55,8 @@ type DraftValue = InstrumentPropertyDraft;
 
 interface InstrumentInspectorProps {
   instrument: InstrumentView;
+  displayLabel?: string;
+  releaseUnconfirmed?: boolean;
   session?: InstrumentSession;
   sessionError?: string;
   connectPending: boolean;
@@ -63,6 +65,7 @@ interface InstrumentInspectorProps {
   onClose: () => void;
   onSessionLost: (message: string) => void;
   onDisconnectOwner: () => void;
+  onCloseProblem?: (problem: boolean) => void;
 }
 
 export function InstrumentInspector(props: InstrumentInspectorProps) {
@@ -84,6 +87,8 @@ export function InstrumentInspector(props: InstrumentInspectorProps) {
 
 function InstrumentInspectorContent({
   instrument,
+  displayLabel,
+  releaseUnconfirmed = false,
   session,
   sessionError,
   connectPending,
@@ -92,6 +97,7 @@ function InstrumentInspectorContent({
   onClose,
   onSessionLost,
   onDisconnectOwner,
+  onCloseProblem,
 }: InstrumentInspectorProps) {
   const queryClient = useQueryClient();
   const instrumentId = instrument.instrument_id;
@@ -128,6 +134,7 @@ function InstrumentInspectorContent({
     session?.configured_default_instrument_ids.includes(instrumentId) ?? false;
 
   const readMutation = useMutation({
+    mutationKey: ["device-control", instrumentId],
     mutationFn: () => readInstrumentState(requireSession(session), instrumentId),
     onSuccess: (value) => setReadState({ source: synchronizedState, value }),
   });
@@ -143,6 +150,7 @@ function InstrumentInspectorContent({
   const stagedCount = Object.keys(declaredDrafts).length;
   const invalidDraft = Object.values(declaredDrafts).some((draft) => draft.value === undefined);
   const applyMutation = useMutation({
+    mutationKey: ["device-control", instrumentId],
     mutationFn: ({
       members,
       commandId,
@@ -172,6 +180,7 @@ function InstrumentInspectorContent({
     },
   });
   const configuredDefaultsMutation = useMutation({
+    mutationKey: ["device-control", instrumentId],
     mutationFn: ({ operationId }: { operationId: string }) =>
       applyInstrumentConfiguredDefaults(requireSession(session), instrumentId, operationId),
     retry: retryTransientInstrumentMutation,
@@ -218,6 +227,7 @@ function InstrumentInspectorContent({
     },
   });
   const collectMutation = useMutation({
+    mutationKey: ["device-control", instrumentId],
     mutationFn: ({
       target,
       commandId,
@@ -241,6 +251,7 @@ function InstrumentInspectorContent({
     },
   });
   const invokeMutation = useMutation({
+    mutationKey: ["device-control", instrumentId],
     mutationFn: ({
       target,
       operationArguments,
@@ -277,6 +288,7 @@ function InstrumentInspectorContent({
     },
   });
   const resolveMutation = useMutation({
+    mutationKey: ["device-control", instrumentId],
     mutationFn: () => {
       if (instrument.owner_kind !== "instrument_session" || !instrument.owner_id) {
         throw new Error("此待处理状态不属于交互会话。");
@@ -373,7 +385,7 @@ function InstrumentInspectorContent({
     configuredDefaultsMutation.isPending ||
     collectMutation.isPending ||
     invokeMutation.isPending;
-  const interactionDisabled = closePending || interactionPending;
+  const interactionDisabled = closePending || interactionPending || releaseUnconfirmed;
   const configuredDefaultsDisabled =
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
@@ -382,6 +394,15 @@ function InstrumentInspectorContent({
       : configuredDefaultsDisabled
         ? "请等待当前仪器交互完成"
         : undefined;
+
+  const failedReceipt =
+    (applyResult !== undefined && applyResult !== "applied") ||
+    configuredDefaultsResult?.status === "rejected" ||
+    Object.values(collectResults).some((receipt) => receipt.status !== "collected") ||
+    Object.values(invokeResults).some((receipt) => receipt.status !== "invoked");
+  useEffect(() => {
+    onCloseProblem?.(!!interactionError || failedReceipt);
+  }, [interactionError, failedReceipt, onCloseProblem]);
 
   return (
     <section
@@ -392,9 +413,13 @@ function InstrumentInspectorContent({
         <div>
           <div className="flex items-center gap-2.5">
             <h2 className="m-0 text-[1.1rem] font-[650] tracking-[-0.025em]">
-              {description?.label ?? instrumentId}
+              {displayLabel ?? description?.label ?? instrumentId}
             </h2>
-            <AvailabilityBadge availability={instrument.availability} connected={connected} />
+            {releaseUnconfirmed ? (
+              <span>释放待确认</span>
+            ) : (
+              <AvailabilityBadge availability={instrument.availability} connected={connected} />
+            )}
           </div>
           {description?.description && (
             <p className="mt-[9px] mb-0 max-w-[760px] text-xs leading-[1.55] text-text-dim">
@@ -408,6 +433,7 @@ function InstrumentInspectorContent({
         instrument={instrument}
         session={session}
         connected={connected}
+        releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connectPending}
         closePending={closePending}
         interactionPending={interactionPending}

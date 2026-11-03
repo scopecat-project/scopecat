@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from contextlib import suppress
 from typing import TYPE_CHECKING, Protocol, cast
 
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, JsonValue, ValidationError
 from scopecat.sdk.instruments import (
     DriverCatalog,
     DriverConnectionSpec,
@@ -392,9 +392,27 @@ def _configuration_problem(
     index: int,
     error: Exception,
 ) -> Problem:
+    message = f"invalid driver configuration for {binding.id} ({type(error).__name__})"
+    if isinstance(error, ValidationError):
+        # Keep actionable model diagnostics without serializing supplied options,
+        # exception context, or validation URLs into a user-facing error.
+        messages = (
+            ": ".join(
+                part
+                for part in (
+                    ".".join(str(part) for part in item["loc"]),
+                    item["msg"],
+                )
+                if part
+            )
+            for item in error.errors(
+                include_input=False, include_context=False, include_url=False
+            )
+        )
+        message += ": " + "; ".join(messages)
     return provider_problem(
         "instrument_driver_configuration_invalid",
-        f"invalid driver configuration for {binding.id} ({type(error).__name__})",
+        message,
         "context",
         "bindings",
         index,

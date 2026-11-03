@@ -197,11 +197,12 @@ scopecat app --home /path/to/Scopecat --action stop
 uv run --locked python -m scripts.dev --home /path/to/development
 ```
 
-在公库检出目录运行，需 Python 3.14+、uv、Node.js 和 pnpm。
+在公库检出目录运行，需 `.python-version` 指定的 Python、uv、Node.js 和 pnpm。
 命令打开带 Vite 和独立后端的原生桌面；Ctrl-C 请求在工作空闲后退出。
 通过设置登记能力源码目录，详见[日常源码开发](../development/public-preview.md#daily-source-desktop)。
 登记源码不会启用驱动。实验和分析修改使用普通作者代码刷新；
-首次选择或修改驱动使用**设备与驱动**中的 **从源码更新**，
+首次选择驱动使用**设备与驱动 → 驱动来源与可用驱动 → 检查并启用驱动**；
+已有驱动的修改使用 **从源码更新**，
 此前应结束活动工作并释放手动会话。仅保存文件不会替换正在使用的驱动。
 依赖变更需要显式准备开发环境。应用更新使用新构建的原生包，
 不在运行中的应用内切换候选解释器或能力 wheel。

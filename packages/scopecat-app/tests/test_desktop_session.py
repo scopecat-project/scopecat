@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -1084,3 +1084,169 @@ def test_file_picker_returns_selected_path_without_runtime_mutation():
     assert api.choose_file() == "C:/SDK Python/python.exe"
     assert window.create_file_dialog.call_args.kwargs == {"allow_multiple": False}
     assert runtime.mock_calls == []
+
+
+def test_device_window_identity_deduplicates_loading_navigation_and_two_devices(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from webview.event import Event
+
+    def create(_title: str, **kwargs: object):
+        window = Mock()
+        window.get_current_url.return_value = None
+        window.initial_url = kwargs["url"]
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    session = DesktopSession(Mock(), threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    windows = DesktopWindows(session, Mock())
+    root = windows.create()
+    root.api.open_device_window("device-a")
+    first = windows.latest
+    assert isinstance(first.window, Mock)
+    root.api.open_device_window("device-a")
+    assert windows.latest is first
+    assert len(windows._views) == 2
+    assert first.device_id == "device-a"
+    assert "device-control=device-a" in first.window.initial_url
+    first.loaded.set()
+    first.window.get_current_url.return_value = "http://127.0.0.1:3210/other"
+    root.api.open_device_window("device-a")
+    assert windows.latest is first
+    root.api.open_device_window("device-b")
+    assert len(windows._views) == 3
+    assert windows.latest.device_id == "device-b"
+    with patch.object(session, "operation", side_effect=ValueError("exit pending")):
+        assert first.window.events.closing.set() is True
+        first.window.hide.assert_not_called()
+    first.window.events.closed.set()
+    root.api.open_device_window("device-a")
+    assert windows.latest is not first
+    assert len(windows._views) == 3
+
+
+@pytest.mark.parametrize(
+    "answer,status",
+    [(False, "saved"), (True, "blocked"), (True, "unknown"), (True, "saved")],
+)
+def test_last_device_window_only_hides_after_confirmed_release(
+    answer: bool, status: str
+):
+    _runtime, _session, windows, views = close_fixture()
+    view = views[0]
+    windows._views = [view]
+    view.device_id = "device-a"
+    mock_window(view).create_confirmation_dialog.return_value = answer
+    acknowledge(view, status)
+    with patch.object(windows, "_hide_or_retain") as hide:
+        windows._close_view(view)
+        assert hide.call_count == (1 if answer and status == "saved" else 0)
+    mock_window(view).destroy.assert_not_called()
+    assert view.close_request is None
+    assert not view.close_authorized
+
+
+def test_device_close_failure_retains_window_and_retry_uses_new_preflight():
+    _runtime, _session, windows, views = close_fixture()
+    view = views[0]
+    view.device_id = "device-a"
+    mock_window(view).create_confirmation_dialog.return_value = True
+    acknowledge(view, "unknown")
+    windows._close_view(view)
+    mock_window(view).destroy.assert_not_called()
+    acknowledge(view, "saved")
+    windows._close_view(view)
+    mock_window(view).destroy.assert_called_once()
+    assert view.close_authorized
+
+
+def test_device_window_api_rejects_empty_identity_before_native_open():
+    session = DesktopSession(Mock(), threading.Event())
+    api = DesktopAPI(session, Mock())
+    api.open_device = Mock()
+    for value in (None, "", " ", "x" * 513):
+        with pytest.raises(ValueError, match="identity"):
+            api.open_device_window(value)
+    api.open_device.assert_not_called()
+
+
+def test_application_reopen_restores_main_after_main_then_device_close(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from webview.event import Event
+
+    native_windows: list[Mock] = []
+
+    def create(_title: str, **kwargs: object):
+        window = Mock()
+        window.initial_url = kwargs["url"]
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        window.destroy.side_effect = window.events.closed.set
+        native_windows.append(window)
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    shown = Mock()
+    monkeypatch.setattr("scopecat_app.desktop.show_window", shown)
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    windows = DesktopWindows(session, Mock())
+    main = windows.create()
+    windows.new_device_window("device-a")
+    device = windows.latest
+    assert main.is_main and not device.is_main
+    acknowledge(main)
+    acknowledge(device)
+    windows.tray_changed(True)
+
+    windows._close_view(main)
+    assert main not in windows._views
+    windows._close_view(device)
+    native_windows[1].hide.assert_called_once()
+    native_windows[1].destroy.assert_not_called()
+    assert device.close_request is None
+    shown.reset_mock()
+
+    windows.activate()
+    reopened = windows.latest
+    assert reopened.is_main and reopened.device_id is None
+    assert native_windows[2].initial_url == session.page_url
+    assert "device-control" not in native_windows[2].initial_url
+    shown.assert_called_once_with(reopened.window)
+    assert len(windows._views) == 2
+    assert device in windows._views
+    windows.activate()
+    assert windows.latest is reopened
+    assert len(windows._views) == 2
+    runtime.start.assert_not_called()
+    runtime.stop.assert_not_called()
+
+
+def test_activation_selects_existing_main_without_resuming_device_or_run(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    runtime, session, windows, views = close_fixture()
+    views[0].is_main = True
+    views[1].device_id = "device-a"
+    shown = Mock()
+    monkeypatch.setattr("scopecat_app.desktop.show_window", shown)
+    windows.activate()
+    shown.assert_called_once_with(views[0].window)
+    for view in views:
+        mock_window(view).run_js.assert_not_called()
+    assert runtime.mock_calls == []
+    session.closing.set()
+    shown.reset_mock()
+    windows.activate()
+    shown.assert_not_called()

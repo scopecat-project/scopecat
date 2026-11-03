@@ -63,10 +63,21 @@ class DriverSourceCapture(BaseModel):
 
 
 def _capture_driver(root: Path) -> DriverSourceCapture:
+    if not root.is_dir():
+        raise ValueError("请选择应用所在计算机上存在的驱动项目目录。")
+    if not any(
+        (parent / "scopecat.toml").is_file() for parent in (root, *root.parents)
+    ):
+        raise ValueError(
+            "所选目录及其上级没有 scopecat.toml。"
+            "请选择驱动项目的根目录。不要选择仅包含驱动文件的包目录。"
+        )
     project = open_project(root)
     if not project.source_roots or project.instrument_backend_spec is None:
         raise ValueError(
-            "source project must declare source roots and a driver factory"
+            "找到项目配置。但未声明可启用的驱动来源。"
+            "请检查项目 scopecat.toml 中的 authors.source_roots 和 "
+            "lab.instrument_backend。仅有实验或 Python 包不能作为驱动来源。"
         )
     return DriverSourceCapture(
         bundle=capture_sources(project), factory=project.instrument_backend_spec
