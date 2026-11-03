@@ -19,7 +19,13 @@ from scopecat.records.device import (
     DriverImplementationRef,
     RegisteredDevice,
 )
-from scopecat.records.driver_source import DriverSourceSelection, DriverSourceUpdate
+from scopecat.records.driver_source import (
+    DriverSourceCollection,
+    DriverSourceCommand,
+    DriverSourceSelection,
+    DriverSourceUpdate,
+    LocalDriverSourceState,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +48,16 @@ class LabDeviceOperations:
             setup=setup.ref,
             instrument_ids=(device_id,),
         )
+
+    def driver_sources(self) -> LocalDriverSourceState:
+        """Inspect the same local source collection and diagnostics as the GUI."""
+        return self.client.driver_sources()
+
+    def manage_driver_source(
+        self, command: DriverSourceCommand
+    ) -> DriverSourceCollection:
+        """Publish an explicit source operation against its observed collection."""
+        return self.client.manage_driver_source(command)
 
     def driver_source(self) -> DriverSourceSelection | None:
         """Inspect the selected source without reading the development directory."""

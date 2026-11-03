@@ -14,4 +14,12 @@ CREATE TABLE IF NOT EXISTS driver_source_head (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
     operation_id TEXT NOT NULL REFERENCES driver_source_selections(operation_id)
 );
+CREATE TABLE IF NOT EXISTS driver_source_collections (
+    operation_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS driver_source_collection_head (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    operation_id TEXT NOT NULL REFERENCES driver_source_collections(operation_id)
+);
 """

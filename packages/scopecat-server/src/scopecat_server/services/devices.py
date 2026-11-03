@@ -44,6 +44,7 @@ from scopecat_server.instruments.actors import (
 )
 from scopecat_server.instruments.backend import InstrumentBackendEndpoint
 from scopecat_server.instruments.owner import InstrumentBackendOwner
+from scopecat_server.instruments.sources import driver_reference
 from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneConflict,
     SQLiteControlPlane,
@@ -84,11 +85,7 @@ class DeviceService:
             )
         if endpoint.driver_catalog.get(driver_id) is None:
             raise BackendNotFound(f"installed driver does not exist: {driver_id}")
-        return DriverImplementationRef(
-            provider_id=endpoint.provider_id,
-            driver_id=driver_id,
-            artifact_hash=endpoint.artifact_hash,
-        )
+        return driver_reference(endpoint, driver_id)
 
     def require_driver(self, reference: DriverImplementationRef) -> None:
         if self.driver_ref(reference.driver_id) != reference:
@@ -206,10 +203,19 @@ class DeviceService:
                     view for view in self.list() if view.device.state != "retired"
                 )
                 if any(
-                    view.revision.content.driver.provider_id != replacement.provider_id
+                    replacement.driver_catalog.get(
+                        view.revision.content.driver.driver_id
+                    )
+                    is not None
+                    and view.revision.content.driver.provider_id
+                    != driver_reference(
+                        replacement, view.revision.content.driver.driver_id
+                    ).provider_id
                     for view in devices
                 ):
                     raise BackendConflict("replacement must keep the provider identity")
+                for view in devices:
+                    self._validate_options(view.revision.content, replacement)
                 revisions = tuple(
                     DeviceConnectionRevision(
                         id=f"driver-update:{uuid4().hex}",
@@ -217,10 +223,8 @@ class DeviceService:
                         previous=view.device.head,
                         content=view.revision.content.model_copy(
                             update={
-                                "driver": DriverImplementationRef(
-                                    provider_id=replacement.provider_id,
-                                    driver_id=view.revision.content.driver.driver_id,
-                                    artifact_hash=replacement.artifact_hash,
+                                "driver": driver_reference(
+                                    replacement, view.revision.content.driver.driver_id
                                 )
                             }
                         ),
@@ -284,6 +288,8 @@ class DeviceService:
                             self._require_drained(
                                 connection, view.device.id, sessions[view.device.id]
                             )
+                            if revision.content == view.revision.content:
+                                continue
                             repository.save(
                                 label=view.device.label,
                                 revision=revision,

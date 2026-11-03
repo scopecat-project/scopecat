@@ -312,9 +312,12 @@ from scopecat.records.data_cleanup import (
 )
 from scopecat.records.device import RegisteredDevice
 from scopecat.records.driver_source import (
+    DriverSourceCollection,
+    DriverSourceCommand,
     DriverSourceSelection,
     DriverSourceState,
     DriverSourceUpdate,
+    LocalDriverSourceState,
 )
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
@@ -1547,6 +1550,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 for driver in endpoint.driver_catalog.drivers
             )
         )
+
+    @app.get(f"{_API_PREFIX}/devices/driver-sources")
+    def local_driver_sources() -> LocalDriverSourceState:
+        return application.driver_sources.sources()
+
+    @app.post(f"{_API_PREFIX}/devices/driver-sources")
+    def manage_local_driver_sources(
+        command: DriverSourceCommand,
+    ) -> DriverSourceCollection:
+        try:
+            return application.driver_sources.manage(command)
+        except (ValueError, OSError, InstrumentBackendError) as error:
+            raise BackendConflict(str(error)) from error
 
     @app.get(f"{_API_PREFIX}/devices/driver-source")
     def driver_source() -> DriverSourceState:

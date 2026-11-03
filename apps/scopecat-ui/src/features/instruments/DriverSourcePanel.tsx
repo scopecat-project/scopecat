@@ -67,9 +67,14 @@ export function DriverSourcePanel({
     onSettled: async (_result, error) => {
       if (error instanceof MissingOperatorError) return;
       await Promise.all(
-        ["driver-source", "devices", "instruments", "instrument-drivers", "device-drivers"].map(
-          (key) => client.invalidateQueries({ queryKey: [key] }),
-        ),
+        [
+          "driver-source",
+          "local-driver-sources",
+          "devices",
+          "instruments",
+          "instrument-drivers",
+          "device-drivers",
+        ].map((key) => client.invalidateQueries({ queryKey: [key] })),
       );
     },
   });

@@ -66,3 +66,11 @@ export function releaseDeviceConnection(
     apiClient.POST("/api/v1/instruments/release", { body: { setup, instrument_ids: [deviceId] } }),
   );
 }
+
+export type DriverSourceCommand = components["schemas"]["DriverSourceCommand"];
+export function getLocalDriverSources(signal?: AbortSignal) {
+  return apiData(apiClient.GET("/api/v1/devices/driver-sources", { signal }));
+}
+export function manageLocalDriverSource(body: DriverSourceCommand) {
+  return apiData(apiClient.POST("/api/v1/devices/driver-sources", { body }));
+}

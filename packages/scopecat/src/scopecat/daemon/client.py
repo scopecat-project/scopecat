@@ -292,9 +292,12 @@ from scopecat.records.content import (
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.device import RegisteredDevice
 from scopecat.records.driver_source import (
+    DriverSourceCollection,
+    DriverSourceCommand,
     DriverSourceSelection,
     DriverSourceState,
     DriverSourceUpdate,
+    LocalDriverSourceState,
 )
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
@@ -1324,6 +1327,18 @@ class DaemonClient:
 
     def save_device(self, command: DeviceSaveCommand) -> DeviceView:
         return self._post_model(f"{_API_PREFIX}/devices", command, DeviceView)
+
+    def driver_sources(self) -> LocalDriverSourceState:
+        return self._get_model(
+            f"{_API_PREFIX}/devices/driver-sources", LocalDriverSourceState
+        )
+
+    def manage_driver_source(
+        self, command: DriverSourceCommand
+    ) -> DriverSourceCollection:
+        return self._post_model(
+            f"{_API_PREFIX}/devices/driver-sources", command, DriverSourceCollection
+        )
 
     def driver_source(self) -> DriverSourceSelection | None:
         return self._get_model(
