@@ -256,9 +256,9 @@ export function SetupMappings({
               </p>
               <Controls.Field>
                 替换组件路径 {route.id} / {endpointIndex + 1}
-                <Controls.Input
+                <ComponentPathInput
                   value={endpoint.component_path?.join("/") ?? ""}
-                  onChange={(event) =>
+                  onChange={(raw) =>
                     onChange({
                       ...draft,
                       routing: {
@@ -271,9 +271,7 @@ export function SetupMappings({
                                   j === endpointIndex
                                     ? {
                                         ...point,
-                                        component_path: event.target.value
-                                          .split("/")
-                                          .filter(Boolean),
+                                        component_path: raw.split("/").filter(Boolean),
                                       }
                                     : point,
                                 ),
@@ -312,5 +310,28 @@ export function SetupMappings({
         )}
       </div>
     </section>
+  );
+}
+
+// Keep unfinished separators in the editor while the setup draft retains only
+// canonical component segments. External path changes replace stale local text.
+function ComponentPathInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (raw: string) => void;
+}) {
+  const [editing, setEditing] = useState<{ raw: string; canonical: string }>();
+  return (
+    <Controls.Input
+      value={editing?.canonical === value ? editing.raw : value}
+      onChange={(event) => {
+        const raw = event.target.value;
+        setEditing({ raw, canonical: raw.split("/").filter(Boolean).join("/") });
+        onChange(raw);
+      }}
+      onBlur={() => setEditing(undefined)}
+    />
   );
 }

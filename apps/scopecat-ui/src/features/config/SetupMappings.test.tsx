@@ -68,9 +68,16 @@ it("authors two qubit mappings from empty topology and replaces only one channel
   fireEvent.change(screen.getByLabelText("替换设备绑定 drive-q0"), {
     target: { value: "replacement" },
   });
-  fireEvent.change(screen.getByLabelText("替换组件路径 drive-q0 / 1"), {
-    target: { value: "channels/2" },
-  });
+  const path = screen.getByLabelText<HTMLInputElement>("替换组件路径 drive-q0 / 1");
+  fireEvent.input(path, { target: { value: "" } });
+  let typed = "";
+  for (const character of "channels/2/I") {
+    typed += character;
+    // Use the current DOM value for each keystroke, not a complete pasted path.
+    fireEvent.input(path, { target: { value: path.value + character } });
+    expect(path).toHaveValue(typed);
+  }
+  expect(current.routing.routes?.[0]?.endpoints[0]?.component_path).toEqual(["channels", "2", "I"]);
   expect(current.routing.routes?.[0]?.instrument_id).toBe("replacement");
   expect(current.routing.routes?.[1]).toEqual(oldRevision.routing.routes?.[1]);
   expect(oldRevision.routing.routes?.[0]?.instrument_id).toBe("source");
