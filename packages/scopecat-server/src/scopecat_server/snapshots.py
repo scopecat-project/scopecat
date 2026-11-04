@@ -29,6 +29,9 @@ from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, RUNTIME_BINDING_NAME
 
 from scopecat_server.services.operator_settings import OPERATOR_SETTINGS_FILE
+from scopecat_server.storage.sqlite.data_reference_schema import (
+    DIRECT_MEASUREMENT_EVENT_KIND,
+)
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
     inspect_project_schema,
@@ -373,7 +376,11 @@ def verify_store_files(project: Path, *, data_relative: Path = _PROJECT_DATA) ->
                 "UNION SELECT digest, NULL, NULL "
                 "FROM apparatus_observation_attachments "
                 "UNION SELECT object_digest, 'capture', content_hash "
-                "FROM imported_captures"
+                "FROM imported_captures "
+                "UNION SELECT json_extract(payload_json, '$.receipt_digest'), "
+                "NULL, NULL "
+                "FROM durable_events WHERE kind=?",
+                (DIRECT_MEASUREMENT_EVENT_KIND,),
             ).fetchall(),
         )
         for row in refs:
