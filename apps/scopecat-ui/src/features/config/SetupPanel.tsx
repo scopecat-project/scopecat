@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
 import { errorMessage } from "../../lib/presentation";
 import { getDevices } from "../instruments/device-api";
+import { SetupMappings } from "./SetupMappings";
 import { ConfigurationTemplatesPanel } from "./ConfigurationTemplatesPanel";
 import { getSetupDefinitions, saveSetupDefinition, type SetupDefinition } from "./setup-api";
 
@@ -245,6 +246,7 @@ export function SetupPanel({
               添加绑定
             </Controls.Button>
           </fieldset>
+          <SetupMappings draft={draft} onChange={setDraft} />
           <Controls.Button
             disabled={!name.trim() || !operator.trim() || save.isPending}
             onClick={() => save.mutate()}
