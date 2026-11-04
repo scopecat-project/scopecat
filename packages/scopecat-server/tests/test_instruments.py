@@ -3943,3 +3943,178 @@ def test_unknown_finish_does_not_release_or_repeat_output_command(
         assert durable.state == "attention_required"
         assert transport.post(url, json=command).status_code in (404, 409)
         assert len(driver.applied) == 1
+
+
+@pytest.mark.parametrize("check_retention", [True, False])
+def test_direct_measurement_retains_setup_and_snapshot_receipt(
+    tmp_path: Path, check_retention: bool
+) -> None:
+    from scopecat.control.models import DurableEventInput
+    from scopecat.project import load_project
+    from scopecat.records.data_cleanup import DataCleanupCommand, DataCleanupSelection
+
+    from scopecat_server.services.data_cleanup import DataCleanupService
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+    from scopecat_server.snapshots import (
+        create_snapshot,
+        restore_snapshot,
+        verify_store_files,
+    )
+    from scopecat_server.storage.sqlite.object_store import ObjectNotFoundError
+
+    source = tmp_path / "source"
+    source.mkdir()
+    manifest = source / "scopecat.toml"
+    manifest.write_text("[lab]\n")
+    with _runtime(source, _TrackingProvider(_VariantDriver)) as runtime:
+        setup = _select_setup(runtime, load_config(), revision_id="direct-evidence")
+        with TestClient(runtime.app()) as transport:
+            daemon = _daemon_client(transport)
+            session = daemon.open_instrument_session(
+                InstrumentSessionOpenCommand(
+                    operation_id="retain-open",
+                    actor="test",
+                    instrument_ids=("source-0",),
+                    setup=setup.ref,
+                )
+            )
+            intent = _variant_collect_intent(
+                command_id="retained", result_ids=("monitored_voltage",)
+            )
+            daemon.collect_instrument(session.session_id, "source-0", intent)
+            service = runtime.application.direct_measurements
+            cleanup = DataCleanupService(service.store)
+            prior_preview = cleanup.preview(
+                DataCleanupSelection(setups=(setup.ref.revision_id,))
+            )
+            assert not prior_preview.blockers
+            record = service.save(
+                DirectMeasurementSave(
+                    session_id=session.session_id,
+                    instrument_id="source-0",
+                    command_id="retained",
+                )
+            )
+            original = service.receipt(record.id)
+            with service.control.write_transaction() as connection:
+                service.control.append_event_in_transaction(
+                    connection,
+                    DurableEventInput(
+                        kind="audit_only",
+                        payload={"receipt_digest": "sha256:" + "0" * 64},
+                    ),
+                )
+            transport.post(f"/api/v1/instrument-sessions/{session.session_id}/close")
+        cleanup = DataCleanupService(service.store)
+        preview = cleanup.preview(DataCleanupSelection(setups=(setup.ref.revision_id,)))
+        if check_retention:
+            with pytest.raises(ValueError, match="changed"):
+                cleanup.execute(
+                    DataCleanupCommand(
+                        request_key="stale-preview", preview=prior_preview
+                    )
+                )
+            assert any(
+                item.owner == f"direct_measurement:{record.id}"
+                for item in preview.blockers
+            ), preview
+            with pytest.raises(ValueError, match="retaining dependencies"):
+                cleanup.execute(
+                    DataCleanupCommand(request_key="retain-block", preview=preview)
+                )
+            return
+    create_snapshot(load_project(manifest), tmp_path / "snapshot")
+    restored = tmp_path / "restored"
+    restore_snapshot(tmp_path / "snapshot", restored)
+    with _runtime(restored, _TrackingProvider(_VariantDriver)) as runtime:
+        service = runtime.application.direct_measurements
+        assert service.get(record.id) == record
+        assert service.receipt(record.id) == original
+        assert runtime.application.setup.get(setup.ref.revision_id).ref == setup.ref
+    verify_store_files(restored)
+    digest = record.receipt_digest.removeprefix("sha256:")
+    (restored / ".scopecat/objects" / digest[:2] / digest[2:]).unlink()
+    with pytest.raises(ObjectNotFoundError):
+        verify_store_files(restored)
+
+
+def test_direct_save_is_fenced_when_cleanup_wins_before_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat.control.models import DurableEventInput
+    from scopecat.records.data_cleanup import DataCleanupCommand, DataCleanupSelection
+
+    from scopecat_server.errors import BackendConflict
+    from scopecat_server.services.data_cleanup import DataCleanupService
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+    from scopecat_server.storage.sqlite.object_store import StoredObject
+
+    with (
+        _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        setup = _select_setup(runtime, load_config(), revision_id="delete-before-save")
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="late-open",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=setup.ref,
+            )
+        )
+        daemon.collect_instrument(
+            session.session_id,
+            "source-0",
+            _variant_collect_intent(
+                command_id="late-capture",
+                result_ids=("monitored_voltage",),
+            ),
+        )
+        service = runtime.application.direct_measurements
+        with service.control.write_transaction() as connection:
+            service.control.append_event_in_transaction(
+                connection,
+                DurableEventInput(
+                    kind="audit_only",
+                    payload={"setup": setup.ref.model_dump(mode="json")},
+                ),
+            )
+        cleanup = DataCleanupService(service.store)
+        original_put = service.store.objects.put
+
+        def delete_before_publication(content: bytes) -> StoredObject:
+            # Force the interleaving after save obtains its replay, before its
+            # writer transaction. No threads or scheduler timing assumptions.
+            transport.post(f"/api/v1/instrument-sessions/{session.session_id}/close")
+            preview = cleanup.preview(
+                DataCleanupSelection(setups=(setup.ref.revision_id,))
+            )
+            assert not preview.blockers  # Audit history is not a live dependency.
+            assert (
+                cleanup.execute(
+                    DataCleanupCommand(request_key="delete-first", preview=preview)
+                ).state
+                == "complete"
+            )
+            return original_put(content)
+
+        monkeypatch.setattr(service.store.objects, "put", delete_before_publication)
+        with pytest.raises(BackendConflict, match="cleared"):
+            service.save(
+                DirectMeasurementSave(
+                    session_id=session.session_id,
+                    instrument_id="source-0",
+                    command_id="late-capture",
+                )
+            )
+        assert service.list().items == []
+        with service.store.sqlite.read_transaction() as connection:
+            assert (
+                connection.execute(
+                    "SELECT 1 FROM setup_revisions WHERE revision_id=?",
+                    (setup.ref.revision_id,),
+                ).fetchone()
+                is None
+            )

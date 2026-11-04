@@ -20,3 +20,7 @@ DATA_REFERENCE_COLUMNS = (
     ("apparatus_observations", "observation_id", "observation_json", "observation"),
     ("procedure_schedules", "schedule_id", "schedule_json", "schedule"),
 )
+
+# These events own retained scientific data, unlike ordinary audit/replay events.
+# Their publisher uses the transaction-level reference fence (no schema change).
+DIRECT_MEASUREMENT_EVENT_KIND = "direct_measurement_saved_v1"

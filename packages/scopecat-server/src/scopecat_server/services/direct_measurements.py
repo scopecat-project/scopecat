@@ -20,9 +20,13 @@ from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.instruments.runtime import InstrumentRuntime
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.data_cleanup import require_retained_references
+from scopecat_server.storage.sqlite.data_reference_schema import (
+    DIRECT_MEASUREMENT_EVENT_KIND,
+)
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
-_KIND = "direct_measurement_saved_v1"
+_KIND = DIRECT_MEASUREMENT_EVENT_KIND
 
 
 class DirectMeasurementSave(BaseModel):
@@ -166,6 +170,9 @@ class DirectMeasurements:
             previous = self._find(connection, record_id)
             if previous is not None:
                 return self._same_selection(previous, selection)
+            # Cleanup uses this same writer. A save validated before deletion
+            # cannot publish a new retained reference after the deletion fence.
+            require_retained_references(connection, record.model_dump_json())
             self.control.append_event_in_transaction(
                 connection,
                 DurableEventInput(
