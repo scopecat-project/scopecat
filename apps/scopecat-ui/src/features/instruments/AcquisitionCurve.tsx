@@ -52,7 +52,6 @@ export function AcquisitionCurve({
   acquisition: InstrumentAcquisition;
 }) {
   const [representation, setRepresentation] = useState<Representation>("magnitude");
-  const [showReceipt, setShowReceipt] = useState(false);
   const values = receipt.readback?.values ?? {};
   return (
     <div className="grid gap-3">
@@ -119,12 +118,19 @@ export function AcquisitionCurve({
             </section>
           );
         })}
-      <details onToggle={(event) => setShowReceipt(event.currentTarget.open)}>
-        <summary className="text-xs">完整回执与采集证据（含复数原值）</summary>
-        <pre className="max-h-80 overflow-auto text-xs">
-          {showReceipt ? JSON.stringify(receipt, null, 2) : ""}
-        </pre>
-      </details>
+      <CollectReceiptDetails receipt={receipt} />
     </div>
+  );
+}
+
+export function CollectReceiptDetails({ receipt }: { receipt: InstrumentCollectReceipt }) {
+  const [showReceipt, setShowReceipt] = useState(false);
+  return (
+    <details onToggle={(event) => setShowReceipt(event.currentTarget.open)}>
+      <summary className="text-xs">完整回执与采集证据（含复数原值）</summary>
+      <pre className="max-h-80 overflow-auto text-xs">
+        {showReceipt ? JSON.stringify(receipt, null, 2) : ""}
+      </pre>
+    </details>
   );
 }

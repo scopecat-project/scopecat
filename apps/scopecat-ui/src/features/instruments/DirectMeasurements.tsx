@@ -8,9 +8,14 @@ import {
   type SavedMeasurement,
 } from "./direct-measurement-api";
 export type { MeasurementSave } from "./direct-measurement-api";
-import type { InstrumentAcquisition, InstrumentCollectReceipt } from "../../api-contract";
+import type {
+  InstrumentAcquisition,
+  InstrumentCollectReceipt,
+  InstrumentInterface,
+} from "../../api-contract";
 import { decodeCollectReceipt } from "./hardware-receipt-wire";
-import { AcquisitionCurve } from "./AcquisitionCurve";
+import { AcquisitionCurve, CollectReceiptDetails } from "./AcquisitionCurve";
+import { interfaceMountPaths } from "./InstrumentInterfaceControls";
 import { createInstrumentCommandId } from "./instrument-api";
 import { secondaryButton } from "../../ui/styles";
 
@@ -167,9 +172,7 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
       return decodeCollectReceipt(await response.arrayBuffer());
     },
   });
-  const acquisition = record.description.interfaces
-    ?.find((item) => item.id === record.intent.interface_id)
-    ?.acquisitions?.find((item) => item.id === record.intent.acquisition_id);
+  const acquisition = recordedAcquisition(record);
   return (
     <section className="min-w-0 border-t border-line pt-2">
       <h4>
@@ -219,9 +222,15 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
         {annotate.error && <p role="alert">{annotate.error.message}</p>}
       </div>
       {receipt.error && <p role="alert">{receipt.error.message}</p>}
-      {receipt.data && acquisition && (
-        <AcquisitionCurve receipt={receipt.data} acquisition={acquisition} />
-      )}
+      {receipt.data &&
+        (acquisition ? (
+          <AcquisitionCurve receipt={receipt.data} acquisition={acquisition} />
+        ) : (
+          <>
+            <p role="alert">无法解析保存的采集契约或组件路径；完整回执仍可查看。</p>
+            <CollectReceiptDetails receipt={receipt.data} />
+          </>
+        ))}
       <details>
         <summary>设备、线路和设置来源</summary>
         <p className="text-xs">
@@ -231,4 +240,23 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
       </details>
     </section>
   );
+}
+
+function recordedAcquisition(record: SavedMeasurement): InstrumentAcquisition | undefined {
+  const { interface_id, component_path = [], acquisition_id } = record.intent;
+  const contract = record.description.interfaces?.find((item) => item.id === interface_id);
+  if (!contract) return undefined;
+  // Match the backend's longest-mount-first resolution, then walk the path
+  // relative to that mount inside the retained interface declaration.
+  for (const mount of interfaceMountPaths(record.description, interface_id).sort(
+    (a, b) => b.length - a.length,
+  )) {
+    if (!mount.every((segment, index) => component_path[index] === segment)) continue;
+    let member: Pick<InstrumentInterface, "components" | "acquisitions"> | undefined = contract;
+    for (const segment of component_path.slice(mount.length)) {
+      member = member?.components?.find((component) => component.id === segment);
+    }
+    if (member) return member.acquisitions?.find((item) => item.id === acquisition_id);
+  }
+  return undefined;
 }
