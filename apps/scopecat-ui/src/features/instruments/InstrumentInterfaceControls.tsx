@@ -586,9 +586,11 @@ function AcquisitionControl({
             {acquisition.label ?? titleCase(acquisition.id)}
           </strong>
           <p className={controlDescription}>
-            {acquisition.description
-              ? `采集契约：${acquisition.description}`
-              : "此 acquisition 未说明是否发起新采集或收集既有结果；调用前请查阅驱动文档。"}
+            {target.interfaceId === "scopecat.network_sweep/v1" && acquisition.id === "sweep"
+              ? "触发一次新扫描，使用当前设置；不会读取面板已有曲线。"
+              : acquisition.description
+                ? `采集契约：${acquisition.description}`
+                : "此 acquisition 未说明是否发起新采集或收集既有结果；调用前请查阅驱动文档。"}
           </p>
         </div>
         {results.length > 0 && (

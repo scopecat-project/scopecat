@@ -212,8 +212,7 @@ class NetworkSweepInterface(Protocol):
 
     @acquisition(
         results=NetworkSweepResults,
-        label="Acquire new sweep",
-        description="Trigger one new sweep using the current sweep settings.",
+        label="Acquire sweep",
         axes={
             "frequency": axis(
                 size=points,
