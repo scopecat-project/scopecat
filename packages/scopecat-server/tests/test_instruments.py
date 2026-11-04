@@ -3686,3 +3686,260 @@ def _select_setup(
         )
     )
     return revision
+
+
+def test_direct_measurements_save_retry_and_restart_preserve_line_attempts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat.daemon.hardware_receipt_wire import decode_collect_receipt
+
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    provider = _TrackingProvider(_VariantDriver)
+    saved_ids: list[str] = []
+    selections: list[DirectMeasurementSave] = []
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="open-direct-records",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        service = runtime.application.direct_measurements
+        for index, line in enumerate(("line-a", "line-b", "line-a")):
+            intent = _variant_collect_intent(
+                command_id=f"attempt-{index}", result_ids=("monitored_voltage",)
+            )
+            receipt = daemon.collect_instrument(session.session_id, "source-0", intent)
+            selection = DirectMeasurementSave(
+                session_id=session.session_id,
+                instrument_id="source-0",
+                command_id=intent.command_id,
+                series_id="series-one",
+                line_id=line,
+                line_label=line,
+                note="suspect; repeat" if index == 0 else "",
+            )
+            selections.append(selection)
+            if index == 0:
+
+                def unavailable(_content: bytes) -> Never:
+                    raise OSError("simulated storage failure")
+
+                with monkeypatch.context() as patch:
+                    patch.setattr(service.store.objects, "put", unavailable)
+                    with pytest.raises(OSError, match="simulated storage failure"):
+                        service.save(selection)
+            response = transport.post(
+                "/api/v1/direct-measurements", json=selection.model_dump()
+            )
+            assert response.status_code == 200, response.text
+            record_id = response.json()["id"]
+            saved_ids.append(record_id)
+            assert (
+                transport.post(
+                    "/api/v1/direct-measurements", json=selection.model_dump()
+                ).json()
+                == response.json()
+            )
+            stored = transport.get(f"/api/v1/direct-measurements/{record_id}/receipt")
+            assert decode_collect_receipt(stored.content) == receipt
+        [driver] = provider.drivers
+        assert isinstance(driver, _VariantDriver)
+        assert len(driver.collect_requests) == 3
+        assert driver.read_count == 4  # open + three explicit collects, never save
+        note = {
+            "operation_id": "note-one",
+            "note": "anomaly after comparison",
+            "anomalous": True,
+        }
+        note_url = f"/api/v1/direct-measurements/{saved_ids[0]}/notes"
+        noted = transport.post(note_url, json=note)
+        assert noted.status_code == 200
+        assert len(noted.json()["notes"]) == 1
+        assert transport.post(note_url, json=note).json() == noted.json()
+        assert len(driver.collect_requests) == 3
+        daemon.close_instrument_session(session.session_id)
+        assert service.save(selections[0]).id == saved_ids[0]
+        changed = selections[0].model_copy(update={"line_label": "renamed-now"})
+        assert (
+            transport.post(
+                "/api/v1/direct-measurements", json=changed.model_dump()
+            ).status_code
+            == 409
+        )
+    reopened_provider = _TrackingProvider(_VariantDriver)
+    with (
+        _runtime(tmp_path, reopened_provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        records = transport.get("/api/v1/direct-measurements").json()["items"]
+        assert [record["id"] for record in records] == saved_ids[::-1]
+        assert [record["selection"]["line_id"] for record in records] == [
+            "line-a",
+            "line-b",
+            "line-a",
+        ]
+        assert records[-1]["selection"]["note"] == "suspect; repeat"
+        for record_id in saved_ids:
+            assert (
+                transport.get(
+                    f"/api/v1/direct-measurements/{record_id}/receipt"
+                ).status_code
+                == 200
+            )
+        assert (
+            runtime.application.direct_measurements.save(selections[0]).id
+            == saved_ids[0]
+        )
+        record = transport.get(f"/api/v1/direct-measurements/{saved_ids[0]}").json()
+        assert record["notes"][0]["anomalous"] is True
+        assert record["selection"]["line_label"] == "line-a"
+        assert reopened_provider.drivers == []
+
+
+def test_shared_observation_does_not_acquire_or_query_hardware(tmp_path: Path) -> None:
+    provider = _TrackingProvider(_ResyncDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        setup = runtime.application.setup.resolve("initial").ref
+        params = {
+            "instrument_id": "source-0",
+            "setup_revision_id": setup.revision_id,
+            "setup_content_hash": setup.content_hash,
+        }
+        assert (
+            transport.get("/api/v1/instrument-observations", params=params).json()[
+                "observations"
+            ]
+            == []
+        )
+        assert provider.drivers == []
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="shared",
+                actor="owner",
+                instrument_ids=("source-0",),
+                setup=setup,
+            )
+        )
+        [driver] = provider.drivers
+        assert isinstance(driver, _ResyncDriver)
+        before = driver.read_count
+        for _ in range(3):
+            snapshot = transport.get("/api/v1/instrument-observations", params=params)
+            assert snapshot.status_code == 200
+            assert snapshot.json()["observations"]
+        assert driver.read_count == before
+        assert not driver.disconnected
+        assert (
+            runtime.application.executor._control.get_instrument_session(
+                session.session_id
+            ).actor
+            == "owner"
+        )
+        daemon.close_instrument_session(session.session_id)
+        assert (
+            transport.get("/api/v1/instrument-observations", params=params).json()[
+                "observations"
+            ]
+            == []
+        )
+        assert driver.read_count == before
+
+
+@pytest.mark.parametrize("mode", ["keep_current", "configured_finish"])
+def test_explicit_finish_keeps_or_applies_exact_configured_scope(
+    tmp_path: Path, mode: str
+) -> None:
+    config = load_config()
+    source = config.system.instrument_registry.instruments[0]
+    source.safe_state = [
+        state_setting(_SET_FREQUENCY, StateValue(Quantity(0.25, "GHz")))
+    ]
+    provider = _TrackingProvider(_ResyncDriver)
+    with (
+        _runtime(tmp_path, provider, config=config) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="finish-test",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        [driver] = provider.drivers
+        assert isinstance(driver, _ResyncDriver)
+        reads = driver.read_count
+        plan = transport.get(
+            f"/api/v1/instrument-sessions/{session.session_id}/finish-plan"
+        )
+        assert plan.status_code == 200
+        assert plan.json()["configured_finish_available"]
+        assert driver.read_count == reads
+        command = {"operation_id": "chosen-finish", "mode": mode}
+        response = transport.post(
+            f"/api/v1/instrument-sessions/{session.session_id}/finish", json=command
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "closed"
+        assert driver.read_count == reads + (2 if mode == "configured_finish" else 0)
+        assert len(driver.applied) == (1 if mode == "configured_finish" else 0)
+        assert driver.abort_count == 0
+        assert not driver.disconnected
+        assert (
+            transport.post(
+                f"/api/v1/instrument-sessions/{session.session_id}/finish", json=command
+            ).json()
+            == response.json()
+        )
+        assert len(driver.applied) == (1 if mode == "configured_finish" else 0)
+
+
+def test_unknown_finish_does_not_release_or_repeat_output_command(
+    tmp_path: Path,
+) -> None:
+    config = load_config()
+    config.system.instrument_registry.instruments[0].safe_state = [
+        state_setting(_SET_FREQUENCY, StateValue(Quantity(0.25, "GHz")))
+    ]
+    provider = _TrackingProvider(_UnknownApplyDriver)
+    with (
+        _runtime(tmp_path, provider, config=config) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="unknown-finish",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        command = {"operation_id": "unknown-finish-action", "mode": "configured_finish"}
+        url = f"/api/v1/instrument-sessions/{session.session_id}/finish"
+        first = transport.post(url, json=command)
+        assert first.status_code == 409
+        assert "unknown" in first.text
+        [driver] = provider.drivers
+        assert len(driver.applied) == 1
+        durable = runtime.application.executor._control.get_instrument_session(
+            session.session_id
+        )
+        assert durable.state == "attention_required"
+        assert transport.post(url, json=command).status_code in (404, 409)
+        assert len(driver.applied) == 1

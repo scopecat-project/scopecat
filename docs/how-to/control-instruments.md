@@ -451,3 +451,80 @@ Python 可通过 `lab.devices.driver_sources()` 读取同一来源集合与诊�
 `lab.devices.manage_driver_source(DriverSourceCommand(...))` 提交显式操作。
 命令使用看到的 `collection.operation_id` 作为 `expected_previous`，网络结果
 不确定时重试同一个 `operation_id` 和相同命令，不创建另一次更新。
+
+## Save a direct measurement without an experiment setup
+
+The device window can retain a successful Collect receipt with **保存此结果**.
+Saving copies the already returned result; retrying a failed save does not issue
+another acquisition. Save before ending the control session: unsaved receipts
+are volatile and are not recoverable after the session is released or the daemon
+restarts. Saved receipts appear in **直接测量记录** after reopening. Their arrays,
+coordinates, units, complex values, device description and acquisition selection
+are retained without rewriting an experiment run.
+
+For the virtual VNA, **Acquire new sweep** triggers a new sweep using its current
+settings. **Read existing trace (no trigger)** reads the last completed virtual
+trace, including its original coordinate vector and trigger-time settings
+metadata. Before a sweep exists, reading is rejected. Changing current settings
+does not regenerate or relabel the retained trace. This separate capability is
+currently implemented by the virtual VNA; it does not claim existing-trace
+support for the physical E5080B driver.
+
+The curve view matches each observable to its declared returned coordinate and
+offers magnitude, phase in radians, real and imaginary representations. Missing
+or mismatched coordinates are reported rather than replaced with guessed sweep
+settings. Invalid samples remain gaps. The full receipt remains inspectable.
+
+For manual line measurements, enter a line label and confirm the actual wiring
+before collecting. **换到新线路** creates a new line identity while leaving device
+settings alone. Repeating a collection on the same line creates another attempt;
+each attempt retains the line label and note selected when collection began.
+Editing the current label cannot reassign an older attempt. Select saved entries
+to compare their curves with their own coordinates and units. **继续此线路** reuses
+a saved line identity and requires a new wiring confirmation; it does not restore
+old settings or trigger an acquisition. Notes can record a suspected anomaly
+before collection. Saved records also accept append-only anomaly notes; these
+do not rewrite the original receipt, attribution or earlier annotations.
+
+A software observation before Collect is not necessarily the state that produced
+an existing trace. The saved record keeps that observation distinct from the
+driver's trace-associated metadata. Neither a saved command receipt nor an old
+observation proves the current physical state. These workflows have isolated
+software tests; Windows native-host, installed-candidate and independent-author
+acceptance must be recorded separately before treating the full journey as
+qualified.
+
+## Observe without control and finish control explicitly
+
+A device window without a session displays only the active owner's existing
+software observations, with their original source and observation time. This
+read path does not activate a backend, connect, acquire ownership or query an
+instrument. Busy, released, changed-binding and unavailable caches yield unknown
+rather than fabricated values. No age threshold can prove the instrument has
+not changed at its front panel; displayed observations are not live guarantees.
+
+After successful device actions, explicitly choose how to finish control. Keep
+current releases ownership without another output command. Configured finish
+shows the session's fixed state assignments and operations, then uses the same
+owner and typed command path to execute them before release. Devices without
+configured finish actions do not receive guessed reset/zero commands. Once a
+finish selection starts, new edits and acquisitions are blocked; retry uses the
+same command identity. Rejection or unknown cleanup does not claim that outputs
+are off. Inspect the driver's connection and physical-disconnect behavior too:
+control release and physical connection retirement are different lifecycle steps.
+
+## Build object and purpose mappings
+
+In **实验 setup**, create a setup and add registered device bindings. The
+**对象 → 用途 → 设备通道** form then adds qubit objects, documented roles and
+logical routes without an experiment template. Copy the exact capability ID from
+the device declaration, select its binding, and provide a declared component path
+and optional logical channel. The initial editor does not discover arbitrary
+vendor channels or draw physical wiring or synchronization/trigger graphs.
+
+The draft check reports missing references, unmapped objects and competing
+candidates. Competing routes are not silently selected. Edit one route's device
+or component path to replace only that part of the mapping; save a new revision
+and prepare the intended experiment again to check its actual capability needs.
+Existing topology, other routes and old run revisions are preserved. Passing a
+local form check is not evidence of physical wiring or experiment readiness.

@@ -25,6 +25,7 @@ from scopecat_instruments.interface_declarations import (
     DCBiasInterface,
     DCMonitorInterface,
     DCSourceInterface,
+    ExistingNetworkTraceInterface,
     NetworkSweepInterface,
     ReferenceClockInterface,
     ReferenceSource,
@@ -234,6 +235,7 @@ PACKAGE_MANIFEST = InstrumentPackageManifest(
             driver_optional_flag="monitor",
         ),
         InterfaceSurfaceRegistration(NetworkSweepInterface),
+        InterfaceSurfaceRegistration(ExistingNetworkTraceInterface),
     ),
     public_types=(ReferenceSource, SParameter),
     drivers=(

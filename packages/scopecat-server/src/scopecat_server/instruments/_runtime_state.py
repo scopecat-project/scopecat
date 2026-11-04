@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from threading import RLock
 
 from scopecat.daemon.wire import (
@@ -73,6 +74,8 @@ class CollectReceiptReplay:
     intent: InteractiveCollectIntent
     command: CollectCommand
     receipt: CollectReceipt
+    collected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    observed_before_collection: InstrumentStateSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +115,7 @@ class OwnershipRuntime:
     payload_catalog: PayloadCodecCatalog
     ledgers: dict[str, InstrumentOperationLedger]
     opening_state: tuple[InstrumentStateSnapshot, ...] = ()
+    finish_command_ids: set[str] | None = None
     lock: RLock = field(default_factory=RLock)
 
 

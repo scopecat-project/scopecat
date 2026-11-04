@@ -265,11 +265,27 @@ _NETWORK_SWEEP_SPEC_JSON = (
     '":true,"value_type":{"type":"string","ch'
     'oices":["S11","S21","S12","S22"]}}],"ope'
     'rations":[],"acquisitions":[{"id":"sweep'
-    '","label":"Acquire sweep","description":'
-    'null,"preconditions":[],"results":[{"id"'
-    ':"frequency","label":null,"description":'
-    'null,"role":"coordinate","dtype":"float6'
-    '4","unit":"Hz","axes":[{"id":"frequency"'
+    '","label":"Acquire new sweep","descripti'
+    'on":"Trigger one new sweep using the cur'
+    'rent sweep settings.","preconditions":[]'
+    ',"results":[{"id":"frequency","label":nu'
+    'll,"description":null,"role":"coordinate'
+    '","dtype":"float64","unit":"Hz","axes":['
+    '{"id":"frequency","label":null,"descript'
+    'ion":null,"kind":"frequency","size":{"in'
+    'terface_id":"scopecat.network_sweep/v1",'
+    '"component_path":[],"property_id":"point'
+    's"},"unit":"Hz","coordinate_result":"fre'
+    'quency","coordinates":{"kind":"linear","'
+    'start":{"interface_id":"scopecat.network'
+    '_sweep/v1","component_path":[],"property'
+    '_id":"start_frequency"},"stop":{"interfa'
+    'ce_id":"scopecat.network_sweep/v1","comp'
+    'onent_path":[],"property_id":"stop_frequ'
+    'ency"},"endpoint":true}}]},{"id":"s_para'
+    'meter","label":null,"description":null,"'
+    'role":"observable","dtype":"complex128",'
+    '"unit":"ratio","axes":[{"id":"frequency"'
     ',"label":null,"description":null,"kind":'
     '"frequency","size":{"interface_id":"scop'
     'ecat.network_sweep/v1","component_path":'
@@ -281,22 +297,7 @@ _NETWORK_SWEEP_SPEC_JSON = (
     'ency"},"stop":{"interface_id":"scopecat.'
     'network_sweep/v1","component_path":[],"p'
     'roperty_id":"stop_frequency"},"endpoint"'
-    ':true}}]},{"id":"s_parameter","label":nu'
-    'll,"description":null,"role":"observable'
-    '","dtype":"complex128","unit":"ratio","a'
-    'xes":[{"id":"frequency","label":null,"de'
-    'scription":null,"kind":"frequency","size'
-    '":{"interface_id":"scopecat.network_swee'
-    'p/v1","component_path":[],"property_id":'
-    '"points"},"unit":"Hz","coordinate_result'
-    '":"frequency","coordinates":{"kind":"lin'
-    'ear","start":{"interface_id":"scopecat.n'
-    'etwork_sweep/v1","component_path":[],"pr'
-    'operty_id":"start_frequency"},"stop":{"i'
-    'nterface_id":"scopecat.network_sweep/v1"'
-    ',"component_path":[],"property_id":"stop'
-    '_frequency"},"endpoint":true}}]}]}],"com'
-    'ponents":[]}'
+    ':true}}]}]}],"components":[]}'
 )
 
 
@@ -304,10 +305,45 @@ def network_sweep_interface() -> InterfaceSpec:
     return InterfaceSpec.model_validate_json(_NETWORK_SWEEP_SPEC_JSON)
 
 
+_EXISTING_NETWORK_TRACE_SPEC_JSON = (
+    '{"id":"scopecat.existing_network_trace/v'
+    '1","label":"Existing network trace","des'
+    'cription":"Read the retained complex tra'
+    "ce without triggering or configuring a s"
+    "weep. Coordinates and acquisition eviden"
+    "ce belong to the retained trace, not cur"
+    'rent settings.","properties":[],"operati'
+    'ons":[],"acquisitions":[{"id":"read_trac'
+    'e","label":"Read existing trace (no trig'
+    'ger)","description":"Read a retained tra'
+    "ce without triggering a new sweep. Curre"
+    "nt settings may differ from the trace ge"
+    'neration settings.","preconditions":[],"'
+    'results":[{"id":"frequency","label":null'
+    ',"description":null,"role":"coordinate",'
+    '"dtype":"float64","unit":"Hz","axes":[{"'
+    'id":"frequency","label":null,"descriptio'
+    'n":null,"kind":"frequency","size":null,"'
+    'unit":"Hz","coordinate_result":"frequenc'
+    'y"}]},{"id":"s_parameter","label":null,"'
+    'description":null,"role":"observable","d'
+    'type":"complex128","unit":"ratio","axes"'
+    ':[{"id":"frequency","label":null,"descri'
+    'ption":null,"kind":"frequency","size":nu'
+    'll,"unit":"Hz","coordinate_result":"freq'
+    'uency"}]}]}],"components":[]}'
+)
+
+
+def existing_network_trace_interface() -> InterfaceSpec:
+    return InterfaceSpec.model_validate_json(_EXISTING_NETWORK_TRACE_SPEC_JSON)
+
+
 __all__ = [
     "dc_bias_interface",
     "dc_monitor_interface",
     "dc_source_interface",
+    "existing_network_trace_interface",
     "network_sweep_interface",
     "reference_clock_interface",
     "rf_output_interface",

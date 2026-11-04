@@ -89,6 +89,8 @@ _DC_MONITOR_REF = InterfaceRef("scopecat.dc_monitor/v4")
 
 _NETWORK_SWEEP_REF = InterfaceRef("scopecat.network_sweep/v1")
 
+_EXISTING_NETWORK_TRACE_REF = InterfaceRef("scopecat.existing_network_trace/v1")
+
 _TEMPERATURE_READOUT_SAMPLE_DECLARATION = ClientAcquisition(
     ref=_TEMPERATURE_READOUT_REF.acquisition("sample"),
     result_fields=(
@@ -215,6 +217,46 @@ _NETWORK_SWEEP_SWEEP_DECLARATION = ClientAcquisition(
                         ),
                         endpoint=True,
                     ),
+                ),
+            ),
+        ),
+    ),
+)
+
+_EXISTING_NETWORK_TRACE_READ_TRACE_DECLARATION = ClientAcquisition(
+    ref=_EXISTING_NETWORK_TRACE_REF.acquisition("read_trace"),
+    result_fields=(
+        ClientAcquisitionResult(
+            "frequency",
+            _EXISTING_NETWORK_TRACE_REF.acquisition("read_trace").result("frequency"),
+            dtype="float64",
+            unit="Hz",
+            role="coordinate",
+            axes=(
+                ClientAcquisitionAxis(
+                    id="frequency",
+                    size=None,
+                    kind="frequency",
+                    unit="Hz",
+                    coordinate_result_id="frequency",
+                    coordinates=None,
+                ),
+            ),
+        ),
+        ClientAcquisitionResult(
+            "s_parameter",
+            _EXISTING_NETWORK_TRACE_REF.acquisition("read_trace").result("s_parameter"),
+            dtype="complex128",
+            unit="ratio",
+            role="observable",
+            axes=(
+                ClientAcquisitionAxis(
+                    id="frequency",
+                    size=None,
+                    kind="frequency",
+                    unit="Hz",
+                    coordinate_result_id="frequency",
+                    coordinates=None,
                 ),
             ),
         ),
@@ -2419,6 +2461,94 @@ network_sweep: InstrumentFamily[
     requires=(_NETWORK_SWEEP_REF,),
 )
 
+
+class ExistingNetworkTraceClient(InstrumentClientBase):
+    def read_trace(self) -> NetworkSweepReadback:
+        return self._collect(
+            _EXISTING_NETWORK_TRACE_READ_TRACE_DECLARATION,
+            NetworkSweepReadback,
+        )
+
+
+class SymbolicExistingNetworkTraceClient(SymbolicInstrumentClientBase):
+    __slots__ = ()
+
+    def __init__(
+        self,
+        recorder: InstrumentRecorder,
+        resource_id: str,
+        *,
+        namespace_hint: str,
+        requires: tuple[InstrumentCapabilityRef, ...] = (_EXISTING_NETWORK_TRACE_REF,),
+        for_: OneEntity | None = None,
+        role: ResourceRoleInput = None,
+    ) -> None:
+        super().__init__(
+            recorder,
+            resource_id,
+            namespace_hint=namespace_hint,
+            requires=requires,
+            for_=for_,
+            role=role,
+        )
+
+    def read_trace(
+        self,
+        *,
+        id: str | None = None,
+    ) -> NetworkSweepProducts:
+        return self._acquire(
+            _EXISTING_NETWORK_TRACE_READ_TRACE_DECLARATION,
+            NetworkSweepProducts,
+            id=id,
+        )
+
+
+class SymbolicExistingNetworkTraceGroup(
+    SymbolicInstrumentGroupBase[SymbolicExistingNetworkTraceClient]
+):
+    __slots__ = ()
+
+    def __init__(
+        self,
+        recorder: InstrumentRecorder,
+        resource_id: str,
+        *,
+        namespace_hint: str,
+        for_: EachEntity,
+        requires: tuple[InstrumentCapabilityRef, ...] = (_EXISTING_NETWORK_TRACE_REF,),
+        role: ResourceRoleInput = None,
+    ) -> None:
+        super().__init__(
+            recorder,
+            resource_id,
+            namespace_hint=namespace_hint,
+            for_=for_,
+            client_factory=SymbolicExistingNetworkTraceClient,
+            requires=requires,
+            role=role,
+        )
+
+    def read_trace(
+        self,
+        *,
+        id: str | None = None,
+    ) -> PerEntity[NetworkSweepProducts]:
+        return self._clients.map(lambda client: client.read_trace(id=id))
+
+
+existing_network_trace: InstrumentFamily[
+    ExistingNetworkTraceClient,
+    SymbolicExistingNetworkTraceClient,
+    SymbolicExistingNetworkTraceGroup,
+] = InstrumentFamily(
+    ExistingNetworkTraceClient,
+    SymbolicExistingNetworkTraceClient,
+    SymbolicExistingNetworkTraceGroup,
+    name="existing_network_trace",
+    requires=(_EXISTING_NETWORK_TRACE_REF,),
+)
+
 __all__ = [
     "DCBiasClient",
     "DCBiasReadbackProducts",
@@ -2430,6 +2560,7 @@ __all__ = [
     "DCMonitorVoltageReadback",
     "DCSourceClient",
     "DCSourceMonitorClient",
+    "ExistingNetworkTraceClient",
     "NetworkSweepClient",
     "NetworkSweepProducts",
     "NetworkSweepReadback",
@@ -2444,6 +2575,8 @@ __all__ = [
     "SymbolicDCSourceGroup",
     "SymbolicDCSourceMonitorClient",
     "SymbolicDCSourceMonitorGroup",
+    "SymbolicExistingNetworkTraceClient",
+    "SymbolicExistingNetworkTraceGroup",
     "SymbolicNetworkSweepClient",
     "SymbolicNetworkSweepGroup",
     "SymbolicRFOutputClient",
@@ -2461,6 +2594,7 @@ __all__ = [
     "dc_monitor",
     "dc_source",
     "dc_source_monitor",
+    "existing_network_trace",
     "network_sweep",
     "reference_clock",
     "rf_output",

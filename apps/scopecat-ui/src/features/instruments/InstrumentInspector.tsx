@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, CircleOff, LoaderCircle, RotateCcw } from "lucide-react";
 import type {
   InstrumentCollectReceipt,
@@ -20,6 +20,7 @@ import {
   createInstrumentCommandId,
   invokeInstrumentOperation,
   readInstrumentState,
+  readSharedInstrumentObservation,
   resolveInstrumentAttention,
   retryTransientInstrumentMutation,
   type InstrumentAcquisitionTarget,
@@ -50,12 +51,19 @@ import {
   operationKey,
 } from "./InstrumentInterfaceControls";
 import { DevicePythonGuide } from "./DevicePythonGuide";
+import {
+  DirectMeasurements,
+  type PendingMeasurement,
+  type MeasurementSave,
+} from "./DirectMeasurements";
+import { InstrumentFinishChoice } from "./InstrumentFinishChoice";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
 
 type DraftValue = InstrumentPropertyDraft;
 
 interface InstrumentInspectorProps {
   instrument: InstrumentView;
+  setup?: InstrumentSession["setup"];
   displayLabel?: string;
   registeredDeviceId?: string;
   releaseUnconfirmed?: boolean;
@@ -89,6 +97,7 @@ export function InstrumentInspector(props: InstrumentInspectorProps) {
 
 function InstrumentInspectorContent({
   instrument,
+  setup,
   displayLabel,
   registeredDeviceId,
   releaseUnconfirmed = false,
@@ -109,6 +118,12 @@ function InstrumentInspectorContent({
     session?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
     instrument.description ??
     undefined;
+  const sharedObservation = useQuery({
+    queryKey: ["instrument-observation", setup, instrumentId],
+    queryFn: () => readSharedInstrumentObservation(setup!, instrumentId),
+    enabled: !!setup && !connected,
+    refetchInterval: 3000,
+  });
   const synchronizedState = session?.observed_state.find(
     (snapshot) => snapshot.instrument_id === instrumentId,
   );
@@ -119,7 +134,9 @@ function InstrumentInspectorContent({
   const state =
     connected && readState !== undefined && readState.source === synchronizedState
       ? readState.value
-      : synchronizedState;
+      : connected
+        ? synchronizedState
+        : sharedObservation.data;
   const [drafts, setDrafts] = useState<Record<string, DraftValue>>({});
   const [applyResult, setApplyResult] = useState<string>();
   const [configuredDefaultsResult, setConfiguredDefaultsResult] =
@@ -128,6 +145,16 @@ function InstrumentInspectorContent({
     {},
   );
   const [invokeResults, setInvokeResults] = useState<Record<string, InstrumentInvokeReceipt>>({});
+  const [outputTouched, setOutputTouched] = useState(false);
+  const [showFinishChoice, setShowFinishChoice] = useState(false);
+  const [closeUnsavedWarning, setCloseUnsavedWarning] = useState(false);
+  const [pendingMeasurements, setPendingMeasurements] = useState<PendingMeasurement[]>([]);
+  const [seriesId, setSeriesId] = useState(() => createInstrumentCommandId("series"));
+  const [lineId, setLineId] = useState(() => createInstrumentCommandId("line"));
+  const [lineLabel, setLineLabel] = useState("");
+  const [lineConfirmed, setLineConfirmed] = useState(false);
+  const [measurementNote, setMeasurementNote] = useState("");
+  const collectionSelections = useRef<Record<string, MeasurementSave>>({});
   const applyCommandIdRef = useRef<string | undefined>(undefined);
   const configuredDefaultsOperationIdRef = useRef<string | undefined>(undefined);
   const collectCommandIdsRef = useRef<Record<string, string>>({});
@@ -167,6 +194,7 @@ function InstrumentInspectorContent({
       applyCommandIdRef.current = undefined;
       setApplyResult(receipt.status);
       if (receipt.status === "applied") {
+        setOutputTouched(true);
         collectCommandIdsRef.current = {};
         invokeCommandIdsRef.current = {};
         setCollectResults({});
@@ -192,6 +220,7 @@ function InstrumentInspectorContent({
       configuredDefaultsOperationIdRef.current = undefined;
       setConfiguredDefaultsResult(receipt);
       if (receipt.status === "applied" || receipt.status === "unchanged") {
+        if (receipt.status === "applied") setOutputTouched(true);
         applyCommandIdRef.current = undefined;
         collectCommandIdsRef.current = {};
         invokeCommandIdsRef.current = {};
@@ -240,7 +269,16 @@ function InstrumentInspectorContent({
     }) => collectInstrumentAcquisition(requireSession(session), instrumentId, target, commandId),
     retry: retryTransientInstrumentMutation,
     retryDelay: 250,
-    onSuccess: (receipt, { target }) => {
+    onSuccess: (receipt, { target, commandId }) => {
+      const selection = collectionSelections.current[commandId];
+      if (receipt.status === "collected" && selection) {
+        setOutputTouched(true);
+        setPendingMeasurements((current) =>
+          current.some((item) => item.selection.command_id === commandId)
+            ? current
+            : [...current, { selection, acquisition: target.acquisition, receipt }],
+        );
+      }
       const key = acquisitionKey(target);
       delete collectCommandIdsRef.current[key];
       setCollectResults((current) => ({ ...current, [key]: receipt }));
@@ -278,6 +316,7 @@ function InstrumentInspectorContent({
       delete invokeCommandIdsRef.current[key];
       setInvokeResults((current) => ({ ...current, [key]: receipt }));
       if (receipt.status === "invoked") {
+        setOutputTouched(true);
         collectCommandIdsRef.current = {};
         setCollectResults({});
         readMutation.mutate();
@@ -349,6 +388,15 @@ function InstrumentInspectorContent({
     const key = acquisitionKey(target);
     const commandId = collectCommandIdsRef.current[key] ?? createInstrumentCommandId("collect");
     collectCommandIdsRef.current[key] = commandId;
+    collectionSelections.current[commandId] ??= {
+      session_id: requireSession(session).session_id,
+      instrument_id: instrumentId,
+      command_id: commandId,
+      series_id: seriesId,
+      line_id: lineLabel ? lineId : "",
+      line_label: lineLabel,
+      note: measurementNote,
+    };
     collectMutation.mutate({
       target,
       commandId,
@@ -388,7 +436,8 @@ function InstrumentInspectorContent({
     configuredDefaultsMutation.isPending ||
     collectMutation.isPending ||
     invokeMutation.isPending;
-  const interactionDisabled = closePending || interactionPending || releaseUnconfirmed;
+  const interactionDisabled =
+    closePending || interactionPending || releaseUnconfirmed || showFinishChoice;
   const configuredDefaultsDisabled =
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
@@ -404,8 +453,10 @@ function InstrumentInspectorContent({
     Object.values(collectResults).some((receipt) => receipt.status !== "collected") ||
     Object.values(invokeResults).some((receipt) => receipt.status !== "invoked");
   useEffect(() => {
-    onCloseProblem?.(!!interactionError || failedReceipt);
-  }, [interactionError, failedReceipt, onCloseProblem]);
+    onCloseProblem?.(
+      !!interactionError || failedReceipt || pendingMeasurements.length > 0 || outputTouched,
+    );
+  }, [interactionError, failedReceipt, onCloseProblem, pendingMeasurements.length, outputTouched]);
 
   return (
     <section
@@ -448,13 +499,27 @@ function InstrumentInspectorContent({
         configuredDefaultsDisabledReason={configuredDefaultsDisabledReason}
         resolvePending={resolveMutation.isPending}
         onConnect={onConnect}
-        onClose={onClose}
+        onClose={() => {
+          if (pendingMeasurements.length > 0) setCloseUnsavedWarning(true);
+          else if (outputTouched) setShowFinishChoice(true);
+          else onClose();
+        }}
         onDisconnectOwner={onDisconnectOwner}
         onRefresh={refreshState}
         onApplyConfiguredDefaults={applyConfiguredDefaults}
         onResolve={() => resolveMutation.mutate()}
       />
 
+      {!connected && (
+        <p className="text-xs text-text-dim">
+          只读观察：仅显示后台已有观测，不获取控制权或查询硬件。各值附来源和观察时间，可能已过期；当前物理状态未确认。
+          {sharedObservation.error
+            ? " 读取后台观测失败，状态未知。"
+            : !sharedObservation.data?.observations?.length
+              ? " 暂无可用观测，状态未知。"
+              : ""}
+        </p>
+      )}
       {interactionError && (
         <div className={inlineError} role="alert">
           <AlertTriangle size={15} />
@@ -480,6 +545,103 @@ function InstrumentInspectorContent({
             </p>
           ))}
         </div>
+      )}
+
+      {closeUnsavedWarning && pendingMeasurements.length > 0 && (
+        <div role="alert" className={inlineError}>
+          未保存结果在会话结束后将无法保存。请先保存，或明确放弃这些未保存结果。
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => {
+              setPendingMeasurements([]);
+              setCloseUnsavedWarning(false);
+              if (outputTouched) setShowFinishChoice(true);
+              else onClose();
+            }}
+          >
+            放弃未保存结果并结束控制
+          </button>
+        </div>
+      )}
+      {showFinishChoice && session && (
+        <InstrumentFinishChoice
+          sessionId={session.session_id}
+          onCancel={() => setShowFinishChoice(false)}
+          onFinished={() => {
+            setOutputTouched(false);
+            setShowFinishChoice(false);
+            onClose();
+          }}
+        />
+      )}
+      <DirectMeasurements
+        instrumentId={instrumentId}
+        onResume={(selection) => {
+          setSeriesId(selection.series_id ?? createInstrumentCommandId("series"));
+          setLineId(selection.line_id ?? createInstrumentCommandId("line"));
+          setLineLabel(selection.line_label ?? "");
+          setLineConfirmed(false);
+          setMeasurementNote("");
+        }}
+        pending={pendingMeasurements}
+        onSaved={(commandId) =>
+          setPendingMeasurements((current) =>
+            current.filter((item) => item.selection.command_id !== commandId),
+          )
+        }
+      />
+      {connected && (
+        <section className="grid gap-2 border border-line p-3 text-xs">
+          <h3>本次测量对象（可留空）</h3>
+          <label>
+            线路名称{" "}
+            <input
+              aria-label="线路名称"
+              value={lineLabel}
+              onChange={(event) => {
+                setLineLabel(event.target.value);
+                setLineConfirmed(false);
+              }}
+            />
+          </label>
+          <label>
+            备注 / 异常标记{" "}
+            <input
+              aria-label="测量备注"
+              value={measurementNote}
+              onChange={(event) => setMeasurementNote(event.target.value)}
+            />
+          </label>
+          {lineLabel && (
+            <label>
+              <input
+                type="checkbox"
+                checked={lineConfirmed}
+                onChange={(event) => setLineConfirmed(event.target.checked)}
+              />
+              已人工确认当前接线为 {lineLabel}
+            </label>
+          )}
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => {
+              setLineId(createInstrumentCommandId("line"));
+              setLineLabel("");
+              setLineConfirmed(false);
+              setMeasurementNote("");
+            }}
+          >
+            换到新线路
+          </button>
+          <p>
+            仪器设置保持不变；同一线路再次采集会追加新尝试。改名不会修改已采集结果，换线请用“换到新线路”。
+          </p>
+          {pendingMeasurements.length >= 20 && (
+            <p role="status">请先保存待保存结果，再继续采集。</p>
+          )}
+        </section>
       )}
 
       {description ? (
@@ -535,6 +697,9 @@ function InstrumentInspectorContent({
                     drafts={declaredDrafts}
                     collectResults={collectResults}
                     invokeResults={invokeResults}
+                    collectionDisabled={
+                      (!!lineLabel && !lineConfirmed) || pendingMeasurements.length >= 20
+                    }
                     collectingTarget={
                       collectMutation.isPending ? collectMutation.variables?.target : undefined
                     }
@@ -542,7 +707,10 @@ function InstrumentInspectorContent({
                       invokeMutation.isPending ? invokeMutation.variables?.target : undefined
                     }
                     onStage={(target, draft) => stage(target, draft)}
-                    onCollect={(target) => collectAcquisition(target)}
+                    onCollect={(target) => {
+                      if ((!lineLabel || lineConfirmed) && pendingMeasurements.length < 20)
+                        collectAcquisition(target);
+                    }}
                     onInvoke={(target, operationArguments) =>
                       invokeOperation(target, operationArguments)
                     }

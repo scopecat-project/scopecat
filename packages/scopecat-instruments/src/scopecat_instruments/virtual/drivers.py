@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Literal, override
 
 import numpy as np
@@ -25,6 +27,7 @@ from scopecat.sdk.instruments import (
 from scopecat_instruments._support import (
     LinearSweepSettings,
     NetworkTrace,
+    execution_problem,
     invoke_unknown,
     quantity_value,
     state_property_problem,
@@ -38,6 +41,7 @@ from scopecat_instruments.driver_observations import (
 from scopecat_instruments.interface_declarations import (
     DCMonitorInterface,
     DCSourceInterface,
+    ExistingNetworkTraceInterface,
     NetworkSweepInterface,
     ReferenceClockInterface,
     ReferenceSource,
@@ -418,7 +422,7 @@ class VirtualTemperatureMonitor(_VirtualDriver):
 @instrument_driver(
     VIRTUAL_VNA_DRIVER.id,
     VIRTUAL_VNA_DRIVER.implementation_version,
-    interfaces=(NetworkSweepInterface,),
+    interfaces=(NetworkSweepInterface, ExistingNetworkTraceInterface),
     label="Virtual VNA",
 )
 class VirtualNetworkAnalyzer(_VirtualDriver):
@@ -488,22 +492,56 @@ class VirtualNetworkAnalyzer(_VirtualDriver):
 
     @implements(NetworkSweepInterface.sweep)
     def sweep(self) -> DriverOutcome[NetworkSweepObservation]:
-        trace = self.acquire_trace()
-        return DriverSuccess(
-            NetworkSweepObservation(
-                frequency=MeasurementArray.create(
-                    dtype="float64",
-                    unit="Hz",
-                    values=np.asarray(trace.frequencies_hz, dtype=np.float64),
-                ),
-                s_parameter=MeasurementArray.create(
-                    dtype="complex128",
-                    unit="ratio",
-                    values=np.asarray(trace.values, dtype=np.complex128),
-                ),
-                evidence={"mode": "virtual", "world_seed": self.world.seed},
+        with self.world.lock:
+            trace = self.acquire_trace()
+            return DriverSuccess(
+                NetworkSweepObservation(
+                    frequency=MeasurementArray.create(
+                        dtype="float64",
+                        unit="Hz",
+                        values=np.asarray(trace.frequencies_hz, dtype=np.float64),
+                    ),
+                    s_parameter=MeasurementArray.create(
+                        dtype="complex128",
+                        unit="ratio",
+                        values=np.asarray(trace.values, dtype=np.complex128),
+                    ),
+                    evidence=deepcopy(
+                        self.world.vna(self.instrument_id).trace_evidence
+                    ),
+                )
             )
-        )
+
+    @implements(ExistingNetworkTraceInterface.read_trace)
+    def read_trace(self) -> DriverOutcome[NetworkSweepObservation]:
+        with self.world.lock:
+            state = self.world.vna(self.instrument_id)
+            trace = state.retained_trace
+            if trace is None:
+                return DriverRejected(
+                    problems=(
+                        execution_problem(
+                            "no_retained_trace",
+                            "No existing trace; explicitly acquire a new sweep first.",
+                            "acquisition",
+                        ),
+                    )
+                )
+            return DriverSuccess(
+                NetworkSweepObservation(
+                    frequency=MeasurementArray.create(
+                        dtype="float64",
+                        unit="Hz",
+                        values=np.asarray(trace.frequencies_hz, dtype=np.float64),
+                    ),
+                    s_parameter=MeasurementArray.create(
+                        dtype="complex128",
+                        unit="ratio",
+                        values=np.asarray(trace.values, dtype=np.complex128),
+                    ),
+                    evidence=deepcopy(state.trace_evidence),
+                )
+            )
 
     def configure_linear_sweep(self, settings: LinearSweepSettings) -> None:
         if settings.start_frequency_hz >= settings.stop_frequency_hz:
@@ -534,10 +572,30 @@ class VirtualNetworkAnalyzer(_VirtualDriver):
             )
 
     def single_trigger(self) -> None:
-        pass
+        with self.world.lock:
+            state = self.world.vna(self.instrument_id)
+            state.retained_trace = self.world.network_trace(self.instrument_id)
+            state.trace_evidence = {
+                "mode": "virtual",
+                "world_seed": self.world.seed,
+                "acquired_at": datetime.now(UTC).isoformat(),
+                "settings_source": "virtual_trigger_snapshot",
+                "settings": {
+                    "start_frequency_hz": state.start_frequency_hz,
+                    "stop_frequency_hz": state.stop_frequency_hz,
+                    "points": state.points,
+                    "if_bandwidth_hz": state.if_bandwidth_hz,
+                    "source_power_dbm": state.source_power_dbm,
+                    "s_parameter": state.s_parameter,
+                },
+            }
 
     def read_trace_ascii(self) -> NetworkTrace:
-        return self.world.network_trace(self.instrument_id)
+        with self.world.lock:
+            trace = self.world.vna(self.instrument_id).retained_trace
+            if trace is None:
+                raise ValueError("No retained trace; trigger a sweep explicitly")
+            return trace
 
     def acquire_trace(self) -> NetworkTrace:
         self.single_trigger()

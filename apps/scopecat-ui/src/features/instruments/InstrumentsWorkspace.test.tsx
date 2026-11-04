@@ -59,6 +59,7 @@ import {
   invokeInstrumentOperation,
   openInstrumentSession,
   readInstrumentState,
+  readSharedInstrumentObservation,
   renewInstrumentSession,
   resolveInstrumentAttention,
 } from "./instrument-api";
@@ -75,12 +76,33 @@ vi.mock("./instrument-api", async (importOriginal) => ({
   invokeInstrumentOperation: vi.fn(),
   openInstrumentSession: vi.fn(),
   readInstrumentState: vi.fn(),
+  readSharedInstrumentObservation: vi.fn(),
   renewInstrumentSession: vi.fn(),
   resolveInstrumentAttention: vi.fn(),
 }));
 
+import { listDirectMeasurements, saveDirectMeasurement } from "./direct-measurement-api";
+vi.mock("./direct-measurement-api", () => ({
+  listDirectMeasurements: vi.fn(),
+  saveDirectMeasurement: vi.fn(),
+}));
+
+import { getInstrumentFinishPlan, finishInstrumentSession } from "./instrument-finish-api";
+vi.mock("./instrument-finish-api", () => ({
+  getInstrumentFinishPlan: vi.fn(),
+  finishInstrumentSession: vi.fn(),
+}));
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getInstrumentFinishPlan).mockResolvedValue({
+    actions: [],
+    configured_finish_available: false,
+  });
+  vi.mocked(finishInstrumentSession).mockResolvedValue({
+    session_id: "session-1",
+    status: "closed",
+  });
+  vi.mocked(listDirectMeasurements).mockResolvedValue({ items: [], next_cursor: null });
   sessionStorage.clear();
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   vi.mocked(getDriverSource).mockResolvedValue({ active: null });
@@ -111,6 +133,10 @@ beforeEach(() => {
   vi.mocked(openInstrumentSession).mockResolvedValue(session());
   vi.mocked(renewInstrumentSession).mockResolvedValue(sessionLease());
   vi.mocked(readInstrumentState).mockResolvedValue(instrumentState());
+  vi.mocked(readSharedInstrumentObservation).mockResolvedValue({
+    instrument_id: "drive-source",
+    observations: [],
+  });
   vi.mocked(applyInstrumentConfiguredDefaults).mockResolvedValue(
     configuredDefaultsReceipt("applied", instrumentState(6_000_000_000)),
   );
@@ -1303,6 +1329,51 @@ describe("instrument workspace", () => {
     expect(await screen.findByRole("button", { name: "连接" })).toBeVisible();
   });
 
+  it("fixes line attribution at collection and retries saving without collecting again", async () => {
+    vi.mocked(saveDirectMeasurement).mockRejectedValueOnce(new Error("disk unavailable"));
+    vi.mocked(saveDirectMeasurement).mockImplementationOnce(async (selection) => ({
+      id: "saved-one",
+      selection,
+      saved_at: "2026-11-04T00:00:00Z",
+      collected_at: "2026-11-04T00:00:00Z",
+      setup: session().setup,
+      description: instrument().description!,
+      intent: {
+        command_id: selection.command_id,
+        instrument_id: selection.instrument_id,
+        interface_id: "scopecat.rf_output/v1",
+        acquisition_id: "trace",
+      },
+      observed_before_collection: null,
+      receipt_digest: "sha256:receipt",
+    }));
+    renderWorkspace();
+    await screen.findAllByText("Drive source");
+    await connectInstrument();
+    fireEvent.change(screen.getByRole("textbox", { name: "线路名称" }), {
+      target: { value: "line-a" },
+    });
+    expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-a" }));
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    await screen.findByRole("button", { name: "保存此结果" });
+    fireEvent.change(screen.getByRole("textbox", { name: "线路名称" }), {
+      target: { value: "line-b" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存此结果" }));
+    await screen.findByText(/保存失败：disk unavailable/);
+    fireEvent.click(screen.getByRole("button", { name: "保存此结果" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "保存此结果" })).not.toBeInTheDocument(),
+    );
+    expect(collectInstrumentAcquisition).toHaveBeenCalledOnce();
+    expect(saveDirectMeasurement).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(saveDirectMeasurement).mock.calls[0]?.[0]).toEqual(
+      vi.mocked(saveDirectMeasurement).mock.calls[1]?.[0],
+    );
+    expect(vi.mocked(saveDirectMeasurement).mock.calls[0]?.[0].line_label).toBe("line-a");
+  });
+
   it("displays a current Python HTTP receipt through the real collection API", async () => {
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
@@ -1316,7 +1387,7 @@ describe("instrument workspace", () => {
     expect(screen.getByText("15 项返回结果")).toBeVisible();
     expect(screen.getByText("2 项结果不可用")).toBeVisible();
     expect(screen.getByText("原因： 无效、缺失")).toBeVisible();
-    expect(screen.getByRole("img", { name: /轨迹预览/i })).toBeVisible();
+    expect(screen.getByRole("img", { name: /完整曲线/i })).toBeVisible();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
@@ -1373,7 +1444,7 @@ describe("instrument workspace", () => {
     expect(within(summary).getByText("原因： 缺失、过载")).toBeVisible();
     expect(summary).not.toHaveTextContent("private-overload-result");
     expect(summary).not.toHaveTextContent("private-missing-result");
-    expect(screen.queryByRole("img", { name: /轨迹预览/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /完整曲线/i })).not.toBeInTheDocument();
     expect(screen.queryByText("JSON preview")).not.toBeInTheDocument();
   });
 
@@ -1406,6 +1477,9 @@ describe("instrument workspace", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "放弃未保存结果并结束控制" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保持当前状态并结束" }));
     await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(2), {
       timeout: 2_000,
     });

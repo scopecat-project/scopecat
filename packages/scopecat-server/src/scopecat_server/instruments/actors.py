@@ -344,6 +344,25 @@ class _InstrumentActor:
         self._connection_count = 0
         self._shutdown = False
 
+    def shared_observation(
+        self, binding_fingerprint: str
+    ) -> InstrumentStateSnapshot | None:
+        """Copy existing evidence without waiting for, or issuing, hardware work."""
+        if not self._lock.acquire(blocking=False):
+            return None
+        try:
+            if (
+                self._shutdown
+                or self._owned is None
+                or self._binding is None
+                or self._binding.binding_fingerprint != binding_fingerprint
+                or self._state_cache is None
+            ):
+                return None
+            return self._state_cache.snapshot()
+        finally:
+            self._lock.release()
+
     def acquire(
         self,
         *,
@@ -752,6 +771,21 @@ class InstrumentActorRegistry:
         self._active_backend: InstrumentBackendEndpoint | None = None
         self._accepting = True
         self._closed = False
+
+    def shared_observation(
+        self,
+        exclusivity_key: str,
+        binding_fingerprint: str,
+    ) -> InstrumentStateSnapshot | None:
+        with self._lock:
+            if (
+                not self._accepting
+                or self._replacing_backend
+                or exclusivity_key in self._retirements
+            ):
+                return None
+            actor = self._actors.get(exclusivity_key)
+        return None if actor is None else actor.shared_observation(binding_fingerprint)
 
     def acquire(
         self,

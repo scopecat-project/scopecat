@@ -349,3 +349,20 @@ async function responseDetail(response: Response): Promise<string | undefined> {
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
+
+export function readSharedInstrumentObservation(
+  setup: InstrumentList["setup"],
+  instrumentId: string,
+) {
+  return apiData(
+    apiClient.GET("/api/v1/instrument-observations", {
+      params: {
+        query: {
+          instrument_id: instrumentId,
+          setup_revision_id: setup.revision_id,
+          setup_content_hash: setup.content_hash,
+        },
+      },
+    }),
+  );
+}

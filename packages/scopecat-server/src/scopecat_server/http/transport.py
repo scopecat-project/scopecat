@@ -431,6 +431,10 @@ from scopecat_server.http.exit_admission import drain_allows
 from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
+from scopecat_server.instruments.finish import (
+    InstrumentFinishCommand,
+    InstrumentFinishPlan,
+)
 from scopecat_server.launch_recovery import (
     LaunchAttemptPage,
     LaunchAttemptRecord,
@@ -457,6 +461,12 @@ from scopecat_server.retained_request import (
 )
 from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.direct_measurements import (
+    DirectMeasurement,
+    DirectMeasurementNoteCommand,
+    DirectMeasurementPage,
+    DirectMeasurementSave,
+)
 from scopecat_server.services.manual_lines import ManualLineScanPage, ManualLineScanView
 from scopecat_server.services.operator_settings import OperatorSettings
 from scopecat_server.services.project_workers import (
@@ -2057,6 +2067,20 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             )
         )
 
+    @app.get(f"{_API_PREFIX}/instrument-observations")
+    def shared_instrument_observation(
+        instrument_id: str,
+        setup_revision_id: Annotated[str, Query(min_length=1)],
+        setup_content_hash: Sha256ContentHash,
+    ) -> InstrumentStateSnapshot:
+        return application.instruments.shared_observation(
+            instrument_id,
+            setup=SetupRevisionRef(
+                revision_id=setup_revision_id,
+                content_hash=setup_content_hash,
+            ),
+        )
+
     @app.post(f"{_API_PREFIX}/instruments/release")
     def release_instruments(
         command: InstrumentReleaseCommand,
@@ -2222,6 +2246,41 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             ),
             media_type=HARDWARE_RECEIPT_MEDIA_TYPE,
         )
+
+    @app.post(f"{_API_PREFIX}/direct-measurements")
+    def save_direct_measurement(command: DirectMeasurementSave) -> DirectMeasurement:
+        return application.direct_measurements.save(command)
+
+    @app.get(f"{_API_PREFIX}/direct-measurements")
+    def list_direct_measurements(before: int | None = None) -> DirectMeasurementPage:
+        return application.direct_measurements.list(before=before)
+
+    @app.get(f"{_API_PREFIX}/direct-measurements/{{record_id}}")
+    def get_direct_measurement(record_id: str) -> DirectMeasurement:
+        return application.direct_measurements.get(record_id)
+
+    @app.post(f"{_API_PREFIX}/direct-measurements/{{record_id}}/notes")
+    def annotate_direct_measurement(
+        record_id: str, command: DirectMeasurementNoteCommand
+    ) -> DirectMeasurement:
+        return application.direct_measurements.annotate(record_id, command)
+
+    @app.get(f"{_API_PREFIX}/direct-measurements/{{record_id}}/receipt")
+    def direct_measurement_receipt(record_id: str) -> Response:
+        return Response(
+            content=application.direct_measurements.receipt(record_id),
+            media_type=HARDWARE_RECEIPT_MEDIA_TYPE,
+        )
+
+    @app.get(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/finish-plan")
+    def instrument_finish_plan(session_id: str) -> InstrumentFinishPlan:
+        return application.instruments.finish_plan(session_id)
+
+    @app.post(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/finish")
+    def finish_instrument_session(
+        session_id: str, command: InstrumentFinishCommand
+    ) -> InstrumentSessionEndReceipt:
+        return application.instruments.finish_session(session_id, command)
 
     @app.post(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/close")
     def close_instrument_session(

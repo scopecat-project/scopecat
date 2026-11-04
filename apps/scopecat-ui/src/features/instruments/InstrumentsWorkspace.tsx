@@ -348,7 +348,7 @@ export function InstrumentsWorkspace({
         })
       ) {
         setWindowError(
-          "操作失败或结果未知，窗口已保留。请先核查结果或使用原操作的恢复入口，再关闭。",
+          "仍有未处理结果、未保存测量或结束控制选择，窗口已保留。请先核查结果、保存测量或明确结束控制，再关闭。",
         );
         return "blocked";
       }
@@ -451,6 +451,9 @@ export function InstrumentsWorkspace({
       <InstrumentInspector
         key={`${revision?.id}:${selected.instrument_id}`}
         instrument={selected}
+        setup={
+          revision ? { revision_id: revision.id, content_hash: revision.content_hash } : undefined
+        }
         displayLabel={selectedDevice.device.label}
         registeredDeviceId={selectedDevice.device.id}
         session={session}
@@ -626,6 +629,10 @@ export function InstrumentsWorkspace({
             }
             onSelect={(id) => {
               if (id === selectedId) return;
+              if (session && closeProblem.current && !close.isError) {
+                setWindowError("请先在当前设备中保存记录并完成输出处置选择，再切换设备。");
+                return;
+              }
               if (session) close.mutate({ id: session.session_id, abort: false, selectAfter: id });
               else selectDevice(id);
             }}
