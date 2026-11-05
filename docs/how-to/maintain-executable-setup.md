@@ -67,3 +67,19 @@ prepared = session.prepare(experiment, parameters=session.params)
 
 不使用实验配置、直接通过 Python 控制设备时，参见[控制仪器](control-instruments.md)。
 编辑参数请参见[参数分支](parameter-branches.md)。
+
+## Build object and purpose mappings
+
+In **实验 setup**, create a setup and add registered device bindings. The
+**对象 → 用途 → 设备通道** form then adds qubit objects, documented roles and
+logical routes without an experiment template. Copy the exact capability ID from
+the device declaration, select its binding, and provide a declared component path
+and optional logical channel. The initial editor does not discover arbitrary
+vendor channels or draw physical wiring or synchronization/trigger graphs.
+
+The draft check reports missing references, unmapped objects and competing
+candidates. Competing routes are not silently selected. Edit one route's device
+or component path to replace only that part of the mapping; save a new revision
+and prepare the intended experiment again to check its actual capability needs.
+Existing topology, other routes and old run revisions are preserved. Passing a
+local form check is not evidence of physical wiring or experiment readiness.
