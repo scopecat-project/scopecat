@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import json
 import os
+import socket
 import stat
 import subprocess
 import sys
@@ -15,6 +17,7 @@ from types import SimpleNamespace
 import httpx2
 import psutil
 import pytest
+import uvicorn
 from pydantic import ValidationError
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import (
@@ -745,6 +748,52 @@ def test_idle_quit_drains_open_sse_and_exits_without_client_disconnect(
             if process.poll() is None:
                 stop_project(project, only_if_idle=True)
             process.wait(timeout=15)
+
+
+def test_server_exit_drains_sse_without_http_shutdown_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server.lifecycle import serve_project
+
+    (tmp_path / "scopecat.toml").write_text("[lab]\n[authors]\ndependencies = []\n")
+    project = open_project(tmp_path, resolve_adapter=False)
+
+    async def exercise(server: uvicorn.Server, sockets: list[socket.socket]) -> None:
+        task = asyncio.create_task(server.serve(sockets=sockets))
+        writer: asyncio.StreamWriter | None = None
+        try:
+            for _ in range(100):
+                if server.started:
+                    break
+                await asyncio.sleep(0.05)
+            assert server.started
+            reader, writer = await asyncio.open_connection(
+                "127.0.0.1", sockets[0].getsockname()[1]
+            )
+            writer.write(
+                b"GET /api/v1/events/stream HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            )
+            await writer.drain()
+            assert b"200 OK" in await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            # This is the state set by Uvicorn's signal handler. Do not invoke
+            # the HTTP endpoint, which already has its own SSE drain coverage.
+            server.should_exit = True
+            await asyncio.wait_for(asyncio.shield(task), 5)
+            assert await asyncio.wait_for(reader.read(), 1) == b"0\r\n\r\n"
+        finally:
+            if writer is not None:
+                writer.close()
+                await writer.wait_closed()
+            server.should_exit = True
+            await asyncio.wait_for(task, 5)
+
+    def run(server: uvicorn.Server, sockets: list[socket.socket] | None = None) -> None:
+        assert sockets is not None
+        asyncio.run(exercise(server, sockets))
+
+    monkeypatch.setattr(uvicorn.Server, "run", run)
+    serve_project(project)
+    assert read_daemon_endpoint_record(tmp_path) is None
 
 
 def test_accepted_shutdown_retry_only_waits_and_never_kills(

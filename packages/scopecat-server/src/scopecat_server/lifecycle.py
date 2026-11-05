@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import os
@@ -166,6 +167,7 @@ def serve_project(
     _startup_diagnostics.stage("project opened; importing runtime")
     import uvicorn
 
+    from .http_protocol import http_protocol
     from .runtime import LocalDaemonRuntime
 
     _startup_diagnostics.stage("runtime imported; inspecting daemon")
@@ -226,6 +228,7 @@ def serve_project(
             return True
 
         preparations = runtime.application.author_workspaces
+        shutdown_started = asyncio.Event()
 
         class PreparationServer(uvicorn.Server):
             @override
@@ -235,6 +238,9 @@ def serve_project(
                 # Uvicorn drains HTTP before runtime.close(). Initial catalog
                 # requests may be waiting on preparation, so release them first.
                 preparations.request_stop()
+                # Signals bypass the HTTP shutdown endpoint. End subscriptions
+                # before Uvicorn waits for open responses, including that path.
+                shutdown_started.set()
                 _startup_diagnostics.shutdown_stage("shutdown: draining HTTP")
                 await super().shutdown(sockets=sockets)
 
@@ -243,11 +249,13 @@ def serve_project(
                 runtime.app(
                     static_dir=static_dir,
                     request_shutdown=request_shutdown,
+                    shutdown_started=shutdown_started,
                 ),
                 host=host,
                 port=actual_port,
                 access_log=False,
                 lifespan="on",
+                http=http_protocol(),
             )
         )
         _startup_diagnostics.stage("starting HTTP server")
