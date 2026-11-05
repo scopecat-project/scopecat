@@ -17,7 +17,13 @@ COMMON = [
     "packages/scopecat-server/tests/test_instrument_worker.py::test_driver_uses_selected_python_and_retains_it_after_reopen",
     "packages/scopecat-server/tests/test_instrument_worker.py::test_shutdown_interrupts_a_blocked_driver_call",
     "packages/scopecat-app/tests/test_platform_files.py::test_application_lock_excludes_process_and_state_replaces",
-    "packages/scopecat-server/tests/test_http_protocol.py",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_closed_tcp_transport_rejects_queued_input[valid-idle]",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_closed_tcp_transport_rejects_queued_input[valid-completed]",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_closed_tcp_transport_rejects_queued_input[malformed-idle]",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_closed_tcp_transport_rejects_queued_input[malformed-completed]",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_open_tcp_transport_keeps_request_and_error_handling[active]",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_open_tcp_transport_keeps_request_and_error_handling[malformed-open]",
+    "packages/scopecat-server/tests/test_http_protocol.py::test_protocol_selection_preserves_other_auto_protocol",
     "packages/scopecat-server/tests/test_lifecycle.py::test_server_exit_drains_sse_without_http_shutdown_request",
 ]
 PLATFORM = {

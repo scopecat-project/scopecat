@@ -12,9 +12,11 @@ from uvicorn.server import ServerState
 from scopecat_server.http_protocol import ClosingAwareH11Protocol, http_protocol
 
 
-@pytest.mark.parametrize("completed", [False, True])
+@pytest.mark.parametrize("completed", [False, True], ids=["idle", "completed"])
 @pytest.mark.parametrize(
-    "payload", [b"GET /late HTTP/1.1\r\nHost: localhost\r\n\r\n", b"invalid\r\n\r\n"]
+    "payload",
+    [b"GET /late HTTP/1.1\r\nHost: localhost\r\n\r\n", b"invalid\r\n\r\n"],
+    ids=["valid", "malformed"],
 )
 def test_closed_tcp_transport_rejects_queued_input(
     completed: bool, payload: bytes
