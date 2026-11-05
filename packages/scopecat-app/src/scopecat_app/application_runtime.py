@@ -190,10 +190,20 @@ class ApplicationRuntime:
             return ExitReport(draining=False)
         if status.record is None:
             raise ValueError("无法确认后台退出状态")
-        with httpx2.Client(timeout=10, trust_env=False) as client:
-            response = client.get(status.record.base_url + "/api/v1/application-exit")
-            response.raise_for_status()
-            return ExitReport.model_validate(response.json())
+        try:
+            with httpx2.Client(timeout=10, trust_env=False) as client:
+                response = client.get(
+                    status.record.base_url + "/api/v1/application-exit"
+                )
+                response.raise_for_status()
+                return ExitReport.model_validate(response.json())
+        except httpx2.TransportError:
+            # The native dialog can poll between the last live health response
+            # and an accepted shutdown finishing. Return the existing stopped
+            # report for that obsolete poll; live/degraded/stale failures remain.
+            if self.status().state == "stopped":
+                return ExitReport(draining=False)
+            raise
 
     def stop_if_idle(self) -> bool:
         with self.lock:

@@ -517,6 +517,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     *,
     max_command_body_bytes: int = DEFAULT_MAX_COMMAND_BODY_BYTES,
     request_shutdown: Callable[[str], bool] | None = None,
+    shutdown_started: asyncio.Event | None = None,
 ) -> FastAPI:
     """Create transport routes around an already-composed daemon application."""
 
@@ -1306,7 +1307,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def health() -> DaemonHealth:
         return application.health()
 
-    shutdown_accepted = asyncio.Event()
+    shutdown_accepted = (
+        shutdown_started if shutdown_started is not None else asyncio.Event()
+    )
 
     if request_shutdown is not None:
         # Serialize the idle decision with admission of HTTP mutations, including

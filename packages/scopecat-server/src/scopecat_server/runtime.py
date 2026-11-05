@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import timedelta
@@ -365,11 +366,13 @@ class LocalDaemonRuntime:
         *,
         static_dir: str | Path | None = None,
         request_shutdown: Callable[[str], bool] | None = None,
+        shutdown_started: asyncio.Event | None = None,
     ) -> FastAPI:
         return create_app(
             self.application,
             static_dir=static_dir,
             request_shutdown=request_shutdown,
+            shutdown_started=shutdown_started,
         )
 
     def close(self) -> None:

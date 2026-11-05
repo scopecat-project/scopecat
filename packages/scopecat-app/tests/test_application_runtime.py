@@ -4,17 +4,55 @@ import json
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import Mock
 
+import httpx2
 import psutil
 import pytest
 from filelock import FileLock
 
 from scopecat.author_workspaces import LocalAuthorWorkspaces, author_bindings_path
+from scopecat.daemon.endpoint import DaemonEndpointRecord
+from scopecat.daemon.exit import ExitReport
 from scopecat.project import load_captured_project, open_project
 from scopecat.project_sources import capture_sources, materialize_sources
 from scopecat_app import application_runtime
 from scopecat_app.application_runtime import ApplicationRuntime
-from scopecat_server.lifecycle import write_daemon_endpoint_record
+from scopecat_server.lifecycle import (
+    DaemonState,
+    DaemonStatus,
+    write_daemon_endpoint_record,
+)
+
+
+@pytest.mark.parametrize("state", ["stopped", "stale", "running", "degraded"])
+@pytest.mark.parametrize("error_type", [httpx2.ConnectError, httpx2.ReadTimeout])
+def test_exit_report_rechecks_transport_failure_without_hiding_live_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: DaemonState,
+    error_type: type[httpx2.TransportError],
+) -> None:
+    runtime = ApplicationRuntime(tmp_path)
+    record = Mock(spec=DaemonEndpointRecord, base_url="http://127.0.0.1:1")
+    status = Mock(side_effect=[DaemonStatus("running", record), DaemonStatus(state)])
+    monkeypatch.setattr(runtime, "status", status)
+    error = error_type("shutdown race")
+    client = Mock()
+    client.get.side_effect = error
+    factory = Mock()
+    factory.return_value.__enter__ = Mock(return_value=client)
+    factory.return_value.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(application_runtime.httpx2, "Client", factory)
+
+    if state == "stopped":
+        report = runtime.exit_report()
+        assert report == ExitReport(draining=False)
+    else:
+        with pytest.raises(error_type) as captured:
+            runtime.exit_report()
+        assert captured.value is error
+    assert status.call_count == 2
 
 
 @pytest.fixture
