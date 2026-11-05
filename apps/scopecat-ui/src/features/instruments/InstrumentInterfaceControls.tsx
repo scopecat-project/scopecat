@@ -2,6 +2,7 @@ import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { AlertTriangle, Database, LoaderCircle, Play } from "lucide-react";
 import type {
+  InstrumentAcquisition,
   InstrumentCollectReceipt,
   InstrumentConfiguredDefaultsApplyReceipt,
   InstrumentDescription,
@@ -26,6 +27,8 @@ import type {
   StagedInstrumentMember,
 } from "./instrument-api";
 
+import { AcquisitionCurve } from "./AcquisitionCurve";
+
 type DraftValue = InstrumentPropertyDraft;
 
 export function InterfaceCard({
@@ -38,6 +41,7 @@ export function InterfaceCard({
   collectResults,
   invokeResults,
   collectingTarget,
+  collectionDisabled,
   invokingTarget,
   interactionDisabled,
   onStage,
@@ -54,6 +58,7 @@ export function InterfaceCard({
   collectResults: Record<string, InstrumentCollectReceipt>;
   invokeResults: Record<string, InstrumentInvokeReceipt>;
   collectingTarget?: InstrumentAcquisitionTarget;
+  collectionDisabled?: boolean;
   invokingTarget?: InstrumentOperationTarget;
   interactionDisabled: boolean;
   onStage: (target: InstrumentStateTarget, draft?: DraftValue) => void;
@@ -97,6 +102,7 @@ export function InterfaceCard({
         collectResults={collectResults}
         invokeResults={invokeResults}
         collectingTarget={collectingTarget}
+        collectionDisabled={collectionDisabled}
         invokingTarget={invokingTarget}
         interactionDisabled={interactionDisabled}
         onStage={onStage}
@@ -183,6 +189,7 @@ function InterfaceEndpoint({
   collectResults,
   invokeResults,
   collectingTarget,
+  collectionDisabled,
   invokingTarget,
   interactionDisabled,
   onStage,
@@ -201,6 +208,7 @@ function InterfaceEndpoint({
   collectResults: Record<string, InstrumentCollectReceipt>;
   invokeResults: Record<string, InstrumentInvokeReceipt>;
   collectingTarget?: InstrumentAcquisitionTarget;
+  collectionDisabled?: boolean;
   invokingTarget?: InstrumentOperationTarget;
   interactionDisabled: boolean;
   onStage: (target: InstrumentStateTarget, draft?: DraftValue) => void;
@@ -288,7 +296,7 @@ function InterfaceEndpoint({
                     target={target}
                     connected={connected}
                     result={collectResults[key]}
-                    interactionDisabled={interactionDisabled}
+                    interactionDisabled={interactionDisabled || !!collectionDisabled}
                     collecting={
                       collectingTarget !== undefined && acquisitionKey(collectingTarget) === key
                     }
@@ -321,6 +329,7 @@ function InterfaceEndpoint({
           collectResults={collectResults}
           invokeResults={invokeResults}
           collectingTarget={collectingTarget}
+          collectionDisabled={collectionDisabled}
           invokingTarget={invokingTarget}
           interactionDisabled={interactionDisabled}
           onStage={onStage}
@@ -577,9 +586,11 @@ function AcquisitionControl({
             {acquisition.label ?? titleCase(acquisition.id)}
           </strong>
           <p className={controlDescription}>
-            {acquisition.description
-              ? `采集契约：${acquisition.description}`
-              : "此 acquisition 未说明是否发起新采集或收集既有结果；调用前请查阅驱动文档。"}
+            {target.interfaceId === "scopecat.network_sweep/v1" && acquisition.id === "sweep"
+              ? "触发一次新扫描，使用当前设置；不会读取面板已有曲线。"
+              : acquisition.description
+                ? `采集契约：${acquisition.description}`
+                : "此 acquisition 未说明是否发起新采集或收集既有结果；调用前请查阅驱动文档。"}
           </p>
         </div>
         {results.length > 0 && (
@@ -626,7 +637,7 @@ function AcquisitionControl({
           ))}
         </div>
       )}
-      {result && <CollectPreview receipt={result} />}
+      {result && <CollectPreview receipt={result} acquisition={acquisition} />}
     </section>
   );
 }
@@ -681,7 +692,7 @@ function PropertyEditor({
           观测来源 {observationSourceLabels[observation.source]}
           {observation.observed_at
             ? ` · ${new Date(observation.observed_at).toLocaleString()}`
-            : ""}
+            : " · 观察时间未知，新鲜度未知"}
         </small>
       )}
       {dirty && (
@@ -693,8 +704,13 @@ function PropertyEditor({
   );
 }
 
-function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
-  const trace = traceValues(receipt);
+function CollectPreview({
+  receipt,
+  acquisition,
+}: {
+  receipt: InstrumentCollectReceipt;
+  acquisition: InstrumentAcquisition;
+}) {
   const unavailable = unavailableResults(receipt);
   return (
     <div className="grid gap-[9px] border-t border-line bg-bg px-3 py-[11px]">
@@ -722,7 +738,7 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
           </small>
         </div>
       )}
-      {trace && <TracePreview values={trace} />}
+      {receipt.readback && <AcquisitionCurve receipt={receipt} acquisition={acquisition} />}
     </div>
   );
 }
@@ -773,33 +789,6 @@ export function AuthorWorkflowLinks() {
         作者程序准备与提交
       </a>
     </p>
-  );
-}
-
-function TracePreview({ values }: { values: number[] }) {
-  if (values.length === 0) return null;
-  const width = 420;
-  const height = 100;
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  const range = maximum - minimum || 1;
-  const points = values
-    .map((value, index) => {
-      const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
-      const y = height - ((value - minimum) / range) * (height - 8) - 4;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg
-      className="h-[110px] w-full rounded-sm border border-line p-[5px] [background-image:linear-gradient(var(--color-line)_1px,transparent_1px),linear-gradient(90deg,var(--color-line)_1px,transparent_1px)] [background-size:25%_50%] [&_polyline]:fill-none [&_polyline]:stroke-accent [&_polyline]:[stroke-width:1.5] [&_polyline]:[vector-effect:non-scaling-stroke]"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={`${values.length} 点轨迹预览`}
-      preserveAspectRatio="none"
-    >
-      <polyline points={points} />
-    </svg>
   );
 }
 
@@ -1098,30 +1087,6 @@ export function configuredDefaultsReceiptMessage(
     return "状态已与配置的默认值一致。";
   }
   return `已拒绝配置的默认值： ${receipt.problems.map((problem) => problem.message).join(" ")}`;
-}
-
-function traceValues(receipt: InstrumentCollectReceipt): number[] | undefined {
-  for (const value of Object.values(receipt.readback?.values ?? {})) {
-    if (value.kind !== "array") continue;
-    const samples = value.values
-      .map((sample) => {
-        if (typeof sample === "number" && Number.isFinite(sample)) return sample;
-        if (
-          typeof sample === "object" &&
-          sample !== null &&
-          "real" in sample &&
-          "imag" in sample &&
-          typeof sample.real === "number" &&
-          typeof sample.imag === "number"
-        ) {
-          return Math.hypot(sample.real, sample.imag);
-        }
-        return undefined;
-      })
-      .filter((sample): sample is number => sample !== undefined);
-    if (samples.length > 0) return samples;
-  }
-  return undefined;
 }
 
 function unavailableResults(receipt: InstrumentCollectReceipt): {

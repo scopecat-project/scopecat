@@ -49,6 +49,7 @@ from .data_cleanup import DataCleanupService
 from .data_exchange import DataExchangeService
 from .decision_drafts import DecisionDraftService
 from .devices import DeviceService
+from .direct_measurements import DirectMeasurements
 from .driver_sources import DriverSourceService
 from .executor import ExecutorService
 from .exit_drain import ExitDrain
@@ -179,6 +180,7 @@ class DaemonApplication:
         self.samples = samples
         self.research = ResearchProjectStore(project_store.sqlite)
         self.record_collections = RecordCollectionStore(project_store.sqlite)
+        self.direct_measurements = DirectMeasurements(project_store, instruments)
         self.experimental_batches = ExperimentalBatchStore(project_store.sqlite)
         self._lease_supervisor = lease_supervisor
 

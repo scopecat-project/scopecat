@@ -304,10 +304,45 @@ def network_sweep_interface() -> InterfaceSpec:
     return InterfaceSpec.model_validate_json(_NETWORK_SWEEP_SPEC_JSON)
 
 
+_EXISTING_NETWORK_TRACE_SPEC_JSON = (
+    '{"id":"scopecat.existing_network_trace/v'
+    '1","label":"Existing network trace","des'
+    'cription":"Read the retained complex tra'
+    "ce without triggering or configuring a s"
+    "weep. Coordinates and acquisition eviden"
+    "ce belong to the retained trace, not cur"
+    'rent settings.","properties":[],"operati'
+    'ons":[],"acquisitions":[{"id":"read_trac'
+    'e","label":"Read existing trace (no trig'
+    'ger)","description":"Read a retained tra'
+    "ce without triggering a new sweep. Curre"
+    "nt settings may differ from the trace ge"
+    'neration settings.","preconditions":[],"'
+    'results":[{"id":"frequency","label":null'
+    ',"description":null,"role":"coordinate",'
+    '"dtype":"float64","unit":"Hz","axes":[{"'
+    'id":"frequency","label":null,"descriptio'
+    'n":null,"kind":"frequency","size":null,"'
+    'unit":"Hz","coordinate_result":"frequenc'
+    'y"}]},{"id":"s_parameter","label":null,"'
+    'description":null,"role":"observable","d'
+    'type":"complex128","unit":"ratio","axes"'
+    ':[{"id":"frequency","label":null,"descri'
+    'ption":null,"kind":"frequency","size":nu'
+    'll,"unit":"Hz","coordinate_result":"freq'
+    'uency"}]}]}],"components":[]}'
+)
+
+
+def existing_network_trace_interface() -> InterfaceSpec:
+    return InterfaceSpec.model_validate_json(_EXISTING_NETWORK_TRACE_SPEC_JSON)
+
+
 __all__ = [
     "dc_bias_interface",
     "dc_monitor_interface",
     "dc_source_interface",
+    "existing_network_trace_interface",
     "network_sweep_interface",
     "reference_clock_interface",
     "rf_output_interface",

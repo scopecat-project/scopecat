@@ -229,12 +229,37 @@ class NetworkSweepInterface(Protocol):
     def sweep(self) -> None: ...
 
 
+@instrument_interface(
+    "scopecat.existing_network_trace/v1",
+    label="Existing network trace",
+    description=(
+        "Read the retained complex trace without triggering or configuring a sweep. "
+        "Coordinates and acquisition evidence belong to the retained trace, "
+        "not current settings."
+    ),
+)
+class ExistingNetworkTraceInterface(Protocol):
+    @acquisition(
+        results=NetworkSweepResults,
+        label="Read existing trace (no trigger)",
+        description="Read a retained trace without triggering a new sweep. "
+        "Current settings may differ from the trace generation settings.",
+        axes={
+            "frequency": axis(
+                kind="frequency", unit="Hz", coordinate_result="frequency"
+            )
+        },
+    )
+    def read_trace(self) -> None: ...
+
+
 __all__ = [
     "DCBiasInterface",
     "DCMonitorCurrentResults",
     "DCMonitorInterface",
     "DCMonitorVoltageResults",
     "DCSourceInterface",
+    "ExistingNetworkTraceInterface",
     "NetworkSweepInterface",
     "NetworkSweepResults",
     "RFOutputInterface",

@@ -29,6 +29,7 @@ from scopecat_instruments.interfaces import (
     dc_bias_interface,
     dc_monitor_interface,
     dc_source_interface,
+    existing_network_trace_interface,
     network_sweep_interface,
     reference_clock_interface,
     rf_output_interface,
@@ -81,6 +82,7 @@ def test_member_catalog_resolves_against_the_interface_contracts() -> None:
             dc_monitor_interface(),
             temperature_readout_interface(),
             network_sweep_interface(),
+            existing_network_trace_interface(),
         )
     }
 

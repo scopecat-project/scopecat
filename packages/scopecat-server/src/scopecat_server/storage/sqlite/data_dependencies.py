@@ -8,7 +8,10 @@ from typing import cast
 from pydantic import JsonValue
 from scopecat.records.data_cleanup import DataCleanupBlocker, DataCleanupSelection
 
-from scopecat_server.storage.sqlite.data_reference_schema import DATA_REFERENCE_COLUMNS
+from scopecat_server.storage.sqlite.data_reference_schema import (
+    DATA_REFERENCE_COLUMNS,
+    DIRECT_MEASUREMENT_EVENT_KIND,
+)
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.resource_objects import resource_directory
 
@@ -79,6 +82,18 @@ def retained_dependencies(
             identity = str(cast("str | int", row[0]))
             if (kind, identity) not in selected and row[1] is not None:
                 inspect(f"{kind}:{identity}", cast("str", row[1]))
+
+    # Only saved measurements publish retained scientific references. Ordinary
+    # event history must remain deletable even when it names cleared resources.
+    for row in cast(
+        "Iterator[sqlite3.Row]",
+        connection.execute(
+            "SELECT json_extract(payload_json, '$.id'), payload_json "
+            "FROM durable_events WHERE kind=?",
+            (DIRECT_MEASUREMENT_EVENT_KIND,),
+        ),
+    ):
+        inspect(f"direct_measurement:{row[0]}", cast("str", row[1]))
 
     # Analysis inputs and retained run/config evidence are immutable JSON objects,
     # not fully represented by list summaries in SQLite.

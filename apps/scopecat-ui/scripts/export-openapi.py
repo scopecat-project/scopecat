@@ -26,6 +26,13 @@ class _OpenAPI(TypedDict):
 OUTPUT = Path(__file__).parent.parent / ".generated" / "ui-api.openapi.json"
 
 _OPERATIONS = {
+    ("/api/v1/direct-measurements/{record_id}", "get"),
+    ("/api/v1/direct-measurements/{record_id}/notes", "post"),
+    ("/api/v1/instrument-sessions/{session_id}/finish-plan", "get"),
+    ("/api/v1/instrument-sessions/{session_id}/finish", "post"),
+    ("/api/v1/instrument-observations", "get"),
+    ("/api/v1/direct-measurements", "get"),
+    ("/api/v1/direct-measurements", "post"),
     ("/api/v1/instruments/release", "post"),
     ("/api/v1/runs/{run_id}/parameter-proposals/{proposal_id}/launch-selection", "get"),
     ("/api/v1/apparatus-objects", "get"),

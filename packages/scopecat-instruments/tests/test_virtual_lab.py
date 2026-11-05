@@ -333,3 +333,25 @@ def test_flux_moves_notch_and_temperature_broadens_response() -> None:
     hot = vna.acquire_trace()
     hot_count = sum(abs(value) < 0.9 for value in hot.values)
     assert hot_count > cold_count
+
+
+def test_existing_trace_does_not_trigger_or_follow_current_settings() -> None:
+    world = VirtualLabWorld(seed=23)
+    driver = VirtualNetworkAnalyzer("vna", world)
+    assert isinstance(driver.read_trace(), DriverRejected)
+    first = driver.sweep()
+    assert isinstance(first, DriverSuccess)
+    driver.write_points(17)
+    driver.write_start_frequency(Quantity(4.7e9, "Hz"))
+    for _ in range(3):
+        existing = driver.read_trace()
+        assert isinstance(existing, DriverSuccess)
+        assert existing.value == first.value
+    # A second driver observes the same simulated panel; reading did not consume RNG.
+    reopened = VirtualNetworkAnalyzer("vna", world)
+    assert reopened.read_trace() == first
+    next_trace = driver.sweep()
+    assert isinstance(next_trace, DriverSuccess)
+    assert next_trace.value.frequency != first.value.frequency
+    assert next_trace.value.evidence["settings"] != first.value.evidence["settings"]
+    assert driver.read_trace() == next_trace

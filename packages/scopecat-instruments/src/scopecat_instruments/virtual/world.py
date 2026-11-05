@@ -5,9 +5,11 @@ from __future__ import annotations
 import cmath
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import RLock
 from typing import Literal
+
+from pydantic import JsonValue
 
 from scopecat_instruments._support import NetworkTrace
 from scopecat_instruments.interface_declarations import ReferenceSource, SParameter
@@ -46,6 +48,8 @@ class VirtualTemperatureState:
 
 @dataclass
 class VirtualVnaState:
+    retained_trace: NetworkTrace | None = None
+    trace_evidence: dict[str, JsonValue] = field(default_factory=dict)
     start_frequency_hz: float = 4.8e9
     stop_frequency_hz: float = 5.2e9
     points: int = 201

@@ -126,6 +126,7 @@ from ..command_payloads import (
 from ..errors import BackendConflict, BackendNotFound
 from ..setup_access import SetupReader, setup_config
 from ._runtime_state import (
+    INTERACTIVE_REPLAY_LIMIT,
     ApplyReplay,
     CollectFailureReplay,
     CollectReceiptReplay,
@@ -185,6 +186,11 @@ from .commands import (
     observed_members,
 )
 from .costs import observe_operation
+from .finish import (
+    InstrumentFinishAction,
+    InstrumentFinishCommand,
+    InstrumentFinishPlan,
+)
 from .owner import InstrumentBackendOwner
 
 if TYPE_CHECKING:
@@ -2613,6 +2619,33 @@ class InstrumentRuntime:
                 "instrument session acquisition could not be released"
             ) from error
 
+    def shared_observation(
+        self,
+        instrument_id: str,
+        *,
+        setup: SetupRevisionRef,
+    ) -> InstrumentStateSnapshot:
+        """Read actor evidence only: no backend activation, lease, connect or query."""
+        config = self._selected_setup_config(setup)
+        specs = {spec.id: spec for spec in config.instrument_registry.instruments}
+        if instrument_id not in specs:
+            raise BackendNotFound("instrument not found in the selected setup")
+        spec = specs[instrument_id]
+        binding = next(
+            item for item in instrument_bindings(config) if item.id == instrument_id
+        )
+        snapshot = self._actors.shared_observation(
+            spec.exclusivity_key,
+            model_wire_content_hash(
+                binding.model_copy(update={"id": spec.exclusivity_key})
+            ),
+        )
+        return (
+            InstrumentStateSnapshot(instrument_id=instrument_id)
+            if snapshot is None
+            else snapshot.model_copy(update={"instrument_id": instrument_id}, deep=True)
+        )
+
     def read_state(
         self,
         session_id: str,
@@ -2693,6 +2726,13 @@ class InstrumentRuntime:
                 session_id,
                 instrument_id,
             )
+            if (
+                runtime.finish_command_ids is not None
+                and command.command_id not in runtime.finish_command_ids
+            ):
+                raise BackendConflict(
+                    "session finish is in progress; new changes are blocked"
+                )
             command_id = command.command_id
             ledger = runtime.ledgers[instrument_id]
             replay = ledger.replay(command_id)
@@ -2768,6 +2808,10 @@ class InstrumentRuntime:
 
         runtime = self._live_runtime(session_id)
         with runtime.lock:
+            if runtime.finish_command_ids is not None:
+                raise BackendConflict(
+                    "session finish is in progress; defaults cannot be applied"
+                )
             session, _runtime, instrument = self._session_instrument(
                 session_id,
                 instrument_id,
@@ -3013,6 +3057,13 @@ class InstrumentRuntime:
                 )
             runtime = self._live_runtime(session_id)
             with runtime.lock:
+                if (
+                    runtime.finish_command_ids is not None
+                    and command.command_id not in runtime.finish_command_ids
+                ):
+                    raise BackendConflict(
+                        "session finish is in progress; new changes are blocked"
+                    )
                 session, _runtime, instrument = self._session_instrument(
                     session_id,
                     instrument_id,
@@ -3057,6 +3108,10 @@ class InstrumentRuntime:
             raise BackendConflict("interactive collect intent does not match its route")
         runtime = self._live_runtime(session_id)
         with runtime.lock:
+            if runtime.finish_command_ids is not None:
+                raise BackendConflict(
+                    "session finish is in progress; new collections are blocked"
+                )
             session, _runtime, instrument = self._session_instrument(
                 session_id,
                 instrument_id,
@@ -3263,6 +3318,7 @@ class InstrumentRuntime:
         command_id = intent.command_id
         ledger = runtime.ledgers[instrument.instrument_id]
         driver_request = lower_backend_collect_request(command)
+        observed_before_collection = instrument.assumed_state
         on_started()
         try:
             receipt = execute_instrument_collect(
@@ -3297,6 +3353,7 @@ class InstrumentRuntime:
                 intent=intent,
                 command=command,
                 receipt=receipt,
+                observed_before_collection=observed_before_collection,
             ),
         )
         try:
@@ -3309,6 +3366,175 @@ class InstrumentRuntime:
         if receipt.status == "unknown":
             on_unknown("instrument_collect_receipt_unknown")
         return receipt
+
+    def retained_collection(
+        self,
+        session_id: str,
+        instrument_id: str,
+        command_id: str,
+    ) -> tuple[InstrumentSession, InstrumentDescription, CollectReceiptReplay]:
+        """Copy an existing successful receipt without device I/O or lease renewal."""
+        with self._sessions_lock:
+            context = self._sessions.get(session_id)
+        if context is None:
+            raise BackendNotFound("unsaved collection is no longer retained")
+        with context.runtime.lock:
+            instrument = context.runtime.instruments.get(instrument_id)
+            ledger = context.runtime.ledgers.get(instrument_id)
+            replay = None if ledger is None else ledger.replay(command_id)
+            if instrument is None or not isinstance(replay, CollectReceiptReplay):
+                raise BackendNotFound("collection receipt is no longer retained")
+            if replay.receipt.status != "collected":
+                raise BackendConflict("only a successful collection can be saved")
+            return (
+                self._control.get_instrument_session(session_id),
+                instrument.description.model_copy(deep=True),
+                replay,
+            )
+
+    def finish_plan(self, session_id: str) -> InstrumentFinishPlan:
+        runtime = self._live_runtime(session_id)
+        with runtime.lock:
+            actions = [
+                InstrumentFinishAction(
+                    instrument_id=instrument_id,
+                    states=spec.safe_state,
+                    operations=spec.safe_operations,
+                )
+                for instrument_id, spec in runtime.specs.items()
+            ]
+            return InstrumentFinishPlan(
+                actions=actions,
+                configured_finish_available=all(
+                    bool(action.states or action.operations)
+                    and len(action.operations) + bool(action.states)
+                    <= INTERACTIVE_REPLAY_LIMIT
+                    for action in actions
+                ),
+            )
+
+    def finish_session(
+        self,
+        session_id: str,
+        command: InstrumentFinishCommand,
+    ) -> InstrumentSessionEndReceipt:
+        # Reuse the original ownership and typed command paths. The close endpoint
+        # retains its existing keep-current semantics for programmatic callers.
+        session = self._control.get_instrument_session(session_id)
+        if (
+            session.state != "closed"
+            and command.mode == "configured_finish"
+            and not self.finish_plan(session_id).configured_finish_available
+        ):
+            raise BackendConflict(
+                "no configured finish action for every selected device"
+            )
+        payload = {"session_id": session_id, **command.model_dump(mode="json")}
+        with self._control.write_transaction() as connection:
+            row = cast(
+                "tuple[str] | None",
+                connection.execute(
+                    "SELECT payload_json FROM durable_events WHERE kind=? "
+                    "AND json_extract(payload_json, '$.session_id')=? "
+                    "ORDER BY event_id LIMIT 1",
+                    ("instrument_session_finish_selected", session_id),
+                ).fetchone(),
+            )
+            if row is not None:
+                import json
+
+                if json.loads(row[0]) != payload:
+                    raise BackendConflict(
+                        "finish selection is already fixed for this session"
+                    )
+            elif session.state == "closed":
+                raise BackendConflict(
+                    "session already closed without this finish selection"
+                )
+            else:
+                self._control.append_event_in_transaction(
+                    connection,
+                    DurableEventInput(
+                        kind="instrument_session_finish_selected",
+                        payload=payload,
+                    ),
+                )
+        if session.state == "closed":
+            with self._control.read_transaction() as connection:
+                completed = cast(
+                    "tuple[int] | None",
+                    connection.execute(
+                        "SELECT 1 FROM durable_events WHERE kind=? "
+                        "AND json_extract(payload_json, '$.session_id')=? LIMIT 1",
+                        ("instrument_session_finish_actions_completed", session_id),
+                    ).fetchone(),
+                )
+            if completed is None or session.end_status != "closed":
+                raise BackendConflict(
+                    "finish completion is unknown; inspect the device"
+                )
+            return self.close_session(session_id)
+        runtime = self._live_runtime(session_id)
+        with runtime.lock:
+            runtime.finish_command_ids = {
+                f"{command.operation_id}.finish.{instrument_id}.{index}"
+                for instrument_id, spec in runtime.specs.items()
+                for index in range(len(spec.safe_operations))
+            } | {
+                f"{command.operation_id}.finish.{instrument_id}.state"
+                for instrument_id in runtime.specs
+            }
+            if command.mode == "configured_finish":
+                if not self.finish_plan(session_id).configured_finish_available:
+                    raise BackendConflict(
+                        "no configured finish action for every selected device"
+                    )
+                for instrument_id, spec in runtime.specs.items():
+                    for index, operation in enumerate(spec.safe_operations):
+                        receipt = self.invoke(
+                            session_id,
+                            instrument_id,
+                            self._configured_safe_operation_command(
+                                instrument_id,
+                                operation,
+                                operation_id=f"{command.operation_id}.finish.{instrument_id}.{index}",
+                            ),
+                        )
+                        if receipt.status != "invoked":
+                            raise BackendConflict(
+                                "finish action was not confirmed; "
+                                "output state is unknown"
+                            )
+                    if spec.safe_state:
+                        instrument = runtime.instruments[instrument_id]
+                        assignments = configured_state_assignments(
+                            instrument_id=instrument_id,
+                            configured_state=spec.safe_state,
+                            instrument=instrument,
+                        )
+                        receipt = self.apply_state(
+                            session_id,
+                            instrument_id,
+                            InstrumentStateCommand(
+                                command_id=f"{command.operation_id}.finish.{instrument_id}.state",
+                                instrument_id=instrument_id,
+                                assignments=list(assignments),
+                            ),
+                        )
+                        if receipt.status != "applied":
+                            raise BackendConflict(
+                                "finish state was not confirmed; "
+                                "output state is unknown"
+                            )
+            with self._control.write_transaction() as connection:
+                self._control.append_event_in_transaction(
+                    connection,
+                    DurableEventInput(
+                        kind="instrument_session_finish_actions_completed",
+                        payload=payload,
+                    ),
+                )
+            return self.close_session(session_id)
 
     def close_session(
         self,

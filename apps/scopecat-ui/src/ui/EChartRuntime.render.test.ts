@@ -13,7 +13,11 @@ it("renders measurement series and updates their visible range with the register
       tooltip: { trigger: "item" },
       xAxis: { type: "value", min: 0, max: 10 },
       yAxis: { type: "value" },
-      dataZoom: [{ type: "inside", start: 0, end: 100 }],
+      // Direct acquisition curves use both wheel/pinch and a visible slider.
+      dataZoom: [
+        { type: "inside", start: 0, end: 100 },
+        { type: "slider", start: 0, end: 100 },
+      ],
       visualMap: {
         min: 0,
         max: 10,
@@ -64,7 +68,10 @@ it("renders measurement series and updates their visible range with the register
       expect(svg).toContain(content);
     }
     chart.dispatchAction({ type: "dataZoom", start: 25, end: 75 });
-    expect(chart.getOption().dataZoom).toEqual([expect.objectContaining({ start: 25, end: 75 })]);
+    expect(chart.getOption().dataZoom).toEqual([
+      expect.objectContaining({ type: "inside", start: 25, end: 75 }),
+      expect.objectContaining({ type: "slider", start: 25, end: 75 }),
+    ]);
     expect(chart.renderToSVGString()).not.toBe(svg);
     expect(errors).not.toHaveBeenCalled();
   } finally {
