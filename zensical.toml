@@ -88,6 +88,7 @@ nav = [
     { "数据兼容性策略" = "development/data-compatibility.md" },
     { "安装布局" = "development/installation-layout.md" },
     { "核心工作流评估" = "development/workflow-evaluations.md" },
+    { "真人作者试用" = "development/author-trial.md" },
     { "架构" = [
       "development/architecture/index.md",
       { "可恢复编辑与原生存储" = "development/architecture/draft-recovery.md" },
