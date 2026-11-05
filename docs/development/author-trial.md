@@ -112,6 +112,7 @@
 
    ```python
    from pathlib import Path
+
    original = author.reopen(Path("第一次打印的 receipt 路径")).wait(timeout=120).result()
    print(original.id, original.measurements()["frequency"].require_magnitudes("GHz"))
    ```
