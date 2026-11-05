@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, override
 
 import pytest
 import uvicorn
@@ -63,10 +63,15 @@ async def _tcp_case(mode: str, payload: bytes) -> None:
 
     config = uvicorn.Config(app, lifespan="off", log_config=None)
 
+    class ConnectedProtocol(ClosingAwareH11Protocol):
+        @override
+        def connection_made(self, transport: asyncio.Transport) -> None:
+            super().connection_made(transport)
+            connected.set()
+
     def factory() -> ClosingAwareH11Protocol:
-        protocol = ClosingAwareH11Protocol(config, state, {})
+        protocol = ConnectedProtocol(config, state, {})
         protocols.append(protocol)
-        connected.set()
         return protocol
 
     server = await loop.create_server(factory, "127.0.0.1", 0)
