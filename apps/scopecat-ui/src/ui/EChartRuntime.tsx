@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { CustomChart, LineChart, ScatterChart } from "echarts/charts";
 import {
   DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GridComponent,
   LegendScrollComponent,
   TooltipComponent,
@@ -14,6 +15,7 @@ import { SVGRenderer } from "echarts/renderers";
 use([
   CustomChart,
   DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GridComponent,
   LegendScrollComponent,
   LineChart,
