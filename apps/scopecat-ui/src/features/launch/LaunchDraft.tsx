@@ -298,11 +298,11 @@ function ProjectDraft({
   const [attemptsReady, setAttemptsReady] = useState(false);
   const [attemptReload, setAttemptReload] = useState(0);
   useEffect(() => {
-    let active = true;
+    const lifecycle = { active: true };
     const generation = attemptGeneration.current;
     void attemptHistory()
       .then((page) => {
-        if (!active) return;
+        if (!lifecycle.active) return;
         const record = page.items[0];
         if (record && generation === attemptGeneration.current)
           setAttempt({
@@ -315,10 +315,10 @@ function ProjectDraft({
         setAttemptsReady(true);
       })
       .catch(() => {
-        if (active) setAttemptsReady(false);
+        if (lifecycle.active) setAttemptsReady(false);
       });
     return () => {
-      active = false;
+      lifecycle.active = false;
     };
   }, [attemptReload]);
   const alive = useRef(true);

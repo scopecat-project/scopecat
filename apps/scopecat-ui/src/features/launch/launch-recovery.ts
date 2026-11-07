@@ -251,7 +251,7 @@ export function useLaunchRecovery(
     queueMicrotask(() => {
       if (mounted.current && session.current === current) setStatus("正在加载已保存的实验输入…");
     });
-    let active = true;
+    const lifecycle = { active: true };
     void readDraft(workspace, experiment, draft_id)
       .then(({ head }) => {
         capturePendingInput(current);
@@ -259,7 +259,7 @@ export function useLaunchRecovery(
         // the existing CAS retain a conflict instead of overwriting a newer head.
         if (current.localInput === undefined) current.revision = head?.revision ?? 0;
         current.head = head ?? undefined;
-        if (!active) return;
+        if (!lifecycle.active) return;
         const pendingCopy = requestedCopy.current;
         const copy =
           pendingCopy?.target.workspace_id === workspace &&
@@ -294,13 +294,13 @@ export function useLaunchRecovery(
         setEpoch((value) => value + 1);
       })
       .catch((error) => {
-        if (active)
+        if (lifecycle.active)
           setStatus(
             `Input recovery unavailable: ${String(error)}. Reopen this experiment to retry.`,
           );
       });
     return () => {
-      active = false;
+      lifecycle.active = false;
       capturePendingInput(current);
       // An abandoned initial lookup owns no edits or pending write. Its late
       // response must neither hydrate another target nor block this window forever.
@@ -471,12 +471,12 @@ export function useLaunchRecovery(
     [unfinished],
   );
   useEffect(() => {
-    let active = true;
+    const lifecycle = { active: true };
     queueMicrotask(() => {
-      if (active) setVisibleSession(session.current ? { ...session.current } : undefined);
+      if (lifecycle.active) setVisibleSession(session.current ? { ...session.current } : undefined);
     });
     return () => {
-      active = false;
+      lifecycle.active = false;
     };
   }, [epoch, target, status]);
   useEffect(

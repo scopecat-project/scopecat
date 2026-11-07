@@ -240,25 +240,27 @@ export function DesktopSession() {
   }, []);
   useEffect(() => {
     if (!open || !window.pywebview) return;
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
+    const lifecycle: { disposed: boolean; timer?: ReturnType<typeof setTimeout> } = {
+      disposed: false,
+    };
     const refresh = async () => {
       try {
         const next = await window.pywebview!.api.exit_status();
-        if (!disposed) {
+        if (!lifecycle.disposed) {
           setReport(next);
           if (next.error) setError(next.error);
         }
       } catch (failure) {
-        if (!disposed) setError(failure instanceof Error ? failure.message : String(failure));
+        if (!lifecycle.disposed)
+          setError(failure instanceof Error ? failure.message : String(failure));
       } finally {
-        if (!disposed) timer = setTimeout(() => void refresh(), 1000);
+        if (!lifecycle.disposed) lifecycle.timer = setTimeout(() => void refresh(), 1000);
       }
     };
     void refresh();
     return () => {
-      disposed = true;
-      clearTimeout(timer);
+      lifecycle.disposed = true;
+      clearTimeout(lifecycle.timer);
     };
   }, [open, waiting]);
   useEffect(() => {

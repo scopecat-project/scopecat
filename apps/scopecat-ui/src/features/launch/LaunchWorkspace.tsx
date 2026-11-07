@@ -144,14 +144,14 @@ export function LaunchWorkspace({
       !catalog.isSuccess
     )
       return;
-    let active = true;
+    const lifecycle = { active: true };
     void linkedActions
-      .current(linkedRead.data, () => active)
+      .current(linkedRead.data, () => lifecycle.active)
       .then((opened) => {
-        if (active) setLinkBlocked(!opened);
+        if (lifecycle.active) setLinkBlocked(!opened);
       });
     return () => {
-      active = false;
+      lifecycle.active = false;
     };
   }, [
     linked,
@@ -238,16 +238,16 @@ export function LaunchWorkspace({
   const [handoffFailed, setHandoffFailed] = useState(false);
   useEffect(() => {
     if (!handoff || !handoffTarget) return;
-    let active = true;
+    const lifecycle = { active: true };
     void importer.current.importHandoff(handoffTarget, handoff).then((accepted) => {
-      if (!active) return;
+      if (!lifecycle.active) return;
       if (accepted) {
         setHandoffFailed(false);
         importer.current.onHandoffImported?.();
       } else setHandoffFailed(true);
     });
     return () => {
-      active = false;
+      lifecycle.active = false;
     };
   }, [handoff, handoffTarget, handoffRetry]);
   return (

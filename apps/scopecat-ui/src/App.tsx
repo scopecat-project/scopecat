@@ -155,17 +155,17 @@ function WorkspaceApp() {
     if (healthQuery.isError) healthWasUnavailable.current = true;
     if (!healthQuery.isSuccess || !healthWasUnavailable.current) return;
     healthWasUnavailable.current = false;
-    let cancelled = false;
+    const lifecycle = { cancelled: false };
     const projectQueries = {
       predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== "health",
     };
     // Invalidation alone can reuse an unfinished first request (no cached data).
     // Retire requests from the old backend before refreshing the mounted page.
     void queryClient.cancelQueries(projectQueries).then(() => {
-      if (!cancelled) void queryClient.invalidateQueries(projectQueries);
+      if (!lifecycle.cancelled) void queryClient.invalidateQueries(projectQueries);
     });
     return () => {
-      cancelled = true;
+      lifecycle.cancelled = true;
     };
   }, [healthQuery.isError, healthQuery.isSuccess, queryClient]);
 
@@ -208,9 +208,11 @@ function WorkspaceApp() {
 
   useEffect(() => {
     if (!healthQuery.isSuccess) return;
-    let refreshTimer: number | undefined;
+    const refreshState: { timer: number | undefined; canonicalRequired: boolean } = {
+      timer: undefined,
+      canonicalRequired: false,
+    };
     const measurementRunsToRefresh = new Set<string>();
-    let canonicalRefreshRequired = false;
     const measurementRefresh = measurementEventRefresh(queryClient);
     const invalidateRunQueries = () => {
       void queryClient.invalidateQueries({ queryKey: ["runs"] });
@@ -249,18 +251,18 @@ function WorkspaceApp() {
       if (measurementRunId !== undefined) {
         measurementRunsToRefresh.add(measurementRunId);
       } else {
-        canonicalRefreshRequired = true;
+        refreshState.canonicalRequired = true;
       }
-      if (refreshTimer !== undefined) return;
-      refreshTimer = window.setTimeout(() => {
-        refreshTimer = undefined;
+      if (refreshState.timer !== undefined) return;
+      refreshState.timer = window.setTimeout(() => {
+        refreshState.timer = undefined;
         const measurementRunsToRefreshNow = [...measurementRunsToRefresh];
         measurementRunsToRefresh.clear();
         // Pure measurement events change run data, not project configuration or samples.
         // A mixed/unknown event batch still uses the complete canonical refresh.
-        if (canonicalRefreshRequired) invalidateCanonicalQueries();
+        if (refreshState.canonicalRequired) invalidateCanonicalQueries();
         else invalidateRunQueries();
-        canonicalRefreshRequired = false;
+        refreshState.canonicalRequired = false;
         for (const runId of measurementRunsToRefreshNow) {
           measurementRefresh.invalidate(runId);
         }
@@ -273,7 +275,7 @@ function WorkspaceApp() {
     );
     return () => {
       measurementRefresh.dispose();
-      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      if (refreshState.timer !== undefined) window.clearTimeout(refreshState.timer);
       disconnect();
     };
   }, [healthQuery.isSuccess, queryClient]);

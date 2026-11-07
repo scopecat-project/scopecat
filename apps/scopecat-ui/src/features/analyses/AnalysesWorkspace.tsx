@@ -277,7 +277,7 @@ function useAnalysisReturnPosition(
     if (!ready || !element) return;
     const position = window.history.state?.scopecatPosition ?? 0;
     const saved = window.history.state?.scopecatAnalysisPosition;
-    let scrollTimer: number | undefined;
+    const scroll: { timer?: number } = {};
     const save = () => {
       // A navigation may finish before the outgoing component is unmounted.
       if ((window.history.state?.scopecatPosition ?? 0) !== position) return;
@@ -298,8 +298,8 @@ function useAnalysisReturnPosition(
       );
     };
     const rememberScroll = () => {
-      window.clearTimeout(scrollTimer);
-      scrollTimer = window.setTimeout(save, 200);
+      window.clearTimeout(scroll.timer);
+      scroll.timer = window.setTimeout(save, 200);
     };
     const frame = requestAnimationFrame(() => {
       if (saved?.projectId === projectId && saved.analysisId === analysisId) {
@@ -316,7 +316,7 @@ function useAnalysisReturnPosition(
     });
     return () => {
       cancelAnimationFrame(frame);
-      window.clearTimeout(scrollTimer);
+      window.clearTimeout(scroll.timer);
       window.removeEventListener("scroll", rememberScroll);
       window.removeEventListener("click", save, true);
       window.removeEventListener("pagehide", save);

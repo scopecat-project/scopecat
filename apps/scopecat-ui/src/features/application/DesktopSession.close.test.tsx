@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DesktopSession } from "./DesktopSession";
 import { launchCloseBlocked, retainLaunchCloseParticipant } from "../launch/launch-close-barrier";
@@ -61,4 +61,46 @@ it("does not acknowledge a flush that finishes after the host released its reque
   expect(acknowledge).not.toHaveBeenCalled();
   expect(launchCloseBlocked()).toBe(false);
   detach();
+});
+
+it("keeps late exit polling isolated from a reopened dialog and stops after unmount", async () => {
+  vi.useFakeTimers();
+  const report = {
+    draining: false,
+    finishing: [],
+    deferred: [],
+    blockers: [],
+    file_operations: 0,
+    error: null,
+  };
+  let finishPreviousPoll!: (value: typeof report) => void;
+  const previousPoll = new Promise<typeof report>((resolve) => {
+    finishPreviousPoll = resolve;
+  });
+  const exitStatus = vi.fn().mockReturnValueOnce(previousPoll).mockResolvedValue(report);
+  vi.stubGlobal("pywebview", {
+    api: {
+      request_exit: vi.fn().mockResolvedValue({ runs: 1 }),
+      exit_status: exitStatus,
+      wait_for_idle: vi.fn().mockResolvedValue(undefined),
+    },
+  });
+  const view = render(<DesktopSession />);
+  try {
+    await act(async () => window.scopecatRequestExit?.());
+    expect(exitStatus).toHaveBeenCalledTimes(1);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
+    await act(async () => window.scopecatRequestExit?.());
+    expect(exitStatus).toHaveBeenCalledTimes(2);
+    await act(async () => finishPreviousPoll({ ...report, file_operations: 99 }));
+    expect(screen.queryByText("Finishing 99 file operations.")).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    expect(exitStatus).toHaveBeenCalledTimes(3);
+    view.unmount();
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(exitStatus).toHaveBeenCalledTimes(3);
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
 });
