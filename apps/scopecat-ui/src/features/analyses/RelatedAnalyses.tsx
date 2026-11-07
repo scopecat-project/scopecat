@@ -89,7 +89,7 @@ function RunResults({
     const element = region.current;
     if (!element) return;
     const position = window.history.state?.scopecatPosition ?? 0;
-    let timer: number | undefined;
+    const scroll: { timer?: number } = {};
     const snapshot = (includeScroll: boolean) => {
       // Outgoing effects must never write into the destination history entry.
       if ((window.history.state?.scopecatPosition ?? 0) !== position) return;
@@ -126,8 +126,8 @@ function RunResults({
     // Keep the previous scroll snapshot while cold content is still settling.
     const rememberDetails = () => snapshot(false);
     const rememberScroll = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
+      window.clearTimeout(scroll.timer);
+      scroll.timer = window.setTimeout(() => {
         const initial = initialPosition.current;
         if (
           initial?.projectId === projectId &&
@@ -144,7 +144,7 @@ function RunResults({
     window.addEventListener("pagehide", save);
     element.addEventListener("toggle", rememberDetails, true);
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(scroll.timer);
       window.removeEventListener("click", save, true);
       window.removeEventListener("scroll", rememberScroll);
       window.removeEventListener("pagehide", save);
