@@ -64,7 +64,7 @@ def check_workflow(source: str, path: str) -> list[str]:
     try:
         document = loader.get_single_node()
     finally:
-        loader.dispose()
+        loader.dispose()  # pyright: ignore[reportUnknownMemberType] -- PyYAML omits this cleanup method's return type.
     lines = source.splitlines()
     for uses in action_uses(document):
         action = scalar_value(uses)
