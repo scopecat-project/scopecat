@@ -100,7 +100,9 @@ test("connection test feedback follows the saved revision across editing and dae
     await dialog.getByLabel("Gain", { exact: true }).fill("2");
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole("status")).toContainText("连接配置已保存，尚未测试。");
+    await expect(
+      page.getByRole("status").filter({ hasText: "连接配置已保存，尚未测试。" }),
+    ).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
     const edited = await current();
     expect(edited.device.head).not.toEqual(failed.device.head);
