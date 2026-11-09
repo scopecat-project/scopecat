@@ -119,7 +119,7 @@ export function AcquisitionCurve({
                     type: "value",
                     name: xLabel,
                     scale: true,
-                    axisLabel: { hideOverlap: true },
+                    axisLabel: { hideOverlap: true, margin: 12 },
                   },
                   yAxis: {
                     type: "value",

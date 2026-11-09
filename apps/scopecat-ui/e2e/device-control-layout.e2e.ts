@@ -171,7 +171,10 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await expectFittedCurve(curve);
     for (const value of ["phase", "real", "imag", "magnitude"]) {
       await sweep.getByRole("combobox", { name: "复数表示" }).selectOption(value);
-      await expectFittedCurve(curve);
+      for (const width of [390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expectFittedCurve(curve);
+      }
     }
     await page.getByRole("button", { name: "保存此结果", exact: true }).click();
     await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
