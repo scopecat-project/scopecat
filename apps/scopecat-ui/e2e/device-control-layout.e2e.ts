@@ -189,17 +189,21 @@ test("control inputs and headings stay readable and complete curves resize at ev
         contentType: "image/png",
       });
     }
-    await page.reload();
-    await page.getByRole("checkbox", { name: /layout-line.*layout-only/ }).check();
-    const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
+    // A fresh view reads the saved result without dismissing the active view's
+    // unload guard or discarding its unsaved existing-trace readback.
+    const reopened = await page.context().newPage();
+    await reopened.setViewportSize({ width: 390, height: 900 });
+    await reopened.goto(controlUrl);
+    await reopened.getByRole("checkbox", { name: /layout-line.*layout-only/ }).check();
+    const savedCurve = reopened.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390]) {
-      await page.setViewportSize({ width, height: 900 });
+      await reopened.setViewportSize({ width, height: 900 });
       await expectFittedCurve(savedCurve);
       expect(
-        await page.evaluate<number>("document.documentElement.scrollWidth"),
+        await reopened.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
       await testInfo.attach(`saved-curve-layout-${width}`, {
-        body: await page.screenshot({ fullPage: true }),
+        body: await reopened.screenshot({ fullPage: true }),
         contentType: "image/png",
       });
     }
