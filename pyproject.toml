@@ -33,7 +33,7 @@ delivery-build = ["pip>=25", "setuptools>=80", "wheel>=0.45"]
 delivery-notebook = ["scopecat-app[notebook]", { include-group = "delivery" }]
 docs = [
   "mkdocstrings-python>=2",
-  "zensical>=0.0.43,<0.1",
+  "zensical>=0.1,<0.2",
 ]
 notebook = [
   "ipykernel>=6.29",
