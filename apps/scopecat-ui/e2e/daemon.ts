@@ -38,21 +38,23 @@ export function stopProjectAndWait(project: string) {
     `
 import json, sys
 from pathlib import Path
-import psutil
+import httpx2, psutil
 from scopecat.application_instance import open_instance
-from scopecat.daemon.endpoint import read_daemon_endpoint_record
-from scopecat_server.lifecycle import stop_project
+from scopecat_server.lifecycle import _require_selected_binding
+from scopecat.daemon.endpoint import (
+    DAEMON_SHUTDOWN_PATH, DAEMON_SHUTDOWN_TOKEN_HEADER, read_daemon_endpoint_record,
+)
 root = Path(sys.argv[1]).resolve()
 record = read_daemon_endpoint_record(root)
 owned = []
 if record is not None:
+    _require_selected_binding(open_instance(root, resolve_adapter=False), record)
     try:
         process = psutil.Process(record.pid)
         if abs(process.create_time() - record.process_create_time) >= 0.01:
             raise RuntimeError("Fixture daemon process identity changed")
         owned = [process, *process.children(recursive=True)]
-        # Windows venv Python redirects to the base interpreter. Its launcher
-        # holds the fixture cwd until the real daemon child has fully exited.
+        # Join Windows venv forwarding launchers too, before removing the cwd.
         for parent in process.parents():
             args = parent.cmdline()
             if not (("scopecat_server.cli" in args or "scopecat_server._daemon_entry" in args)
@@ -62,7 +64,15 @@ if record is not None:
     except psutil.NoSuchProcess:
         pass
 identities = [(p.pid, p.create_time()) for p in owned if p.is_running()]
-stop_project(open_instance(root, resolve_adapter=False), only_if_idle=True)
+if record is not None and owned:
+    # This is an explicit end of our isolated fixture, not an idle-only close.
+    # Request normal shutdown directly so HTTP failure never falls back to kill.
+    with httpx2.Client(timeout=10, trust_env=False) as client:
+        response = client.post(
+            record.base_url.rstrip("/") + DAEMON_SHUTDOWN_PATH,
+            headers={DAEMON_SHUTDOWN_TOKEN_HEADER: record.shutdown_token},
+        )
+        response.raise_for_status()
 _, alive = psutil.wait_procs(owned, timeout=10)
 alive = [p for p in alive if p.is_running() and p.status() != psutil.STATUS_ZOMBIE]
 if alive:

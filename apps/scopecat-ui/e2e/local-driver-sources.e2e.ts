@@ -91,8 +91,7 @@ test("a fresh standard application discovers simulation and combines public sour
     await page.getByRole("button", { name: "刷新状态", exact: true }).click();
     await expect(frequency).toHaveValue("5000000000");
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
-    await expect(finish.getByRole("heading", { name: "未保存结果：0", exact: true })).toBeVisible();
-    await finish.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    // This session only read state, so ending it needs no output-disposition choice.
     await expect(finish).toBeHidden();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
   } finally {

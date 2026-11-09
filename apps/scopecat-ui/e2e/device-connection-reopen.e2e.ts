@@ -100,7 +100,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await dialog.getByLabel("Gain", { exact: true }).fill("2");
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText("此连接版本尚未测试。")).toBeVisible();
+    await expect(page.getByRole("status")).toContainText("连接配置已保存，尚未测试。");
     await expect(page.getByRole("alert")).toHaveCount(0);
     const edited = await current();
     expect(edited.device.head).not.toEqual(failed.device.head);
@@ -187,7 +187,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "释放物理连接" })).toBeDisabled();
     await page.getByRole("button", { name: "操作", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
-    await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "结束控制前的待办", exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "连接与环境", exact: true }).click();
     await page.getByRole("button", { name: "释放物理连接" }).click();
@@ -227,7 +227,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "刷新状态", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
-    await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "结束控制前的待办", exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     passed = true;
   } finally {
