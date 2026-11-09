@@ -2,6 +2,7 @@
 
 import socket
 import sys
+import threading
 from pathlib import Path
 
 import uvicorn
@@ -70,6 +71,15 @@ with (
 ):
     listener.bind(("127.0.0.1", 0))
     (root / "url").write_text(f"http://127.0.0.1:{listener.getsockname()[1]}")
-    uvicorn.Server(
+    server = uvicorn.Server(
         uvicorn.Config(runtime.app(static_dir=static), log_level="warning")
-    ).run(sockets=[listener])
+    )
+
+    def stop_from_stdin() -> None:
+        # The test sends one explicit token. Legacy fixtures with ignored stdin
+        # see EOF and keep running; an EOF is not a shutdown request.
+        if sys.stdin.readline().strip() == "stop":
+            server.should_exit = True
+
+    threading.Thread(target=stop_from_stdin, daemon=True).start()
+    server.run(sockets=[listener])

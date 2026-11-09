@@ -115,8 +115,18 @@ export function AcquisitionCurve({
                     outerBoundsMode: "same",
                     outerBoundsContain: "all",
                   },
-                  xAxis: { type: "value", name: xLabel, scale: true },
-                  yAxis: { type: "value", name: yLabel, scale: true },
+                  xAxis: {
+                    type: "value",
+                    name: xLabel,
+                    scale: true,
+                    axisLabel: { hideOverlap: true },
+                  },
+                  yAxis: {
+                    type: "value",
+                    name: yLabel,
+                    scale: true,
+                    axisLabel: { hideOverlap: true },
+                  },
                   dataZoom: [{ type: "inside" }, { type: "slider" }],
                   series: [
                     { type: "line", name: yLabel, data, showSymbol: false, connectNulls: false },

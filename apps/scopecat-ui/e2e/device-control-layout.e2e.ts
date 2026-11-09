@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { cleanDeviceFixture, startDeviceFixture } from "./device-fixture";
 import { expect, test, type Locator } from "@playwright/test";
 import type { components } from "../src/api-schema";
 
@@ -51,6 +51,14 @@ async function expectFittedCurve(chart: Locator) {
     expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
     expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
   }
+  // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
+  for (const [index, label] of layout.labels.entries()) {
+    for (const next of layout.labels.slice(index + 1)) {
+      const overlapX = Math.min(label.right, next.right) - Math.max(label.left, next.left);
+      const overlapY = Math.min(label.bottom, next.bottom) - Math.max(label.top, next.top);
+      expect(overlapX > 1 && overlapY > 1, JSON.stringify([label, next])).toBe(false);
+    }
+  }
 }
 
 test("control inputs and headings stay readable and complete curves resize at every entry", async ({
@@ -58,37 +66,26 @@ test("control inputs and headings stay readable and complete curves resize at ev
 }, testInfo) => {
   test.setTimeout(120_000);
   const root = await mkdtemp(join(tmpdir(), "scopecat-curve-layout-"));
-  const daemon = spawn(
-    "uv",
-    [
-      "run",
-      "--locked",
-      "--project",
-      "../..",
-      "python",
-      "../../packages/scopecat-server/tests/fixtures/device_curve_daemon.py",
-      root,
-      resolve("dist"),
-    ],
-    { stdio: ["ignore", "pipe", "pipe"] },
+  const fixture = startDeviceFixture(
+    "../../packages/scopecat-server/tests/fixtures/device_curve_daemon.py",
+    root,
   );
-  let logs = "";
-  daemon.stderr.on("data", (chunk) => {
-    logs += String(chunk);
-  });
-  const stopped = new Promise<void>((done) => daemon.once("exit", () => done()));
+  let passed = false;
   let url = "";
   try {
     await expect
-      .poll(async () => {
-        if (daemon.exitCode !== null) throw new Error(logs);
-        try {
-          url = await readFile(join(root, "url"), "utf8");
-          return (await page.request.get(`${url}/api/v1/health`)).ok();
-        } catch {
-          return false;
-        }
-      })
+      .poll(
+        async () => {
+          if (fixture.child.exitCode !== null) throw new Error(fixture.logs);
+          try {
+            url = await readFile(join(root, "url"), "utf8");
+            return (await page.request.get(`${url}/api/v1/health`)).ok();
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000 },
+      )
       .toBe(true);
     await page.goto(`${url}/#settings`);
     await page.getByLabel("操作者名称", { exact: true }).fill("layout-tester");
@@ -207,9 +204,8 @@ test("control inputs and headings stay readable and complete curves resize at ev
         contentType: "image/png",
       });
     }
+    passed = true;
   } finally {
-    if (daemon.exitCode === null) daemon.kill("SIGTERM");
-    await stopped;
-    await rm(root, { recursive: true, force: true });
+    await cleanDeviceFixture(fixture, root, passed, testInfo);
   }
 });
