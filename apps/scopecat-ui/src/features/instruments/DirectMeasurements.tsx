@@ -78,7 +78,7 @@ export function DirectMeasurements({
   }
   const selectedRecords = Object.values(selected);
   return (
-    <section className="grid min-w-0 gap-3 rounded border border-line p-3 [overflow-wrap:anywhere]">
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded border border-line p-3 [overflow-wrap:anywhere]">
       <h3 className="text-sm font-semibold">直接测量记录</h3>
       <p className="text-xs text-text-dim">
         保存只保留已返回的完整回执，不会重新采集。未保存结果仅在当前控制会话内可保存，请在结束控制前保存。历史记录的线路归属不会随当前线路修改。
