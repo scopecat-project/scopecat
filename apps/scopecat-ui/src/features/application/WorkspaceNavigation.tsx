@@ -69,14 +69,12 @@ const icons = [Activity, Boxes, Boxes, Cable, Settings2];
 export function WorkspaceNavigation({
   view,
   onSelect,
-  projectName,
   focused,
   onShowNavigation,
   decisionAttention,
 }: {
   view: ProjectView;
   onSelect: (view: ProjectView) => void;
-  projectName?: string;
   focused: boolean;
   onShowNavigation: () => void;
   decisionAttention?: string;
@@ -234,9 +232,6 @@ export function WorkspaceNavigation({
             );
           })}
         </nav>
-        <div className="workspace-project" title={projectName}>
-          {projectName ?? "连接工作空间…"}
-        </div>
         <button
           className="workspace-collapse"
           aria-label={compact ? "展开 / Expand navigation" : "收起导航 / Collapse navigation"}

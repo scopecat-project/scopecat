@@ -436,7 +436,7 @@ describe("config provenance navigation", () => {
     renderApp();
 
     await screen.findByText("实验配置");
-    expect(await screen.findByText("Test lab · 参数与绑定")).toBeVisible();
+    expect(document.querySelector(".workspace-top-title")).toHaveTextContent("参数与绑定");
     expect(getRuns).not.toHaveBeenCalled();
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#configuration");
@@ -445,6 +445,30 @@ describe("config provenance navigation", () => {
       "page",
     );
   });
+
+  it.each(["Scopecat", "data", "runtime", "a1b2c3d4e5f607182930"])(
+    "uses the page title instead of the %s storage directory name",
+    async (projectName) => {
+      vi.mocked(getHealth).mockResolvedValue({
+        status: "ok",
+        projectId: "local:test",
+        projectName,
+        projectRoot: `/storage/${projectName}`,
+        details: {},
+      });
+      renderApp();
+      await screen.findByText("已连接", { exact: true });
+      expect(document.querySelector(".workspace-top-title")).toHaveTextContent(/^参数与绑定$/);
+      expect(screen.queryByTitle(projectName)).not.toBeInTheDocument();
+      expect(screen.queryAllByText(projectName, { exact: true })).toHaveLength(
+        projectName === "Scopecat" ? 1 : 0,
+      );
+      expect(screen.getAllByText("Scopecat", { exact: true })).toHaveLength(1);
+      expect(document.querySelector(".workspace-brand")).toHaveTextContent("Scopecat");
+      fireEvent.click(screen.getByRole("button", { name: /Devices and drivers$/ }));
+      expect(document.querySelector(".workspace-top-title")).toHaveTextContent(/^设备与驱动$/);
+    },
+  );
 
   it("keeps the configuration editor mounted across page navigation", async () => {
     renderApp();
@@ -1875,7 +1899,7 @@ it("opens preparation when adopting parameters while preserving the fixed monito
   window.history.replaceState(null, "", "/?procedure=run-a&workbench=submitted#configuration");
   renderApp();
   // Health replaces the project-keyed provider; click the current window, not its detached loading node.
-  await screen.findByTitle("Test lab");
+  await screen.findByText("已连接", { exact: true });
   fireEvent.click(screen.getByRole("button", { name: "用于下次实验" }));
   await waitFor(() => expect(screen.getByText("Calibration launcher")).toBeVisible());
   const url = new URL(window.location.href);

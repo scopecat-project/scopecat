@@ -39,6 +39,7 @@ test("shell labels connection, lazy loading and recovery in Chinese across width
     const top = page.locator(".workspace-top");
     const refresh = top.getByRole("button", { name: "刷新项目数据", exact: true });
     await expect(top.getByRole("status")).toHaveText("正在连接");
+    await expect(top.locator(".workspace-top-title")).toHaveText("帮助");
     await expect(refresh).toHaveAttribute("aria-busy", "true");
     await expect(page.getByText("正在加载帮助…", { exact: true })).toBeVisible();
     for (const width of [1280, 768, 390]) {
@@ -53,9 +54,7 @@ test("shell labels connection, lazy loading and recovery in Chinese across width
     }
     releaseHealth();
     await expect(top.getByRole("status")).toHaveText("已连接");
-    await expect(top.locator(".workspace-top-title")).toHaveText(
-      `${project.split("/").at(-1)} · 帮助`,
-    );
+    await expect(top.locator(".workspace-top-title")).toHaveText("帮助");
     releaseHelp();
     await expect(page.getByText("正在加载帮助…", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: /Open navigation$/ }).focus();
@@ -65,12 +64,13 @@ test("shell labels connection, lazy loading and recovery in Chinese across width
     await drawer.getByRole("button", { name: "数据 / Data", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(drawer).toHaveCount(0);
-    await expect(top.locator(".workspace-top-title")).toContainText("· 数据");
+    await expect(top.locator(".workspace-top-title")).toHaveText("数据");
     await expect(page).toHaveURL(/#history$/);
     unavailable = true;
     await refresh.focus();
     await page.keyboard.press("Enter");
     await expect(top.getByRole("status")).toHaveText("连接已断开");
+    await expect(top.locator(".workspace-top-title")).toHaveText("数据");
     await expect(page.getByText(/请确认 Scopecat 正在运行，再刷新此页面/)).toBeVisible();
     for (const width of [1280, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });

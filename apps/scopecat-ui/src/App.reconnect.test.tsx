@@ -158,7 +158,7 @@ it("labels pending, healthy, degraded and unknown health without implying succes
   expect(screen.getByRole("button", { name: "刷新项目数据" })).toHaveAttribute("aria-busy", "true");
   await act(async () => resolveHealth(healthy));
   expect(await screen.findByText("已连接", { exact: true })).toBeVisible();
-  expect(screen.getByText("Test lab · 样品")).toBeVisible();
+  expect(document.querySelector(".workspace-top-title")).toHaveTextContent(/^样品$/);
   await act(async () => {
     await client.cancelQueries({ queryKey: ["procedure-decisions"] });
     client
@@ -170,7 +170,7 @@ it("labels pending, healthy, degraded and unknown health without implying succes
       });
   });
   expect(await screen.findByLabelText("待处理判断")).toHaveTextContent("状态未知");
-  const connection = within(screen.getByText("Test lab · 样品").closest("header")!);
+  const connection = within(document.querySelector(".workspace-top-title")!.closest("header")!);
   for (const [status, label] of [
     ["degraded", "服务受限"],
     ["future_status", "状态未知（future_status）"],
