@@ -23,6 +23,9 @@ async function expectFittedCurve(chart: Locator) {
     const bounds = svg.getBoundingClientRect();
     return {
       width: bounds.width,
+      left: bounds.left,
+      right: bounds.right,
+      viewport: element.ownerDocument.defaultView!.innerWidth,
       overflow: element.scrollWidth - element.clientWidth,
       labels: [...svg.querySelectorAll("text")].map((label) => {
         const rect = label.getBoundingClientRect();
@@ -37,6 +40,8 @@ async function expectFittedCurve(chart: Locator) {
     };
   });
   expect(layout.width).toBeGreaterThan(200);
+  expect(layout.left).toBeGreaterThanOrEqual(0);
+  expect(layout.right).toBeLessThanOrEqual(layout.viewport);
   expect(layout.overflow).toBeLessThanOrEqual(1);
   expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
   expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
@@ -186,7 +191,18 @@ test("control inputs and headings stay readable and complete curves resize at ev
     }
     await page.reload();
     await page.getByRole("checkbox", { name: /layout-line.*layout-only/ }).check();
-    await expectFittedCurve(page.getByRole("img", { name: "s_parameter 完整曲线" }));
+    const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
+    for (const width of [390, 1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectFittedCurve(savedCurve);
+      expect(
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await testInfo.attach(`saved-curve-layout-${width}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
   } finally {
     if (daemon.exitCode === null) daemon.kill("SIGTERM");
     await stopped;
