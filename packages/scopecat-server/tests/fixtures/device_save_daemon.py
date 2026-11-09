@@ -2,6 +2,7 @@
 
 import socket
 import sys
+import threading
 from pathlib import Path
 from typing import override
 
@@ -78,4 +79,12 @@ with (
     server = uvicorn.Server(
         uvicorn.Config(runtime.app(static_dir=static), log_level="warning")
     )
+
+    def stop_from_stdin() -> None:
+        # The test sends one explicit token. Legacy fixtures with ignored stdin
+        # see EOF and keep running; an EOF is not a shutdown request.
+        if sys.stdin.readline().strip() == "stop":
+            server.should_exit = True
+
+    threading.Thread(target=stop_from_stdin, daemon=True).start()
     server.run(sockets=[listener])

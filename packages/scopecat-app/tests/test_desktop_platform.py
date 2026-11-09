@@ -3,6 +3,7 @@
 import sys
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
@@ -12,8 +13,45 @@ import pytest
 from scopecat_app.desktop_platform import (
     install_reopen_handler,
     install_window_menu,
+    log_native_backend,
     start_tray,
 )
+
+
+def test_windows_backend_diagnostic_reads_the_loaded_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    import hashlib
+    import logging
+
+    source = tmp_path / "winforms.py"
+    source.write_bytes(b"verified source")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setitem(
+        sys.modules,
+        "webview.platforms.winforms",
+        SimpleNamespace(__file__=str(source)),
+    )
+
+    def installed_version(_name: str) -> str:
+        return "verified-version"
+
+    monkeypatch.setattr("scopecat_app.desktop_platform.version", installed_version)
+    with caplog.at_level(logging.INFO):
+        log_native_backend()
+    assert "pywebview=verified-version" in caplog.text
+    assert f"backend={source}" in caplog.text
+    assert hashlib.sha256(source.read_bytes()).hexdigest() in caplog.text
+
+
+def test_windows_backend_diagnostic_reports_missing_evidence(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delitem(sys.modules, "webview.platforms.winforms", raising=False)
+    log_native_backend()
+    assert "Native WebView identity could not be verified" in caplog.text
+    assert "Native WebView: pywebview=" not in caplog.text
 
 
 def _backend_tray(backend: str) -> Mock:

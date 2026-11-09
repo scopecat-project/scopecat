@@ -1,0 +1,25 @@
+--- a/winforms.py
++++ b/winforms.py
+@@ -796,6 +796,9 @@
+                 # Check if SIGINT was received and exit from GUI thread
+                 global _sigint_received
+                 if _sigint_received:
++                    # Consume before Exit: cancelled closes and modal message pumps
++                    # must not turn a single console signal into repeated exits.
++                    _sigint_received = False
+                     app.Exit()
+ 
+             # Create a timer to periodically allow the Python interpreter to run
+@@ -811,7 +814,11 @@
+ 
+     if window.uid == 'master':
+         # Set up Ctrl+C handler in main thread (before starting GUI thread)
+-        signal.signal(signal.SIGINT, _sigint_handler)
++        # Embedders may own a coordinated, cancellable application shutdown.
++        # Do not replace that handler with per-window Application.Exit requests.
++        previous_sigint = signal.getsignal(signal.SIGINT)
++        if previous_sigint in (signal.SIG_DFL, signal.default_int_handler):
++            signal.signal(signal.SIGINT, _sigint_handler)
+ 
+         if is_chromium:
+             init_storage()

@@ -9,12 +9,14 @@ import hashlib
 import importlib.metadata
 import io
 import logging
+import signal
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier, Lock
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from scripts.app_build import windows_dependency
@@ -31,6 +33,122 @@ def source_pair() -> tuple[bytes, bytes]:
         )
     ).read_bytes()
     return source, windows_dependency.patch_windows(source)
+
+
+@pytest.fixture(scope="module")
+def winforms_source_pair() -> tuple[bytes, bytes]:
+    source = Path(
+        str(
+            importlib.metadata.distribution("pywebview").locate_file(
+                "webview/platforms/winforms.py"
+            )
+        )
+    ).read_bytes()
+    return source, windows_dependency.patch_winforms(source)
+
+
+def winforms_signal_scope(source: bytes, handler: object) -> dict[str, Any]:
+    # Execute actual hash-checked signal-registration code, with only the CLR
+    # thread/UI boundary replaced. No OS signal handler or real window is changed.
+    tree = ast.parse(source)
+    functions: list[ast.stmt] = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"_sigint_handler", "create_window"}
+    ]
+    registered = SimpleNamespace(current=handler)
+
+    def register(_signal: object, selected: object) -> None:
+        registered.current = selected
+
+    def selected_handler(_number: object) -> object:
+        return registered.current
+
+    def thread_start(target: object) -> object:
+        return target
+
+    def thread(_target: object) -> SimpleNamespace:
+        return SimpleNamespace(SetApartmentState=Mock(), Start=Mock(), IsAlive=False)
+
+    scope: dict[str, Any] = {
+        "signal": SimpleNamespace(
+            SIGINT=signal.SIGINT,
+            SIG_DFL=signal.SIG_DFL,
+            default_int_handler=signal.default_int_handler,
+            getsignal=selected_handler,
+            signal=register,
+        ),
+        "WinForms": SimpleNamespace(Application=Mock()),
+        "Thread": thread,
+        "ThreadStart": thread_start,
+        "ApartmentState": SimpleNamespace(STA="STA"),
+        "sys": SimpleNamespace(getwindowsversion=lambda: SimpleNamespace(major=5)),
+        "is_chromium": False,
+        "is_cef": False,
+        "registered": registered,
+        "_sigint_received": False,
+    }
+    exec(  # noqa: S102 - execute hash-checked vendor functions with UI stand-ins
+        compile(ast.Module(body=functions, type_ignores=[]), "winforms-signal", "exec"),
+        scope,
+    )
+    return scope
+
+
+@pytest.mark.parametrize("handler", [signal.SIG_IGN, "application"])
+def test_winforms_preserves_application_or_ignored_sigint(
+    winforms_source_pair: tuple[bytes, bytes], handler: object
+):
+    selected = Mock() if handler == "application" else handler
+    for source, preserves in zip(winforms_source_pair, [False, True], strict=True):
+        scope = winforms_signal_scope(source, selected)
+        scope["create_window"](SimpleNamespace(uid="master"))
+        assert (scope["registered"].current is selected) is preserves
+
+
+@pytest.mark.parametrize("handler", [signal.SIG_DFL, signal.default_int_handler])
+def test_winforms_keeps_default_console_interrupt_support(
+    winforms_source_pair: tuple[bytes, bytes], handler: object
+):
+    scope = winforms_signal_scope(winforms_source_pair[1], handler)
+    scope["create_window"](SimpleNamespace(uid="master"))
+    assert scope["registered"].current is scope["_sigint_handler"]
+
+
+def test_winforms_consumes_one_signal_before_reentrant_close_or_later_ticks(
+    winforms_source_pair: tuple[bytes, bytes],
+):
+    for source, expected in zip(winforms_source_pair, [4, 1], strict=True):
+        tree = ast.parse(source)
+        tick = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "timer_tick"
+        )
+        calls: list[str] = []
+        scope: dict[str, Any] = {"_sigint_received": True}
+
+        def request_close(calls: list[str] = calls, scope: dict[str, Any] = scope):
+            calls.append("exit")
+            if len(calls) == 1:
+                # A confirmation dialog pumps the UI queue before it returns.
+                scope["timer_tick"](None, None)
+
+        scope["app"] = SimpleNamespace(Exit=request_close)
+        exec(  # noqa: S102 - execute the hash-checked vendor timer callback
+            compile(ast.Module(body=[tick], type_ignores=[]), "winforms-timer", "exec"),
+            scope,
+        )
+        for _ in range(3):
+            scope["timer_tick"](None, None)
+        assert len(calls) == expected
+        if expected == 1:
+            assert scope["_sigint_received"] is False
+            # A later deliberate signal remains a new close request.
+            scope["_sigint_received"] = True
+            scope["timer_tick"](None, None)
+            assert len(calls) == 2
 
 
 class Task:
@@ -258,6 +376,8 @@ def test_explicit_cookie_api_is_unchanged(source_pair: tuple[bytes, bytes]):
 def test_windows_patch_rejects_unknown_source_and_wheel(tmp_path: Path):
     with pytest.raises(ValueError, match="differs"):
         windows_dependency.patch_windows(b"unknown backend")
+    with pytest.raises(ValueError, match="differs"):
+        windows_dependency.patch_winforms(b"unknown backend")
     (tmp_path / "pywebview-6.2.1-py3-none-any.whl").write_bytes(b"unknown wheel")
     with pytest.raises(ValueError, match="differs"):
         windows_dependency.patch_wheel(tmp_path)

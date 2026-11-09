@@ -119,9 +119,9 @@ application draft survived; cross-host isolation and complete restart/form
 recovery passed. The user then approved a bounded repair to initialize cookies
 once per actual host/profile, preserving private mode and explicit clearing.
 
-Windows delivery transforms the hash-locked upstream wheel into
-`6.2.1+scopecat.windows.1`. The reviewed patch changes only `edgechromium.py`;
-WinForms and its host-specific temporary directory are unchanged. It uses
+Windows native source and packaged hosts transform the hash-locked upstream wheel
+into `6.2.1+scopecat.windows.2`. The cookie repair in `edgechromium.py` leaves
+the host-specific temporary directory unchanged. It uses
 [ClearBrowsingDataAsync(Cookies)](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2profile.clearbrowsingdataasync?view=webview2-dotnet-1.0.3856.49)
 to observe completion rather than treating the void `DeleteAllCookies` call as a
 completion barrier. The pinned wheel's WebView2 Core DLL supports this API.
@@ -140,10 +140,23 @@ introduce persistent browser storage or alter application draft ownership.
 Source module, patch, resulting module, wheel and provenance are hash-checked;
 METADATA/RECORD are rewritten deterministically and licenses retained. Only the
 existing RECORD/ZIP writer is shared with Cocoa; Darwin version, patch and final
-wheel hash remain unchanged. Ordinary source environments still use upstream.
+wheel hash remain unchanged. Ordinary source environments keep upstream installed;
+the native source launcher loads the verified repaired wheel from its separate cache.
 The strict existing native cookie/marker/restart assertions must pass on the
 repaired exact SHA before claiming Windows qualification. Source-level sequencing
 tests and real wheel-integrity checks are not native acceptance.
+
+The WinForms portion of `windows.2` preserves an application's existing SIGINT
+handler, so the source host's Ctrl+C reaches its coordinated, cancellable Quit
+flow. The upstream fallback is installed only for a default handler and consumes
+its signal flag before `Application.Exit()`. A cancelled close or a modal dialog's
+nested message pump therefore cannot replay the same signal every timer tick.
+This change does not force termination or imply that instrument outputs are safe.
+Its native signal/Cancel checks are separate from the earlier cookie evidence.
+After the Windows backend loads, the existing desktop/development log records
+`Native WebView:` with its version, loaded module path and source SHA-256. Native
+acceptance checks this line against the repaired wheel, rather than inspecting
+the upstream wheel left in an ordinary development environment.
 
 ### Home, host and privacy boundaries
 

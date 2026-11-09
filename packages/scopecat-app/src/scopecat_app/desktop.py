@@ -30,6 +30,7 @@ from .desktop_platform import (
     hide_window,
     install_reopen_handler,
     install_window_menu,
+    log_native_backend,
     show_window,
     start_tray,
 )
@@ -1351,6 +1352,7 @@ def run(
                     return
             if closing.is_set() and session.finish_exit(windows.destroy):
                 return
+            log_native_backend()
             try:
                 # Cocoa status items need the application to have finished
                 # launching; a queued callback before webview.start is too early.

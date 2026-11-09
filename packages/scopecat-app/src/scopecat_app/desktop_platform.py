@@ -13,11 +13,35 @@ import logging
 import sys
 import threading
 from collections.abc import Callable
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
+
+from .bundle import file_hash
 
 if TYPE_CHECKING:
     import webview
     from pystray._base import Icon
+
+
+def log_native_backend() -> None:
+    """Report the loaded Windows backend, not an unrelated environment's wheel."""
+    if sys.platform != "win32":
+        return
+    logger = logging.getLogger(__name__)
+    try:
+        backend = sys.modules.get("webview.platforms.winforms")
+        source = getattr(backend, "__file__", None)
+        if not isinstance(source, str):
+            raise ValueError("WinForms backend source is unavailable")
+        logger.info(
+            "Native WebView: pywebview=%s; backend=%s; sha256=%s",
+            version("pywebview"),
+            source,
+            file_hash(Path(source)),
+        )
+    except OSError, ValueError, PackageNotFoundError:
+        logger.exception("Native WebView identity could not be verified")
 
 
 def show_window(window: webview.Window) -> None:

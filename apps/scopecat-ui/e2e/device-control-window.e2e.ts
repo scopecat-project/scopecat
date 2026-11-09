@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { cleanDeviceFixture, startDeviceFixture } from "./device-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import type { components } from "../src/api-schema";
 type DeviceView = components["schemas"]["DeviceView"];
@@ -11,44 +11,28 @@ test("device control windows hand off sessions without sharing writable views", 
   context,
 }, testInfo) => {
   const root = await mkdtemp(join(tmpdir(), "scopecat-device-reopen-"));
-  let daemon: ReturnType<typeof spawn>;
-  let stopped: Promise<void>;
+  let fixture: ReturnType<typeof startDeviceFixture> | undefined;
+  let passed = false;
   let url = "";
   async function start() {
-    daemon = spawn(
-      "uv",
-      [
-        "run",
-        "--locked",
-        "--project",
-        "../..",
-        "python",
-        "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
-        root,
-        resolve("dist"),
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
+    fixture = startDeviceFixture(
+      "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
+      root,
     );
-    let logs = "";
-    daemon.stderr!.on("data", (chunk) => {
-      logs += String(chunk);
-    });
-    stopped = new Promise<void>((done) => daemon.once("exit", () => done()));
     await expect
-      .poll(async () => {
-        if (daemon.exitCode !== null) throw new Error(logs);
-        try {
-          url = await readFile(join(root, "url"), "utf8");
-          return (await page.request.get(`${url}/api/v1/health`)).ok();
-        } catch {
-          return false;
-        }
-      })
+      .poll(
+        async () => {
+          if (fixture!.child.exitCode !== null) throw new Error(fixture!.logs);
+          try {
+            url = await readFile(join(root, "url"), "utf8");
+            return (await page.request.get(`${url}/api/v1/health`)).ok();
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000 },
+      )
       .toBe(true);
-  }
-  async function stop() {
-    daemon.kill("SIGTERM");
-    await stopped;
   }
   const controls: Page[] = [];
   async function capture(view: Page, name: string) {
@@ -216,9 +200,9 @@ test("device control windows hand off sessions without sharing writable views", 
       );
       await capture(page, `device-table-restored-${width}`);
     }
+    passed = true;
   } finally {
     for (const control of controls) await control.close({ runBeforeUnload: false });
-    if (daemon! && daemon.exitCode === null) await stop();
-    await rm(root, { recursive: true, force: true });
+    await cleanDeviceFixture(fixture, root, passed, testInfo);
   }
 });
