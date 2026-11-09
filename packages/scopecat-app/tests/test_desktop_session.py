@@ -9,6 +9,8 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
+from scopecat.daemon.exit import ExitReport, ExitWork
+from scopecat.daemon.health import ApplicationActivity
 from scopecat_app.desktop import (
     DesktopAPI,
     DesktopView,
@@ -693,8 +695,189 @@ def test_deferred_exit_obtains_fresh_all_view_preflight():
     acknowledge(views[1])
     runtime.stop_if_idle.return_value = True
     session.poll_exit()
+    assert not session.closing.is_set()
+    assert not session._waiting.is_set()
+    runtime.set_exit_wait.assert_called_with(False)
+    # Resolving the blocker does not silently re-arm a cancelled exit intent.
+    assert views[0].api.request_exit() is None
     assert session.closing.is_set()
     assert runtime.stop_if_idle.call_count == 2
+
+
+def test_deferred_device_exit_confirms_once_but_rechecks_fresh_saved_input():
+    runtime, session, _windows, views = close_fixture()
+    view = views[0]
+    view.device_id = "device-a"
+    for item in views:
+        acknowledge(item)
+    runtime.activity.return_value.model_dump.return_value = {"runs": 1}
+    runtime.stop_if_idle.return_value = False
+    runtime.exit_report.return_value = ExitReport(
+        draining=True, finishing=(ExitWork(kind="run", identity="run", reason="busy"),)
+    )
+    assert view.api.request_exit() == {"runs": 1}
+    initial = view.close_status
+    view.api.wait_for_idle(True)
+    for _ in range(3):
+        assert view.api.request_exit() == {"runs": 1}
+        view.api.wait_for_idle(True)
+        session.poll_exit()
+    assert view.close_status == initial
+    mock_window(view).create_confirmation_dialog.assert_called_once()
+    runtime.stop_if_idle.assert_called_once()
+    runtime.set_exit_wait.assert_called_once_with(True)
+
+    runtime.exit_report.return_value = ExitReport(draining=True)
+    requests: list[str] = []
+
+    def recheck(script: str):
+        if "scopecat:close-preflight" in script:
+            assert view.close_request is not None
+            requests.append(view.close_request)
+            view.api.complete_close_preflight(view.close_request, "saved")
+
+    mock_window(view).run_js.side_effect = recheck
+    # A racing backend operation may still veto the atomic idle stop.
+    session.poll_exit()
+    assert not session.closing.is_set()
+    runtime.stop_if_idle.return_value = True
+    session.poll_exit()
+    assert session.closing.is_set()
+    assert len(set(requests)) == 2
+    mock_window(view).create_confirmation_dialog.assert_called_once()
+    runtime.stop.assert_not_called()
+
+
+@pytest.mark.parametrize("status", ["blocked", "unknown", None])
+@pytest.mark.parametrize("cancel_fails", [False, True])
+def test_blocked_deferred_device_exit_never_repeats_dialogs_or_saving(
+    status: str | None, cancel_fails: bool
+):
+    runtime, session, _windows, views = close_fixture()
+    view = views[0]
+    view.device_id = "device-a"
+    for item in views:
+        acknowledge(item)
+    runtime.stop_if_idle.return_value = False
+    runtime.activity.return_value.model_dump.return_value = {"runs": 1}
+    runtime.exit_report.return_value = ExitReport(draining=True)
+    assert view.api.request_exit() == {"runs": 1}
+    session.wait_for_idle(True)
+    if status:
+        acknowledge(view, status)
+    else:
+        mock_window(view).run_js.side_effect = None
+    if cancel_fails:
+        runtime.set_exit_wait.side_effect = OSError("cancellation response lost")
+    with pytest.raises(ValueError, match="confirmed"):
+        session.poll_exit()
+    calls = mock_window(view).run_js.call_count
+    for _ in range(3):
+        session.poll_exit()
+    assert mock_window(view).run_js.call_count == calls
+    mock_window(view).create_confirmation_dialog.assert_called_once()
+    runtime.stop_if_idle.assert_called_once()
+    runtime.stop.assert_not_called()
+    assert not session.closing.is_set()
+    assert session._waiting.is_set() is cancel_fails
+    assert session.exit_status()["error"]
+    if cancel_fails:
+        with pytest.raises(ValueError, match="取消等待"), session.operation():
+            pytest.fail("uncertain cancellation must retain admission fencing")
+        with pytest.raises(ValueError, match="取消等待"):
+            session.wait_for_idle(True)
+        runtime.set_exit_wait.side_effect = None
+        session.wait_for_idle(False)
+        assert not session._waiting.is_set()
+    acknowledge(view)
+    runtime.stop_if_idle.return_value = True
+    assert view.api.request_exit() is None
+    assert session.closing.is_set()
+    assert mock_window(view).create_confirmation_dialog.call_count == 2
+
+
+def test_deferred_exit_does_not_invent_device_close_consent():
+    runtime, session, _windows, views = close_fixture()
+    views[0].device_id = "device-a"
+    runtime.exit_report.return_value = ExitReport(draining=True)
+    session.wait_for_idle(True)
+    with pytest.raises(ValueError, match="设备窗口已改变"):
+        session.poll_exit()
+    mock_window(views[0]).create_confirmation_dialog.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    assert not session._waiting.is_set()
+
+
+def test_deferred_exit_can_finish_when_backend_is_already_stopped():
+    runtime, session, _windows, views = close_fixture()
+    for view in views:
+        acknowledge(view)
+    runtime.exit_report.return_value = ExitReport(draining=False)
+    runtime.activity.return_value = ApplicationActivity()
+    session.wait_for_idle(True)
+    session.poll_exit()
+    assert session.closing.is_set()
+    runtime.stop_if_idle.assert_called_once()
+
+
+def test_quit_in_progress_cannot_start_a_second_native_confirmation():
+    runtime, session, _windows, views = close_fixture()
+    views[0].device_id = "device-a"
+    for view in views:
+        acknowledge(view)
+
+    def confirm(_title: str, _message: str) -> bool:
+        with pytest.raises(ValueError, match="另一项操作"):
+            session.request_exit()
+        return False
+
+    mock_window(views[0]).create_confirmation_dialog.side_effect = confirm
+    with pytest.raises(ValueError, match="cancelled"):
+        session.request_exit()
+    mock_window(views[0]).create_confirmation_dialog.assert_called_once()
+    runtime.stop_if_idle.assert_not_called()
+    assert not session._waiting.is_set()
+
+
+def test_development_controller_does_not_retry_a_blocked_device_exit(tmp_path: Path):
+    import queue
+
+    from scripts.dev import control_session
+
+    runtime, session, _windows, views = close_fixture()
+    views[0].device_id = "device-a"
+    for view in views:
+        acknowledge(view)
+    checks = 0
+
+    def save(script: str):
+        nonlocal checks
+        if "scopecat:close-preflight" in script:
+            checks += 1
+            request = views[0].close_request
+            assert request is not None
+            views[0].api.complete_close_preflight(
+                request, "saved" if checks == 1 else "blocked"
+            )
+
+    mock_window(views[0]).run_js.side_effect = save
+    runtime.stop_if_idle.return_value = False
+    runtime.activity.return_value.model_dump.return_value = {"runs": 1}
+    runtime.exit_report.return_value = ExitReport(draining=True)
+    closing = Mock()
+    closing.is_set.return_value = False
+    closing.wait.side_effect = [False, False, False, False, True]
+    session.closing = closing
+    commands: queue.Queue[str] = queue.Queue()
+    commands.put("q")
+    control_session(session, tmp_path, commands, Mock())
+    assert checks == 2
+    mock_window(views[0]).create_confirmation_dialog.assert_called_once()
+    assert not session._waiting.is_set()
+    assert runtime.set_exit_wait.call_args_list == [call(True), call(False)]
+    runtime.stop_if_idle.assert_called_once()
+    runtime.stop.assert_not_called()
+    closing.set.assert_not_called()
 
 
 def test_close_reserves_last_view_until_actual_closed_event():
@@ -748,6 +931,46 @@ def test_reload_during_preflight_invalidates_old_page_ack(
     runtime.stop_if_idle.assert_not_called()
     assert not session.closing.is_set()
     view.window.destroy.assert_not_called()
+
+
+@pytest.mark.parametrize("invalidate", ["reload", "cancel"])
+def test_deferred_device_confirmation_does_not_survive_reload_or_cancel(
+    monkeypatch: pytest.MonkeyPatch, invalidate: str
+):
+    from webview.event import Event
+
+    def create(_title: str, **_kwargs: object):
+        window = Mock()
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    runtime = Mock()
+    runtime.stop_if_idle.return_value = False
+    runtime.activity.return_value.model_dump.return_value = {"runs": 1}
+    runtime.exit_report.return_value = ExitReport(draining=True)
+    session = DesktopSession(runtime, threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    windows = DesktopWindows(session, Mock())
+    view = windows.create(device_id="device-a")
+    acknowledge(view)
+    assert view.api.request_exit() == {"runs": 1}
+    session.wait_for_idle(True)
+    if invalidate == "reload":
+        mock_window(view).events.loaded.set()
+    else:
+        session.wait_for_idle(False)
+        session.wait_for_idle(True)
+    with pytest.raises(ValueError, match="设备窗口已改变"):
+        session.poll_exit()
+    mock_window(view).create_confirmation_dialog.assert_called_once()
+    runtime.stop_if_idle.assert_called_once()
+    assert not session.closing.is_set()
+    assert not session._waiting.is_set()
 
 
 @pytest.mark.parametrize("operation", ["request", "stop", "deferred"])

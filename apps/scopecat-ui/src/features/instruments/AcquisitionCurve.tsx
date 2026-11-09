@@ -4,6 +4,7 @@ import type {
   InstrumentCollectReceipt,
   MeasurementAcquisitionValue,
 } from "../../api-contract";
+import { CollectResultData } from "./CollectResultData";
 import { EChart } from "../../ui/EChart";
 
 type Representation = "magnitude" | "phase" | "real" | "imag";
@@ -139,6 +140,7 @@ export function AcquisitionCurve({
             </section>
           );
         })}
+      <CollectResultData receipt={receipt} />
       <CollectReceiptDetails receipt={receipt} />
     </div>
   );

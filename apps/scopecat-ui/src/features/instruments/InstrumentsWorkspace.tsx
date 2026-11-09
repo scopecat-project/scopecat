@@ -55,6 +55,7 @@ export function InstrumentsWorkspace({
   const [releasePending, setReleasePending] = useState(false);
   const releaseInFlight = useRef<Promise<void> | undefined>(undefined);
   const closeProblem = useRef(false);
+  const [exitRequest, setExitRequest] = useState(0);
   const noteCloseProblem = useCallback((problem: boolean) => {
     closeProblem.current = problem;
   }, []);
@@ -347,6 +348,8 @@ export function InstrumentsWorkspace({
           );
         })
       ) {
+        setClosingWindow(false);
+        setExitRequest((current) => current + 1);
         setWindowError(
           "仍有未处理结果、未保存测量或结束控制选择，窗口已保留。请先核查结果、保存测量或明确结束控制，再关闭。",
         );
@@ -470,6 +473,7 @@ export function InstrumentsWorkspace({
         }
         onSessionLost={loseSession}
         onCloseProblem={noteCloseProblem}
+        exitRequest={exitRequest}
         onDisconnectOwner={() => {
           if (selected.owner_kind === "instrument_session" && selected.owner_id)
             close.mutate({ id: selected.owner_id, abort: true });
@@ -646,6 +650,7 @@ export function InstrumentsWorkspace({
             onSelect={(id) => {
               if (id === selectedId) return;
               if (session && closeProblem.current && !close.isError) {
+                setExitRequest((current) => current + 1);
                 setWindowError("请先在当前设备中保存记录并完成输出处置选择，再切换设备。");
                 return;
               }

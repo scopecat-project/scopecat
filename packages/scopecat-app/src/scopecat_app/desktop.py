@@ -30,6 +30,7 @@ from .desktop_platform import (
     hide_window,
     install_reopen_handler,
     install_window_menu,
+    log_native_backend,
     show_window,
     start_tray,
 )
@@ -694,10 +695,17 @@ class DesktopWindows:
         self._preflight_lock = threading.Lock()
         self.preflight_timeout = 10.0
         session.close_preflight = self.preflight
+        session.close_recheck = lambda: self.preflight(confirm_devices=False)
+        session.close_cancelled = self._clear_device_confirmation
         session.commit_close = self._commit_close
         session.close_aborted = self._abort_close
         self._closing_certificate: tuple[str, tuple[DesktopView, ...]] | None = None
         self._certificate: tuple[str, tuple[DesktopView, ...]] | None = None
+        self._confirmed_device_views: tuple[DesktopView, ...] = ()
+
+    def _clear_device_confirmation(self) -> None:
+        with self._lock:
+            self._confirmed_device_views = ()
 
     def _validate_certificate(self) -> None:
         certificate = self._certificate
@@ -763,8 +771,18 @@ class DesktopWindows:
             f"{{detail:{json.dumps(detail)}}}));"
         )
 
-    @staticmethod
-    def _confirm_device_close(views: tuple[DesktopView, ...]) -> None:
+    def _confirm_device_close(
+        self, views: tuple[DesktopView, ...], *, prompt: bool
+    ) -> None:
+        if not prompt:
+            if any(
+                view.device_id is not None
+                and not any(view is item for item in self._confirmed_device_views)
+                for view in views
+            ):
+                raise ValueError("设备窗口已改变；请取消等待后重新请求退出")
+            return
+        self._clear_device_confirmation()
         for view in views:
             if (
                 view.device_id is not None
@@ -776,8 +794,20 @@ class DesktopWindows:
             ):
                 raise ValueError("Device control close cancelled; window retained")
 
+    def _remember_device_confirmation(
+        self, views: tuple[DesktopView, ...], *, application: bool
+    ) -> None:
+        if application:
+            # Only the device-close choice survives this quit intent.
+            # Saved-input certificates are always fresh on every check.
+            self._confirmed_device_views = tuple(
+                view for view in views if view.device_id is not None
+            )
+
     @contextmanager
-    def preflight(self, selected: DesktopView | None = None) -> Generator[None]:
+    def preflight(
+        self, selected: DesktopView | None = None, *, confirm_devices: bool = True
+    ) -> Generator[None]:
         # This waits only in a bridge/background worker. Native closing callbacks
         # return immediately; JS acknowledgment uses an independent bridge call.
         if not self._preflight_lock.acquire(blocking=False):
@@ -796,7 +826,7 @@ class DesktopWindows:
                     view.close_status = None
                     view.close_reply_thread = None
                     view.close_ready.clear()
-            self._confirm_device_close(views)
+            self._confirm_device_close(views, prompt=confirm_devices)
             for view in views:
                 self._dispatch(
                     view, "scopecat:close-preflight", {"requestId": request_id}
@@ -825,8 +855,12 @@ class DesktopWindows:
             with self._lock:
                 if any(view.close_status != "saved" for view in views):
                     raise ValueError("The page changed while confirming saved input")
+                self._remember_device_confirmation(
+                    views, application=confirm_devices and selected is None
+                )
             yield
         except Exception as error:
+            self._clear_device_confirmation()
             message = str(error)
             raise
         finally:
@@ -987,6 +1021,11 @@ class DesktopWindows:
                 loaded.set()
                 with self._lock:
                     # Reload/replacement invalidates the old page's certificate.
+                    self._confirmed_device_views = tuple(
+                        item
+                        for item in self._confirmed_device_views
+                        if item is not view
+                    )
                     if view.close_request is not None:
                         view.close_status = "unknown"
                         view.close_ready.set()
@@ -1313,6 +1352,7 @@ def run(
                     return
             if closing.is_set() and session.finish_exit(windows.destroy):
                 return
+            log_native_backend()
             try:
                 # Cocoa status items need the application to have finished
                 # launching; a queued callback before webview.start is too early.
@@ -1331,7 +1371,6 @@ def run(
                     try:
                         session.poll_exit()
                     except Exception:
-                        session.wait_for_idle(False)
                         windows.show()
                         logging.getLogger(__name__).exception(
                             "Deferred quit retained open views"

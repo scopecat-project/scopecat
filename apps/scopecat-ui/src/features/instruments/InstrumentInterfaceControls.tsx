@@ -27,7 +27,7 @@ import type {
   StagedInstrumentMember,
 } from "./instrument-api";
 
-import { AcquisitionCurve } from "./AcquisitionCurve";
+import { AcquisitionCurve, CollectReceiptDetails } from "./AcquisitionCurve";
 
 type DraftValue = InstrumentPropertyDraft;
 
@@ -42,6 +42,7 @@ export function InterfaceCard({
   invokeResults,
   collectingTarget,
   collectionDisabled,
+  hideCollectionPlots = false,
   invokingTarget,
   interactionDisabled,
   onStage,
@@ -59,6 +60,7 @@ export function InterfaceCard({
   invokeResults: Record<string, InstrumentInvokeReceipt>;
   collectingTarget?: InstrumentAcquisitionTarget;
   collectionDisabled?: boolean;
+  hideCollectionPlots?: boolean;
   invokingTarget?: InstrumentOperationTarget;
   interactionDisabled: boolean;
   onStage: (target: InstrumentStateTarget, draft?: DraftValue) => void;
@@ -103,6 +105,7 @@ export function InterfaceCard({
         invokeResults={invokeResults}
         collectingTarget={collectingTarget}
         collectionDisabled={collectionDisabled}
+        hideCollectionPlots={hideCollectionPlots}
         invokingTarget={invokingTarget}
         interactionDisabled={interactionDisabled}
         onStage={onStage}
@@ -190,6 +193,7 @@ function InterfaceEndpoint({
   invokeResults,
   collectingTarget,
   collectionDisabled,
+  hideCollectionPlots = false,
   invokingTarget,
   interactionDisabled,
   onStage,
@@ -209,6 +213,7 @@ function InterfaceEndpoint({
   invokeResults: Record<string, InstrumentInvokeReceipt>;
   collectingTarget?: InstrumentAcquisitionTarget;
   collectionDisabled?: boolean;
+  hideCollectionPlots?: boolean;
   invokingTarget?: InstrumentOperationTarget;
   interactionDisabled: boolean;
   onStage: (target: InstrumentStateTarget, draft?: DraftValue) => void;
@@ -296,6 +301,7 @@ function InterfaceEndpoint({
                     target={target}
                     connected={connected}
                     result={collectResults[key]}
+                    hidePlot={hideCollectionPlots}
                     interactionDisabled={interactionDisabled || !!collectionDisabled}
                     collecting={
                       collectingTarget !== undefined && acquisitionKey(collectingTarget) === key
@@ -330,6 +336,7 @@ function InterfaceEndpoint({
           invokeResults={invokeResults}
           collectingTarget={collectingTarget}
           collectionDisabled={collectionDisabled}
+          hideCollectionPlots={hideCollectionPlots}
           invokingTarget={invokingTarget}
           interactionDisabled={interactionDisabled}
           onStage={onStage}
@@ -566,6 +573,7 @@ function AcquisitionControl({
   connected,
   result,
   collecting,
+  hidePlot = false,
   interactionDisabled,
   onCollect,
 }: {
@@ -573,6 +581,7 @@ function AcquisitionControl({
   connected: boolean;
   result?: InstrumentCollectReceipt;
   collecting: boolean;
+  hidePlot?: boolean;
   interactionDisabled: boolean;
   onCollect: () => void;
 }) {
@@ -637,7 +646,7 @@ function AcquisitionControl({
           ))}
         </div>
       )}
-      {result && <CollectPreview receipt={result} acquisition={acquisition} />}
+      {result && <CollectPreview receipt={result} acquisition={acquisition} hidePlot={hidePlot} />}
     </section>
   );
 }
@@ -707,7 +716,9 @@ function PropertyEditor({
 function CollectPreview({
   receipt,
   acquisition,
+  hidePlot = false,
 }: {
+  hidePlot?: boolean;
   receipt: InstrumentCollectReceipt;
   acquisition: InstrumentAcquisition;
 }) {
@@ -738,7 +749,12 @@ function CollectPreview({
           </small>
         </div>
       )}
-      {receipt.readback && <AcquisitionCurve receipt={receipt} acquisition={acquisition} />}
+      {receipt.readback &&
+        (hidePlot ? (
+          <CollectReceiptDetails receipt={receipt} />
+        ) : (
+          <AcquisitionCurve receipt={receipt} acquisition={acquisition} />
+        ))}
     </div>
   );
 }

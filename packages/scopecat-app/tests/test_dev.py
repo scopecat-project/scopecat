@@ -169,6 +169,42 @@ def test_terminal_wait_restarts_only_after_idle(
     runtime.stop.assert_not_called()
 
 
+def test_console_interrupts_coalesce_until_cancelled_request_returns(tmp_path: Path):
+    from collections.abc import Generator
+    from contextlib import contextmanager
+
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+    closing = Mock()
+    closing.is_set.return_value = False
+    closing.wait.side_effect = [False, False, True]
+    session.closing = closing
+    commands: queue.Queue[str] = queue.Queue()
+    pending = threading.Event()
+    calls: list[str] = []
+
+    @contextmanager
+    def cancel_close() -> Generator[None]:
+        calls.append("confirm")
+        # A second console interrupt during the modal must not queue another.
+        dev.queue_quit(commands, pending)
+        raise ValueError("Device control close cancelled; window retained")
+        yield  # pragma: no cover
+
+    session.close_preflight = cancel_close
+    for _ in range(3):
+        dev.queue_quit(commands, pending)
+    assert commands.qsize() == 1
+    dev.control_session(session, tmp_path, commands, Mock(), quit_requested=pending)
+    assert calls == ["confirm"]
+    assert commands.empty()
+    assert not pending.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    dev.queue_quit(commands, pending)
+    assert commands.get_nowait() == "q"
+
+
 def test_failed_source_watcher_does_not_disable_safe_quit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

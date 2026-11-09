@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, apiData, ApiError } from "../../api-client";
+import { apiClient, apiData } from "../../api-client";
 import {
   listDirectMeasurements,
   saveDirectMeasurement,
@@ -13,7 +13,12 @@ import type {
   InstrumentCollectReceipt,
   InstrumentInterface,
 } from "../../api-contract";
-import { decodeCollectReceipt } from "./hardware-receipt-wire";
+import {
+  COMPARISON_LIMIT,
+  MeasurementComparison,
+  measurementGroupKey,
+  measurementReceiptQuery,
+} from "./MeasurementComparison";
 import { AcquisitionCurve, CollectReceiptDetails } from "./AcquisitionCurve";
 import { interfaceMountPaths } from "./InstrumentInterfaceControls";
 import { createInstrumentCommandId } from "./instrument-api";
@@ -42,6 +47,7 @@ export function DirectMeasurements({
     queryKey: ["direct-measurements", cursor],
     queryFn: () => listDirectMeasurements(cursor),
   });
+  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Record<string, SavedMeasurement>>({});
   const save = useMutation({
     mutationFn: saveDirectMeasurement,
@@ -50,8 +56,29 @@ export function DirectMeasurements({
       void queryClient.invalidateQueries({ queryKey: ["direct-measurements"] });
     },
   });
+  const visibleGroups = new Map<string, SavedMeasurement[]>();
+  for (const record of records.data?.items ?? []) {
+    const text = [
+      record.id,
+      record.selection.instrument_id,
+      record.description.label,
+      record.selection.series_id,
+      record.selection.line_id,
+      record.selection.line_label,
+      record.selection.note,
+      record.intent.interface_id,
+      record.intent.acquisition_id,
+      ...(record.intent.component_path ?? []),
+    ]
+      .join(" ")
+      .toLocaleLowerCase();
+    if (!text.includes(search.trim().toLocaleLowerCase())) continue;
+    const key = measurementGroupKey(record);
+    visibleGroups.set(key, [...(visibleGroups.get(key) ?? []), record]);
+  }
+  const selectedRecords = Object.values(selected);
   return (
-    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded border border-line p-3">
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded border border-line p-3 [overflow-wrap:anywhere]">
       <h3 className="text-sm font-semibold">直接测量记录</h3>
       <p className="text-xs text-text-dim">
         保存只保留已返回的完整回执，不会重新采集。未保存结果仅在当前控制会话内可保存，请在结束控制前保存。历史记录的线路归属不会随当前线路修改。
@@ -59,7 +86,7 @@ export function DirectMeasurements({
       {pending.map((item) => (
         <div key={item.selection.command_id} className="border-b border-line pb-2">
           <span className="text-xs">
-            待保存：{item.selection.line_label || "对象未知"} ·{" "}
+            待保存：{item.selection.line_label || "未标注测量对象"} ·{" "}
             {item.acquisition.label ?? item.acquisition.id} · {item.selection.note}
           </span>
           <button
@@ -74,36 +101,63 @@ export function DirectMeasurements({
       ))}
       {save.error && <p role="alert">保存失败：{save.error.message}。可重试保存，不要重新采集。</p>}
       {records.error && <p role="alert">无法读取历史记录：{records.error.message}</p>}
-      {records.data?.items.map((record) => (
-        <label className="flex gap-2 text-xs" key={record.id}>
-          <input
-            type="checkbox"
-            checked={!!selected[record.id]}
-            onChange={(event) =>
-              setSelected((current) => {
-                const next = { ...current };
-                if (event.target.checked) next[record.id] = record;
-                else delete next[record.id];
-                return next;
-              })
-            }
-          />
-          {record.selection.line_label || "对象未知"} ·{" "}
-          {record.description.label ?? record.selection.instrument_id} ·{" "}
-          {new Date(record.collected_at).toLocaleString()} · {record.selection.note}
-          {record.selection.line_id && record.selection.instrument_id === instrumentId && (
-            <button
-              type="button"
-              className={secondaryButton}
-              onClick={(event) => {
-                event.preventDefault();
-                onResume(record.selection);
-              }}
-            >
-              继续此线路（需确认接线）
-            </button>
-          )}
-        </label>
+      <label className="text-xs">
+        查找当前页记录{" "}
+        <input
+          aria-label="查找当前页记录"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="设备、系列、线路、备注或记录 ID"
+        />
+      </label>
+      <p className="text-xs text-text-dim">
+        只搜索当前已加载页；可翻到更早记录继续查找。搜索和翻页不会移除已选记录。按设备 / 系列 / 线路
+        ID 分组，同名对象不会合并。
+      </p>
+      {records.isPending && <p role="status">正在读取记录…</p>}
+      {records.data && !visibleGroups.size && <p className="text-xs">当前页没有匹配记录。</p>}
+      {[...visibleGroups].map(([key, group]) => (
+        <fieldset key={key} className="grid min-w-0 gap-2 border border-line p-2">
+          <legend className="text-xs break-all">
+            设备 {group[0]!.selection.instrument_id} / 系列{" "}
+            {group[0]!.selection.series_id || "未知"} / 线路 {group[0]!.selection.line_id || "未知"}
+          </legend>
+          {group.map((record) => (
+            <div className="flex flex-wrap gap-2 text-xs" key={record.id}>
+              <label className="flex gap-2">
+                <input
+                  type="checkbox"
+                  aria-label={`选择记录 ${record.id}`}
+                  checked={!!selected[record.id]}
+                  disabled={!selected[record.id] && selectedRecords.length >= COMPARISON_LIMIT}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setSelected((current) => {
+                      const next = { ...current };
+                      if (checked && Object.keys(current).length < COMPARISON_LIMIT)
+                        next[record.id] = record;
+                      else if (!checked) delete next[record.id];
+                      return next;
+                    });
+                  }}
+                />
+                {record.selection.line_label || "未标注测量对象"} ·{" "}
+                {record.description.label ?? record.selection.instrument_id} ·{" "}
+                {new Date(record.collected_at).toLocaleString()} · {record.selection.note} ·{" "}
+                {record.id}
+              </label>
+              {record.selection.line_id && record.selection.instrument_id === instrumentId && (
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={() => onResume(record.selection)}
+                >
+                  继续此线路（需确认接线）
+                </button>
+              )}
+            </div>
+          ))}
+        </fieldset>
       ))}
       <div className="flex gap-2">
         {cursor !== undefined && (
@@ -122,9 +176,36 @@ export function DirectMeasurements({
         )}
       </div>
       <p className="text-xs text-text-dim">
-        勾选记录逐项比较；每条曲线保留自己的坐标与单位，不自动重采样。
+        已选 {selectedRecords.length} / {COMPARISON_LIMIT} 条，最多比较 {COMPARISON_LIMIT}{" "}
+        条记录；每条曲线保留自己的坐标与单位。
       </p>
-      {Object.values(selected).map((record) => (
+      <div className="flex flex-wrap gap-2">
+        {selectedRecords.map((record) => (
+          <button
+            key={record.id}
+            type="button"
+            className={secondaryButton}
+            onClick={() =>
+              setSelected((current) => {
+                const next = { ...current };
+                delete next[record.id];
+                return next;
+              })
+            }
+          >
+            移除已选记录 {record.id}
+          </button>
+        ))}
+      </div>
+      {selectedRecords.length > 1 && (
+        <MeasurementComparison
+          entries={selectedRecords.map((record) => ({
+            record,
+            acquisition: recordedAcquisition(record),
+          }))}
+        />
+      )}
+      {selectedRecords.map((record) => (
         <SavedCurve key={record.id} record={record} />
       ))}
     </section>
@@ -162,21 +243,12 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
     },
   });
 
-  const receipt = useQuery({
-    queryKey: ["direct-measurement-receipt", record.id],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/v1/direct-measurements/${encodeURIComponent(record.id)}/receipt`,
-      );
-      if (!response.ok) throw new ApiError("保存的回执读取失败", response.status);
-      return decodeCollectReceipt(await response.arrayBuffer());
-    },
-  });
+  const receipt = useQuery(measurementReceiptQuery(record));
   const acquisition = recordedAcquisition(record);
   return (
     <section className="min-w-0 border-t border-line pt-2">
       <h4>
-        {record.selection.line_label || "对象未知"} · {record.selection.note}
+        {record.selection.line_label || "未标注测量对象"} · {record.selection.note}
       </h4>
       <p className="text-xs [overflow-wrap:anywhere]">
         {record.id} · {new Date(record.collected_at).toLocaleString()}

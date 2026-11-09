@@ -18,6 +18,10 @@ class DesktopSession:
 
     def __init__(self, runtime: ApplicationRuntime, closing: threading.Event):
         self.close_preflight: Callable[[], AbstractContextManager[None]] = nullcontext
+        self.close_recheck: Callable[[], AbstractContextManager[None]] = lambda: (
+            self.close_preflight()
+        )
+        self.close_cancelled: Callable[[], None] = lambda: None
         self.runtime = runtime
         self.closing = closing
         self.commit_close: Callable[[], None] = closing.set
@@ -30,6 +34,7 @@ class DesktopSession:
         self._operation_lock = threading.Lock()
         self._exit_thread: threading.Thread | None = None
         self._waiting = threading.Event()
+        self._poll_suspended = False
         self._exit_error: str | None = None
         self._files = threading.Condition()
         self._file_operations: dict[threading.Thread, threading.Event] = {}
@@ -91,7 +96,7 @@ class DesktopSession:
             self._operation_lock.release()
 
     def exit(self) -> None:
-        with self.close_preflight(), self.operation(allow_files=True, allow_wait=True):
+        with self.operation(allow_files=True, allow_wait=True), self.close_preflight():
             with self._files:
                 for cancel in self._file_operations.values():
                     cancel.set()
@@ -105,7 +110,13 @@ class DesktopSession:
             self.commit_close()
 
     def request_exit(self) -> dict[str, int] | None:
-        with self.close_preflight(), self.operation(allow_files=True, allow_wait=True):
+        with self.operation(allow_files=True, allow_wait=True):
+            if self._waiting.is_set():
+                return self.runtime.activity().model_dump()
+            return self._request_exit()
+
+    def _request_exit(self) -> dict[str, int] | None:
+        with self.close_preflight():
             with self._files:
                 if self._file_operations:
                     return {
@@ -121,21 +132,30 @@ class DesktopSession:
     def wait_for_idle(self, wait: bool) -> None:
         with self.operation(allow_files=True, allow_wait=True):
             if wait:
+                if self._waiting.is_set():
+                    if self._poll_suspended:
+                        raise ValueError("退出等待未确认取消；请先重试取消等待")
+                    return
                 self._exit_thread = threading.current_thread()
                 self._waiting.set()
             try:
                 self.runtime.set_exit_wait(wait)
             except Exception as error:
+                self._poll_suspended = True
                 self._exit_error = str(error)
                 raise
             self._exit_error = None
+            self._poll_suspended = False
             if not wait:
                 self._waiting.clear()
+                self.close_cancelled()
 
     def keep_running(self, hide: Callable[[], None]) -> None:
         with self.operation(allow_files=True, allow_wait=True):
             self.runtime.set_exit_wait(False)
             self._waiting.clear()
+            self._poll_suspended = False
+            self.close_cancelled()
             self._exit_error = None
             hide()
 
@@ -147,16 +167,42 @@ class DesktopSession:
         return report
 
     def poll_exit(self) -> None:
-        if self._waiting.is_set() and self._operation_lock.acquire(blocking=False):
+        if (
+            self._waiting.is_set()
+            and not self._poll_suspended
+            and self._operation_lock.acquire(blocking=False)
+        ):
             try:
+                if (
+                    not self._waiting.is_set()
+                    or self._poll_suspended
+                    or self.closing.is_set()
+                ):
+                    return
                 with self._files:
                     if self._file_operations:
                         return
-                with self.close_preflight():
+                report = self.runtime.exit_report()
+                if not report.ready and (
+                    report.draining or self.runtime.activity().busy
+                ):
+                    return
+                with self.close_recheck():
                     if self.runtime.stop_if_idle():
                         self.commit_close()
             except Exception as error:
+                # A cancelled/blocked close is a decision, not a retry timer.
+                # If cancelling drain fails, retain the admission fence but stop
+                # prompting until the user explicitly retries cancellation.
+                self._poll_suspended = True
                 self._exit_error = str(error)
+                try:
+                    self.runtime.set_exit_wait(False)
+                except Exception as cancel_error:
+                    self._exit_error += f"; 退出等待未确认取消：{cancel_error}"
+                    raise ValueError(self._exit_error) from cancel_error
+                self._waiting.clear()
+                self.close_cancelled()
                 raise
             finally:
                 self._operation_lock.release()
@@ -173,6 +219,8 @@ class DesktopSession:
         except ClosePreflightAborted as error:
             self.closing.clear()
             self._waiting.clear()
+            self._poll_suspended = False
+            self.close_cancelled()
             self._exit_thread = None
             self._exit_error = str(error)
             self.close_aborted(str(error))

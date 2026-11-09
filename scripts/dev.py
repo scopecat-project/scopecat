@@ -123,6 +123,13 @@ def start_vite(
         raise
 
 
+def queue_quit(commands: queue.Queue[str], pending: threading.Event) -> None:
+    """Coalesce console signals until the current quit request returns."""
+    if not pending.is_set():
+        pending.set()
+        commands.put("q")
+
+
 def control_session(
     session: DesktopSession,
     source: Path,
@@ -130,6 +137,7 @@ def control_session(
     prepare: Callable[[], None],
     frontend: subprocess.Popen[str] | None = None,
     frontend_log: Path | None = None,
+    quit_requested: threading.Event | None = None,
 ) -> None:
     """Foreground commands share native lifecycle fencing; no forced fallback."""
     stamp: str | None = None
@@ -187,6 +195,9 @@ def control_session(
                 logging.getLogger(__name__).exception(
                     "Development lifecycle operation deferred"
                 )
+        finally:
+            if command == "q" and quit_requested is not None:
+                quit_requested.clear()
         if time.monotonic() >= next_check:
             next_check = time.monotonic() + 2
             try:
@@ -306,6 +317,7 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
     child_owner: psutil.Process | None = None
     closing = threading.Event()
     commands: queue.Queue[str] = queue.Queue()
+    quit_requested = threading.Event()
     session = DesktopSession(ApplicationRuntime(home), closing)
     endpoint = home / "backend.json"
     session.endpoint_changed = lambda url: publish_endpoint(home, url)
@@ -317,7 +329,7 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
     def request_quit(_number: int, _frame: object) -> None:
         if interruptible:
             raise KeyboardInterrupt
-        commands.put("q")
+        queue_quit(commands, quit_requested)
 
     for name in previous_signals:
         signal.signal(name, request_quit)
@@ -369,7 +381,15 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
 
         controller = threading.Thread(
             target=control_session,
-            args=(session, source, commands, start, child, logs / "vite.log"),
+            args=(
+                session,
+                source,
+                commands,
+                start,
+                child,
+                logs / "vite.log",
+                quit_requested,
+            ),
             daemon=True,
         )
         controller.start()

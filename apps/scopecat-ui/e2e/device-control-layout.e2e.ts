@@ -10,55 +10,53 @@ const deviceName = "Synthetic VNA " + "long-device-label-".repeat(5);
 
 async function expectFittedCurve(chart: Locator) {
   await expect(chart.locator("svg")).toBeVisible();
-  await expect
-    .poll(() =>
-      chart.evaluate((element) => {
-        const svg = element.querySelector("svg")!;
-        return Math.abs(svg.getBoundingClientRect().width - element.clientWidth);
-      }),
-    )
-    .toBeLessThanOrEqual(1);
-  const layout = await chart.evaluate((element) => {
-    const svg = element.querySelector("svg")!;
-    const bounds = svg.getBoundingClientRect();
-    return {
-      width: bounds.width,
-      left: bounds.left,
-      right: bounds.right,
-      viewport: element.ownerDocument.defaultView!.innerWidth,
-      overflow: element.scrollWidth - element.clientWidth,
-      labels: [...svg.querySelectorAll("text")].map((label) => {
-        const rect = label.getBoundingClientRect();
-        return {
-          text: label.textContent,
-          left: rect.left - bounds.left,
-          right: rect.right - bounds.left,
-          top: rect.top - bounds.top,
-          bottom: rect.bottom - bounds.top,
-        };
-      }),
-    };
-  });
-  expect(layout.width).toBeGreaterThan(200);
-  expect(layout.left).toBeGreaterThanOrEqual(0);
-  expect(layout.right).toBeLessThanOrEqual(layout.viewport);
-  expect(layout.overflow).toBeLessThanOrEqual(1);
-  expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
-  expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
-  for (const label of layout.labels) {
-    expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
-    expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
-    expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
-    expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
-  }
-  // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
-  for (const [index, label] of layout.labels.entries()) {
-    for (const next of layout.labels.slice(index + 1)) {
-      const overlapX = Math.min(label.right, next.right) - Math.max(label.left, next.left);
-      const overlapY = Math.min(label.bottom, next.bottom) - Math.max(label.top, next.top);
-      expect(overlapX > 1 && overlapY > 1, JSON.stringify([label, next])).toBe(false);
+  // ResizeObserver can resize the SVG before ECharts positions every label.
+  // Retry the complete geometry contract, not only the outer SVG width.
+  await expect(async () => {
+    const layout = await chart.evaluate((element) => {
+      const svg = element.querySelector("svg")!;
+      const bounds = svg.getBoundingClientRect();
+      return {
+        width: bounds.width,
+        containerWidth: element.clientWidth,
+        left: bounds.left,
+        right: bounds.right,
+        viewport: element.ownerDocument.defaultView!.innerWidth,
+        overflow: element.scrollWidth - element.clientWidth,
+        labels: [...svg.querySelectorAll("text")].map((label) => {
+          const rect = label.getBoundingClientRect();
+          return {
+            text: label.textContent,
+            left: rect.left - bounds.left,
+            right: rect.right - bounds.left,
+            top: rect.top - bounds.top,
+            bottom: rect.bottom - bounds.top,
+          };
+        }),
+      };
+    });
+    expect(Math.abs(layout.width - layout.containerWidth)).toBeLessThanOrEqual(1);
+    expect(layout.width).toBeGreaterThan(200);
+    expect(layout.left).toBeGreaterThanOrEqual(0);
+    expect(layout.right).toBeLessThanOrEqual(layout.viewport);
+    expect(layout.overflow).toBeLessThanOrEqual(1);
+    expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
+    expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
+    for (const label of layout.labels) {
+      expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
+      expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
+      expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
+      expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
     }
-  }
+    // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
+    for (const [index, label] of layout.labels.entries()) {
+      for (const next of layout.labels.slice(index + 1)) {
+        const overlapX = Math.min(label.right, next.right) - Math.max(label.left, next.left);
+        const overlapY = Math.min(label.bottom, next.bottom) - Math.max(label.top, next.top);
+        expect(overlapX > 1 && overlapY > 1, JSON.stringify([label, next])).toBe(false);
+      }
+    }
+  }).toPass({ timeout: 5_000, intervals: [100, 250, 500] });
 }
 
 test("control inputs and headings stay readable and complete curves resize at every entry", async ({
@@ -147,7 +145,16 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const sweep = page.getByTestId("interface-card-scopecat.network_sweep/v1-root");
     const read = page.getByTestId("interface-card-scopecat.existing_network_trace/v1-root");
     await sweep.getByRole("button", { name: "收集 Collect", exact: true }).click();
-    const curve = sweep.getByRole("img", { name: "s_parameter 完整曲线" });
+    // Keep the same region and curve locatable while deliberately hidden below.
+    const current = page.getByRole("region", {
+      name: "当前测量结果",
+      exact: true,
+      includeHidden: true,
+    });
+    const curve = current.getByRole("img", {
+      name: "s_parameter 完整曲线",
+      includeHidden: true,
+    });
     for (const width of [390, 1280, 390, 760, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(curve);
@@ -156,21 +163,23 @@ test("control inputs and headings stay readable and complete curves resize at ev
       ).toBeLessThanOrEqual(width);
     }
     // Resize the containing panel without changing the viewport, then hide/show it.
-    await sweep.evaluate((element) => {
+    await current.evaluate((element) => {
       element.style.width = "360px";
     });
     await expectFittedCurve(curve);
-    await sweep.evaluate((element) => {
+    await current.evaluate((element) => {
       element.style.display = "none";
     });
+    await expect(current).toBeHidden();
     await expect(curve).toBeHidden();
-    await sweep.evaluate((element) => {
+    await current.evaluate((element) => {
       element.style.display = "";
       element.style.width = "";
     });
+    await expect(current).toBeVisible();
     await expectFittedCurve(curve);
     for (const value of ["phase", "real", "imag", "magnitude"]) {
-      await sweep.getByRole("combobox", { name: "复数表示" }).selectOption(value);
+      await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
       for (const width of [390, 1280]) {
         await page.setViewportSize({ width, height: 900 });
         await expectFittedCurve(curve);
@@ -179,31 +188,35 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await page.getByRole("button", { name: "保存此结果", exact: true }).click();
     await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
     await read.getByRole("button", { name: "收集 Collect", exact: true }).click();
-    await expectFittedCurve(read.getByRole("img", { name: "s_parameter 完整曲线" }));
+    await expectFittedCurve(curve);
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(curve);
-      await expectFittedCurve(read.getByRole("img", { name: "s_parameter 完整曲线" }));
+      await expectFittedCurve(curve);
       await testInfo.attach(`device-layout-${width}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: "image/png",
       });
     }
-    // A fresh view reads the saved result without dismissing the active view's
-    // unload guard or discarding its unsaved existing-trace readback.
-    const reopened = await page.context().newPage();
-    await reopened.setViewportSize({ width: 390, height: 900 });
-    await reopened.goto(controlUrl);
-    await reopened.getByRole("checkbox", { name: /layout-line.*layout-only/ }).check();
-    const savedCurve = reopened.getByRole("img", { name: "s_parameter 完整曲线" });
+    await page.getByRole("button", { name: "保存此结果", exact: true }).click();
+    await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await page.reload();
+    await page
+      .getByRole("checkbox", { name: /选择记录/ })
+      .first()
+      .check();
+    const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390]) {
-      await reopened.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(savedCurve);
       expect(
-        await reopened.evaluate<number>("document.documentElement.scrollWidth"),
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
       await testInfo.attach(`saved-curve-layout-${width}`, {
-        body: await reopened.screenshot({ fullPage: true }),
+        body: await page.screenshot({ fullPage: true }),
         contentType: "image/png",
       });
     }
