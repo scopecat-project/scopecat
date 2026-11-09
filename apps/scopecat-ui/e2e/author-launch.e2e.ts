@@ -51,11 +51,12 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
-    await chooseAuthorContext(page);
     const sourceBounds = await page.getByLabel("代码工作区", { exact: true }).boundingBox();
     const refreshBounds = await page
       .getByRole("button", { name: "刷新作者代码", exact: true })
       .boundingBox();
+    // Check the initial source controls before selecting the parameter/setup context:
+    // those lower form fields legitimately scroll the page as the user operates them.
     // Author refresh follows the source/draft/experiment row in the current workbench.
     expect(sourceBounds!.y + sourceBounds!.height).toBeLessThanOrEqual(refreshBounds!.y);
     await expect(page.getByRole("button", { name: "刷新作者代码", exact: true })).toBeInViewport();
@@ -63,6 +64,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
       body: await page.screenshot(),
       contentType: "image/png",
     });
+    await chooseAuthorContext(page);
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });

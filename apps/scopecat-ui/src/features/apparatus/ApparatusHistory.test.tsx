@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApparatusHistory } from "./ApparatusHistory";
@@ -80,7 +80,7 @@ function setup() {
       />
     </QueryClientProvider>
   );
-  return { ...render(view()), view, open };
+  return { ...render(view()), view, open, client };
 }
 it("keeps exact historical descriptions and fetches cross-page corrections by ID", async () => {
   const { open } = setup();
@@ -186,4 +186,51 @@ it("ignores late search results after a newer query", async () => {
   await act(async () => finish({ items: [object("a")] }));
   expect(screen.queryByRole("button", { name: "同名输入线 · a" })).not.toBeInTheDocument();
   expect(screen.getByRole("textbox")).toHaveValue("fast");
+});
+
+it("keeps cached history in place during background refresh without adding status rows", async () => {
+  const { client } = setup();
+  fireEvent.click(await screen.findByRole("button", { name: "同名输入线 · a" }));
+  await screen.findByRole("button", { name: "correction · correction" });
+  let finishObjects!: (value: Awaited<ReturnType<typeof findObjects>>) => void;
+  let finishHistory!: (value: Awaited<ReturnType<typeof objectHistory>>) => void;
+  vi.mocked(findObjects).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishObjects = resolve;
+      }),
+  );
+  vi.mocked(objectHistory).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishHistory = resolve;
+      }),
+  );
+  await act(async () => {
+    void client.invalidateQueries({ queryKey: ["apparatus", "space"] });
+  });
+  expect(await screen.findByText("正在搜索…")).toHaveClass("sr-only");
+  expect(await screen.findByText("正在读取观察…")).toHaveClass("sr-only");
+  expect(screen.getByRole("button", { name: "correction · correction" })).toBeVisible();
+  await act(async () => {
+    finishObjects({ items: [object("a"), object("b")], next_cursor: 8 });
+    finishHistory({ items: [observation("correction")], next_cursor: 4 });
+  });
+  await waitFor(() => expect(screen.queryByText("正在读取观察…")).not.toBeInTheDocument());
+});
+
+it("keeps initial loading visible when there is no cached data", async () => {
+  setup();
+  expect(screen.getByText("正在搜索…")).not.toHaveClass("sr-only");
+  let finish!: (value: Awaited<ReturnType<typeof objectHistory>>) => void;
+  vi.mocked(objectHistory).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "同名输入线 · a" }));
+  expect(await screen.findByText("正在读取观察…")).not.toHaveClass("sr-only");
+  await act(async () => finish({ items: [observation("correction")], next_cursor: 4 }));
+  expect(await screen.findByRole("button", { name: "correction · correction" })).toBeVisible();
 });

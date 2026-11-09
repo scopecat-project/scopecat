@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { startDeviceFixture, cleanDeviceFixture } from "./device-fixture";
 import type { components } from "../src/api-schema";
 type DeviceView = components["schemas"]["DeviceView"];
 
@@ -10,32 +10,17 @@ test("connection test feedback follows the saved revision across editing and dae
   page,
 }, testInfo) => {
   const root = await mkdtemp(join(tmpdir(), "scopecat-device-reopen-"));
-  let daemon: ReturnType<typeof spawn>;
-  let stopped: Promise<void>;
+  let fixture: ReturnType<typeof startDeviceFixture> | undefined;
+  let passed = false;
   let url = "";
   async function start() {
-    daemon = spawn(
-      "uv",
-      [
-        "run",
-        "--locked",
-        "--project",
-        "../..",
-        "python",
-        "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
-        root,
-        resolve("dist"),
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
+    fixture = startDeviceFixture(
+      "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
+      root,
     );
-    let logs = "";
-    daemon.stderr!.on("data", (chunk) => {
-      logs += String(chunk);
-    });
-    stopped = new Promise<void>((done) => daemon.once("exit", () => done()));
     await expect
       .poll(async () => {
-        if (daemon.exitCode !== null) throw new Error(logs);
+        if (fixture!.child.exitCode !== null) throw new Error(fixture!.logs);
         try {
           url = await readFile(join(root, "url"), "utf8");
           return (await page.request.get(`${url}/api/v1/health`)).ok();
@@ -46,8 +31,10 @@ test("connection test feedback follows the saved revision across editing and dae
       .toBe(true);
   }
   async function stop() {
-    daemon.kill("SIGTERM");
-    await stopped;
+    await fixture!.stop();
+    fixture = undefined;
+    // A restart must discover the new listener, not probe the previous endpoint.
+    await unlink(join(root, "url"));
   }
   async function current(): Promise<DeviceView> {
     return (await (await page.request.get(`${url}/api/v1/devices`)).json()).items[0];
@@ -194,6 +181,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "释放物理连接" })).toBeDisabled();
     await page.getByRole("button", { name: "操作", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "连接与环境", exact: true }).click();
     await page.getByRole("button", { name: "释放物理连接" }).click();
@@ -233,8 +221,10 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "刷新状态", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    passed = true;
   } finally {
-    if (daemon! && daemon.exitCode === null) await stop();
-    await rm(root, { recursive: true, force: true });
+    await cleanDeviceFixture(fixture, root, passed, testInfo);
   }
 });

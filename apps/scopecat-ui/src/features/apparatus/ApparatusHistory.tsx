@@ -72,7 +72,11 @@ export function ApparatusHistory({
           <div className="grid gap-4 min-[1000px]:grid-cols-[minmax(240px,1fr)_minmax(0,2fr)]">
             <aside className={`${detailCard} self-start`} aria-label="实验装置对象搜索结果">
               <h3 className={sectionTitle}>对象</h3>
-              {objects.isFetching && <p role="status">正在搜索…</p>}
+              {objects.isFetching && (
+                <p role="status" className={objects.data ? "sr-only" : undefined}>
+                  正在搜索…
+                </p>
+              )}
               {!objects.error && objects.data?.items.length === 0 && <p>没有符合条件的对象。</p>}
               <ul className="space-y-3">
                 {objects.data?.items.map((object) => (
@@ -200,7 +204,11 @@ function ObjectHistory({
             <p>按记录顺序分页；游标不表示物理时间。测量时间与记录时间分别保留。</p>
             <p>更正从新记录链接到旧记录；本页不判断哪些旧记录有后继，也不声明当前有效记录。</p>
             {history.error && <Notice role="alert">观察读取失败：{history.error.message}</Notice>}
-            {history.isFetching && <p role="status">正在读取观察…</p>}
+            {history.isFetching && (
+              <p role="status" className={history.data ? "sr-only" : undefined}>
+                正在读取观察…
+              </p>
+            )}
             {history.data?.items.length === 0 && <p>此页没有观察记录。</p>}
             <ul className="space-y-3">
               {history.data?.items.map((item) => (
