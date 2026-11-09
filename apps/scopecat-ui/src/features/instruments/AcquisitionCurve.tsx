@@ -115,17 +115,20 @@ export function AcquisitionCurve({
                     outerBoundsMode: "same",
                     outerBoundsContain: "all",
                   },
+                  // Account for Windows glyph height when resolving label collisions.
                   xAxis: {
                     type: "value",
                     name: xLabel,
                     scale: true,
-                    axisLabel: { hideOverlap: true, margin: 12 },
+                    nameTextStyle: { lineHeight: 18 },
+                    axisLabel: { hideOverlap: true, lineHeight: 18, margin: 12 },
                   },
                   yAxis: {
                     type: "value",
                     name: yLabel,
                     scale: true,
-                    axisLabel: { hideOverlap: true },
+                    nameTextStyle: { lineHeight: 18 },
+                    axisLabel: { hideOverlap: true, lineHeight: 18 },
                   },
                   dataZoom: [{ type: "inside" }, { type: "slider" }],
                   series: [
