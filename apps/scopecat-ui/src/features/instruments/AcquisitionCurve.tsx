@@ -115,20 +115,20 @@ export function AcquisitionCurve({
                     outerBoundsMode: "same",
                     outerBoundsContain: "all",
                   },
-                  // Account for Windows glyph height when resolving label collisions.
+                  // Reserve a collision margin for platform font measurement differences.
                   xAxis: {
                     type: "value",
                     name: xLabel,
                     scale: true,
-                    nameTextStyle: { lineHeight: 18 },
-                    axisLabel: { hideOverlap: true, lineHeight: 18, margin: 12 },
+                    nameTextStyle: { textMargin: 3 },
+                    axisLabel: { hideOverlap: true, textMargin: 3, margin: 12 },
                   },
                   yAxis: {
                     type: "value",
                     name: yLabel,
                     scale: true,
-                    nameTextStyle: { lineHeight: 18 },
-                    axisLabel: { hideOverlap: true, lineHeight: 18 },
+                    nameTextStyle: { textMargin: 3 },
+                    axisLabel: { hideOverlap: true, textMargin: 3 },
                   },
                   dataZoom: [{ type: "inside" }, { type: "slider" }],
                   series: [

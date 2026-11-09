@@ -59,12 +59,12 @@ it("uses returned coordinates rather than the first array as the plotted respons
   expect(option.grid).toMatchObject({ outerBoundsMode: "same", outerBoundsContain: "all" });
   expect(option.grid).not.toHaveProperty("containLabel");
   expect(option.xAxis).toMatchObject({
-    nameTextStyle: { lineHeight: 18 },
-    axisLabel: { hideOverlap: true, lineHeight: 18, margin: 12 },
+    nameTextStyle: { textMargin: 3 },
+    axisLabel: { hideOverlap: true, textMargin: 3, margin: 12 },
   });
   expect(option.yAxis).toMatchObject({
-    nameTextStyle: { lineHeight: 18 },
-    axisLabel: { hideOverlap: true, lineHeight: 18 },
+    nameTextStyle: { textMargin: 3 },
+    axisLabel: { hideOverlap: true, textMargin: 3 },
   });
   expect(screen.getByTestId("chart")).toHaveTextContent('"data":[[10,5],[30,2]]');
   fireEvent.change(screen.getByRole("combobox", { name: "复数表示" }), {
