@@ -134,8 +134,16 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const sweep = page.getByTestId("interface-card-scopecat.network_sweep/v1-root");
     const read = page.getByTestId("interface-card-scopecat.existing_network_trace/v1-root");
     await sweep.getByRole("button", { name: "收集 Collect", exact: true }).click();
-    const current = page.getByRole("region", { name: "当前测量结果", exact: true });
-    const curve = current.getByRole("img", { name: "s_parameter 完整曲线" });
+    // Keep the same region and curve locatable while deliberately hidden below.
+    const current = page.getByRole("region", {
+      name: "当前测量结果",
+      exact: true,
+      includeHidden: true,
+    });
+    const curve = current.getByRole("img", {
+      name: "s_parameter 完整曲线",
+      includeHidden: true,
+    });
     for (const width of [390, 1280, 390, 760, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(curve);
@@ -151,11 +159,13 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await current.evaluate((element) => {
       element.style.display = "none";
     });
+    await expect(current).toBeHidden();
     await expect(curve).toBeHidden();
     await current.evaluate((element) => {
       element.style.display = "";
       element.style.width = "";
     });
+    await expect(current).toBeVisible();
     await expectFittedCurve(curve);
     for (const value of ["phase", "real", "imag", "magnitude"]) {
       await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
