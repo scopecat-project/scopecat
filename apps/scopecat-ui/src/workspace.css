@@ -66,14 +66,8 @@
 .workspace-nav-item[aria-current="page"] small {
   color: #466c5c;
 }
-.workspace-project {
-  margin-top: auto;
-  padding: 14px 10px 5px;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-  color: #b8d3c4;
-}
 .workspace-collapse {
+  margin-top: auto;
   border: 0;
   background: transparent;
   text-align: left;
@@ -159,8 +153,7 @@
   gap: 4px;
   font-size: 11px;
 }
-.navigation-compact .workspace-nav-item small,
-.navigation-compact .workspace-project {
+.navigation-compact .workspace-nav-item small {
   display: none;
 }
 .navigation-compact .workspace-nav-item.is-child {

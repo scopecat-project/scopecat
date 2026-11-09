@@ -342,7 +342,6 @@ function WorkspaceApp() {
       <WorkspaceNavigation
         view={view}
         onSelect={selectView}
-        projectName={healthQuery.data?.projectName}
         focused={focused}
         decisionAttention={
           daemonUnavailable || waitingDecisions.isError
@@ -359,9 +358,7 @@ function WorkspaceApp() {
       />
       <div id="workspace-body">
         <header className="workspace-top">
-          <span className="workspace-top-title">
-            {healthQuery.data?.projectName ?? "Scopecat"} · {projectViewLabel(view)}
-          </span>
+          <span className="workspace-top-title">{projectViewLabel(view)}</span>
           <div className="flex items-center gap-2.5">
             <ConnectionState
               reachable={daemonReachable}

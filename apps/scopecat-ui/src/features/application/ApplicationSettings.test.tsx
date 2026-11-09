@@ -173,3 +173,21 @@ it("keeps author dependencies independent and uses native application updates", 
   expect(screen.queryByLabelText("Delivery directory")).toBeNull();
   expect(screen.getByText(/安装新版本/)).toBeVisible();
 });
+
+it("keeps the scientific data path available without using it as a page title", async () => {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ApplicationSettings
+        health={{
+          status: "ok",
+          projectId: "local:isolated",
+          projectName: "data",
+          projectRoot: "/isolated/data",
+          details: { data_root: "/isolated/data/scientific" },
+        }}
+      />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole("heading", { name: "应用设置" })).toBeVisible();
+  expect(screen.getByText("/isolated/data/scientific", { exact: true })).toBeVisible();
+});
