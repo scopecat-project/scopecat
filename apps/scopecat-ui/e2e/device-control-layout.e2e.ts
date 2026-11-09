@@ -51,6 +51,14 @@ async function expectFittedCurve(chart: Locator) {
     expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
     expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
   }
+  // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
+  for (const [index, label] of layout.labels.entries()) {
+    for (const next of layout.labels.slice(index + 1)) {
+      const overlapX = Math.min(label.right, next.right) - Math.max(label.left, next.left);
+      const overlapY = Math.min(label.bottom, next.bottom) - Math.max(label.top, next.top);
+      expect(overlapX > 1 && overlapY > 1, JSON.stringify([label, next])).toBe(false);
+    }
+  }
 }
 
 test("control inputs and headings stay readable and complete curves resize at every entry", async ({
@@ -174,7 +182,10 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await expectFittedCurve(curve);
     for (const value of ["phase", "real", "imag", "magnitude"]) {
       await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
-      await expectFittedCurve(curve);
+      for (const width of [390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expectFittedCurve(curve);
+      }
     }
     await page.getByRole("button", { name: "保存此结果", exact: true }).click();
     await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);

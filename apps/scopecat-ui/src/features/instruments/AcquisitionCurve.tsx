@@ -116,8 +116,21 @@ export function AcquisitionCurve({
                     outerBoundsMode: "same",
                     outerBoundsContain: "all",
                   },
-                  xAxis: { type: "value", name: xLabel, scale: true },
-                  yAxis: { type: "value", name: yLabel, scale: true },
+                  // Reserve a collision margin for platform font measurement differences.
+                  xAxis: {
+                    type: "value",
+                    name: xLabel,
+                    scale: true,
+                    nameTextStyle: { textMargin: 3 },
+                    axisLabel: { hideOverlap: true, textMargin: 3, margin: 12 },
+                  },
+                  yAxis: {
+                    type: "value",
+                    name: yLabel,
+                    scale: true,
+                    nameTextStyle: { textMargin: 3 },
+                    axisLabel: { hideOverlap: true, textMargin: 3 },
+                  },
                   dataZoom: [{ type: "inside" }, { type: "slider" }],
                   series: [
                     { type: "line", name: yLabel, data, showSymbol: false, connectNulls: false },
