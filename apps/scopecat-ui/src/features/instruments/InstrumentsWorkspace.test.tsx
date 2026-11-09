@@ -1348,6 +1348,102 @@ describe("instrument workspace", () => {
     expect(await screen.findByRole("button", { name: "连接" })).toBeVisible();
   });
 
+  it("shows only the most recent successful result across acquisition actions and retains it after settings change or rejection", async () => {
+    const view = instrument();
+    const base = view.description!.interfaces![0]!;
+    const sample = base.acquisitions![0]!;
+    view.description = {
+      ...view.description!,
+      interfaces: [
+        { ...base, acquisitions: [sample, { ...sample, id: "read", label: "Read existing" }] },
+      ],
+    };
+    mockInventory({ setup: session().setup, problems: [], items: [view] });
+    vi.mocked(openInstrumentSession).mockResolvedValue(
+      session({ descriptions: [view.description] }),
+    );
+    vi.mocked(collectInstrumentAcquisition).mockResolvedValue({
+      status: "collected",
+      problems: [],
+      readback: {
+        values: {
+          trace: { kind: "array", dtype: "float64", shape: [3], unit: "ratio", values: [1, 2, 3] },
+        },
+      },
+    });
+    renderWorkspace();
+    await connectInstrument();
+    fireEvent.click(screen.getAllByRole("button", { name: "收集 Collect" })[0]!);
+    const current = await screen.findByRole("region", { name: "当前测量结果" });
+    expect(within(current).getByRole("img", { name: /完整曲线/ })).toBeVisible();
+    fireEvent.click(screen.getAllByRole("button", { name: "收集 Collect" })[1]!);
+    await waitFor(() => expect(within(current).getByText(/Read existing ·/)).toBeVisible());
+    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
+      target: { value: "6000000000" },
+    });
+    expect(within(current).getByText(/有未发送的设置草稿/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
+    await waitFor(() =>
+      expect(within(current).getByText(/此后已执行设置或设备动作/)).toBeVisible(),
+    );
+    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    vi.mocked(collectInstrumentAcquisition).mockResolvedValueOnce({
+      status: "not_collected",
+      problems: [],
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "收集 Collect" })[0]!);
+    await waitFor(() => expect(within(current).getByText(/最近一次采集未成功/)).toBeVisible());
+    expect(within(current).getByText(/Read existing ·/)).toBeVisible();
+    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+  });
+
+  it("prepares the next line without clearing the current label or note and requires fresh wiring confirmation", async () => {
+    renderWorkspace();
+    await connectInstrument();
+    const line = screen.getByRole("textbox", { name: "线路名称" });
+    const note = screen.getByRole("textbox", { name: "测量备注" });
+    fireEvent.change(line, { target: { value: "line-a" } });
+    fireEvent.change(note, { target: { value: "keep this note" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-a" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始下一条线路…" }));
+    expect(line).toHaveValue("line-a");
+    expect(note).toHaveValue("keep this note");
+    fireEvent.click(screen.getByRole("button", { name: "取消换线" }));
+    expect(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-a" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "开始下一条线路…" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "下一条线路名称" }), {
+      target: { value: "line-b" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "切换并确认接线" }));
+    expect(line).toHaveValue("line-b");
+    expect(note).toHaveValue("");
+    expect(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-b" })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
+  });
+
+  it("opens the same in-viewport exit checklist on native close and cancellation preserves pending results", async () => {
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    await screen.findByRole("button", { name: "保存此结果" });
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await prepareDeviceClose("exit-checklist");
+    });
+    expect(outcome).toBe("blocked");
+    expect(screen.getByRole("dialog", { name: "结束控制前的待办" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "保持当前状态并结束" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
+    fireEvent.click(screen.getByRole("button", { name: "继续控制" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "保存此结果" })).toBeVisible();
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
+    releaseDeviceClose("exit-checklist");
+    fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+    expect(screen.getByRole("checkbox", { name: /明确放弃这/ })).not.toBeChecked();
+  });
+
   it("fixes line attribution at collection and retries saving without collecting again", async () => {
     vi.mocked(saveDirectMeasurement).mockRejectedValueOnce(new Error("disk unavailable"));
     vi.mocked(saveDirectMeasurement).mockImplementationOnce(async (selection) => ({
@@ -1497,7 +1593,7 @@ describe("instrument workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
     expect(closeInstrumentSession).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "放弃未保存结果并结束控制" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
     fireEvent.click(await screen.findByRole("button", { name: "保持当前状态并结束" }));
     await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(2), {
       timeout: 2_000,

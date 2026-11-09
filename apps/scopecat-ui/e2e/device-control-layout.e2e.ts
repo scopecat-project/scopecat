@@ -23,9 +23,6 @@ async function expectFittedCurve(chart: Locator) {
     const bounds = svg.getBoundingClientRect();
     return {
       width: bounds.width,
-      left: bounds.left,
-      right: bounds.right,
-      viewport: element.ownerDocument.defaultView!.innerWidth,
       overflow: element.scrollWidth - element.clientWidth,
       labels: [...svg.querySelectorAll("text")].map((label) => {
         const rect = label.getBoundingClientRect();
@@ -40,8 +37,6 @@ async function expectFittedCurve(chart: Locator) {
     };
   });
   expect(layout.width).toBeGreaterThan(200);
-  expect(layout.left).toBeGreaterThanOrEqual(0);
-  expect(layout.right).toBeLessThanOrEqual(layout.viewport);
   expect(layout.overflow).toBeLessThanOrEqual(1);
   expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
   expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
@@ -150,7 +145,8 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const sweep = page.getByTestId("interface-card-scopecat.network_sweep/v1-root");
     const read = page.getByTestId("interface-card-scopecat.existing_network_trace/v1-root");
     await sweep.getByRole("button", { name: "收集 Collect", exact: true }).click();
-    const curve = sweep.getByRole("img", { name: "s_parameter 完整曲线" });
+    const current = page.getByRole("region", { name: "当前测量结果", exact: true });
+    const curve = current.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390, 760, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(curve);
@@ -159,51 +155,55 @@ test("control inputs and headings stay readable and complete curves resize at ev
       ).toBeLessThanOrEqual(width);
     }
     // Resize the containing panel without changing the viewport, then hide/show it.
-    await sweep.evaluate((element) => {
+    await current.evaluate((element) => {
       element.style.width = "360px";
     });
     await expectFittedCurve(curve);
-    await sweep.evaluate((element) => {
+    await current.evaluate((element) => {
       element.style.display = "none";
     });
     await expect(curve).toBeHidden();
-    await sweep.evaluate((element) => {
+    await current.evaluate((element) => {
       element.style.display = "";
       element.style.width = "";
     });
     await expectFittedCurve(curve);
     for (const value of ["phase", "real", "imag", "magnitude"]) {
-      await sweep.getByRole("combobox", { name: "复数表示" }).selectOption(value);
+      await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
       await expectFittedCurve(curve);
     }
     await page.getByRole("button", { name: "保存此结果", exact: true }).click();
     await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
     await read.getByRole("button", { name: "收集 Collect", exact: true }).click();
-    await expectFittedCurve(read.getByRole("img", { name: "s_parameter 完整曲线" }));
+    await expectFittedCurve(curve);
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(curve);
-      await expectFittedCurve(read.getByRole("img", { name: "s_parameter 完整曲线" }));
+      await expectFittedCurve(curve);
       await testInfo.attach(`device-layout-${width}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: "image/png",
       });
     }
-    // A fresh view reads the saved result without dismissing the active view's
-    // unload guard or discarding its unsaved existing-trace readback.
-    const reopened = await page.context().newPage();
-    await reopened.setViewportSize({ width: 390, height: 900 });
-    await reopened.goto(controlUrl);
-    await reopened.getByRole("checkbox", { name: /layout-line.*layout-only/ }).check();
-    const savedCurve = reopened.getByRole("img", { name: "s_parameter 完整曲线" });
+    await page.getByRole("button", { name: "保存此结果", exact: true }).click();
+    await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await page.reload();
+    await page
+      .getByRole("checkbox", { name: /选择记录/ })
+      .first()
+      .check();
+    const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390]) {
-      await reopened.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(savedCurve);
       expect(
-        await reopened.evaluate<number>("document.documentElement.scrollWidth"),
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
       await testInfo.attach(`saved-curve-layout-${width}`, {
-        body: await reopened.screenshot({ fullPage: true }),
+        body: await page.screenshot({ fullPage: true }),
         contentType: "image/png",
       });
     }

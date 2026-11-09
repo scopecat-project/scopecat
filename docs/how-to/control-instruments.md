@@ -470,21 +470,52 @@ does not regenerate or relabel the retained trace. This separate capability is
 currently implemented by the virtual VNA; it does not claim existing-trace
 support for the physical E5080B driver.
 
+Both actions update one **当前测量结果** view after a successful return. The
+view names the action and component and shows the receipt-return time, which is
+not the trace-generation time. Changing settings, refreshing observations or a
+failed acquisition leaves the previous successful curve visible with its source
+and a changed-relationship notice; current settings never relabel an old trace.
+Other acquisition capabilities also identify their own source, without assuming
+that matching result names describe the same physical trace.
+
 The curve view matches each observable to its declared returned coordinate and
 offers magnitude, phase in radians, real and imaginary representations. Missing
 or mismatched coordinates are reported rather than replaced with guessed sweep
-settings. Invalid samples remain gaps. The full receipt remains inspectable.
+settings. Invalid samples remain gaps. Expand **结果数据（数值与可用性）**
+to read decoded numeric values, including complex components and paginated
+one-dimensional arrays. The browser's existing int64 decoder can lose precision
+outside its safe integer range; such values are labeled approximate, and the
+JSON diagnostic is not an exact integer representation either. Technical receipt
+and source evidence remain in a separate disclosure.
 
 For manual line measurements, enter a line label and confirm the actual wiring
-before collecting. **换到新线路** creates a new line identity while leaving device
-settings alone. Repeating a collection on the same line creates another attempt;
+before collecting. **开始下一条线路…** keeps the current label and note while you
+enter the next label. Cancel leaves them unchanged. Explicitly switching creates
+a new line identity, clears the next attempt's note and requires fresh wiring
+confirmation, while leaving device settings alone. Repeating a collection on the same line creates another attempt;
 each attempt retains the line label and note selected when collection began.
-Editing the current label cannot reassign an older attempt. Select saved entries
-to compare their curves with their own coordinates and units. **继续此线路** reuses
+Editing the current label cannot reassign an older attempt. History groups by
+stable device, series and line IDs, not labels. Search is explicitly limited to
+the currently loaded page; selected records survive searching and paging.
+Select up to four saved entries for comparison. Compatible curves share axes but
+keep their own returned coordinates; incompatible entries retain separate views.
+The known network-sweep and existing-network-trace interfaces may be overlaid
+when their exact result contracts and units agree. Other interfaces require the
+same acquisition contract. Source and recorded-condition differences remain
+visible. Overlay does not prove physical equivalence and performs no subtraction,
+interpolation or resampling. **继续此线路** reuses
 a saved line identity and requires a new wiring confirmation; it does not restore
 old settings or trigger an acquisition. Notes can record a suspected anomaly
 before collection. Saved records also accept append-only anomaly notes; these
 do not rewrite the original receipt, attribution or earlier annotations.
+
+Window close and **释放控制** use the same **结束控制前的待办** dialog when
+results or output choices remain. Save individual results or all pending results
+there; a partial save failure retains the failed items for retry without another
+acquisition. Alternatively select explicit discard, then choose the existing
+output disposition. Cancel retains unsaved results even after selecting discard.
+No output choice is preselected, and an uncertain finish retains its original
+command identity and mode. Closing the dialog is not evidence that output stopped.
 
 A software observation before Collect is not necessarily the state that produced
 an existing trace. The saved record keeps that observation distinct from the

@@ -63,7 +63,8 @@ import {
   type PendingMeasurement,
   type MeasurementSave,
 } from "./DirectMeasurements";
-import { InstrumentFinishChoice } from "./InstrumentFinishChoice";
+import { InstrumentExitDialog } from "./InstrumentExitDialog";
+import { CurrentMeasurement, type CurrentMeasurementResult } from "./CurrentMeasurement";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
 
 type DraftValue = InstrumentPropertyDraft;
@@ -83,10 +84,12 @@ interface InstrumentInspectorProps {
   onClose: () => void;
   onSessionLost: (message: string) => void;
   onDisconnectOwner: () => void;
+  exitRequest?: number;
   onCloseProblem?: (problem: boolean) => void;
 }
 
 export function InstrumentInspector(props: InstrumentInspectorProps) {
+  const [currentMeasurement, setCurrentMeasurement] = useState<CurrentMeasurementResult>();
   const { instrument, session } = props;
   const instrumentId = instrument.instrument_id;
   const connected = session?.instrument_ids.includes(instrumentId) ?? false;
@@ -100,7 +103,14 @@ export function InstrumentInspector(props: InstrumentInspectorProps) {
     connected ? session?.session_id : null,
     targetKey,
   ]);
-  return <InstrumentInspectorContent key={inspectorKey} {...props} />;
+  return (
+    <InstrumentInspectorContent
+      key={inspectorKey}
+      {...props}
+      currentMeasurement={currentMeasurement}
+      setCurrentMeasurement={setCurrentMeasurement}
+    />
+  );
 }
 
 function InstrumentInspectorContent({
@@ -119,7 +129,13 @@ function InstrumentInspectorContent({
   onSessionLost,
   onDisconnectOwner,
   onCloseProblem,
-}: InstrumentInspectorProps) {
+  exitRequest = 0,
+  currentMeasurement,
+  setCurrentMeasurement,
+}: InstrumentInspectorProps & {
+  currentMeasurement?: CurrentMeasurementResult;
+  setCurrentMeasurement: React.Dispatch<React.SetStateAction<CurrentMeasurementResult | undefined>>;
+}) {
   const queryClient = useQueryClient();
   const instrumentId = instrument.instrument_id;
   const connected = session?.instrument_ids.includes(instrumentId) ?? false;
@@ -156,7 +172,18 @@ function InstrumentInspectorContent({
   const [invokeResults, setInvokeResults] = useState<Record<string, InstrumentInvokeReceipt>>({});
   const [outputTouched, setOutputTouched] = useState(false);
   const [showFinishChoice, setShowFinishChoice] = useState(false);
-  const [closeUnsavedWarning, setCloseUnsavedWarning] = useState(false);
+  const [nextLineOpen, setNextLineOpen] = useState(false);
+  const [nextLineLabel, setNextLineLabel] = useState("");
+  const [dismissedExitRequest, setDismissedExitRequest] = useState(exitRequest);
+  const finishChoiceOpen = showFinishChoice || (!!session && exitRequest !== dismissedExitRequest);
+  const dismissFinishChoice = () => {
+    setShowFinishChoice(false);
+    setDismissedExitRequest(exitRequest);
+  };
+  const markPreviousResult = (reason: string) =>
+    setCurrentMeasurement((current) =>
+      current ? { ...current, relationshipChanged: reason } : current,
+    );
   const [pendingMeasurements, setPendingMeasurements] = useState<PendingMeasurement[]>([]);
   const [seriesId, setSeriesId] = useState(() => createInstrumentCommandId("series"));
   const [lineId, setLineId] = useState(() => createInstrumentCommandId("line"));
@@ -207,6 +234,7 @@ function InstrumentInspectorContent({
         collectCommandIdsRef.current = {};
         invokeCommandIdsRef.current = {};
         setCollectResults({});
+        markPreviousResult("此后已执行设置或设备动作");
         setInvokeResults({});
         setDrafts({});
         readMutation.mutate();
@@ -236,6 +264,11 @@ function InstrumentInspectorContent({
         setApplyResult(undefined);
         setDrafts({});
         setCollectResults({});
+        markPreviousResult(
+          receipt.status === "applied"
+            ? "此后已执行设置或设备动作"
+            : "此后已重新核对默认设置；不证明原曲线生成条件相同",
+        );
         setInvokeResults({});
         readMutation.mutate();
       }
@@ -282,12 +315,15 @@ function InstrumentInspectorContent({
       const selection = collectionSelections.current[commandId];
       if (receipt.status === "collected" && selection) {
         setOutputTouched(true);
+        setCurrentMeasurement({ target, receipt, selection, receivedAt: new Date().toISOString() });
         setPendingMeasurements((current) =>
           current.some((item) => item.selection.command_id === commandId)
             ? current
             : [...current, { selection, acquisition: target.acquisition, receipt }],
         );
       }
+      if (receipt.status !== "collected")
+        markPreviousResult("最近一次采集未成功，当前仍是上次成功结果");
       const key = acquisitionKey(target);
       delete collectCommandIdsRef.current[key];
       setCollectResults((current) => ({ ...current, [key]: receipt }));
@@ -297,6 +333,7 @@ function InstrumentInspectorContent({
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     },
     onError: () => {
+      markPreviousResult("最近一次采集返回未确认，当前仍是上次成功结果");
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     },
   });
@@ -328,6 +365,7 @@ function InstrumentInspectorContent({
         setOutputTouched(true);
         collectCommandIdsRef.current = {};
         setCollectResults({});
+        markPreviousResult("此后已执行设置或设备动作");
         readMutation.mutate();
       } else if (receipt.status === "unknown") {
         onSessionLost("操作结果未知。后台服务已隔离此会话，需操作者核对。");
@@ -384,6 +422,7 @@ function InstrumentInspectorContent({
     setApplyResult(undefined);
     setConfiguredDefaultsResult(undefined);
     setCollectResults({});
+    markPreviousResult("此后已重新读取当前设置，这不是原曲线生成设置的证明");
     setInvokeResults({});
     readMutation.mutate();
   };
@@ -446,7 +485,7 @@ function InstrumentInspectorContent({
     collectMutation.isPending ||
     invokeMutation.isPending;
   const interactionDisabled =
-    closePending || interactionPending || releaseUnconfirmed || showFinishChoice;
+    closePending || interactionPending || releaseUnconfirmed || finishChoiceOpen;
   const configuredDefaultsDisabled =
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
@@ -501,8 +540,7 @@ function InstrumentInspectorContent({
         resolvePending={resolveMutation.isPending}
         onConnect={onConnect}
         onClose={() => {
-          if (pendingMeasurements.length > 0) setCloseUnsavedWarning(true);
-          else if (outputTouched) setShowFinishChoice(true);
+          if (pendingMeasurements.length > 0 || outputTouched) setShowFinishChoice(true);
           else onClose();
         }}
         onDisconnectOwner={onDisconnectOwner}
@@ -548,32 +586,31 @@ function InstrumentInspectorContent({
         </div>
       )}
 
-      {closeUnsavedWarning && pendingMeasurements.length > 0 && (
-        <div role="alert" className={inlineError}>
-          未保存结果在会话结束后将无法保存。请先保存，或明确放弃这些未保存结果。
-          <button
-            type="button"
-            className={secondaryButton}
-            onClick={() => {
-              setPendingMeasurements([]);
-              setCloseUnsavedWarning(false);
-              if (outputTouched) setShowFinishChoice(true);
-              else onClose();
-            }}
-          >
-            放弃未保存结果并结束控制
-          </button>
-        </div>
-      )}
-      {showFinishChoice && session && (
-        <InstrumentFinishChoice
+      {finishChoiceOpen && session && (
+        <InstrumentExitDialog
           sessionId={session.session_id}
-          onCancel={() => setShowFinishChoice(false)}
+          pending={pendingMeasurements}
+          stagedCount={stagedCount}
+          problem={interactionError}
+          onSaved={(commandId) =>
+            setPendingMeasurements((current) =>
+              current.filter((item) => item.selection.command_id !== commandId),
+            )
+          }
+          onCancel={dismissFinishChoice}
           onFinished={() => {
+            setPendingMeasurements([]);
             setOutputTouched(false);
-            setShowFinishChoice(false);
+            dismissFinishChoice();
             onClose();
           }}
+        />
+      )}
+      {currentMeasurement && (
+        <CurrentMeasurement
+          result={currentMeasurement}
+          staged={stagedCount > 0}
+          sessionId={session?.session_id}
         />
       )}
       <DirectMeasurements
@@ -583,9 +620,10 @@ function InstrumentInspectorContent({
           setLineId(selection.line_id ?? createInstrumentCommandId("line"));
           setLineLabel(selection.line_label ?? "");
           setLineConfirmed(false);
+          setNextLineOpen(false);
           setMeasurementNote("");
         }}
-        pending={pendingMeasurements}
+        pending={finishChoiceOpen ? [] : pendingMeasurements}
         onSaved={(commandId) =>
           setPendingMeasurements((current) =>
             current.filter((item) => item.selection.command_id !== commandId),
@@ -595,12 +633,20 @@ function InstrumentInspectorContent({
       {connected && (
         <section className="grid gap-2 border border-line p-3 text-xs">
           <h3>本次测量对象（可留空）</h3>
+          <p>
+            {lineLabel
+              ? lineConfirmed
+                ? `当前线路已就绪：${lineLabel}`
+                : `待确认接线：${lineLabel}`
+              : "未标注测量对象；不表示采集执行结果未知。"}
+          </p>
           <label className={fieldLabel}>
             线路名称
             <input
               className={formControl}
               aria-label="线路名称"
               value={lineLabel}
+              disabled={interactionDisabled}
               onChange={(event) => {
                 setLineLabel(event.target.value);
                 setLineConfirmed(false);
@@ -613,6 +659,7 @@ function InstrumentInspectorContent({
               className={formControl}
               aria-label="测量备注"
               value={measurementNote}
+              disabled={interactionDisabled}
               onChange={(event) => setMeasurementNote(event.target.value)}
             />
           </label>
@@ -621,6 +668,7 @@ function InstrumentInspectorContent({
               <input
                 type="checkbox"
                 checked={lineConfirmed}
+                disabled={interactionDisabled}
                 onChange={(event) => setLineConfirmed(event.target.checked)}
               />
               已人工确认当前接线为 {lineLabel}
@@ -629,17 +677,52 @@ function InstrumentInspectorContent({
           <button
             type="button"
             className={secondaryButton}
+            disabled={interactionDisabled || nextLineOpen}
             onClick={() => {
-              setLineId(createInstrumentCommandId("line"));
-              setLineLabel("");
-              setLineConfirmed(false);
-              setMeasurementNote("");
+              setNextLineOpen(true);
+              setNextLineLabel("");
             }}
           >
-            换到新线路
+            开始下一条线路…
           </button>
+          {nextLineOpen && (
+            <section className="grid gap-2 rounded border border-line p-2" aria-label="下一条线路">
+              <p>当前线路和备注会保留，直到明确切换。已采集记录不会重新归属。</p>
+              <label className={fieldLabel}>
+                下一条线路名称{" "}
+                <input
+                  className={formControl}
+                  aria-label="下一条线路名称"
+                  value={nextLineLabel}
+                  disabled={interactionDisabled}
+                  onChange={(event) => setNextLineLabel(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={interactionDisabled || !nextLineLabel.trim()}
+                onClick={() => {
+                  setLineId(createInstrumentCommandId("line"));
+                  setLineLabel(nextLineLabel.trim());
+                  setLineConfirmed(false);
+                  setMeasurementNote("");
+                  setNextLineOpen(false);
+                }}
+              >
+                切换并确认接线
+              </button>
+              <button
+                type="button"
+                className={secondaryButton}
+                onClick={() => setNextLineOpen(false)}
+              >
+                取消换线
+              </button>
+            </section>
+          )}
           <p>
-            仪器设置保持不变；同一线路再次采集会追加新尝试。改名不会修改已采集结果，换线请用“换到新线路”。
+            仪器设置保持不变；同一线路再次采集会追加新尝试。改名不会修改已采集结果，换线请用“开始下一条线路”。
           </p>
           {pendingMeasurements.length >= 20 && (
             <p role="status">请先保存待保存结果，再继续采集。</p>
@@ -699,6 +782,7 @@ function InstrumentInspectorContent({
                     state={state}
                     drafts={declaredDrafts}
                     collectResults={collectResults}
+                    hideCollectionPlots
                     invokeResults={invokeResults}
                     collectionDisabled={
                       (!!lineLabel && !lineConfirmed) || pendingMeasurements.length >= 20

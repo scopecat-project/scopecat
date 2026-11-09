@@ -8,10 +8,18 @@ export function InstrumentFinishChoice({
   sessionId,
   onFinished,
   onCancel,
+  disabled = false,
+  cancelDisabled = false,
+  embedded = false,
+  onStarted,
 }: {
   sessionId: string;
   onFinished: () => void;
   onCancel: () => void;
+  disabled?: boolean;
+  cancelDisabled?: boolean;
+  embedded?: boolean;
+  onStarted?: () => void;
 }) {
   const selected = useRef<
     { operation_id: string; mode: "keep_current" | "configured_finish" } | undefined
@@ -23,6 +31,7 @@ export function InstrumentFinishChoice({
   const finish = useMutation({
     mutationKey: ["device-control", sessionId],
     mutationFn: (mode: "keep_current" | "configured_finish") => {
+      onStarted?.();
       selected.current ??= { operation_id: createInstrumentCommandId("finish"), mode };
       return finishInstrumentSession(sessionId, selected.current);
     },
@@ -30,7 +39,7 @@ export function InstrumentFinishChoice({
   });
   return (
     <section
-      role="dialog"
+      role={embedded ? undefined : "dialog"}
       aria-label="结束直接控制"
       className="grid gap-2 rounded border border-line p-3"
     >
@@ -42,6 +51,7 @@ export function InstrumentFinishChoice({
         type="button"
         className={secondaryButton}
         disabled={
+          disabled ||
           finish.isPending ||
           (finish.variables !== undefined && finish.variables !== "keep_current")
         }
@@ -75,6 +85,7 @@ export function InstrumentFinishChoice({
         type="button"
         className={secondaryButton}
         disabled={
+          disabled ||
           !plan.data?.configured_finish_available ||
           finish.isPending ||
           (finish.variables !== undefined && finish.variables !== "configured_finish")
@@ -92,7 +103,7 @@ export function InstrumentFinishChoice({
       <button
         type="button"
         className={secondaryButton}
-        disabled={finish.isPending || finish.variables !== undefined}
+        disabled={cancelDisabled || finish.isPending || finish.variables !== undefined}
         onClick={onCancel}
       >
         继续控制
