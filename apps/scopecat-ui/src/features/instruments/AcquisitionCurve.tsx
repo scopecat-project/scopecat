@@ -54,7 +54,7 @@ export function AcquisitionCurve({
   const [representation, setRepresentation] = useState<Representation>("magnitude");
   const values = receipt.readback?.values ?? {};
   return (
-    <div className="grid gap-3">
+    <div className="grid min-w-0 gap-3">
       <label className="text-xs">
         复数表示{" "}
         <select
@@ -93,8 +93,8 @@ export function AcquisitionCurve({
             );
           const data = y.map((sample, index) => [x ? x[index] : index, sample]);
           return (
-            <section key={result.id}>
-              <p className="text-xs">
+            <section key={result.id} className="min-w-0">
+              <p className="text-xs [overflow-wrap:anywhere]">
                 {yLabel}；横轴 {xLabel}；完整 {y.length} 点
               </p>
               <EChart
@@ -106,7 +106,15 @@ export function AcquisitionCurve({
                 option={{
                   animation: false,
                   tooltip: { trigger: "axis" },
-                  grid: { containLabel: true, left: 10, right: 15, top: 20, bottom: 55 },
+                  // ECharts 6 fits axis names and tick labels inside these bounds.
+                  grid: {
+                    left: 10,
+                    right: 15,
+                    top: 20,
+                    bottom: 55,
+                    outerBoundsMode: "same",
+                    outerBoundsContain: "all",
+                  },
                   xAxis: { type: "value", name: xLabel, scale: true },
                   yAxis: { type: "value", name: yLabel, scale: true },
                   dataZoom: [{ type: "inside" }, { type: "slider" }],

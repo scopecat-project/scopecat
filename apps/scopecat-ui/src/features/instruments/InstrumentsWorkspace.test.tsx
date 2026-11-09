@@ -190,6 +190,25 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
+  it("shows one device heading with status, description and refresh in a control window", async () => {
+    renderWorkspace("drive-source");
+    await screen.findByText("Virtual microwave source");
+    const title = screen.getByRole("heading", { name: "Drive source", level: 1 });
+    expect(screen.getAllByRole("heading", { name: "Drive source" })).toHaveLength(1);
+    const header = title.closest("header")!;
+    expect(within(header).getByText("可用", { exact: true })).toBeVisible();
+    expect(within(header).getByText("Virtual microwave source")).toBeVisible();
+    expect(within(header).getByRole("button", { name: "刷新占用" })).toBeEnabled();
+    await connectInstrument();
+    expect(within(header).getByText("已连接", { exact: true })).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: "Drive source" })).toHaveLength(1);
+    for (const name of ["线路名称", "测量备注"]) {
+      const input = screen.getByRole("textbox", { name });
+      expect(input).toHaveClass("border", "bg-panel", "min-h-9");
+      expect(input.closest("label")).toHaveClass("grid", "gap-1.5");
+    }
+  });
+
   it("a fixed control view preserves experiment ownership and links to its run", async () => {
     mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },

@@ -8,7 +8,7 @@ import type { InstrumentSession } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
 import { connectionOptionFields } from "./connection-fields";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
-import { InstrumentInspector } from "./InstrumentInspector";
+import { InstrumentHeading, InstrumentInspector } from "./InstrumentInspector";
 import { DeviceTable } from "./DeviceTable";
 import { LocalDriverSourcesPanel } from "./LocalDriverSourcesPanel";
 import {
@@ -455,6 +455,7 @@ export function InstrumentsWorkspace({
           revision ? { revision_id: revision.id, content_hash: revision.content_hash } : undefined
         }
         displayLabel={selectedDevice.device.label}
+        hideHeading={!!controlDeviceId}
         registeredDeviceId={selectedDevice.device.id}
         session={session}
         sessionError={sessionError}
@@ -482,10 +483,25 @@ export function InstrumentsWorkspace({
   if (controlDeviceId)
     return (
       <section aria-label="设备控制" className="mx-auto max-w-6xl">
-        <header className="flex items-center justify-between border-b border-line p-3">
-          <h1 className="text-lg font-semibold">{selectedDevice?.device.label ?? "设备控制"}</h1>
-          <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
-        </header>
+        <div className="p-5 pb-0 max-[680px]:px-[13px]">
+          {selected ? (
+            <InstrumentHeading
+              primary
+              instrument={selected}
+              session={session}
+              displayLabel={selectedDevice?.device.label}
+              releaseUnconfirmed={releaseUnconfirmed}
+              actions={<Controls.Button onClick={refresh}>刷新占用</Controls.Button>}
+            />
+          ) : (
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+              <h1 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">
+                {selectedDevice?.device.label ?? "设备控制"}
+              </h1>
+              <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
+            </header>
+          )}
+        </div>
         {closingWindow && <p role="status">正在等待当前操作完成并释放控制…</p>}
         {!closingWindow && releasePending && (
           <p role="status">仍在等待释放回执，暂不能重试或操作设备。</p>

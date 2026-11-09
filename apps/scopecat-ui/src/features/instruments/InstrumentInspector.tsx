@@ -11,7 +11,14 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { ApiError } from "../../api-client";
-import { classes, eyebrow, primaryButton, secondaryButton } from "../../ui/styles";
+import {
+  classes,
+  eyebrow,
+  fieldLabel,
+  formControl,
+  primaryButton,
+  secondaryButton,
+} from "../../ui/styles";
 import type { InstrumentPropertyDraft } from "./InstrumentPropertyInput";
 import {
   applyInstrumentConfiguredDefaults,
@@ -65,6 +72,7 @@ interface InstrumentInspectorProps {
   instrument: InstrumentView;
   setup?: InstrumentSession["setup"];
   displayLabel?: string;
+  hideHeading?: boolean;
   registeredDeviceId?: string;
   releaseUnconfirmed?: boolean;
   session?: InstrumentSession;
@@ -99,6 +107,7 @@ function InstrumentInspectorContent({
   instrument,
   setup,
   displayLabel,
+  hideHeading = false,
   registeredDeviceId,
   releaseUnconfirmed = false,
   session,
@@ -460,28 +469,20 @@ function InstrumentInspectorContent({
 
   return (
     <section
-      className="relative grid min-h-[640px] min-w-0 content-start gap-3.5 p-5 max-[880px]:min-h-[560px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-[13px] max-[680px]:py-4"
+      className={classes(
+        "relative grid min-h-[640px] min-w-0 content-start gap-3.5 p-5 max-[880px]:min-h-[560px] max-[680px]:px-[13px] max-[680px]:py-4",
+        !hideHeading && "max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line",
+      )}
       aria-live="polite"
     >
-      <header className="flex items-start justify-between gap-[18px] border-b border-line pb-3.5 max-[460px]:grid">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="m-0 text-[1.1rem] font-[650] tracking-[-0.025em]">
-              {displayLabel ?? description?.label ?? instrumentId}
-            </h2>
-            {releaseUnconfirmed ? (
-              <span>释放待确认</span>
-            ) : (
-              <AvailabilityBadge availability={instrument.availability} connected={connected} />
-            )}
-          </div>
-          {description?.description && (
-            <p className="mt-[9px] mb-0 max-w-[760px] text-xs leading-[1.55] text-text-dim">
-              {description.description}
-            </p>
-          )}
-        </div>
-      </header>
+      {!hideHeading && (
+        <InstrumentHeading
+          instrument={instrument}
+          session={session}
+          displayLabel={displayLabel}
+          releaseUnconfirmed={releaseUnconfirmed}
+        />
+      )}
 
       <InstrumentSessionPanel
         instrument={instrument}
@@ -594,9 +595,10 @@ function InstrumentInspectorContent({
       {connected && (
         <section className="grid gap-2 border border-line p-3 text-xs">
           <h3>本次测量对象（可留空）</h3>
-          <label>
-            线路名称{" "}
+          <label className={fieldLabel}>
+            线路名称
             <input
+              className={formControl}
               aria-label="线路名称"
               value={lineLabel}
               onChange={(event) => {
@@ -605,9 +607,10 @@ function InstrumentInspectorContent({
               }}
             />
           </label>
-          <label>
-            备注 / 异常标记{" "}
+          <label className={fieldLabel}>
+            备注 / 异常标记
             <input
+              className={formControl}
               aria-label="测量备注"
               value={measurementNote}
               onChange={(event) => setMeasurementNote(event.target.value)}
@@ -791,5 +794,52 @@ function InstrumentInspectorContent({
         />
       )}
     </section>
+  );
+}
+
+export function InstrumentHeading({
+  instrument,
+  session,
+  displayLabel,
+  releaseUnconfirmed = false,
+  primary = false,
+  actions,
+}: Pick<
+  InstrumentInspectorProps,
+  "instrument" | "session" | "displayLabel" | "releaseUnconfirmed"
+> & {
+  primary?: boolean;
+  actions?: React.ReactNode;
+}) {
+  const description =
+    session?.descriptions.find(
+      (candidate) => candidate.instrument_id === instrument.instrument_id,
+    ) ?? instrument.description;
+  const connected = session?.instrument_ids.includes(instrument.instrument_id) ?? false;
+  const Heading = primary ? "h1" : "h2";
+  return (
+    <header
+      className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-line pb-3.5"
+      aria-live="polite"
+    >
+      <div className="min-w-0 flex-1 basis-60">
+        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+          <Heading className="m-0 min-w-0 text-[1.1rem] font-[650] tracking-[-0.025em] [overflow-wrap:anywhere]">
+            {displayLabel ?? description?.label ?? instrument.instrument_id}
+          </Heading>
+          {releaseUnconfirmed ? (
+            <span>释放待确认</span>
+          ) : (
+            <AvailabilityBadge availability={instrument.availability} connected={connected} />
+          )}
+        </div>
+        {description?.description && (
+          <p className="mt-[9px] mb-0 max-w-[760px] text-xs leading-[1.55] text-text-dim [overflow-wrap:anywhere]">
+            {description.description}
+          </p>
+        )}
+      </div>
+      {actions}
+    </header>
   );
 }

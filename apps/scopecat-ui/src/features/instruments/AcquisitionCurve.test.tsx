@@ -55,6 +55,9 @@ const receipt: InstrumentCollectReceipt = {
 it("uses returned coordinates rather than the first array as the plotted response", () => {
   render(<AcquisitionCurve acquisition={acquisition} receipt={receipt} />);
   expect(screen.getAllByTestId("chart")).toHaveLength(1);
+  const option = JSON.parse(screen.getByTestId("chart").textContent);
+  expect(option.grid).toMatchObject({ outerBoundsMode: "same", outerBoundsContain: "all" });
+  expect(option.grid).not.toHaveProperty("containLabel");
   expect(screen.getByTestId("chart")).toHaveTextContent('"data":[[10,5],[30,2]]');
   fireEvent.change(screen.getByRole("combobox", { name: "复数表示" }), {
     target: { value: "imag" },
