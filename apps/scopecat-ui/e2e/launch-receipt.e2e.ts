@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { stopProjectAndWait } from "./daemon";
 import { chooseAuthorContext, copyAuthorWorkspace, prepareAuthorContexts } from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
@@ -26,6 +27,19 @@ test("reopens a lost launch receipt after context changes without a second submi
   const project = await mkdtemp(join(tmpdir(), "scopecat-draft-submission-"));
   let originalId = "";
   let submissions = 0;
+  async function cleanup() {
+    try {
+      stopProjectAndWait(project);
+      // Preserve failed project state and logs for diagnosis.
+      if (!failed) await rm(project, { recursive: true, force: true });
+    } catch (error) {
+      await testInfo.attach("fixture-cleanup", {
+        body: `${String(error)}\nFixture root: ${project}`,
+        contentType: "text/plain",
+      });
+      if (!failed) throw error;
+    }
+  }
   try {
     await copyAuthorWorkspace(project);
     uv([
@@ -116,8 +130,6 @@ test("reopens a lost launch receipt after context changes without a second submi
     await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
     throw error;
   } finally {
-    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
-    // Preserve failed project state and logs for diagnosis.
-    if (!failed) await rm(project, { recursive: true, force: true });
+    await cleanup();
   }
 });

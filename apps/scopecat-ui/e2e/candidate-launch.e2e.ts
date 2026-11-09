@@ -1,7 +1,8 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { stopProjectAndWait } from "./daemon";
 import { reviewRetainedExperiment } from "./author-context";
 import { expect, test } from "@playwright/test";
 const ROOT = resolve(process.cwd(), "../..");
@@ -36,49 +37,47 @@ with project.authoring() as author:
 `;
 test("opens an unpublished candidate, saves a draft, and explicitly starts a linked run", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
   page.setDefaultTimeout(10_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-candidate-launch-"));
-  let daemon: ReturnType<typeof spawn> | undefined;
-  let stopped: Promise<void> | undefined;
+  let passed = false;
+  async function cleanup() {
+    // Windows SIGTERM force-kills Python and skips runtime/worker cleanup.
+    // Use the identity-checked HTTP shutdown path and join its owned process tree.
+    try {
+      stopProjectAndWait(project);
+      if (passed) await rm(project, { recursive: true, force: true });
+    } catch (error) {
+      await testInfo.attach("fixture-cleanup", {
+        body: `${String(error)}\nFixture root: ${project}`,
+        contentType: "text/plain",
+      });
+      if (passed) throw error;
+    }
+  }
   try {
     for (const name of ["src", "scopecat.toml"])
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    daemon = spawn(
-      uv(["python", "-c", "import sys; print(sys.executable)"]),
-      [
-        "-m",
-        "scopecat_server.cli",
-        "serve",
-        project,
-        "--port",
-        "0",
-        "--static-dir",
-        resolve("dist"),
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
-    daemon.stdout?.resume();
-    let logs = "";
-    daemon.stderr?.on("data", (chunk) => {
-      logs += String(chunk);
-    });
-    stopped = new Promise<void>((done) => daemon!.once("exit", () => done()));
-    let endpoint = { base_url: "" };
-    await expect
-      .poll(async () => {
-        if (daemon!.exitCode !== null) throw new Error(logs);
-        try {
-          endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8"));
-          return (await page.request.get(`${endpoint.base_url}/api/v1/health`)).ok();
-        } catch {
-          return false;
-        }
-      })
-      .toBe(true);
+    // The CLI owns startup failure cleanup as well as the recorded process.
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+      "--startup-timeout",
+      "10",
+    ]);
+    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
+      base_url: string;
+    };
     const seed = JSON.parse(uv(["python", "-c", SEED, project]));
     const historyUrl = `${endpoint.base_url}/api/v1/parameters/branch-history/chip/daily`;
     const historyBefore = await (await page.request.get(historyUrl)).json();
@@ -131,9 +130,8 @@ test("opens an unpublished candidate, saves a draft, and explicitly starts a lin
     ).json();
     expect(detail.snapshot.config_source).toEqual(exact.configuration.source);
     expect(await (await page.request.get(historyUrl)).json()).toEqual(historyBefore);
+    passed = true;
   } finally {
-    daemon?.kill("SIGTERM");
-    await stopped;
-    await rm(project, { recursive: true, force: true });
+    await cleanup();
   }
 });

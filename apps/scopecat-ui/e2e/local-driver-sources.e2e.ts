@@ -64,6 +64,10 @@ test("a fresh standard application discovers simulation and combines public sour
       contentType: "image/png",
     });
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    const finish = page.getByRole("dialog", { name: "结束控制前的待办", exact: true });
+    await expect(finish.getByRole("heading", { name: "未保存结果：0", exact: true })).toBeVisible();
+    await finish.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(finish).toBeHidden();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     await page.getByText("驱动来源与可用驱动", { exact: true }).click();
     await page.getByRole("button", { name: "添加内置公共驱动", exact: true }).click();
@@ -87,6 +91,9 @@ test("a fresh standard application discovers simulation and combines public sour
     await page.getByRole("button", { name: "刷新状态", exact: true }).click();
     await expect(frequency).toHaveValue("5000000000");
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    // This session only read state, so ending it needs no output-disposition choice.
+    await expect(finish).toBeHidden();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
   } finally {
     if (started) command("stop");
     await rm(home, { recursive: true, force: true });

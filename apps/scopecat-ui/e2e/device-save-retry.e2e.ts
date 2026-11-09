@@ -1,41 +1,27 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { startDeviceFixture, cleanDeviceFixture } from "./device-fixture";
 import type { components } from "../src/api-schema";
 type DeviceSaveCommand = components["schemas"]["DeviceSaveCommand"];
 type DeviceView = components["schemas"]["DeviceView"];
 
 test("a committed save can be retried after response loss without a second revision", async ({
   page,
-}) => {
+}, testInfo) => {
   page.setDefaultTimeout(10_000);
   const root = await mkdtemp(join(tmpdir(), "scopecat-device-retry-"));
-  const daemon = spawn(
-    "uv",
-    [
-      "run",
-      "--locked",
-      "--project",
-      "../..",
-      "python",
-      "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
-      root,
-      resolve("dist"),
-    ],
-    { stdio: ["ignore", "pipe", "pipe"] },
+  const fixture = startDeviceFixture(
+    "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
+    root,
   );
-  let logs = "";
-  daemon.stderr.on("data", (chunk) => {
-    logs += String(chunk);
-  });
-  const stopped = new Promise<void>((done) => daemon.once("exit", () => done()));
+  let passed = false;
   try {
     let url = "";
     await expect
       .poll(async () => {
-        if (daemon.exitCode !== null) throw new Error(logs);
+        if (fixture.child.exitCode !== null) throw new Error(fixture.logs);
         try {
           url = await readFile(join(root, "url"), "utf8");
           return (await page.request.get(`${url}/api/v1/health`)).ok();
@@ -81,9 +67,8 @@ test("a committed save can be retried after response loss without a second revis
     await expect(
       page.getByRole("heading", { name: "Retry software device", exact: true }),
     ).toBeVisible();
+    passed = true;
   } finally {
-    daemon.kill("SIGTERM");
-    await stopped;
-    await rm(root, { recursive: true, force: true });
+    await cleanDeviceFixture(fixture, root, passed, testInfo);
   }
 });

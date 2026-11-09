@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { retainedWorkerIdentities, type WorkerProcess } from "./retained-worker-identity";
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]) {
   const env = { ...process.env };
@@ -16,20 +17,23 @@ function uv(args: string[]) {
     throw new Error(`${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`);
   return result.stdout.trim();
 }
-function retainedWorkers(project: string): number[] {
-  return JSON.parse(
+function retainedWorkers(project: string) {
+  const processes: WorkerProcess[] = JSON.parse(
     uv([
       "python",
       "-c",
       `
 import json, psutil, sys
-print(json.dumps(sorted(p.pid for p in psutil.process_iter(["cmdline"])
+print(json.dumps([
+    {"pid": p.pid, "ppid": p.info["ppid"], "created": p.info["create_time"], "args": p.info["cmdline"], "executable": p.info["exe"]}
+    for p in psutil.process_iter(["cmdline", "ppid", "create_time", "exe"])
     if "scopecat_server.retained_worker" in (p.info["cmdline"] or [])
-    and sys.argv[1] in (p.info["cmdline"] or []))))
+    and sys.argv[1] in (p.info["cmdline"] or [])]))
 `,
       project,
     ]),
   );
+  return retainedWorkerIdentities(processes);
 }
 const SEED = `
 import json, sys

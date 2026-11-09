@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { startDeviceFixture, cleanDeviceFixture } from "./device-fixture";
 import type { components } from "../src/api-schema";
 type DeviceView = components["schemas"]["DeviceView"];
 
@@ -10,32 +10,17 @@ test("connection test feedback follows the saved revision across editing and dae
   page,
 }, testInfo) => {
   const root = await mkdtemp(join(tmpdir(), "scopecat-device-reopen-"));
-  let daemon: ReturnType<typeof spawn>;
-  let stopped: Promise<void>;
+  let fixture: ReturnType<typeof startDeviceFixture> | undefined;
+  let passed = false;
   let url = "";
   async function start() {
-    daemon = spawn(
-      "uv",
-      [
-        "run",
-        "--locked",
-        "--project",
-        "../..",
-        "python",
-        "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
-        root,
-        resolve("dist"),
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
+    fixture = startDeviceFixture(
+      "../../packages/scopecat-server/tests/fixtures/device_save_daemon.py",
+      root,
     );
-    let logs = "";
-    daemon.stderr!.on("data", (chunk) => {
-      logs += String(chunk);
-    });
-    stopped = new Promise<void>((done) => daemon.once("exit", () => done()));
     await expect
       .poll(async () => {
-        if (daemon.exitCode !== null) throw new Error(logs);
+        if (fixture!.child.exitCode !== null) throw new Error(fixture!.logs);
         try {
           url = await readFile(join(root, "url"), "utf8");
           return (await page.request.get(`${url}/api/v1/health`)).ok();
@@ -46,8 +31,10 @@ test("connection test feedback follows the saved revision across editing and dae
       .toBe(true);
   }
   async function stop() {
-    daemon.kill("SIGTERM");
-    await stopped;
+    await fixture!.stop();
+    fixture = undefined;
+    // A restart must discover the new listener, not probe the previous endpoint.
+    await unlink(join(root, "url"));
   }
   async function current(): Promise<DeviceView> {
     return (await (await page.request.get(`${url}/api/v1/devices`)).json()).items[0];
@@ -88,6 +75,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "添加设备", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "添加设备", exact: true }).click();
     await dialog.getByLabel("设备名称").fill("Reopen virtual device");
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "添加控制器地址" }).click();
     await expect(dialog.getByRole("button", { name: "保存设备", exact: true })).toBeDisabled();
     await dialog.getByLabel("控制器地址 名称 1").fill("main");
@@ -108,10 +96,13 @@ test("connection test feedback follows the saved revision across editing and dae
     expect(failed.last_connection_test?.revision).toEqual(failed.device.head);
 
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByLabel("Gain", { exact: true }).fill("2");
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText("此连接版本尚未测试。")).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "连接配置已保存，尚未测试。" }),
+    ).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
     const edited = await current();
     expect(edited.device.head).not.toEqual(failed.device.head);
@@ -127,6 +118,7 @@ test("connection test feedback follows the saved revision across editing and dae
 
     // Load a previous configuration without publishing or touching hardware.
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("-1");
     await expect(dialog.getByRole("region", { name: "连接修改预览" })).toContainText("驱动选项");
@@ -159,6 +151,7 @@ test("connection test feedback follows the saved revision across editing and dae
     expect((await current()).device.head).toEqual(tested.device.head);
     // Reopen, restore as a new revision, fail its test, then repair in place.
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -169,6 +162,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await page.getByRole("button", { name: "测试连接", exact: true }).click();
     await expect(page.getByText(/上次连接测试失败：/)).toBeVisible();
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -183,6 +177,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByText(/连接测试通过，/)).toBeVisible();
     expect((await current()).last_connection_test).toEqual(finalTested.last_connection_test);
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await expect(dialog.getByLabel("控制器地址 值 1")).toHaveValue("192.0.2.1");
     await dialog.getByRole("button", { name: "取消", exact: true }).click();
@@ -194,6 +189,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "释放物理连接" })).toBeDisabled();
     await page.getByRole("button", { name: "操作", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "结束控制前的待办", exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "连接与环境", exact: true }).click();
     await page.getByRole("button", { name: "释放物理连接" }).click();
@@ -233,8 +229,10 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "刷新状态", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "结束控制前的待办", exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    passed = true;
   } finally {
-    if (daemon! && daemon.exitCode === null) await stop();
-    await rm(root, { recursive: true, force: true });
+    await cleanDeviceFixture(fixture, root, passed, testInfo);
   }
 });
