@@ -10,55 +10,53 @@ const deviceName = "Synthetic VNA " + "long-device-label-".repeat(5);
 
 async function expectFittedCurve(chart: Locator) {
   await expect(chart.locator("svg")).toBeVisible();
-  await expect
-    .poll(() =>
-      chart.evaluate((element) => {
-        const svg = element.querySelector("svg")!;
-        return Math.abs(svg.getBoundingClientRect().width - element.clientWidth);
-      }),
-    )
-    .toBeLessThanOrEqual(1);
-  const layout = await chart.evaluate((element) => {
-    const svg = element.querySelector("svg")!;
-    const bounds = svg.getBoundingClientRect();
-    return {
-      width: bounds.width,
-      left: bounds.left,
-      right: bounds.right,
-      viewport: element.ownerDocument.defaultView!.innerWidth,
-      overflow: element.scrollWidth - element.clientWidth,
-      labels: [...svg.querySelectorAll("text")].map((label) => {
-        const rect = label.getBoundingClientRect();
-        return {
-          text: label.textContent,
-          left: rect.left - bounds.left,
-          right: rect.right - bounds.left,
-          top: rect.top - bounds.top,
-          bottom: rect.bottom - bounds.top,
-        };
-      }),
-    };
-  });
-  expect(layout.width).toBeGreaterThan(200);
-  expect(layout.left).toBeGreaterThanOrEqual(0);
-  expect(layout.right).toBeLessThanOrEqual(layout.viewport);
-  expect(layout.overflow).toBeLessThanOrEqual(1);
-  expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
-  expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
-  for (const label of layout.labels) {
-    expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
-    expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
-    expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
-    expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
-  }
-  // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
-  for (const [index, label] of layout.labels.entries()) {
-    for (const next of layout.labels.slice(index + 1)) {
-      const overlapX = Math.min(label.right, next.right) - Math.max(label.left, next.left);
-      const overlapY = Math.min(label.bottom, next.bottom) - Math.max(label.top, next.top);
-      expect(overlapX > 1 && overlapY > 1, JSON.stringify([label, next])).toBe(false);
+  // ResizeObserver can resize the SVG before ECharts positions every label.
+  // Retry the complete geometry contract, not only the outer SVG width.
+  await expect(async () => {
+    const layout = await chart.evaluate((element) => {
+      const svg = element.querySelector("svg")!;
+      const bounds = svg.getBoundingClientRect();
+      return {
+        width: bounds.width,
+        containerWidth: element.clientWidth,
+        left: bounds.left,
+        right: bounds.right,
+        viewport: element.ownerDocument.defaultView!.innerWidth,
+        overflow: element.scrollWidth - element.clientWidth,
+        labels: [...svg.querySelectorAll("text")].map((label) => {
+          const rect = label.getBoundingClientRect();
+          return {
+            text: label.textContent,
+            left: rect.left - bounds.left,
+            right: rect.right - bounds.left,
+            top: rect.top - bounds.top,
+            bottom: rect.bottom - bounds.top,
+          };
+        }),
+      };
+    });
+    expect(Math.abs(layout.width - layout.containerWidth)).toBeLessThanOrEqual(1);
+    expect(layout.width).toBeGreaterThan(200);
+    expect(layout.left).toBeGreaterThanOrEqual(0);
+    expect(layout.right).toBeLessThanOrEqual(layout.viewport);
+    expect(layout.overflow).toBeLessThanOrEqual(1);
+    expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
+    expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
+    for (const label of layout.labels) {
+      expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
+      expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
+      expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
+      expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
     }
-  }
+    // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
+    for (const [index, label] of layout.labels.entries()) {
+      for (const next of layout.labels.slice(index + 1)) {
+        const overlapX = Math.min(label.right, next.right) - Math.max(label.left, next.left);
+        const overlapY = Math.min(label.bottom, next.bottom) - Math.max(label.top, next.top);
+        expect(overlapX > 1 && overlapY > 1, JSON.stringify([label, next])).toBe(false);
+      }
+    }
+  }).toPass({ timeout: 5_000, intervals: [100, 250, 500] });
 }
 
 test("control inputs and headings stay readable and complete curves resize at every entry", async ({
