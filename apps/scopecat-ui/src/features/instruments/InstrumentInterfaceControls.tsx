@@ -286,7 +286,7 @@ function InterfaceEndpoint({
           )}
 
           {(member.acquisitions ?? []).length > 0 && (
-            <div className="grid">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)]">
               {(member.acquisitions ?? []).map((acquisition) => {
                 const target = { interfaceId, componentPath, acquisition };
                 const key = acquisitionKey(target);
@@ -579,7 +579,7 @@ function AcquisitionControl({
   const acquisition = target.acquisition;
   const results = acquisition.results;
   return (
-    <section className="border-t border-line">
+    <section className="min-w-0 border-t border-line">
       <header className={controlHeader}>
         <div>
           <strong className="text-xs text-text-soft">
@@ -713,7 +713,7 @@ function CollectPreview({
 }) {
   const unavailable = unavailableResults(receipt);
   return (
-    <div className="grid gap-[9px] border-t border-line bg-bg px-3 py-[11px]">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[9px] border-t border-line bg-bg px-3 py-[11px]">
       <div className="flex items-baseline gap-[9px]">
         <strong
           className={classes(

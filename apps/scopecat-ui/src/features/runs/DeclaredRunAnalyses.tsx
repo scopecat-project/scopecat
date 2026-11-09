@@ -116,7 +116,7 @@ export function DeclaredRunAnalyses({ catalog }: { catalog: RunAnalysisActions }
   return (
     <section aria-label="分析此结果">
       <p className="mt-1 text-sm text-text-soft">
-        以下操作由本实验声明，使用其已保存的作者代码。它们分析已有数据，不采集测量，也不采纳参数。
+        选择本实验提供的分析，使用随结果保存的作者代码处理已有数据。
       </p>
       <div className="mt-3 grid gap-3">
         {catalog.actions.map((action) => (

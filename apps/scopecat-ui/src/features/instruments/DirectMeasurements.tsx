@@ -51,7 +51,7 @@ export function DirectMeasurements({
     },
   });
   return (
-    <section className="grid gap-3 rounded border border-line p-3">
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded border border-line p-3">
       <h3 className="text-sm font-semibold">直接测量记录</h3>
       <p className="text-xs text-text-dim">
         保存只保留已返回的完整回执，不会重新采集。未保存结果仅在当前控制会话内可保存，请在结束控制前保存。历史记录的线路归属不会随当前线路修改。
@@ -178,7 +178,7 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
       <h4>
         {record.selection.line_label || "对象未知"} · {record.selection.note}
       </h4>
-      <p className="text-xs">
+      <p className="text-xs [overflow-wrap:anywhere]">
         {record.id} · {new Date(record.collected_at).toLocaleString()}
       </p>
       <div className="grid gap-2 text-xs">

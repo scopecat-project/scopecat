@@ -1,7 +1,7 @@
 # 保存与重开实验计划 {#save-and-reopen-experiment-plans}
 
-命名计划（plan）保存不可变的实验输入，供以后复用。保存、打开、复制或隐藏计划都不采集数据、
-不预留设备，也不修改实验室默认配置。每次执行都需重新获得正常启动流程的预览。
+命名计划（plan）保存一份固定的实验输入，供以后复用。打开计划后，检查输入、重新预览，
+再开始本次采集。
 
 在**实验**中编辑输入并点击**预览**，填写**计划名称**后选择**保存计划**。
 修订保存实验定义、受支持的作者代码修订、标量/扫描控件、精确配置条目或命名参数上下文及覆盖值，
@@ -46,7 +46,7 @@ saved = prepared.save_plan("Frequency check", saved_by="alice")
 reopened = author.prepare_plan(saved.ref, actor="bob")
 ```
 
-以上代码尚未采集。确认要开展本次实验后，另行显式提交；在同一作者会话中调用：
+确认预览后，在同一作者会话中提交本次采集：
 
 ```python
 receipt = reopened.submit(request_key="frequency-check-2026-10-27")
