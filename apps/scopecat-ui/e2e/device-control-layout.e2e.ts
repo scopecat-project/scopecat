@@ -23,6 +23,9 @@ async function expectFittedCurve(chart: Locator) {
     const bounds = svg.getBoundingClientRect();
     return {
       width: bounds.width,
+      left: bounds.left,
+      right: bounds.right,
+      viewport: element.ownerDocument.defaultView!.innerWidth,
       overflow: element.scrollWidth - element.clientWidth,
       labels: [...svg.querySelectorAll("text")].map((label) => {
         const rect = label.getBoundingClientRect();
@@ -37,6 +40,8 @@ async function expectFittedCurve(chart: Locator) {
     };
   });
   expect(layout.width).toBeGreaterThan(200);
+  expect(layout.left).toBeGreaterThanOrEqual(0);
+  expect(layout.right).toBeLessThanOrEqual(layout.viewport);
   expect(layout.overflow).toBeLessThanOrEqual(1);
   expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
   expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
