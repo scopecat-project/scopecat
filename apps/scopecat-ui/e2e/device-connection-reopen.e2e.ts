@@ -75,6 +75,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByRole("button", { name: "添加设备", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "添加设备", exact: true }).click();
     await dialog.getByLabel("设备名称").fill("Reopen virtual device");
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "添加控制器地址" }).click();
     await expect(dialog.getByRole("button", { name: "保存设备", exact: true })).toBeDisabled();
     await dialog.getByLabel("控制器地址 名称 1").fill("main");
@@ -95,6 +96,7 @@ test("connection test feedback follows the saved revision across editing and dae
     expect(failed.last_connection_test?.revision).toEqual(failed.device.head);
 
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByLabel("Gain", { exact: true }).fill("2");
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -114,6 +116,7 @@ test("connection test feedback follows the saved revision across editing and dae
 
     // Load a previous configuration without publishing or touching hardware.
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("-1");
     await expect(dialog.getByRole("region", { name: "连接修改预览" })).toContainText("驱动选项");
@@ -146,6 +149,7 @@ test("connection test feedback follows the saved revision across editing and dae
     expect((await current()).device.head).toEqual(tested.device.head);
     // Reopen, restore as a new revision, fail its test, then repair in place.
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -156,6 +160,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await page.getByRole("button", { name: "测试连接", exact: true }).click();
     await expect(page.getByText(/上次连接测试失败：/)).toBeVisible();
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await dialog.getByRole("button", { name: "使用上一连接版本生成草稿" }).click();
     await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -170,6 +175,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(page.getByText(/连接测试通过，/)).toBeVisible();
     expect((await current()).last_connection_test).toEqual(finalTested.last_connection_test);
     await page.getByRole("button", { name: "编辑设备", exact: true }).click();
+    await dialog.getByText("可选参数与默认值", { exact: true }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await expect(dialog.getByLabel("控制器地址 值 1")).toHaveValue("192.0.2.1");
     await dialog.getByRole("button", { name: "取消", exact: true }).click();
