@@ -19,7 +19,17 @@ class Arguments(Protocol):
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="scopecat teach", description=__doc__)
+    import sys
+
+    from scopecat.trial_policy import current_policy, validate_arguments
+
+    validate_arguments(sys.argv[1:] if argv is None else argv)
+
+    parser = argparse.ArgumentParser(
+        prog="scopecat teach",
+        description=__doc__,
+        allow_abbrev=current_policy() is None,
+    )
     parser.add_argument("--home", type=Path, required=True, help="已安装应用的目录")
     parser.add_argument("--list", action="store_true", help="列出已有练习")
     parser.add_argument("--clear", help="清理指定练习的 ID")

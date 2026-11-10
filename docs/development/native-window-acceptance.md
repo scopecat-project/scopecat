@@ -231,3 +231,42 @@ Native probe reports retain child Python output, host logs and cleanup results.
 The window/reset sequence proceeds only after host and background cleanup are
 confirmed, records unexecuted reset reasons, and remains failed if either probe
 fails. No later successful result overwrites an earlier failure.
+
+
+## Isolated trial probe
+
+`python -m scripts.app_build.trial_package APP` only reads a trial's policy,
+bootstrap/runtime markers and bundle metadata. It never prepares, starts or
+restarts the app, and it does not verify a native signature. Verify the platform
+signature separately before approving a native run.
+
+The native `--trial-window-probe` mode is for an explicitly approved, marked
+trial, not a release or an existing user application. It invokes a fixed packaged
+probe module, never a caller-supplied script. It requires the package's native
+executable, exact `--home` installation root, exact
+`SCOPECAT_LOCATOR_HOME`, an already prepared/stopped trial and no previous report.
+It starts once, uses only its own windows, and reports programmatic assertions;
+it is not a human visual acceptance or a retry/restart loop. Existing hosted-runner
+requirements remain unchanged for the release acceptance harness.
+
+After signature verification and authorization for the one-shot run, invoke the
+verified native executable (on Mac, `APP/Contents/MacOS/Scopecat`; on Windows,
+`APP/Scopecat.exe`):
+
+```sh
+SCOPECAT_LOCATOR_HOME="$TRIAL_LOCATOR" \
+  "$TRIAL_NATIVE" --home "$TRIAL_HOME" --trial-window-probe
+```
+
+Do not substitute an ordinary or source interpreter. On Mac the native mode
+checks `NSBundle` against the trial's unique ID before any state access. The
+packaged probe additionally verifies the reviewed Cocoa implementation and uses
+private WebView mode. The source-script wrapper refuses Mac execution because
+bundled Python alone does not establish the app's native identity. Release
+packages reject the probe switch, as do conflicting modes or script arguments.
+
+The package guards reject missing/mismatched policy or launch context and scan
+for existing or dangling symlinks/junctions, including log, lock and report files.
+An unreadable subtree is a failure, not a successful check. These entry checks
+are not an OS sandbox for arbitrary Python code or concurrent filesystem
+replacement. Keep all trial artifacts/data separate from existing installations.

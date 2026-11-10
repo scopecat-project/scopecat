@@ -47,7 +47,11 @@ int main(int argc, char **argv) {
         @autoreleasepool {
             NSAlert *alert = [[NSAlert alloc] init];
             alert.messageText = @"Scopecat 启动未完成";
+#ifdef SCOPECAT_TRIAL
+            alert.informativeText = @"试用构建拒绝启动。请检查包内固定 home、locator 与启动参数；不会回退正式数据目录。";
+#else
             alert.informativeText = @"请保留应用和数据。错误详情位于 ~/Library/Application Support/Scopecat/native-start.log。";
+#endif
             [alert runModal];
         }
     }

@@ -50,8 +50,14 @@ def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from scopecat.trial_policy import current_policy, validate_arguments
+
+    validate_arguments(sys.argv[1:] if argv is None else argv)
+
     configure_console()
-    parser = argparse.ArgumentParser(prog="scopecat app", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="scopecat app", description=__doc__, allow_abbrev=current_policy() is None
+    )
     parser.add_argument(
         "--action",
         choices=(

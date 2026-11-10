@@ -599,7 +599,9 @@ app = create_app()
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Run the Typer application."""
+    from scopecat.trial_policy import refuse_trial_entry
 
+    refuse_trial_entry("Server maintenance CLI")
     app(
         args=None if argv is None else list(argv),
         prog_name="python -m scopecat_server.cli",
