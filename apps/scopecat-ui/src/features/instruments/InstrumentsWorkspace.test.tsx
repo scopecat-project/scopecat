@@ -367,7 +367,7 @@ describe("instrument workspace", () => {
       act(() => releaseDeviceClose("pending"));
     }
     expect(await result).toBe(
-      outcome === "success" ? "saved" : outcome === "timeout" ? "unknown" : "blocked",
+      outcome === "success" ? "saved" : outcome === "timeout" ? "unknown" : "cancelled",
     );
     expect(closeInstrumentSession).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
     expect(readInstrumentState).toHaveBeenCalledTimes(1);
@@ -1458,13 +1458,15 @@ describe("instrument workspace", () => {
     });
     expect(await screen.findByRole("dialog", { name: "结束控制前的待办" })).toBeVisible();
     expect(choosing).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId(/^recent-result-/)).toHaveTextContent("待保存");
+    expect(screen.getByTestId(/^recent-result-/)).not.toHaveTextContent("已保存");
     expect(screen.getByRole("button", { name: "保持当前状态并结束" })).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
     fireEvent.click(screen.getByRole("button", { name: "继续控制" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
     expect(finishInstrumentSession).not.toHaveBeenCalled();
-    expect(await outcome).toBe("blocked");
+    expect(await outcome).toBe("cancelled");
     releaseDeviceClose("exit-checklist");
     fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
     expect(screen.getByRole("checkbox", { name: /明确放弃这/ })).not.toBeChecked();

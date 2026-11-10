@@ -43,6 +43,7 @@ const results: CurrentMeasurementResult[] = ["one", "two"].map((id) => ({
 function Harness() {
   const [collapsed, setCollapsed] = useState(false);
   const [current, setCurrent] = useState(results[1]);
+  const [recent, setRecent] = useState(results);
   const [pending, setPending] = useState<PendingMeasurement[]>(
     results.map((item) => ({
       selection: item.selection,
@@ -58,7 +59,7 @@ function Harness() {
       connected
       disabled={false}
       collectResults={{}}
-      recent={results}
+      recent={recent}
       current={current}
       staged={false}
       sessionId="session"
@@ -75,6 +76,11 @@ function Harness() {
         )
       }
       onSaved={(id, recordId) => {
+        setRecent((items) =>
+          items.map((item) =>
+            item.selection.command_id === id ? { ...item, savedRecordId: recordId } : item,
+          ),
+        );
         setPending((items) => items.filter((item) => item.selection.command_id !== id));
         setCurrent((item) =>
           item?.selection.command_id === id ? { ...item, savedRecordId: recordId } : item,
@@ -173,3 +179,45 @@ it("rejects overlong metadata before freezing or sending the request", async () 
   expect(saveDirectMeasurement).not.toHaveBeenCalled();
   expect(title).toBeEnabled();
 });
+
+it.each([true, false])(
+  "does not infer a saved receipt from hidden save controls (pending=%s)",
+  (isPending) => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MeasurementWorkbench
+          collapsed={false}
+          onCollapsedChange={vi.fn()}
+          description={description}
+          connected
+          disabled={false}
+          collectResults={{}}
+          recent={results}
+          current={results[0]}
+          staged={false}
+          saveDisabled
+          pending={
+            isPending
+              ? results.map((item) => ({
+                  selection: item.selection,
+                  acquisition: item.target.acquisition,
+                  receipt: item.receipt,
+                }))
+              : []
+          }
+          onCollect={vi.fn()}
+          onSelect={vi.fn()}
+          onSaveAttempt={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId("recent-result-one")).toHaveTextContent(
+      isPending ? "待保存" : "未保存",
+    );
+    expect(screen.getByTestId("recent-result-one")).not.toHaveTextContent("已保存");
+    const button = screen.queryByRole("button", { name: "保存所选结果" });
+    expect(button === null || button.hasAttribute("disabled")).toBe(true);
+    expect(saveDirectMeasurement).not.toHaveBeenCalled();
+  },
+);

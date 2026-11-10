@@ -35,7 +35,7 @@ from .desktop_platform import (
     show_window,
     start_tray,
 )
-from .desktop_session import ClosePreflightAborted, DesktopSession
+from .desktop_session import CloseCancelled, ClosePreflightAborted, DesktopSession
 
 if TYPE_CHECKING:
     import webview
@@ -65,7 +65,7 @@ class DesktopAPI:
         self.close_reply: Callable[[str, str], None] = lambda _id, _status: None
 
     def complete_close_preflight(self, requestId: str, status: str) -> None:
-        if status not in {"saved", "blocked", "unknown", "pending"}:
+        if status not in {"saved", "blocked", "unknown", "pending", "cancelled"}:
             raise ValueError("Invalid close preflight status")
         self.close_reply(requestId, status)
 
@@ -571,14 +571,20 @@ class DesktopAPI:
             _replace_location(self._window(), self._session.page_url or record.base_url)
             return True
 
-    def exit(self, background: bool) -> None:
-        if background:
-            self._session.keep_running(lambda: hide_window(self._window()))
-        else:
-            self._session.exit()
+    def exit(self, background: bool) -> Literal["cancelled"] | None:
+        try:
+            if background:
+                self._session.keep_running(lambda: hide_window(self._window()))
+            else:
+                self._session.exit()
+        except CloseCancelled:
+            return "cancelled"
 
-    def request_exit(self) -> dict[str, int] | None:
-        return self._session.request_exit()
+    def request_exit(self) -> dict[str, int] | Literal["cancelled"] | None:
+        try:
+            return self._session.request_exit()
+        except CloseCancelled:
+            return "cancelled"
 
     def exit_status(self) -> dict[str, object]:
         return self._session.exit_status()
@@ -828,6 +834,8 @@ class DesktopWindows:
                             "Input is not confirmed saved; "
                             "resolve saving before closing"
                         )
+                    if any(item.close_status == "cancelled" for item in views):
+                        raise CloseCancelled
                     if view.close_ready.is_set():
                         break
                     timed_out = time.monotonic() >= deadline
@@ -937,6 +945,8 @@ class DesktopWindows:
                 except Exception:
                     view.close_authorized = False
                     raise
+        except CloseCancelled:
+            pass
         except Exception:
             logging.getLogger(__name__).exception("Window close retained the view")
         finally:

@@ -61,6 +61,7 @@ export function MeasurementWorkbench({
   staged,
   sessionId,
   pending,
+  saveDisabled = false,
   onCollect,
   onSelect,
   onSaveAttempt,
@@ -78,6 +79,7 @@ export function MeasurementWorkbench({
   staged: boolean;
   sessionId?: string;
   pending: PendingMeasurement[];
+  saveDisabled?: boolean;
   onCollect: (target: InstrumentAcquisitionTarget) => void;
   onSelect: (result: CurrentMeasurementResult) => void;
   onSaveAttempt: (selection: MeasurementSave) => void;
@@ -100,7 +102,7 @@ export function MeasurementWorkbench({
   );
   const frozen = pendingTarget?.saveAttempted ? pendingTarget.selection : undefined;
   const openSave = () => {
-    if (!current || !canSave) return;
+    if (!current || !canSave || saveDisabled) return;
     const selection =
       pending.find((item) => item.selection.command_id === current.selection.command_id)
         ?.selection ?? current.selection;
@@ -207,7 +209,7 @@ export function MeasurementWorkbench({
             {current && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {canSave && (
-                  <button className={primaryButton} onClick={openSave}>
+                  <button className={primaryButton} disabled={saveDisabled} onClick={openSave}>
                     保存所选结果
                   </button>
                 )}
@@ -250,12 +252,13 @@ export function MeasurementWorkbench({
                     </strong>
                     <span className="text-xs">
                       {new Date(item.receivedAt).toLocaleTimeString()} ·{" "}
-                      {pending.some(
-                        (pendingItem) =>
-                          pendingItem.selection.command_id === item.selection.command_id,
-                      )
-                        ? "待保存"
-                        : "已保存"}
+                      {item.savedRecordId
+                        ? "已保存"
+                        : pending.some(
+                              (entry) => entry.selection.command_id === item.selection.command_id,
+                            )
+                          ? "待保存"
+                          : "未保存"}
                     </span>
                   </button>
                 ))}

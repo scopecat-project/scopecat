@@ -4,9 +4,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, it, vi } from "vitest";
 import { DesktopSession } from "./DesktopSession";
 import { registerDeviceClose } from "../instruments/device-close";
+import {
+  retainLaunchCloseParticipant,
+  resetLaunchCloseWindowForTests,
+} from "../launch/launch-close-barrier";
 
 afterEach(() => {
   cleanup();
+  resetLaunchCloseWindowForTests();
   delete window.pywebview;
 });
 
@@ -270,8 +275,8 @@ it("keeps one close review through repeated native quit signals and allows cance
   let cancel!: () => void;
   const controller = vi.fn(async (_signal: AbortSignal, choosing: () => Promise<void>) => {
     await choosing();
-    return new Promise<"blocked">((resolve) => {
-      cancel = () => resolve("blocked");
+    return new Promise<"cancelled">((resolve) => {
+      cancel = () => resolve("cancelled");
     });
   });
   const unregister = registerDeviceClose(controller);
@@ -292,11 +297,52 @@ it("keeps one close review through repeated native quit signals and allows cance
   expect(request_exit).not.toHaveBeenCalled();
   expect(controller).toHaveBeenCalledTimes(1);
   await act(async () => cancel());
-  await waitFor(() => expect(complete_close_preflight).toHaveBeenCalledWith("native-x", "blocked"));
+  await waitFor(() =>
+    expect(complete_close_preflight).toHaveBeenCalledWith("native-x", "cancelled"),
+  );
   act(() => {
     window.dispatchEvent(new CustomEvent("scopecat:close-release", { detail: { requestId } }));
   });
+  expect(screen.queryByText(/窗口已保留/)).not.toBeInTheDocument();
+  request_exit.mockResolvedValueOnce("cancelled");
   act(() => window.scopecatRequestExit?.());
   expect(request_exit).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   unregister();
 });
+
+it.each(["blocked", "unknown"] as const)(
+  "does not hide %s input behind a cancelled device review",
+  async (failure) => {
+    const complete_close_preflight = vi.fn().mockResolvedValue(undefined);
+    window.pywebview = { api: { complete_close_preflight } } as unknown as NonNullable<
+      Window["pywebview"]
+    >;
+    const unregister = registerDeviceClose(async () => "cancelled");
+    retainLaunchCloseParticipant(
+      {},
+      { freeze: vi.fn(), flush: async () => failure, saved: () => false },
+    );
+    render(<DesktopSession />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("scopecat:close-preflight", { detail: { requestId: "mixed-result" } }),
+      );
+    });
+    await waitFor(() =>
+      expect(complete_close_preflight).toHaveBeenCalledExactlyOnceWith("mixed-result", failure),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("窗口已保留");
+    expect(screen.getByRole("status")).toHaveTextContent("失败或未知结果");
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("scopecat:close-release", {
+          detail: { requestId: "mixed-result", message: "Input remains unconfirmed" },
+        }),
+      );
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Input remains unconfirmed");
+    unregister();
+  },
+);

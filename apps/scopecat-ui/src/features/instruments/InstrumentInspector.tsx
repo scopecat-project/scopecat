@@ -673,7 +673,8 @@ function InstrumentInspectorContent({
           current={currentMeasurement}
           staged={stagedCount > 0}
           sessionId={session?.session_id}
-          pending={finishChoiceOpen ? [] : pendingMeasurements}
+          pending={pendingMeasurements}
+          saveDisabled={finishChoiceOpen}
           onCollect={collectAcquisition}
           onSelect={setCurrentMeasurement}
           onSaveAttempt={(selection) => {

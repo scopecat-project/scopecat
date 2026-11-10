@@ -1586,3 +1586,62 @@ def test_other_view_cancels_pending_review_without_waiting_for_first(result: str
             for item in mock_window(view).run_js.call_args_list
         )
         mock_window(view).destroy.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["view", "request", "stop", "deferred"])
+def test_user_cancel_releases_entire_close_without_error(operation: str):
+    runtime, session, windows, views = close_fixture()
+    for view in views:
+        acknowledge(view, "cancelled" if view is views[0] else "saved")
+    if operation == "view":
+        windows._close_view(views[0])
+    elif operation == "request":
+        assert views[0].api.request_exit() == "cancelled"
+    elif operation == "stop":
+        assert views[0].api.exit(False) == "cancelled"
+    else:
+        runtime.exit_report.return_value = ExitReport(draining=True)
+        session.wait_for_idle(True)
+        session.poll_exit()
+        assert not session.exit_status()["error"]
+        assert not session._waiting.is_set()
+    assert not windows._preflight_lock.locked()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    for view in views[:1] if operation == "view" else views:
+        assert view.close_request is None
+        mock_window(view).destroy.assert_not_called()
+        messages = [
+            item.args[0]
+            for item in mock_window(view).run_js.call_args_list
+            if "close-release" in item.args[0]
+        ]
+        assert len(messages) == 1
+        assert '"message": ""' in messages[0]
+
+
+@pytest.mark.parametrize("failure", ["blocked", "unknown"])
+@pytest.mark.parametrize("cancel_first", [True, False])
+def test_user_cancel_never_hides_another_views_failed_close(
+    failure: str, cancel_first: bool
+):
+    runtime, session, windows, views = close_fixture()
+    for index, view in enumerate(views):
+        acknowledge(view, "cancelled" if (index == 0) == cancel_first else failure)
+    with pytest.raises(ValueError, match="Input is not confirmed saved"):
+        views[0].api.request_exit()
+    assert not windows._preflight_lock.locked()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    for view in views:
+        assert view.close_request is None
+        mock_window(view).destroy.assert_not_called()
+        messages = [
+            item.args[0]
+            for item in mock_window(view).run_js.call_args_list
+            if "close-release" in item.args[0]
+        ]
+        assert len(messages) == 1
+        assert "Input is not confirmed saved" in messages[0]

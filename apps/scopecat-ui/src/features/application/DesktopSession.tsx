@@ -1,9 +1,9 @@
-import { prepareDeviceClose, releaseDeviceClose } from "../instruments/device-close";
 import {
-  prepareLaunchClose,
-  releaseLaunchClose,
-  type LaunchCloseStatus,
-} from "../launch/launch-close-barrier";
+  prepareDeviceClose,
+  releaseDeviceClose,
+  type DeviceCloseStatus,
+} from "../instruments/device-close";
+import { prepareLaunchClose, releaseLaunchClose } from "../launch/launch-close-barrier";
 import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState } from "react";
 import type { components } from "../../api-schema";
@@ -59,7 +59,7 @@ export interface NotebookJourneyStatus {
 interface DesktopAPI {
   complete_close_preflight?(
     requestId: string,
-    status: LaunchCloseStatus | "pending",
+    status: DeviceCloseStatus | "pending",
   ): Promise<void>;
   preview_notebook_cleanup?(topic: LessonTopic): Promise<{
     preview: components["schemas"]["DataCleanupPreview"];
@@ -93,8 +93,8 @@ interface DesktopAPI {
   retry(afterReply?: boolean): Promise<void>;
   restart(): Promise<void>;
   backup_application(): Promise<void>;
-  exit(background: boolean): Promise<void>;
-  request_exit(): Promise<ApplicationActivity | null>;
+  exit(background: boolean): Promise<void | "cancelled">;
+  request_exit(): Promise<ApplicationActivity | null | "cancelled">;
   wait_for_idle(wait: boolean): Promise<void>;
   exit_status(): Promise<ExitReport>;
   register_source(directory: string, interpreter: string): Promise<string>;
@@ -204,18 +204,20 @@ export function DesktopSession() {
           await api.complete_close_preflight(requestId, "pending");
         }),
       ]).then(async (statuses) => {
-        const status: LaunchCloseStatus = statuses.includes("unknown")
+        const status: DeviceCloseStatus = statuses.includes("unknown")
           ? "unknown"
           : statuses.includes("blocked")
             ? "blocked"
-            : "saved";
+            : statuses.includes("cancelled")
+              ? "cancelled"
+              : "saved";
         if (!active.has(requestId)) return;
         try {
           const api = window.pywebview?.api;
           if (!api?.complete_close_preflight)
             throw new Error("Native close acknowledgement is unavailable.");
           await api.complete_close_preflight(requestId, status);
-          if (active.has(requestId) && status !== "saved")
+          if (active.has(requestId) && status !== "saved" && status !== "cancelled")
             setCloseNotice(
               "窗口已保留：设备控制或输入尚未确认安全交接。请处理页面中的失败或未知结果后再关闭。",
             );
@@ -288,7 +290,12 @@ export function DesktopSession() {
       void window.pywebview?.api
         .request_exit()
         .then((work) => {
-          if (work) {
+          if (work === "cancelled") {
+            pending.current = false;
+            setProgress(undefined);
+            setOpen(false);
+            setWaiting(false);
+          } else if (work) {
             pending.current = false;
             setProgress(undefined);
             setActivity(work);
@@ -328,8 +335,8 @@ export function DesktopSession() {
     setProgress(background ? "Hiding the window…" : "Stopping work and releasing devices…");
     setError(undefined);
     try {
-      await window.pywebview.api.exit(background);
-      if (background) {
+      const result = await window.pywebview.api.exit(background);
+      if (background || result === "cancelled") {
         setOpen(false);
         setWaiting(false);
         pending.current = false;

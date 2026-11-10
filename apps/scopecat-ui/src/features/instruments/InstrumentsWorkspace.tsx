@@ -55,7 +55,9 @@ export function InstrumentsWorkspace({
   const [releasePending, setReleasePending] = useState(false);
   const releaseInFlight = useRef<Promise<void> | undefined>(undefined);
   const closeProblem = useRef(false);
-  const closeDecision = useRef<((finished: boolean) => void) | undefined>(undefined);
+  const closeDecision = useRef<((status: "saved" | "blocked" | "cancelled") => void) | undefined>(
+    undefined,
+  );
   const [exitRequest, setExitRequest] = useState(0);
   const noteCloseProblem = useCallback((problem: boolean) => {
     closeProblem.current = problem;
@@ -157,7 +159,7 @@ export function InstrumentsWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["instrument-drivers"] });
   };
   const loseSession = (message: string) => {
-    closeDecision.current?.(false);
+    closeDecision.current?.("blocked");
     sessionRef.current = undefined;
     setSession(undefined);
     closeProblem.current = true;
@@ -198,13 +200,13 @@ export function InstrumentsWorkspace({
       setSessionError(undefined);
       setWindowError(undefined);
       setReleaseUnconfirmed(false);
-      closeDecision.current?.(true);
+      closeDecision.current?.("saved");
       if (selectAfter) selectDevice(selectAfter);
       refresh();
     },
     onError: (error) => {
       setSessionError(errorMessage(error));
-      closeDecision.current?.(false);
+      closeDecision.current?.("blocked");
     },
   });
   const probe = useMutation({
@@ -362,18 +364,18 @@ export function InstrumentsWorkspace({
         setClosingWindow(false);
         // Keep this native close intent alive while the existing review surface
         // handles saving and the user's explicit output disposition.
-        const finished = await new Promise<boolean>((resolve) => {
-          const settle = (value: boolean) => {
+        const finished = await new Promise<"saved" | "blocked" | "cancelled">((resolve) => {
+          const settle = (value: "saved" | "blocked" | "cancelled") => {
             signal.removeEventListener("abort", cancel);
             closeDecision.current = undefined;
             resolve(value);
           };
-          const cancel = () => settle(false);
+          const cancel = () => settle("blocked");
           closeDecision.current = settle;
           signal.addEventListener("abort", cancel, { once: true });
           setExitRequest((current) => current + 1);
         });
-        return finished && !signal.aborted ? "saved" : "blocked";
+        return signal.aborted ? "blocked" : finished;
       }
       const current = sessionRef.current;
       if (current || releaseInFlight.current) {
@@ -494,7 +496,7 @@ export function InstrumentsWorkspace({
         onSessionLost={loseSession}
         onCloseProblem={noteCloseProblem}
         exitRequest={exitRequest}
-        onExitCancelled={() => closeDecision.current?.(false)}
+        onExitCancelled={() => closeDecision.current?.("cancelled")}
         onDisconnectOwner={() => {
           if (selected.owner_kind === "instrument_session" && selected.owner_id)
             close.mutate({ id: selected.owner_id, abort: true });
