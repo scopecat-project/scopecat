@@ -1,12 +1,15 @@
 """Fail closed before importing or constructing any runtime/window."""
 
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import Mock
 
 import pytest
 
 from scopecat import trial_policy
+from scopecat_app.desktop import DesktopView, DesktopWindows
 from scopecat_app.trial_window_probe import (
     guard,
     is_reopened_controller,
@@ -177,11 +180,99 @@ def test_diagnostics_capture_structure_not_input_values():
         (None, False, False),
     ],
 )
-def test_close_cancel_waits_for_full_native_completion(close_request, busy, locked):
+def test_close_cancel_waits_for_full_native_completion(
+    close_request: str | None, busy: bool, locked: bool
+):
     from scopecat_app.trial_window_probe import close_preflight_idle
 
     view = SimpleNamespace(close_request=close_request, close_in_progress=busy)
     windows = SimpleNamespace(_preflight_lock=SimpleNamespace(locked=lambda: locked))
-    assert close_preflight_idle(windows, view) == (
-        close_request is None and not busy and not locked
+    assert close_preflight_idle(
+        cast("DesktopWindows", cast("object", windows)),
+        cast("DesktopView", cast("object", view)),
+    ) == (close_request is None and not busy and not locked)
+
+
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
+def test_native_close_uses_owned_platform_user_path(
+    monkeypatch: pytest.MonkeyPatch, platform: str
+):
+    import scopecat_app.trial_window_probe as probe
+
+    window = SimpleNamespace(uid="own", destroy=Mock())
+    native_window = SimpleNamespace(performClose_=Mock())
+    native = SimpleNamespace(pywebview_window=window, window=native_window)
+    window.native = native_window if platform == "darwin" else native
+    scheduled = Mock()
+    backend = SimpleNamespace(
+        BrowserView=SimpleNamespace(instances={"own": native}),
+        AppHelper=SimpleNamespace(callAfter=scheduled),
     )
+    monkeypatch.setattr(probe.sys, "platform", platform)
+
+    def imported(_name: str) -> SimpleNamespace:
+        return backend
+
+    monkeypatch.setattr(probe, "import_module", imported)
+    probe.schedule_native_close(
+        cast("DesktopView", cast("object", SimpleNamespace(window=window)))
+    )
+    if platform == "darwin":
+        scheduled.assert_called_once_with(native_window.performClose_, None)
+        window.destroy.assert_not_called()
+        native_window.performClose_.assert_not_called()
+    else:
+        window.destroy.assert_called_once_with()
+        scheduled.assert_not_called()
+    native.pywebview_window = object()
+    with pytest.raises(ValueError, match="not this probe"):
+        probe.schedule_native_close(
+            cast("DesktopView", cast("object", SimpleNamespace(window=window)))
+        )
+
+
+def test_request_close_requires_real_event_and_removes_observer(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from webview.event import Event
+
+    import scopecat_app.trial_window_probe as probe
+
+    window = SimpleNamespace(
+        events=SimpleNamespace(closing=Event(None, should_lock=True))
+    )
+    view = cast("DesktopView", cast("object", SimpleNamespace(window=window)))
+
+    def emit_closing(target: DesktopView) -> None:
+        target.window.events.closing.set()
+
+    monkeypatch.setattr(probe, "schedule_native_close", emit_closing)
+    probe.request_native_close(view)
+    assert len(window.events.closing) == 0
+
+    def no_event(_view: DesktopView) -> None:
+        pass
+
+    monkeypatch.setattr(probe, "schedule_native_close", no_event)
+
+    def assert_ready(predicate: Callable[[], object], message: str) -> None:
+        assert predicate(), message
+
+    monkeypatch.setattr(probe, "wait", assert_ready)
+    with pytest.raises(AssertionError, match="event was not observed"):
+        probe.request_native_close(view)
+    assert len(window.events.closing) == 0
+
+
+def test_winforms_backend_requires_reviewed_package():
+    from scopecat_app.trial_window_probe import (
+        WINFORMS_SHA256,
+        WINFORMS_VERSION,
+        check_winforms_identity,
+    )
+
+    check_winforms_identity(WINFORMS_VERSION, WINFORMS_SHA256)
+    with pytest.raises(ValueError, match="reviewed WinForms"):
+        check_winforms_identity("6.2.1", WINFORMS_SHA256)
+    with pytest.raises(ValueError, match="reviewed WinForms"):
+        check_winforms_identity(WINFORMS_VERSION, "modified")

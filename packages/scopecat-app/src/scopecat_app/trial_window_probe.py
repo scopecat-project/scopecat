@@ -17,10 +17,11 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
+from importlib import import_module
 from importlib.metadata import distribution
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 if TYPE_CHECKING:
     import psutil
@@ -208,14 +209,83 @@ def close_preflight_idle(windows: DesktopWindows, view: DesktopView) -> bool:
     )
 
 
+class _NativeWindow(Protocol):
+    def performClose_(self, sender: object) -> None: ...
+
+
+class _NativeView(Protocol):
+    pywebview_window: object
+    window: _NativeWindow
+
+
+class _NativeRegistry(Protocol):
+    instances: dict[str, _NativeView]
+
+
+class _MainThread(Protocol):
+    def callAfter(self, action: Callable[[object], None], argument: object) -> None: ...
+
+
+class _NativeBackend(Protocol):
+    BrowserView: _NativeRegistry
+    AppHelper: _MainThread
+
+
+def schedule_native_close(view: DesktopView) -> None:
+    """Request the owned window's user-close path, not unconditional destruction."""
+    if sys.platform == "darwin":
+        cocoa = cast(
+            "_NativeBackend", cast("object", import_module("webview.platforms.cocoa"))
+        )
+        instances = cocoa.BrowserView.instances
+        native = instances.get(view.window.uid)
+        if native is None or native.pywebview_window is not view.window:
+            raise ValueError("Native close target is not this probe's window")
+        window = native.window
+        if cast("object", view.window.native) is not window:
+            raise ValueError("Cocoa native window identity mismatch")
+        # NSWindow.close bypasses windowShouldClose_. performClose_ invokes it.
+        cocoa.AppHelper.callAfter(window.performClose_, None)
+    elif sys.platform == "win32":
+        winforms = cast(
+            "_NativeBackend",
+            cast("object", import_module("webview.platforms.winforms")),
+        )
+        instances = winforms.BrowserView.instances
+        native = instances.get(view.window.uid)
+        if native is None or native.pywebview_window is not view.window:
+            raise ValueError("Native close target is not this probe's window")
+        if cast("object", view.window.native) is not native:
+            raise ValueError("WinForms native window identity mismatch")
+        # Reviewed WinForms destroy_window invokes Form.Close -> FormClosing.
+        view.window.destroy()
+    else:
+        raise ValueError("Native close probe supports only Cocoa and WinForms")
+
+
+def request_native_close(view: DesktopView) -> None:
+    """Require an actual closing callback for every requested close."""
+    observed = threading.Event()
+
+    def acknowledged() -> None:
+        observed.set()
+
+    view.window.events.closing += acknowledged
+    try:
+        schedule_native_close(view)
+        wait(observed.is_set, "Native user-close event was not observed")
+    finally:
+        view.window.events.closing -= acknowledged
+
+
 CONTROL_WINDOW_LABEL = "打开控制窗口"
 
 
-def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[str]:
+def exercise(
+    windows: DesktopWindows, main: DesktopView, base_url: str, passed: list[str]
+) -> list[str]:
     """Interact only with the windows created by this process."""
     import httpx2
-
-    passed: list[str] = []
 
     def ready(view: DesktopView) -> None:
         wait(view.loaded.is_set, "Window did not load", 30)
@@ -269,8 +339,24 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
     button(control, "连接")
     wait(lambda: text(control, "交互会话已连接"), "Connection missing")
     # A real native closing event, not synthetic preflight-success replies.
-    control.window.destroy()
+    request_native_close(control)
     wait(control.close_finished.is_set, "Empty controller did not close")
+    passed.append("empty-controller-native-closing-event-observed")
+    with httpx2.Client(base_url=base_url, trust_env=False, timeout=5) as client:
+
+        def released() -> bool:
+            response = client.get("/api/v1/devices")
+            response.raise_for_status()
+            rows = cast("dict[str, list[dict[str, object]]]", response.json())["items"]
+            matches = [
+                row
+                for row in rows
+                if cast("dict[str, object]", row["device"])["id"] == control.device_id
+            ]
+            return len(matches) == 1 and matches[0]["availability"] == "idle"
+
+        wait(released, "Closed controller still owns the device on the service")
+    passed.append("empty-controller-service-ownership-released")
     passed.append("empty-controller-single-close")
     previous = control
     button(main, CONTROL_WINDOW_LABEL)
@@ -304,8 +390,8 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
             "Receipt missing",
         )
         if index == 0:
-            control.window.destroy()
-            control.window.destroy()
+            request_native_close(control)
+            request_native_close(control)
             wait(lambda: text(control, "结束控制前的待办"), "Close checklist absent")
             assert js(control, "document.querySelectorAll('[role=dialog]').length") == 1
             assert js(
@@ -383,13 +469,17 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
         and not a.close_finished.is_set()
     )
     passed.append("same-id-reuse-different-id-coexist-controller-retained")
-    control.window.destroy()
+    request_native_close(control)
     wait(lambda: text(control, "结束控制前的待办"), "Release checklist absent")
     button(control, "保持当前状态并结束")
     wait(control.close_finished.is_set, "Original close intent did not continue")
     assert not a.close_finished.is_set() and not b.close_finished.is_set()
     passed.append("keep-current-completes-original-close-results-retained")
     return passed
+
+
+WINFORMS_VERSION = "6.2.1+scopecat.windows.2"
+WINFORMS_SHA256 = "dc42082a8d6ae25189a958fcfec8310131c4f2c834a8cd81508fd913054b2d49"
 
 
 COCOA_VERSION = "6.2.1+scopecat.2"
@@ -405,16 +495,24 @@ def check_cocoa_identity(
         raise ValueError("Trial probe requires the reviewed private-store Cocoa patch")
 
 
+def check_winforms_identity(version: str, digest: str) -> None:
+    if version != WINFORMS_VERSION or digest != WINFORMS_SHA256:
+        raise ValueError("Trial probe requires the reviewed WinForms backend")
+
+
 def platform_preconditions(policy: TrialPolicy) -> None:
-    if sys.platform != "darwin":
-        return
+    if sys.platform not in {"darwin", "win32"}:
+        raise ValueError("Trial native probe requires Cocoa or WinForms")
     from scopecat.trial_policy import checked_path
     from scopecat_app.desktop_platform import macos_bundle_identifier
 
     package = distribution("pywebview")
-    source = checked_path(Path(str(package.locate_file("webview/platforms/cocoa.py"))))
+    backend_name = "cocoa" if sys.platform == "darwin" else "winforms"
+    source = checked_path(
+        Path(str(package.locate_file(f"webview/platforms/{backend_name}.py")))
+    )
     if not source.is_relative_to(policy.resources / "python"):
-        raise ValueError("Cocoa backend must belong to this trial package")
+        raise ValueError("Native backend must belong to this trial package")
     spec = find_spec("webview")
     expected_module = checked_path(
         Path(str(package.locate_file("webview/__init__.py")))
@@ -425,6 +523,11 @@ def platform_preconditions(policy: TrialPolicy) -> None:
         or checked_path(Path(spec.origin)) != expected_module
     ):
         raise ValueError("Loaded WebView must match the verified trial dependency")
+    if sys.platform == "win32":
+        check_winforms_identity(
+            package.version, hashlib.sha256(source.read_bytes()).hexdigest()
+        )
+        return
     check_cocoa_identity(
         macos_bundle_identifier(),
         "org.scopecat.trial." + policy.identity,
@@ -526,7 +629,9 @@ def run(home: Path) -> None:
 
         def callback() -> None:
             try:
-                evidence["passed"] = exercise(windows, main, record.base_url)
+                passed: list[str] = []
+                evidence["passed"] = passed
+                exercise(windows, main, record.base_url, passed)
                 evidence["status"] = "passed"
             except Exception:
                 evidence["error"] = traceback.format_exc()
