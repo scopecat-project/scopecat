@@ -272,7 +272,7 @@ export function MeasurementWorkbench({
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdrop} />
           <Dialog.Viewport className={dialogViewport}>
-            <Dialog.Popup className={dialogPopup}>
+            <Dialog.Popup className={classes(dialogPopup, "p-4")}>
               <Dialog.Title className={dialogTitle}>保存测量</Dialog.Title>
               <Dialog.Description className="text-xs text-text-dim">
                 {target?.target.acquisition.label ?? target?.target.acquisition.id} ·{" "}

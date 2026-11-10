@@ -216,9 +216,11 @@ export function DirectMeasurements({
 export function SavedCurve({
   record,
   readOnly = false,
+  hideHeading = false,
 }: {
   record: SavedMeasurement;
   readOnly?: boolean;
+  hideHeading?: boolean;
 }) {
   const cache = useQueryClient();
   const detail = useQuery({
@@ -254,10 +256,14 @@ export function SavedCurve({
   const acquisition = recordedAcquisition(record);
   return (
     <section className="min-w-0 border-t border-line pt-2">
-      <h4>
-        {record.selection.title || record.selection.line_label || "未命名测量"} ·{" "}
-        {record.selection.note}
-      </h4>
+      {hideHeading ? (
+        record.selection.note && <p className="text-sm">{record.selection.note}</p>
+      ) : (
+        <h4>
+          {record.selection.title || record.selection.line_label || "未命名测量"} ·{" "}
+          {record.selection.note}
+        </h4>
+      )}
       <p className="text-xs [overflow-wrap:anywhere]">
         {record.id} · {new Date(record.collected_at).toLocaleString()}
       </p>

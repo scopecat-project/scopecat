@@ -8,8 +8,17 @@ import { SavedMeasurementLink } from "./SavedMeasurementView";
 type DesktopAPI = NonNullable<Window["pywebview"]>["api"];
 
 vi.mock("./DirectMeasurements", () => ({
-  SavedCurve: ({ record, readOnly }: { record: { id: string }; readOnly: boolean }) => (
+  SavedCurve: ({
+    record,
+    readOnly,
+    hideHeading,
+  }: {
+    record: { id: string };
+    readOnly: boolean;
+    hideHeading?: boolean;
+  }) => (
     <div>
+      {!hideHeading && <h4>Duplicate title</h4>}
       Saved receipt {record.id} {readOnly ? "read only" : "editable"}
     </div>
   ),
@@ -101,6 +110,7 @@ it("restores only the URL record on fresh mount and refresh, without workspace o
   expect(screen.getByRole("main", { name: "已保存测量结果" })).toHaveTextContent(
     "Saved receipt record-a read only",
   );
+  expect(screen.getAllByRole("heading")).toHaveLength(1);
   expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   expect(screen.queryByRole("textbox", { name: "查找当前页记录" })).not.toBeInTheDocument();
   view.unmount();

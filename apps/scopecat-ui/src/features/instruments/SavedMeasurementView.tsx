@@ -79,7 +79,7 @@ export function SavedMeasurementView({ recordId }: { recordId: string }) {
       {!recordId && <p role="alert">缺少已保存结果 ID。</p>}
       {recordId && detail.isPending && <p role="status">正在读取已保存结果…</p>}
       {detail.error && <p role="alert">无法读取已保存结果：{detail.error.message}</p>}
-      {record && <SavedCurve key={record.id} record={record} readOnly />}
+      {record && <SavedCurve key={record.id} record={record} readOnly hideHeading />}
     </section>
   );
 }

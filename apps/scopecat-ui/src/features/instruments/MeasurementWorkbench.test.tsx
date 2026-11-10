@@ -104,6 +104,7 @@ it("selects earlier receipt, saves optional metadata, and keeps the result visib
   fireEvent.click(screen.getByRole("button", { name: "展开采集面板" }));
   expect(screen.getByTestId("recent-result-one")).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  expect(screen.getByRole("dialog")).toHaveClass("p-4");
   fireEvent.change(screen.getByRole("textbox", { name: "标题" }), { target: { value: "Cable A" } });
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^保存$/ }));
   await screen.findByRole("link", { name: "查看已保存结果" });
