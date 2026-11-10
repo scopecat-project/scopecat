@@ -278,14 +278,14 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
     await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(saveDialog).toBeHidden();
-    const dataHref = await page
-      .getByRole("link", { name: "查看 Data", exact: true })
+    const resultHref = await page
+      .getByRole("link", { name: "查看已保存结果", exact: true })
       .getAttribute("href");
-    expect(dataHref).toBeTruthy();
+    expect(resultHref).toBeTruthy();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
-    await page.goto(`${url}${dataHref}`);
+    await page.goto(`${url}${resultHref}`);
     const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390]) {
       await page.setViewportSize({ width, height: 900 });

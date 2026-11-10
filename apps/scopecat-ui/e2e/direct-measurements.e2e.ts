@@ -211,21 +211,58 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await exit.getByRole("button", { name: "保存全部未保存结果", exact: true }).click();
     await expect(exit.getByRole("heading", { name: "未保存结果：0", exact: true })).toBeVisible();
     await exit.getByRole("button", { name: "继续控制", exact: true }).click();
+    const controlUrl = page.url();
     const popup = page.waitForEvent("popup");
-    await page.getByRole("link", { name: "查看 Data", exact: true }).click();
-    const dataPage = await popup;
-    await expect(dataPage).toHaveURL(new RegExp(`measurement=${record.id}.*#history`));
-    const data = dataPage.getByRole("region", { name: "直接测量数据", exact: true });
-    await expect(data.getByRole("button", { name: /First retained VNA trace/ })).toBeVisible();
-    await expect(data.getByRole("img", { name: /完整曲线/ })).toBeVisible();
-    const dataPath = new URL(dataPage.url());
+    await page.getByRole("link", { name: "查看已保存结果", exact: true }).click();
+    const resultPage = await popup;
+    await expect(resultPage).toHaveURL(new RegExp(`saved-measurement=${record.id}`));
+    const savedResult = resultPage.getByRole("main", { name: "已保存测量结果", exact: true });
+    await expect(
+      savedResult.getByRole("heading", { name: "First retained VNA trace", level: 1 }),
+    ).toBeVisible();
+    await expect(savedResult.getByRole("img", { name: /完整曲线/ })).toBeVisible();
+    await expect(resultPage.getByRole("navigation")).toHaveCount(0);
+    await expect(savedResult.getByRole("textbox", { name: "追加备注", exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      savedResult.getByRole("button", { name: "追加标记（不修改原结果）", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      resultPage.getByRole("textbox", { name: "搜索已加载记录", exact: true }),
+    ).toHaveCount(0);
+    await expect(page).toHaveURL(controlUrl);
+    await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+    await resultPage.reload();
+    await expect(
+      savedResult.getByRole("heading", { name: "First retained VNA trace", level: 1 }),
+    ).toBeVisible();
+    await expect(savedResult.getByRole("img", { name: /完整曲线/ })).toBeVisible();
+
+    // Historical browsing remains in the main application, separate from the
+    // single-result browser tab. End control normally before navigating away.
+    await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    await exit.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: /Data$/ }).click();
+    await page.getByRole("button", { name: "直接测量", exact: true }).click();
+    const history = page.getByRole("region", { name: "直接测量数据", exact: true });
+    await history
+      .getByRole("textbox", { name: "搜索已加载记录", exact: true })
+      .fill("First retained VNA trace");
+    await history.getByRole("button", { name: /First retained VNA trace/ }).click();
+    await expect(page).toHaveURL(new RegExp(`measurement=${record.id}.*#history`));
+    await expect(history.getByRole("img", { name: /完整曲线/ })).toBeVisible();
+    const resultPath = new URL(resultPage.url());
     command("stop");
     started = false;
     const restartedUrl = command("start").trim().split("\n").at(-1)!;
     started = true;
-    await dataPage.goto(`${restartedUrl}/${dataPath.search}${dataPath.hash}`);
-    await expect(data.getByRole("button", { name: /First retained VNA trace/ })).toBeVisible();
-    await expect(data.getByRole("img", { name: /完整曲线/ })).toBeVisible();
+    await resultPage.goto(`${restartedUrl}/${resultPath.search}${resultPath.hash}`);
+    await expect(
+      savedResult.getByRole("heading", { name: "First retained VNA trace", level: 1 }),
+    ).toBeVisible();
+    await expect(savedResult.getByRole("img", { name: /完整曲线/ })).toBeVisible();
     const receiptAfter = await page.request.get(
       `${restartedUrl}/api/v1/direct-measurements/${record.id}/receipt`,
     );
@@ -238,8 +275,8 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     expect(collections).toBe(2);
     // The accessible chart wrapper exists before lazy ECharts finishes drawing.
     // Wait for rendered coordinates and an actual multi-point series, not just
-    // the wrapper, before capturing the restarted Data view.
-    const savedChart = data.getByRole("img", { name: "s_parameter 完整曲线", exact: true });
+    // the wrapper, before capturing the restarted single-result view.
+    const savedChart = savedResult.getByRole("img", { name: "s_parameter 完整曲线", exact: true });
     await expect(savedChart.locator("svg")).toBeVisible();
     await expect(savedChart.locator("svg text").filter({ hasText: "frequency" })).toBeVisible();
     await expect(savedChart.locator("svg text").filter({ hasText: "s_parameter" })).toBeVisible();
@@ -256,8 +293,8 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
         ),
       )
       .toBe(true);
-    await testInfo.attach("direct-measurement-data-after-restart", {
-      body: await dataPage.screenshot({ fullPage: true }),
+    await testInfo.attach("direct-measurement-result-after-restart", {
+      body: await resultPage.screenshot({ fullPage: true }),
       contentType: "image/png",
     });
   } finally {

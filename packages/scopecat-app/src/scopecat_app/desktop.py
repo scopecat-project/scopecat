@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -59,11 +60,12 @@ class DesktopAPI:
         self._file_lock = threading.Lock()
         self._unsupported: UnsupportedDataSpace | None = None
         self._page_thread: threading.Thread | None = None
+        self.open_saved_measurement: Callable[[str], None] = lambda _id: None
         self.open_device: Callable[[str], None] = lambda _id: None
         self.close_reply: Callable[[str, str], None] = lambda _id, _status: None
 
     def complete_close_preflight(self, requestId: str, status: str) -> None:
-        if status not in {"saved", "blocked", "unknown"}:
+        if status not in {"saved", "blocked", "unknown", "pending"}:
             raise ValueError("Invalid close preflight status")
         self.close_reply(requestId, status)
 
@@ -88,6 +90,16 @@ class DesktopAPI:
             raise ValueError("Invalid device identity")
         with self._session.operation(allow_files=True):
             self.open_device(device_id)
+
+    def open_saved_measurement_window(self, record_id: object) -> None:
+        """Open a retained receipt by identity, never a caller-supplied URL."""
+        if (
+            not isinstance(record_id, str)
+            or re.fullmatch(r"[0-9a-f]{64}", record_id) is None
+        ):
+            raise ValueError("Invalid saved measurement identity")
+        with self._session.operation(allow_files=True):
+            self.open_saved_measurement(record_id)
 
     def set_window_title(self, title: str) -> None:
         self._window().set_title(title)
@@ -673,10 +685,12 @@ class DesktopView:
     initial_location: str | None = None
     device_id: str | None = None
     is_main: bool = False
+    saved_measurement_id: str | None = None
     close_request: str | None = None
     close_status: str | None = None
     close_reply_thread: threading.Thread | None = None
     close_ready: threading.Event = field(default_factory=threading.Event)
+    close_in_progress: bool = False
     close_authorized: bool = False
     close_finished: threading.Event = field(default_factory=threading.Event)
 
@@ -758,11 +772,12 @@ class DesktopWindows:
             if (
                 view in self._views
                 and view.close_request == request_id
-                and view.close_status is None
+                and view.close_status in {None, "pending"}
             ):
                 view.close_status = status
                 view.close_reply_thread = threading.current_thread()
-                view.close_ready.set()
+                if status != "pending":
+                    view.close_ready.set()
 
     @staticmethod
     def _dispatch(view: DesktopView, event: str, detail: dict[str, str]) -> None:
@@ -783,16 +798,8 @@ class DesktopWindows:
                 raise ValueError("设备窗口已改变；请取消等待后重新请求退出")
             return
         self._clear_device_confirmation()
-        for view in views:
-            if (
-                view.device_id is not None
-                and not view.window.create_confirmation_dialog(
-                    "关闭设备控制",
-                    "等待当前操作完成并释放手动控制后关闭？未应用的输入将丢弃。"
-                    "不会额外断开物理连接、停止或归零输出。",
-                )
-            ):
-                raise ValueError("Device control close cancelled; window retained")
+        # The WebView owns the single review surface, including output choices.
+        # The host only validates its acknowledgement; no separate native prompt.
 
     def _remember_device_confirmation(
         self, views: tuple[DesktopView, ...], *, application: bool
@@ -803,6 +810,39 @@ class DesktopWindows:
             self._confirmed_device_views = tuple(
                 view for view in views if view.device_id is not None
             )
+
+    def _wait_close_reviews(
+        self, views: tuple[DesktopView, ...], request_id: str
+    ) -> None:
+        deadline = time.monotonic() + self.preflight_timeout
+        for view in views:
+            while True:
+                with self._lock:
+                    if any(
+                        item not in self._views
+                        or item.close_request != request_id
+                        or item.close_status in {"blocked", "unknown"}
+                        for item in views
+                    ):
+                        raise ValueError(
+                            "Input is not confirmed saved; "
+                            "resolve saving before closing"
+                        )
+                    if view.close_ready.is_set():
+                        break
+                    timed_out = time.monotonic() >= deadline
+                    if timed_out and any(item.close_status is None for item in views):
+                        raise ValueError(
+                            "Input saving could not be confirmed; "
+                            "keep this window open and retry"
+                        )
+                # Human reviews may take longer than the bridge timeout, but
+                # cancellation or page invalidation in ANY view ends the intent.
+                view.close_ready.wait(0.05)
+            if view.close_status != "saved":
+                raise ValueError(
+                    "Input is not confirmed saved; resolve saving before closing"
+                )
 
     @contextmanager
     def preflight(
@@ -831,17 +871,8 @@ class DesktopWindows:
                 self._dispatch(
                     view, "scopecat:close-preflight", {"requestId": request_id}
                 )
+            self._wait_close_reviews(views, request_id)
             deadline = time.monotonic() + self.preflight_timeout
-            for view in views:
-                if not view.close_ready.wait(max(0, deadline - time.monotonic())):
-                    raise ValueError(
-                        "Input saving could not be confirmed; "
-                        "keep this window open and retry"
-                    )
-                if view.close_status != "saved":
-                    raise ValueError(
-                        "Input is not confirmed saved; resolve saving before closing"
-                    )
             for view in views:
                 reply = view.close_reply_thread
                 if reply is not None and reply is not threading.current_thread():
@@ -908,6 +939,9 @@ class DesktopWindows:
                     raise
         except Exception:
             logging.getLogger(__name__).exception("Window close retained the view")
+        finally:
+            with self._lock:
+                view.close_in_progress = False
 
     def _reconnect(self, previous: str, current: str) -> None:
         old, new = (
@@ -918,6 +952,9 @@ class DesktopWindows:
         with self._lock:
             views = tuple(self._views)
         for view in views:
+            if view.saved_measurement_id is not None:
+                self._restore_saved_measurement(view, force=True)
+                continue
             location = view.window.get_current_url()
             if location is None:
                 continue
@@ -958,12 +995,34 @@ class DesktopWindows:
             raise TimeoutError("The requested window has not finished loading")
         show_window(view.window)
 
+    @staticmethod
+    def _identity_location(
+        location: str | None,
+        device_id: str | None,
+        saved_measurement_id: str | None,
+    ) -> str | None:
+        identity_query: dict[str, str] = {}
+        if device_id is not None:
+            identity_query["device-control"] = device_id
+        if saved_measurement_id is not None:
+            identity_query["saved-measurement"] = saved_measurement_id
+        if not identity_query:
+            return location
+        if location is None:
+            raise ValueError("Application is not connected")
+        identity_query["desktop"] = "1"
+        base = urlsplit(location)
+        return urlunsplit(
+            (base.scheme, base.netloc, "/", urlencode(identity_query), "")
+        )
+
     def create(
         self,
         run_id: str | None = None,
         *,
         target: ApplicationOpenTarget | None = None,
         device_id: str | None = None,
+        saved_measurement_id: str | None = None,
     ) -> DesktopView:
         import webview
 
@@ -982,19 +1041,9 @@ class DesktopWindows:
                 if location is None:
                     raise ValueError("Application is not connected")
                 location = object_location(location, target)
-            if device_id is not None:
-                if location is None:
-                    raise ValueError("Application is not connected")
-                base = urlsplit(location)
-                location = urlunsplit(
-                    (
-                        base.scheme,
-                        base.netloc,
-                        "/",
-                        urlencode({"device-control": device_id}),
-                        "",
-                    )
-                )
+            location = self._identity_location(
+                location, device_id, saved_measurement_id
+            )
             api = DesktopAPI(
                 self._session, lambda: window, self._prepare, self.new_window
             )
@@ -1041,9 +1090,16 @@ class DesktopWindows:
                 request_quit,
                 location,
                 device_id,
-                is_main=run_id is None and target is None and device_id is None,
+                is_main=(
+                    run_id is None
+                    and target is None
+                    and device_id is None
+                    and saved_measurement_id is None
+                ),
+                saved_measurement_id=saved_measurement_id,
             )
             api.open_device = self.new_device_window
+            api.open_saved_measurement = self.new_saved_measurement_window
 
             api.close_reply = lambda request_id, status: self._reply(
                 view, request_id, status
@@ -1064,6 +1120,10 @@ class DesktopWindows:
                     with self._session.operation(allow_files=True), self._lock:
                         destructive = len(self._views) > 1 or view.device_id is not None
                     if destructive:
+                        with self._lock:
+                            if view.close_in_progress or self._preflight_lock.locked():
+                                return False
+                            view.close_in_progress = True
                         threading.Thread(
                             target=self._close_view, args=(view,), daemon=True
                         ).start()
@@ -1087,6 +1147,49 @@ class DesktopWindows:
             window.events.closed += closed
             self._views.append(view)
             return view
+
+    def _restore_saved_measurement(
+        self, view: DesktopView, *, force: bool = False
+    ) -> None:
+        location = self._identity_location(
+            self._session.page_url, None, view.saved_measurement_id
+        )
+        assert location is not None
+        current = view.window.get_current_url()
+        if not force and (
+            current == location
+            or (current is None and view.initial_location == location)
+        ):
+            return
+        view.initial_location = location
+        if current is None:
+            # A loading WebView may not have a JavaScript context yet. Replace
+            # its pending navigation rather than leaving the old daemon URL.
+            view.window.load_url(location)
+        else:
+            _replace_location(view.window, location)
+
+    def new_saved_measurement_window(self, record_id: str) -> None:
+        # Identity survives loading, navigation and daemon reconnects. Unknown
+        # retained IDs are reported by the result view's normal record lookup.
+        with self._lock:
+            if self._preflight_lock.locked() or self._session.closing.is_set():
+                raise ValueError("Wait for input saving before opening another window")
+            view = next(
+                (
+                    item
+                    for item in self._views
+                    if item.saved_measurement_id == record_id
+                    and not item.close_authorized
+                    and not item.close_finished.is_set()
+                ),
+                None,
+            )
+            if view is None:
+                view = self.create(saved_measurement_id=record_id)
+            else:
+                self._restore_saved_measurement(view)
+        show_window(view.window)
 
     def new_device_window(self, device_id: str) -> None:
         # Identity belongs to the native view, including during load/reconnect/hide.

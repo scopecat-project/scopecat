@@ -261,9 +261,6 @@ describe("instrument workspace", () => {
     vi.mocked(closeInstrumentSession).mockRejectedValueOnce(new Error("reply lost"));
     renderWorkspace("drive-source");
     await connectInstrument();
-    fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
-      target: { value: "6000000000" },
-    });
     await act(async () => {
       expect(await prepareDeviceClose("close-failed")).toBe("unknown");
     });
@@ -272,10 +269,6 @@ describe("instrument workspace", () => {
     expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
     act(() => releaseDeviceClose("close-failed"));
     expect(screen.getByRole("button", { name: "释放控制" })).toBeEnabled();
-    const reset = screen.getByRole("button", { name: "重置" });
-    expect(reset).toBeEnabled();
-    fireEvent.click(reset);
-    expect(screen.queryByText("已暂存 1 项属性")).not.toBeInTheDocument();
     expect(readInstrumentState).not.toHaveBeenCalled();
     expect(applyInstrumentState).not.toHaveBeenCalled();
     await act(async () => {
@@ -363,8 +356,14 @@ describe("instrument workspace", () => {
       await act(async () => {
         if (outcome === "success") finish(instrumentState());
         else fail(new Error("read failed"));
-        await result;
+        if (outcome === "success") await result;
       });
+      if (outcome === "failure") {
+        fireEvent.click(await screen.findByRole("button", { name: "继续控制" }));
+        await act(async () => {
+          await result;
+        });
+      }
       act(() => releaseDeviceClose("pending"));
     }
     expect(await result).toBe(
@@ -1452,21 +1451,102 @@ describe("instrument workspace", () => {
     await connectInstrument();
     fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
     await screen.findByRole("button", { name: "保存所选结果" });
-    let outcome: string | undefined;
-    await act(async () => {
-      outcome = await prepareDeviceClose("exit-checklist");
+    let outcome!: Promise<string>;
+    const choosing = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      outcome = prepareDeviceClose("exit-checklist", choosing);
     });
-    expect(outcome).toBe("blocked");
-    expect(screen.getByRole("dialog", { name: "结束控制前的待办" })).toBeVisible();
+    expect(await screen.findByRole("dialog", { name: "结束控制前的待办" })).toBeVisible();
+    expect(choosing).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "保持当前状态并结束" })).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
     fireEvent.click(screen.getByRole("button", { name: "继续控制" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
     expect(finishInstrumentSession).not.toHaveBeenCalled();
+    expect(await outcome).toBe("blocked");
     releaseDeviceClose("exit-checklist");
     fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
     expect(screen.getByRole("checkbox", { name: /明确放弃这/ })).not.toBeChecked();
+  });
+
+  it.each(["review", "bridge", "unmount"])(
+    "ends a pending native close after %s disappears",
+    async (stage) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-27T09:00:00Z"));
+      vi.mocked(openInstrumentSession).mockResolvedValue(
+        session({
+          renewed_at: "2026-07-27T09:00:00Z",
+          expires_at: "2026-07-27T09:00:30Z",
+        }),
+      );
+      vi.mocked(renewInstrumentSession).mockRejectedValue(new Error("lease lost"));
+      const rendered = renderWorkspace("drive-source");
+      await vi.waitFor(() => expect(screen.getByRole("button", { name: "连接" })).toBeVisible());
+      fireEvent.click(screen.getByRole("button", { name: "连接" }));
+      await vi.waitFor(() => expect(screen.getByText("交互会话已连接")).toBeVisible());
+      fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
+        target: { value: "6000000000" },
+      });
+      let acknowledge!: () => void;
+      const choosing = vi.fn(() =>
+        stage === "bridge"
+          ? new Promise<void>((resolve) => {
+              acknowledge = resolve;
+            })
+          : Promise.resolve(),
+      );
+      let result!: Promise<string>;
+      act(() => {
+        result = prepareDeviceClose("lost-review", choosing);
+      });
+      await vi.waitFor(() => expect(choosing).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: "结束控制前的待办" }) !== null).toBe(
+          stage !== "bridge",
+        ),
+      );
+      if (stage === "unmount") rendered.unmount();
+      else await act(async () => vi.advanceTimersByTimeAsync(10_000));
+      if (stage === "bridge") await act(async () => acknowledge());
+      expect(await result).toBe("blocked");
+      expect(screen.queryByRole("dialog", { name: "结束控制前的待办" })).not.toBeInTheDocument();
+      expect(finishInstrumentSession).not.toHaveBeenCalled();
+      releaseDeviceClose("lost-review");
+    },
+  );
+
+  it("continues the original native close after save failure, retry and explicit finish", async () => {
+    vi.mocked(saveDirectMeasurement).mockRejectedValueOnce(new Error("disk unavailable"));
+    vi.mocked(saveDirectMeasurement).mockResolvedValueOnce({ id: "saved-close" } as Awaited<
+      ReturnType<typeof saveDirectMeasurement>
+    >);
+    renderWorkspace("drive-source");
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await screen.findByRole("button", { name: "保存所选结果" });
+    let result!: Promise<string>;
+    const settled = vi.fn();
+    act(() => {
+      result = prepareDeviceClose("save-and-close");
+      void result.then(settled);
+    });
+    await screen.findByRole("dialog", { name: "结束控制前的待办" });
+    fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
+    expect(await screen.findByText(/保存失败：disk unavailable/)).toBeVisible();
+    expect(settled).not.toHaveBeenCalled();
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
+    const finish = screen.getByRole("button", { name: "保持当前状态并结束" });
+    await waitFor(() => expect(finish).toBeEnabled());
+    fireEvent.click(finish);
+    await waitFor(() => expect(settled).toHaveBeenCalledWith("saved"));
+    expect(await result).toBe("saved");
+    expect(finishInstrumentSession).toHaveBeenCalledTimes(1);
+    expect(closeInstrumentSession).toHaveBeenCalledExactlyOnceWith("session-1");
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(1);
+    releaseDeviceClose("save-and-close");
   });
 
   it("fixes metadata on the first save attempt and retries without collecting again", async () => {
@@ -1505,9 +1585,9 @@ describe("instrument workspace", () => {
     expect(within(dialog).getByRole("textbox", { name: "标题" })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole("button", { name: "重试保存" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByRole("link", { name: "查看 Data" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "查看已保存结果" })).toHaveAttribute(
       "href",
-      "/?data=direct-measurements&measurement=saved-one#history",
+      "/?saved-measurement=saved-one",
     );
     expect(collectInstrumentAcquisition).toHaveBeenCalledOnce();
     expect(saveDirectMeasurement).toHaveBeenCalledTimes(2);
@@ -1637,9 +1717,9 @@ describe("instrument workspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "继续控制" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByTestId(`recent-result-${commandId}`));
-    expect(screen.getByRole("link", { name: "查看 Data" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "查看已保存结果" })).toHaveAttribute(
       "href",
-      "/?data=direct-measurements&measurement=saved-through-exit#history",
+      "/?saved-measurement=saved-through-exit",
     );
     expect(screen.queryByRole("button", { name: "保存所选结果" })).not.toBeInTheDocument();
     expect(collectInstrumentAcquisition).toHaveBeenCalledOnce();

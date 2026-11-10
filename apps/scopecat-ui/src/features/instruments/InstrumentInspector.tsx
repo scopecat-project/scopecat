@@ -75,6 +75,7 @@ interface InstrumentInspectorProps {
   onSessionLost: (message: string) => void;
   onDisconnectOwner: () => void;
   exitRequest?: number;
+  onExitCancelled?: () => void;
   onCloseProblem?: (problem: boolean) => void;
 }
 
@@ -119,6 +120,7 @@ function InstrumentInspectorContent({
   onSessionLost,
   onDisconnectOwner,
   onCloseProblem,
+  onExitCancelled,
   exitRequest = 0,
   currentMeasurement,
   setCurrentMeasurement,
@@ -524,9 +526,20 @@ function InstrumentInspectorContent({
     Object.values(invokeResults).some((receipt) => receipt.status !== "invoked");
   useEffect(() => {
     onCloseProblem?.(
-      !!interactionError || failedReceipt || pendingMeasurements.length > 0 || outputTouched,
+      !!interactionError ||
+        failedReceipt ||
+        pendingMeasurements.length > 0 ||
+        outputTouched ||
+        stagedCount > 0,
     );
-  }, [interactionError, failedReceipt, onCloseProblem, pendingMeasurements.length, outputTouched]);
+  }, [
+    interactionError,
+    failedReceipt,
+    onCloseProblem,
+    pendingMeasurements.length,
+    outputTouched,
+    stagedCount,
+  ]);
 
   return (
     <section
@@ -624,7 +637,10 @@ function InstrumentInspectorContent({
             )
           }
           onSaved={markMeasurementSaved}
-          onCancel={dismissFinishChoice}
+          onCancel={() => {
+            dismissFinishChoice();
+            onExitCancelled?.();
+          }}
           onFinished={() => {
             setPendingMeasurements([]);
             setOutputTouched(false);

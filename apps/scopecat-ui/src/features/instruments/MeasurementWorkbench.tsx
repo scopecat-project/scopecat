@@ -1,3 +1,4 @@
+import { SavedMeasurementLink } from "./SavedMeasurementView";
 import { useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useQueryClient } from "@tanstack/react-query";
@@ -213,14 +214,7 @@ export function MeasurementWorkbench({
                 {commandId && current.savedRecordId && (
                   <>
                     <span role="status">已保存</span>
-                    <a
-                      className={secondaryButton}
-                      href={`/?data=direct-measurements&measurement=${encodeURIComponent(current.savedRecordId)}#history`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      查看 Data
-                    </a>
+                    <SavedMeasurementLink recordId={current.savedRecordId} />
                   </>
                 )}
               </div>

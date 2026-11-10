@@ -55,6 +55,7 @@ export function InstrumentsWorkspace({
   const [releasePending, setReleasePending] = useState(false);
   const releaseInFlight = useRef<Promise<void> | undefined>(undefined);
   const closeProblem = useRef(false);
+  const closeDecision = useRef<((finished: boolean) => void) | undefined>(undefined);
   const [exitRequest, setExitRequest] = useState(0);
   const noteCloseProblem = useCallback((problem: boolean) => {
     closeProblem.current = problem;
@@ -156,6 +157,7 @@ export function InstrumentsWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["instrument-drivers"] });
   };
   const loseSession = (message: string) => {
+    closeDecision.current?.(false);
     sessionRef.current = undefined;
     setSession(undefined);
     closeProblem.current = true;
@@ -196,10 +198,14 @@ export function InstrumentsWorkspace({
       setSessionError(undefined);
       setWindowError(undefined);
       setReleaseUnconfirmed(false);
+      closeDecision.current?.(true);
       if (selectAfter) selectDevice(selectAfter);
       refresh();
     },
-    onError: (error) => setSessionError(errorMessage(error)),
+    onError: (error) => {
+      setSessionError(errorMessage(error));
+      closeDecision.current?.(false);
+    },
   });
   const probe = useMutation({
     mutationFn: async (device: DeviceView) => {
@@ -309,7 +315,7 @@ export function InstrumentsWorkspace({
   }, [instrumentsQuery.dataUpdatedAt, session?.session_id]);
   useEffect(() => {
     if (!controlDeviceId) return;
-    return registerDeviceClose(async (signal) => {
+    return registerDeviceClose(async (signal, choosing) => {
       setClosingWindow(true);
       setWindowError(undefined);
       const thaw = () => setClosingWindow(false);
@@ -348,12 +354,26 @@ export function InstrumentsWorkspace({
           );
         })
       ) {
+        const reviewedSession = sessionRef.current;
+        if (!reviewedSession) return "blocked";
+        await choosing();
+        if (signal.aborted) return "unknown";
+        if (sessionRef.current?.session_id !== reviewedSession.session_id) return "blocked";
         setClosingWindow(false);
-        setExitRequest((current) => current + 1);
-        setWindowError(
-          "仍有未处理结果、未保存测量或结束控制选择，窗口已保留。请先核查结果、保存测量或明确结束控制，再关闭。",
-        );
-        return "blocked";
+        // Keep this native close intent alive while the existing review surface
+        // handles saving and the user's explicit output disposition.
+        const finished = await new Promise<boolean>((resolve) => {
+          const settle = (value: boolean) => {
+            signal.removeEventListener("abort", cancel);
+            closeDecision.current = undefined;
+            resolve(value);
+          };
+          const cancel = () => settle(false);
+          closeDecision.current = settle;
+          signal.addEventListener("abort", cancel, { once: true });
+          setExitRequest((current) => current + 1);
+        });
+        return finished && !signal.aborted ? "saved" : "blocked";
       }
       const current = sessionRef.current;
       if (current || releaseInFlight.current) {
@@ -474,6 +494,7 @@ export function InstrumentsWorkspace({
         onSessionLost={loseSession}
         onCloseProblem={noteCloseProblem}
         exitRequest={exitRequest}
+        onExitCancelled={() => closeDecision.current?.(false)}
         onDisconnectOwner={() => {
           if (selected.owner_kind === "instrument_session" && selected.owner_id)
             close.mutate({ id: selected.owner_id, abort: true });

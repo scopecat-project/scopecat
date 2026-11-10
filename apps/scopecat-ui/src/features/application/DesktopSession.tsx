@@ -57,7 +57,10 @@ export interface NotebookJourneyStatus {
 }
 
 interface DesktopAPI {
-  complete_close_preflight?(requestId: string, status: LaunchCloseStatus): Promise<void>;
+  complete_close_preflight?(
+    requestId: string,
+    status: LaunchCloseStatus | "pending",
+  ): Promise<void>;
   preview_notebook_cleanup?(topic: LessonTopic): Promise<{
     preview: components["schemas"]["DataCleanupPreview"];
     files_error: string | null;
@@ -71,6 +74,7 @@ interface DesktopAPI {
     repair?: boolean,
   ): Promise<NotebookJourney>;
   open_lesson_notebook(topic?: LessonTopic): Promise<void>;
+  open_saved_measurement_window?(recordId: string): Promise<void>;
   open_device_window?(deviceId: string): Promise<void>;
   open_run_window(runId: string): Promise<void>;
   set_window_title(title: string): Promise<void>;
@@ -167,6 +171,7 @@ export function DesktopSession() {
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState<string>();
   const pending = useRef(false);
+  const closeInProgress = useRef(false);
   const busy = progress !== undefined;
   const [error, setError] = useState<string>();
   const [activity, setActivity] = useState<ApplicationActivity>();
@@ -188,31 +193,38 @@ export function DesktopSession() {
       const requestId = detail.requestId;
       if (active.has(requestId)) return;
       active.add(requestId);
+      closeInProgress.current = true;
       setCloseNotice("正在等待操作完成、释放设备控制并确认输入…");
-      void Promise.all([prepareLaunchClose(requestId), prepareDeviceClose(requestId)]).then(
-        async (statuses) => {
-          const status: LaunchCloseStatus = statuses.includes("unknown")
-            ? "unknown"
-            : statuses.includes("blocked")
-              ? "blocked"
-              : "saved";
-          if (!active.has(requestId)) return;
-          try {
-            const api = window.pywebview?.api;
-            if (!api?.complete_close_preflight)
-              throw new Error("Native close acknowledgement is unavailable.");
-            await api.complete_close_preflight(requestId, status);
-            if (active.has(requestId) && status !== "saved")
-              setCloseNotice(
-                "窗口已保留：设备控制或输入尚未确认安全交接。请处理页面中的失败或未知结果后再关闭。",
-              );
-          } catch (failure) {
-            // Only the host can release a close barrier. A failed reply is not permission to close.
-            if (active.has(requestId))
-              setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
-          }
-        },
-      );
+      void Promise.all([
+        prepareLaunchClose(requestId),
+        prepareDeviceClose(requestId, async () => {
+          const api = window.pywebview?.api;
+          if (!api?.complete_close_preflight)
+            throw new Error("Native close acknowledgement is unavailable.");
+          await api.complete_close_preflight(requestId, "pending");
+        }),
+      ]).then(async (statuses) => {
+        const status: LaunchCloseStatus = statuses.includes("unknown")
+          ? "unknown"
+          : statuses.includes("blocked")
+            ? "blocked"
+            : "saved";
+        if (!active.has(requestId)) return;
+        try {
+          const api = window.pywebview?.api;
+          if (!api?.complete_close_preflight)
+            throw new Error("Native close acknowledgement is unavailable.");
+          await api.complete_close_preflight(requestId, status);
+          if (active.has(requestId) && status !== "saved")
+            setCloseNotice(
+              "窗口已保留：设备控制或输入尚未确认安全交接。请处理页面中的失败或未知结果后再关闭。",
+            );
+        } catch (failure) {
+          // Only the host can release a close barrier. A failed reply is not permission to close.
+          if (active.has(requestId))
+            setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
+        }
+      });
     };
     const release = (event: Event) => {
       const detail: unknown = (event as CustomEvent).detail;
@@ -224,6 +236,7 @@ export function DesktopSession() {
       )
         return;
       active.delete(detail.requestId);
+      closeInProgress.current = active.size > 0;
       releaseLaunchClose(detail.requestId);
       releaseDeviceClose(detail.requestId);
       setCloseNotice(
@@ -234,6 +247,7 @@ export function DesktopSession() {
     window.addEventListener("scopecat:close-release", release);
     return () => {
       active.clear();
+      closeInProgress.current = false;
       window.removeEventListener("scopecat:close-preflight", preflight);
       window.removeEventListener("scopecat:close-release", release);
     };
@@ -265,7 +279,7 @@ export function DesktopSession() {
   }, [open, waiting]);
   useEffect(() => {
     window.scopecatRequestExit = () => {
-      if (!window.pywebview || pending.current) return;
+      if (!window.pywebview || pending.current || closeInProgress.current) return;
       pending.current = true;
       setOpen(true);
       setActivity(undefined);

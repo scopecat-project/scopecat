@@ -213,7 +213,13 @@ export function DirectMeasurements({
   );
 }
 
-export function SavedCurve({ record }: { record: SavedMeasurement }) {
+export function SavedCurve({
+  record,
+  readOnly = false,
+}: {
+  record: SavedMeasurement;
+  readOnly?: boolean;
+}) {
   const cache = useQueryClient();
   const detail = useQuery({
     queryKey: ["direct-measurement-detail", record.id],
@@ -262,37 +268,41 @@ export function SavedCurve({ record }: { record: SavedMeasurement }) {
             {entry.note}
           </p>
         ))}
-        <label>
-          追加备注{" "}
-          <input
-            value={note}
-            disabled={annotate.isPending}
-            onChange={(event) => {
-              noteOperation.current = undefined;
-              setNote(event.target.value);
-            }}
-          />
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={anomalous}
-            disabled={annotate.isPending}
-            onChange={(event) => {
-              noteOperation.current = undefined;
-              setAnomalous(event.target.checked);
-            }}
-          />
-          标记异常
-        </label>
-        <button
-          type="button"
-          className={secondaryButton}
-          disabled={annotate.isPending}
-          onClick={() => annotate.mutate()}
-        >
-          追加标记（不修改原结果）
-        </button>
+        {!readOnly && (
+          <>
+            <label>
+              追加备注{" "}
+              <input
+                value={note}
+                disabled={annotate.isPending}
+                onChange={(event) => {
+                  noteOperation.current = undefined;
+                  setNote(event.target.value);
+                }}
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={anomalous}
+                disabled={annotate.isPending}
+                onChange={(event) => {
+                  noteOperation.current = undefined;
+                  setAnomalous(event.target.checked);
+                }}
+              />
+              标记异常
+            </label>
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={annotate.isPending}
+              onClick={() => annotate.mutate()}
+            >
+              追加标记（不修改原结果）
+            </button>
+          </>
+        )}
         {annotate.error && <p role="alert">{annotate.error.message}</p>}
       </div>
       {receipt.error && <p role="alert">{receipt.error.message}</p>}

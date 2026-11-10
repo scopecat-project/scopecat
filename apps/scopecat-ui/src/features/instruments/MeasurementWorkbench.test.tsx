@@ -106,7 +106,7 @@ it("selects earlier receipt, saves optional metadata, and keeps the result visib
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
   fireEvent.change(screen.getByRole("textbox", { name: "标题" }), { target: { value: "Cable A" } });
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^保存$/ }));
-  await screen.findByRole("link", { name: "查看 Data" });
+  await screen.findByRole("link", { name: "查看已保存结果" });
   expect(vi.mocked(saveDirectMeasurement).mock.calls[0]?.[0]).toMatchObject({
     command_id: "one",
     title: "Cable A",
@@ -134,7 +134,7 @@ it("freezes retry payload even after cancelling and selecting a different result
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
   expect(screen.getByRole("textbox", { name: "备注" })).toHaveValue("first note");
   fireEvent.click(screen.getByRole("button", { name: "重试保存" }));
-  await screen.findByRole("link", { name: "查看 Data" });
+  await screen.findByRole("link", { name: "查看已保存结果" });
   expect(vi.mocked(saveDirectMeasurement).mock.calls[1]?.[0]).toEqual(
     vi.mocked(saveDirectMeasurement).mock.calls[0]?.[0],
   );
