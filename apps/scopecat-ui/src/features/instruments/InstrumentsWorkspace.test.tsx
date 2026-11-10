@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { readOperatorSettings } from "../application/OperatorSettings";
 // @vitest-environment jsdom
 
@@ -180,7 +182,15 @@ describe("instrument workspace", () => {
     const open = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("pywebview", { api: { open_device_window: open } });
     renderWorkspace();
-    const button = await screen.findByRole("button", { name: "打开控制窗口" });
+    // Use the packaged probe's entry label against the real desktop manageOnly DOM.
+    const probe = readFileSync(
+      resolvePath("../../packages/scopecat-app/src/scopecat_app/trial_window_probe.py"),
+      "utf8",
+    );
+    const label = probe.match(/^CONTROL_WINDOW_LABEL = "([^"]+)"$/m)?.[1];
+    expect(label).toBeTruthy();
+    const button = await screen.findByRole("button", { name: label! });
+    expect(screen.queryByRole("button", { name: "操作" })).not.toBeInTheDocument();
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     fireEvent.click(button);

@@ -166,3 +166,22 @@ def test_diagnostics_capture_structure_not_input_values():
     script = view.window.evaluate_js.call_args.args[0]
     assert "visibleText" in script and "labels:" in script and "htmlFor" in script
     assert ".value" not in script and "Storage" not in script
+
+
+@pytest.mark.parametrize(
+    "close_request,busy,locked",
+    [
+        ("pending", False, False),
+        (None, True, False),
+        (None, False, True),
+        (None, False, False),
+    ],
+)
+def test_close_cancel_waits_for_full_native_completion(close_request, busy, locked):
+    from scopecat_app.trial_window_probe import close_preflight_idle
+
+    view = SimpleNamespace(close_request=close_request, close_in_progress=busy)
+    windows = SimpleNamespace(_preflight_lock=SimpleNamespace(locked=lambda: locked))
+    assert close_preflight_idle(windows, view) == (
+        close_request is None and not busy and not locked
+    )

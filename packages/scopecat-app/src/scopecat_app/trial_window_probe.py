@@ -200,6 +200,17 @@ def field_assignment(label: str, value: str) -> str:
     )
 
 
+def close_preflight_idle(windows: DesktopWindows, view: DesktopView) -> bool:
+    return (
+        view.close_request is None
+        and not view.close_in_progress
+        and not windows._preflight_lock.locked()  # pyright: ignore[reportPrivateUsage] - own test session
+    )
+
+
+CONTROL_WINDOW_LABEL = "打开控制窗口"
+
+
 def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[str]:
     """Interact only with the windows created by this process."""
     import httpx2
@@ -251,7 +262,7 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
     fill(main, "设备名称", "Trial probe virtual VNA")
     fill(main, "驱动", "scopecat.virtual.vna")
     button(main, "保存设备")
-    button(main, "操作")
+    button(main, CONTROL_WINDOW_LABEL)
     wait(lambda: windows.latest is not main, "Dedicated controller not created")
     control = windows.latest
     ready(control)
@@ -262,7 +273,7 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
     wait(control.close_finished.is_set, "Empty controller did not close")
     passed.append("empty-controller-single-close")
     previous = control
-    button(main, "操作")
+    button(main, CONTROL_WINDOW_LABEL)
     wait(
         lambda: is_reopened_controller(windows.latest, main, previous),
         "Controller not reopened with the same device identity",
@@ -305,6 +316,10 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
             wait(
                 lambda: not text(control, "结束控制前的待办"), "Cancel did not dismiss"
             )
+            wait(
+                lambda: close_preflight_idle(windows, control),
+                "Cancelled native close has not finished",
+            )
             assert not text(control, "Input is not confirmed saved")
             assert (
                 js(
@@ -329,17 +344,39 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
         response.raise_for_status()
         document = cast("dict[str, list[dict[str, object]]]", response.json())
         records = document["items"]
-    assert len(records) == 2, "Probe requires fresh synthetic data"
+        assert len(records) == 2, "Probe requires fresh synthetic data"
+        titles: dict[str, str] = {}
+        for record in records:
+            result = client.get(f"/api/v1/direct-measurements/{record['id']}")
+            result.raise_for_status()
+            detail = cast("dict[str, dict[str, str]]", result.json())
+            titles[str(record["id"])] = detail["selection"]["title"]
     ids = [str(record["id"]) for record in records]
+    assert set(titles.values()) == {
+        "Native program result 1",
+        "Native program result 2",
+    }
+
+    def result_ready(view: DesktopView, record_id: str) -> None:
+        ready(view)
+        assert view.saved_measurement_id == record_id
+        wait(
+            lambda: js(
+                view,
+                "document.querySelector('h1')?.textContent==="
+                + json.dumps(titles[record_id]),
+            ),
+            f"Saved result {record_id} did not render its exact title",
+        )
+
     control.api.open_saved_measurement_window(ids[0])
     a = windows.latest
-    ready(a)
-    wait(lambda: text(a, "Native program result"), "Result A did not render")
+    result_ready(a, ids[0])
     control.api.open_saved_measurement_window(ids[0])
     assert windows.latest is a
     control.api.open_saved_measurement_window(ids[1])
     b = windows.latest
-    ready(b)
+    result_ready(b, ids[1])
     assert (
         b is not a
         and not control.close_finished.is_set()
