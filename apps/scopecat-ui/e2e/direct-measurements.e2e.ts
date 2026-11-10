@@ -196,6 +196,26 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     );
     expect(await recordAfter.json()).toEqual(record);
     expect(collections).toBe(2);
+    // The accessible chart wrapper exists before lazy ECharts finishes drawing.
+    // Wait for rendered coordinates and an actual multi-point series, not just
+    // the wrapper, before capturing the restarted Data view.
+    const savedChart = data.getByRole("img", { name: "s_parameter 完整曲线", exact: true });
+    await expect(savedChart.locator("svg")).toBeVisible();
+    await expect(savedChart.locator("svg text").filter({ hasText: "frequency" })).toBeVisible();
+    await expect(savedChart.locator("svg text").filter({ hasText: "s_parameter" })).toBeVisible();
+    await expect
+      .poll(() =>
+        savedChart.locator("svg").evaluate((svg) =>
+          [...svg.querySelectorAll("path")].some((path) => {
+            const bounds = path.getBoundingClientRect();
+            const commands = path.getAttribute("d") ?? "";
+            return (
+              (commands.match(/[Ll]/g)?.length ?? 0) > 10 && bounds.width > 100 && bounds.height > 1
+            );
+          }),
+        ),
+      )
+      .toBe(true);
     await testInfo.attach("direct-measurement-data-after-restart", {
       body: await dataPage.screenshot({ fullPage: true }),
       contentType: "image/png",

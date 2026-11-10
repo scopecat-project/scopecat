@@ -131,6 +131,81 @@ test("control inputs and headings stay readable and complete curves resize at ev
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
     }
+    // A 1920px viewport still leaves only a narrow settings column. Fields
+    // must adapt to that container rather than using viewport-wide two columns.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    for (const id of ["start_frequency", "stop_frequency"]) {
+      const row = page.getByTestId(`interface-property-${id}`);
+      const label = row.getByTestId("property-label");
+      const input = row.getByRole("spinbutton");
+      await expect(label).toBeVisible();
+      await expect(input).toBeVisible();
+      await expect(async () => {
+        const geometry = await row.evaluate((element) => {
+          const labelNode = element.querySelector('[data-testid="property-label"]')!;
+          const inputNode = element.querySelector('input[type="number"]')!;
+          // This helper must travel with the browser-evaluated callback.
+          // oxlint-disable-next-line unicorn/consistent-function-scoping
+          const rect = (node: {
+            getBoundingClientRect(): { left: number; right: number; top: number; bottom: number };
+          }) => {
+            const bounds = node.getBoundingClientRect();
+            return {
+              left: bounds.left,
+              right: bounds.right,
+              top: bounds.top,
+              bottom: bounds.bottom,
+            };
+          };
+          return {
+            row: rect(element),
+            container: rect(element.parentElement),
+            card: rect(element.closest("article")),
+            label: rect(labelNode),
+            input: rect(inputNode),
+            labelWidth: labelNode.clientWidth,
+            labelContentWidth: labelNode.scrollWidth,
+          };
+        });
+        expect(geometry.labelContentWidth).toBeLessThanOrEqual(geometry.labelWidth + 1);
+        for (const bounds of [geometry.label, geometry.input]) {
+          for (const container of [geometry.row, geometry.container, geometry.card]) {
+            expect(bounds.left).toBeGreaterThanOrEqual(container.left - 1);
+            expect(bounds.right).toBeLessThanOrEqual(container.right + 1);
+            expect(bounds.top).toBeGreaterThanOrEqual(container.top - 1);
+            expect(bounds.bottom).toBeLessThanOrEqual(container.bottom + 1);
+          }
+        }
+        const overlapX =
+          Math.min(geometry.label.right, geometry.input.right) -
+          Math.max(geometry.label.left, geometry.input.left);
+        const overlapY =
+          Math.min(geometry.label.bottom, geometry.input.bottom) -
+          Math.max(geometry.label.top, geometry.input.top);
+        expect(overlapX > 1 && overlapY > 1).toBe(false);
+      }).toPass({ timeout: 5_000 });
+    }
+    const startInput = await page
+      .getByTestId("interface-property-start_frequency")
+      .getByRole("spinbutton")
+      .boundingBox();
+    const stopInput = await page
+      .getByTestId("interface-property-stop_frequency")
+      .getByRole("spinbutton")
+      .boundingBox();
+    expect(startInput).not.toBeNull();
+    expect(stopInput).not.toBeNull();
+    const inputsOverlapX =
+      Math.min(startInput!.x + startInput!.width, stopInput!.x + stopInput!.width) -
+      Math.max(startInput!.x, stopInput!.x);
+    const inputsOverlapY =
+      Math.min(startInput!.y + startInput!.height, stopInput!.y + stopInput!.height) -
+      Math.max(startInput!.y, stopInput!.y);
+    expect(inputsOverlapX > 1 && inputsOverlapY > 1).toBe(false);
+    await testInfo.attach("device-control-fields-1920", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
     // Resize the containing panel without changing the viewport, then hide/show it.
     await current.evaluate((element) => {
       element.style.width = "360px";

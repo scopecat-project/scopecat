@@ -87,10 +87,10 @@ export function InterfaceCard({
     return null;
   return (
     <article
-      className="overflow-hidden rounded-md border border-line bg-panel-soft"
+      className="@container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel-soft"
       data-testid={`interface-card-${instrumentInterface.id}-${mountPath.join("-") || "root"}`}
     >
-      <header className="flex items-start justify-between gap-3.5 border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3 max-[460px]:flex-col">
+      <header className="flex items-start justify-between gap-3.5 border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3 @max-[460px]/controls:flex-col">
         <div>
           <h4 className="m-0 text-sm font-[680]">
             {instrumentInterface.label ?? interfaceFallbackLabel(instrumentInterface.id)}
@@ -149,7 +149,7 @@ export function DeviceStateCard({
 }) {
   return (
     <article
-      className="overflow-hidden rounded-md border border-line bg-panel-soft"
+      className="@container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel-soft"
       data-testid={`device-state-card-${deviceState.id}`}
     >
       <header className="border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3">
@@ -882,11 +882,12 @@ export const problems =
 export const receiptStyle =
   "m-0 rounded-sm border border-line bg-panel-soft px-2.5 py-2 text-xs text-text-soft";
 const controlGrid =
-  "grid grid-cols-[repeat(2,minmax(230px,1fr))] max-[1100px]:grid-cols-[minmax(0,1fr)]";
-const controlHeader = "flex items-start justify-between gap-3.5 px-3 py-2.5 max-[460px]:flex-col";
+  "grid min-w-0 grid-cols-[minmax(0,1fr)] @min-[720px]/controls:grid-cols-[repeat(2,minmax(0,1fr))]";
+const controlHeader =
+  "flex items-start justify-between gap-3.5 px-3 py-2.5 @max-[460px]/controls:flex-col";
 const controlDescription = "mt-1.5 mb-0 max-w-[760px] text-xs leading-[1.45] text-text-dim";
 const editorRow =
-  "relative grid min-h-[78px] grid-cols-[minmax(130px,1fr)_minmax(140px,0.85fr)] items-center gap-x-3.5 gap-y-[9px] border-r border-b border-line bg-transparent px-[13px] py-2.5 even:border-r-0 max-[1100px]:border-r-0 max-[680px]:grid-cols-[minmax(120px,1fr)_minmax(125px,0.9fr)] max-[460px]:grid-cols-[minmax(0,1fr)]";
+  "relative grid min-h-[78px] min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-x-3.5 gap-y-[9px] border-b border-line bg-transparent px-[13px] py-2.5 @min-[360px]/controls:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] @min-[720px]/controls:border-r even:border-r-0";
 const propertyLabel = "flex min-w-0 items-start justify-between gap-2";
 const controlInput = "w-full";
 const unitAddon =
