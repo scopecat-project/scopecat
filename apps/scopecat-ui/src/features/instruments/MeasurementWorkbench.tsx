@@ -48,6 +48,8 @@ export function acquisitionTargets(
 }
 
 export function MeasurementWorkbench({
+  collapsed,
+  onCollapsedChange,
   description,
   connected,
   disabled,
@@ -63,6 +65,8 @@ export function MeasurementWorkbench({
   onSaveAttempt,
   onSaved,
 }: {
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
   description?: InstrumentDescription;
   connected: boolean;
   disabled: boolean;
@@ -79,7 +83,6 @@ export function MeasurementWorkbench({
   onSaved: (commandId: string, recordId?: string) => void;
 }) {
   const cache = useQueryClient();
-  const [collapsed, setCollapsed] = useState(false);
   const [target, setTarget] = useState<CurrentMeasurementResult>();
   const [title, setTitle] = useState("");
   const [line, setLine] = useState("");
@@ -144,17 +147,23 @@ export function MeasurementWorkbench({
   return (
     <section
       aria-label="交互采集"
-      className="min-w-0 rounded-md border border-line bg-panel-soft p-3"
+      className={classes(
+        "min-w-0",
+        collapsed ? "justify-self-start" : "rounded-md border border-line bg-panel-soft p-3",
+      )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">采集</h3>
+        {!collapsed && <h3 className="text-sm font-semibold">采集</h3>}
         <button
           className={secondaryButton}
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => onCollapsedChange(!collapsed)}
           aria-expanded={!collapsed}
         >
           {collapsed ? "展开采集面板" : "收起采集面板"}
         </button>
+        {collapsed && pending.length > 0 && (
+          <span className="text-xs text-text-dim">{pending.length} 条待保存</span>
+        )}
       </div>
       <div hidden={collapsed}>
         <div className="my-3 flex flex-wrap gap-2">

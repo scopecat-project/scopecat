@@ -1400,6 +1400,32 @@ describe("instrument workspace", () => {
     expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
   });
 
+  it("collapses the parent layout without losing selected or pending results", async () => {
+    renderWorkspace();
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await screen.findByRole("button", { name: "保存所选结果" });
+    const first = screen.getByTestId(/^recent-result-/);
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2));
+    fireEvent.click(first);
+    const layout = screen.getByTestId("instrument-workbench-layout");
+    expect(layout).toHaveAttribute("data-collection-collapsed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "收起采集面板" }));
+    expect(layout).toHaveAttribute("data-collection-collapsed", "true");
+    expect(layout).not.toHaveClass("xl:grid-cols-[minmax(0,1fr)_24rem]");
+    expect(screen.getByText("2 条待保存")).toBeVisible();
+    expect(screen.getByTestId("instrument-control-panel")).toHaveClass("max-w-6xl");
+    expect(screen.queryByRole("region", { name: "当前测量结果" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开采集面板" }));
+    expect(layout).toHaveAttribute("data-collection-collapsed", "false");
+    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("region", { name: "当前测量结果" })).toBeVisible();
+    expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2);
+    expect(saveDirectMeasurement).not.toHaveBeenCalled();
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
+  });
+
   it("collects without metadata and keeps optional save drafts separate from device settings", async () => {
     renderWorkspace();
     await connectInstrument();

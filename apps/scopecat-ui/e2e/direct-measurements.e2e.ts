@@ -87,11 +87,51 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     expect(original).not.toContain("完整 3 点");
     await page.getByTestId(firstId!).click();
     await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "收起采集面板", exact: true }).click();
-    await expect(current).toBeHidden();
-    await page.getByRole("button", { name: "展开采集面板", exact: true }).click();
-    await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
-    await expect(current.getByText(/完整 \d+ 点/)).toHaveText(original!);
+    for (const width of [1920, 900]) {
+      await page.setViewportSize({ width, height: 1080 });
+      await page.getByRole("button", { name: "收起采集面板", exact: true }).click();
+      await expect(current).toBeHidden();
+      const layout = page.getByTestId("instrument-workbench-layout");
+      const controls = page.getByTestId("instrument-control-panel");
+      const collection = page.getByRole("region", { name: "交互采集", exact: true });
+      const expand = collection.getByRole("button", { name: "展开采集面板", exact: true });
+      await expect(layout).toHaveAttribute("data-collection-collapsed", "true");
+      await expect(expand).toBeVisible();
+      await expect(collection.getByText("2 条待保存", { exact: true })).toBeVisible();
+      await expect(async () => {
+        const bounds = await layout.boundingBox();
+        const panel = await controls.boundingBox();
+        const entry = await collection.boundingBox();
+        const button = await expand.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(panel).not.toBeNull();
+        expect(entry).not.toBeNull();
+        expect(button).not.toBeNull();
+        // Controls return to the workspace's left edge; do not require them
+        // to stretch across the entire screen just to remove the empty column.
+        expect(panel!.x).toBeGreaterThanOrEqual(bounds!.x - 1);
+        expect(panel!.x - bounds!.x).toBeLessThanOrEqual(24);
+        expect(panel!.y).toBeGreaterThanOrEqual(entry!.y + entry!.height - 1);
+        expect(entry!.height).toBeLessThanOrEqual(96);
+        expect(button!.height).toBeLessThanOrEqual(48);
+        expect(panel!.x + panel!.width).toBeLessThanOrEqual(width + 1);
+        expect(
+          await page.evaluate<number>("document.documentElement.scrollWidth"),
+        ).toBeLessThanOrEqual(width);
+      }).toPass({ timeout: 5_000 });
+      await testInfo.attach(`direct-workbench-collapsed-${width}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+      await expand.click();
+      await expect(layout).toHaveAttribute("data-collection-collapsed", "false");
+      await expect(recent).toHaveCount(2);
+      await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId(firstId!)).toContainText("待保存");
+      await expect(current.getByText(/完整 \d+ 点/)).toHaveText(original!);
+      await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeEnabled();
+      expect(collections).toBe(2);
+    }
 
     for (const width of [1920, 900]) {
       await page.setViewportSize({ width, height: 1080 });

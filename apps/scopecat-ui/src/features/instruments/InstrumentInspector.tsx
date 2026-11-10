@@ -168,6 +168,7 @@ function InstrumentInspectorContent({
     setShowFinishChoice(false);
     setDismissedExitRequest(exitRequest);
   };
+  const [collectionCollapsed, setCollectionCollapsed] = useState(false);
   const [recentMeasurements, setRecentMeasurements] = useState<CurrentMeasurementResult[]>([]);
   const markPreviousResult = (reason: string) => {
     setCurrentMeasurement((current) =>
@@ -633,13 +634,18 @@ function InstrumentInspectorContent({
         />
       )}
       <div
+        data-testid="instrument-workbench-layout"
+        data-collection-collapsed={collectionCollapsed}
         className={classes(
           "grid min-w-0 items-start gap-4",
-          (acquisitionTargets(description).length > 0 || currentMeasurement) &&
+          !collectionCollapsed &&
+            (acquisitionTargets(description).length > 0 || currentMeasurement) &&
             "xl:grid-cols-[minmax(0,1fr)_24rem]",
         )}
       >
         <MeasurementWorkbench
+          collapsed={collectionCollapsed}
+          onCollapsedChange={setCollectionCollapsed}
           description={description}
           connected={connected}
           disabled={interactionDisabled || pendingMeasurements.length >= 20}
@@ -675,7 +681,15 @@ function InstrumentInspectorContent({
         />
 
         {description ? (
-          <div className="grid min-w-0 gap-3 xl:max-h-[calc(100vh-15rem)] xl:overflow-y-auto">
+          <div
+            data-testid="instrument-control-panel"
+            className={classes(
+              "grid min-w-0 gap-3",
+              collectionCollapsed
+                ? "w-full max-w-6xl"
+                : "xl:max-h-[calc(100vh-15rem)] xl:overflow-y-auto",
+            )}
+          >
             <div
               className="mt-[3px] flex items-end justify-between max-[460px]:flex-col max-[460px]:items-start"
               data-testid="interface-heading"
@@ -715,7 +729,13 @@ function InstrumentInspectorContent({
 
             {(description.interfaces ?? []).length > 0 ||
             (description.device_schemas ?? []).length > 0 ? (
-              <div className="grid gap-2.5">
+              <div
+                className={classes(
+                  "grid min-w-0 items-start gap-2.5",
+                  collectionCollapsed &&
+                    "grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] [&>article]:max-w-xl",
+                )}
+              >
                 {(description.interfaces ?? []).flatMap((instrumentInterface) =>
                   interfaceMountPaths(description, instrumentInterface.id).map((mountPath) => (
                     <InterfaceCard

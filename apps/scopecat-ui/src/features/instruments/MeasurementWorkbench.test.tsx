@@ -41,6 +41,7 @@ const results: CurrentMeasurementResult[] = ["one", "two"].map((id) => ({
   receivedAt: "2026-01-01T12:00:00Z",
 }));
 function Harness() {
+  const [collapsed, setCollapsed] = useState(false);
   const [current, setCurrent] = useState(results[1]);
   const [pending, setPending] = useState<PendingMeasurement[]>(
     results.map((item) => ({
@@ -51,6 +52,8 @@ function Harness() {
   );
   return (
     <MeasurementWorkbench
+      collapsed={collapsed}
+      onCollapsedChange={setCollapsed}
       description={description}
       connected
       disabled={false}
@@ -97,6 +100,7 @@ it("selects earlier receipt, saves optional metadata, and keeps the result visib
   expect(screen.getByText("Curve one")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "收起采集面板" }));
   expect(screen.getByText("Curve one")).not.toBeVisible();
+  expect(screen.getByText("2 条待保存")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "展开采集面板" }));
   expect(screen.getByTestId("recent-result-one")).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
@@ -139,6 +143,8 @@ it("does not create a collection panel for a pure output device", () => {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <MeasurementWorkbench
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
         description={{ ...description, interfaces: [] }}
         connected
         disabled={false}
