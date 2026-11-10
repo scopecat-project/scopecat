@@ -20,6 +20,7 @@ export function InstrumentExitDialog({
   stagedCount,
   problem,
   onSaved,
+  onSaveAttempt,
   onCancel,
   onFinished,
 }: {
@@ -27,7 +28,8 @@ export function InstrumentExitDialog({
   pending: PendingMeasurement[];
   stagedCount: number;
   problem?: string;
-  onSaved: (commandId: string) => void;
+  onSaved: (commandId: string, recordId?: string) => void;
+  onSaveAttempt?: (item: PendingMeasurement) => void;
   onCancel: () => void;
   onFinished: () => void;
 }) {
@@ -44,8 +46,9 @@ export function InstrumentExitDialog({
     for (const item of items) {
       const id = item.selection.command_id;
       try {
-        await saveDirectMeasurement(item.selection);
-        onSaved(id);
+        onSaveAttempt?.(item);
+        const record = await saveDirectMeasurement(item.selection);
+        onSaved(id, record.id);
         setErrors((current) => {
           const next = { ...current };
           delete next[id];

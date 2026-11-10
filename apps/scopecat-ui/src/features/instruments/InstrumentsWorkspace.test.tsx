@@ -202,7 +202,10 @@ describe("instrument workspace", () => {
     await connectInstrument();
     expect(within(header).getByText("已连接", { exact: true })).toBeVisible();
     expect(screen.getAllByRole("heading", { name: "Drive source" })).toHaveLength(1);
-    for (const name of ["线路名称", "测量备注"]) {
+    expect(screen.queryByRole("textbox", { name: "线路名称" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保存所选结果" }));
+    for (const name of ["标题", "线路名称", "备注"]) {
       const input = screen.getByRole("textbox", { name });
       expect(input).toHaveClass("border", "bg-panel", "min-h-9");
       expect(input.closest("label")).toHaveClass("grid", "gap-1.5");
@@ -763,7 +766,7 @@ describe("instrument workspace", () => {
     expect(applyDefaults).toBeDisabled();
     expect(applyDefaults).toHaveAttribute("title", "请先应用或重置暂存属性");
 
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledOnce());
     expect(screen.getByRole("button", { name: "应用暂存修改" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
@@ -810,7 +813,7 @@ describe("instrument workspace", () => {
 
     expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "释放控制" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sample Collect" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "调用 Reset fault" })).toBeDisabled();
     expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toBeDisabled();
     expect(applyDefaults).toHaveAttribute("title", "请等待当前仪器交互完成");
@@ -1191,6 +1194,7 @@ describe("instrument workspace", () => {
         quarantined: /设备状态不确定/,
         unavailable: /设备不可用。请先处理/,
       };
+      fireEvent.click(screen.getByText("接口说明与 Python"));
       expect(screen.getByText(reasons[availability])).toBeVisible();
     },
   );
@@ -1232,12 +1236,10 @@ describe("instrument workspace", () => {
         items: [view],
       });
       renderWorkspace();
-      expect(
-        await screen.findByText(
-          description ? `采集契约：${description}` : /此 acquisition 未说明是否发起新采集/,
-        ),
-      ).toBeVisible();
-      expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
+      fireEvent.click(await screen.findByText("Sample 说明"));
+      const explicitDescription = screen.queryByText(description ?? "发起一次新采集并返回结果。");
+      expect(explicitDescription !== null).toBe(description !== undefined);
+      expect(screen.getByRole("button", { name: "Sample Collect" })).toBeDisabled();
       expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
       expect(invokeInstrumentOperation).not.toHaveBeenCalled();
       expect(openInstrumentSession).not.toHaveBeenCalled();
@@ -1373,10 +1375,10 @@ describe("instrument workspace", () => {
     });
     renderWorkspace();
     await connectInstrument();
-    fireEvent.click(screen.getAllByRole("button", { name: "收集 Collect" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Sample Collect" })[0]!);
     const current = await screen.findByRole("region", { name: "当前测量结果" });
     expect(within(current).getByRole("img", { name: /完整曲线/ })).toBeVisible();
-    fireEvent.click(screen.getAllByRole("button", { name: "收集 Collect" })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Read existing Collect" }));
     await waitFor(() => expect(within(current).getByText(/Read existing ·/)).toBeVisible());
     expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
     fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
@@ -1392,41 +1394,38 @@ describe("instrument workspace", () => {
       status: "not_collected",
       problems: [],
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "收集 Collect" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Sample Collect" })[0]!);
     await waitFor(() => expect(within(current).getByText(/最近一次采集未成功/)).toBeVisible());
     expect(within(current).getByText(/Read existing ·/)).toBeVisible();
     expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
   });
 
-  it("prepares the next line without clearing the current label or note and requires fresh wiring confirmation", async () => {
+  it("collects without metadata and keeps optional save drafts separate from device settings", async () => {
     renderWorkspace();
     await connectInstrument();
-    const line = screen.getByRole("textbox", { name: "线路名称" });
-    const note = screen.getByRole("textbox", { name: "测量备注" });
-    fireEvent.change(line, { target: { value: "line-a" } });
-    fireEvent.change(note, { target: { value: "keep this note" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-a" }));
-    fireEvent.click(screen.getByRole("button", { name: "开始下一条线路…" }));
-    expect(line).toHaveValue("line-a");
-    expect(note).toHaveValue("keep this note");
-    fireEvent.click(screen.getByRole("button", { name: "取消换线" }));
-    expect(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-a" })).toBeChecked();
-    fireEvent.click(screen.getByRole("button", { name: "开始下一条线路…" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "下一条线路名称" }), {
-      target: { value: "line-b" },
+    expect(screen.queryByRole("textbox", { name: "线路名称" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保存所选结果" }));
+    const dialog = screen.getByRole("dialog", { name: "保存测量" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "线路名称" }), {
+      target: { value: "line-a" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "切换并确认接线" }));
-    expect(line).toHaveValue("line-b");
-    expect(note).toHaveValue("");
-    expect(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-b" })).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "备注" }), {
+      target: { value: "optional note" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(saveDirectMeasurement).not.toHaveBeenCalled();
+    expect(applyInstrumentState).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Sample Collect" })).toBeEnabled();
+    expect(screen.getByRole("region", { name: "当前测量结果" })).toBeVisible();
   });
 
   it("opens the same in-viewport exit checklist on native close and cancellation preserves pending results", async () => {
     renderWorkspace("drive-source");
     await connectInstrument();
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
-    await screen.findByRole("button", { name: "保存此结果" });
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await screen.findByRole("button", { name: "保存所选结果" });
     let outcome: string | undefined;
     await act(async () => {
       outcome = await prepareDeviceClose("exit-checklist");
@@ -1437,14 +1436,14 @@ describe("instrument workspace", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
     fireEvent.click(screen.getByRole("button", { name: "继续控制" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "保存此结果" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
     expect(finishInstrumentSession).not.toHaveBeenCalled();
     releaseDeviceClose("exit-checklist");
     fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
     expect(screen.getByRole("checkbox", { name: /明确放弃这/ })).not.toBeChecked();
   });
 
-  it("fixes line attribution at collection and retries saving without collecting again", async () => {
+  it("fixes metadata on the first save attempt and retries without collecting again", async () => {
     vi.mocked(saveDirectMeasurement).mockRejectedValueOnce(new Error("disk unavailable"));
     vi.mocked(saveDirectMeasurement).mockImplementationOnce(async (selection) => ({
       id: "saved-one",
@@ -1465,21 +1464,24 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.change(screen.getByRole("textbox", { name: "线路名称" }), {
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保存所选结果" }));
+    const dialog = screen.getByRole("dialog", { name: "保存测量" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "线路名称" }), {
       target: { value: "line-a" },
     });
-    expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "已人工确认当前接线为 line-a" }));
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
-    await screen.findByRole("button", { name: "保存此结果" });
-    fireEvent.change(screen.getByRole("textbox", { name: "线路名称" }), {
-      target: { value: "line-b" },
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "标题" }), {
+      target: { value: "first sweep" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存此结果" }));
-    await screen.findByText(/保存失败：disk unavailable/);
-    fireEvent.click(screen.getByRole("button", { name: "保存此结果" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "保存此结果" })).not.toBeInTheDocument(),
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+    await screen.findByText(/保存尚未确认：disk unavailable/);
+    expect(within(dialog).getByRole("textbox", { name: "线路名称" })).toBeDisabled();
+    expect(within(dialog).getByRole("textbox", { name: "标题" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "重试保存" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "查看 Data" })).toHaveAttribute(
+      "href",
+      "/?data=direct-measurements&measurement=saved-one#history",
     );
     expect(collectInstrumentAcquisition).toHaveBeenCalledOnce();
     expect(saveDirectMeasurement).toHaveBeenCalledTimes(2);
@@ -1487,6 +1489,136 @@ describe("instrument workspace", () => {
       vi.mocked(saveDirectMeasurement).mock.calls[1]?.[0],
     );
     expect(vi.mocked(saveDirectMeasurement).mock.calls[0]?.[0].line_label).toBe("line-a");
+  });
+
+  it("stops at twenty unsaved results and resumes after one retained save", async () => {
+    vi.mocked(saveDirectMeasurement).mockImplementation(async (selection) => ({
+      id: "saved-capacity",
+      selection,
+      saved_at: "2026-11-04T00:00:00Z",
+      collected_at: "2026-11-04T00:00:00Z",
+      setup: session().setup,
+      description: instrument().description!,
+      intent: {
+        command_id: selection.command_id,
+        instrument_id: selection.instrument_id,
+        interface_id: "scopecat.rf_output/v1",
+        acquisition_id: "sample",
+      },
+      observed_before_collection: null,
+      receipt_digest: "sha256:receipt",
+    }));
+    renderWorkspace();
+    await connectInstrument();
+    for (let index = 0; index < 20; index++) {
+      const collect = screen.getByRole("button", { name: "Sample Collect" });
+      expect(collect).toBeEnabled();
+      fireEvent.click(collect);
+      await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(index + 1));
+    }
+    expect(screen.getByRole("button", { name: "Sample Collect" })).toBeDisabled();
+    expect(screen.getByText("请先保存待保存结果，再继续采集。")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(20);
+    fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "保存测量" })).getByRole("button", {
+        name: "保存",
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Sample Collect" })).toBeEnabled();
+    expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(20);
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(21));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Sample Collect" })).toBeDisabled(),
+    );
+  });
+
+  it("bounds saved recent results without evicting an unsaved earlier result", async () => {
+    vi.mocked(saveDirectMeasurement).mockImplementation(async (selection) => ({
+      id: "saved-capacity",
+      selection,
+      saved_at: "2026-11-04T00:00:00Z",
+      collected_at: "2026-11-04T00:00:00Z",
+      setup: session().setup,
+      description: instrument().description!,
+      intent: {
+        command_id: selection.command_id,
+        instrument_id: selection.instrument_id,
+        interface_id: "scopecat.rf_output/v1",
+        acquisition_id: "sample",
+      },
+      observed_before_collection: null,
+      receipt_digest: "sha256:receipt",
+    }));
+    renderWorkspace();
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await screen.findByRole("button", { name: "保存所选结果" });
+    const pendingId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]![3];
+    for (let index = 0; index < 21; index++) {
+      fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+      await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(index + 2));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Sample Collect" })).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+      fireEvent.click(
+        within(screen.getByRole("dialog", { name: "保存测量" })).getByRole("button", {
+          name: "保存",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    }
+    expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(21);
+    const pending = screen.getByTestId(`recent-result-${pendingId}`);
+    expect(pending).toHaveTextContent("待保存");
+    fireEvent.click(pending);
+    expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
+    expect(saveDirectMeasurement).toHaveBeenCalledTimes(21);
+  });
+
+  it("links an exit-dialog save to its retained Data record when control continues", async () => {
+    vi.mocked(saveDirectMeasurement).mockImplementation(async (selection) => ({
+      id: "saved-through-exit",
+      selection,
+      saved_at: "2026-11-04T00:00:00Z",
+      collected_at: "2026-11-04T00:00:00Z",
+      setup: session().setup,
+      description: instrument().description!,
+      intent: {
+        command_id: selection.command_id,
+        instrument_id: selection.instrument_id,
+        interface_id: "scopecat.rf_output/v1",
+        acquisition_id: "sample",
+      },
+      observed_before_collection: null,
+      receipt_digest: "sha256:receipt",
+    }));
+    renderWorkspace();
+    await connectInstrument();
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+    await screen.findByRole("button", { name: "保存所选结果" });
+    const commandId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]![3];
+    fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+    const dialog = await screen.findByRole("dialog", { name: "结束控制前的待办" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存此结果" }));
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("button", { name: "保存此结果" })).not.toBeInTheDocument(),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "继续控制" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId(`recent-result-${commandId}`));
+    expect(screen.getByRole("link", { name: "查看 Data" })).toHaveAttribute(
+      "href",
+      "/?data=direct-measurements&measurement=saved-through-exit#history",
+    );
+    expect(screen.queryByRole("button", { name: "保存所选结果" })).not.toBeInTheDocument();
+    expect(collectInstrumentAcquisition).toHaveBeenCalledOnce();
+    expect(saveDirectMeasurement).toHaveBeenCalledOnce();
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
   });
 
   it("displays a current Python HTTP receipt through the real collection API", async () => {
@@ -1497,18 +1629,23 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
-    expect(await screen.findByText("Collect 回执： 已采集")).toBeVisible();
-    expect(screen.getByText("15 项返回结果")).toBeVisible();
-    expect(screen.getByText("2 项结果不可用")).toBeVisible();
-    expect(screen.getByText("原因： 无效、缺失")).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
+    expect(await screen.findByRole("region", { name: "当前测量结果" })).toBeVisible();
+    fireEvent.click(screen.getByText("结果数据（数值与可用性）"));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("combobox", { name: "精确结果字段" })).getAllByRole("option"),
+      ).toHaveLength(15),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("2 项结果不可用");
+    expect(screen.getByRole("status")).toHaveTextContent("原因： 无效、缺失");
     expect(screen.getByRole("img", { name: /完整曲线/i })).toBeVisible();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([
     [1, "收集结果未知。后台服务已隔离此会话，需操作者核对。"],
-    [2, "Collect 回执： 未采集"],
+    [2, "未采集"],
   ] as const)("handles current Python receipt status %i", async (index, message) => {
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
@@ -1519,7 +1656,7 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
     expect(await screen.findByText(message)).toBeVisible();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -1552,11 +1689,11 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
 
     const summary = await screen.findByRole("status");
-    expect(within(summary).getByText("2 项结果不可用")).toBeVisible();
-    expect(within(summary).getByText("原因： 缺失、过载")).toBeVisible();
+    expect(summary).toHaveTextContent("2 项结果不可用");
+    expect(summary).toHaveTextContent("原因： 缺失、过载");
     expect(summary).not.toHaveTextContent("private-overload-result");
     expect(summary).not.toHaveTextContent("private-missing-result");
     expect(screen.queryByRole("img", { name: /完整曲线/i })).not.toBeInTheDocument();
@@ -1583,9 +1720,9 @@ describe("instrument workspace", () => {
       vi.mocked(applyInstrumentState).mock.calls[1]?.[3],
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
     expect(await screen.findByText("Collect network failed.")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2));
     expect(vi.mocked(collectInstrumentAcquisition).mock.calls[0]?.[3]).toBe(
       vi.mocked(collectInstrumentAcquisition).mock.calls[1]?.[3],
@@ -1610,14 +1747,14 @@ describe("instrument workspace", () => {
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
 
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
     expect(await screen.findByText("Collect request lost.")).toBeVisible();
     const staleCollectCommandId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]?.[3];
 
     fireEvent.change(frequency, { target: { value: "6000000000" } });
     fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
     expect(await screen.findByText("应用回执： 已应用")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
 
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2));
     expect(vi.mocked(collectInstrumentAcquisition).mock.calls[1]?.[3]).not.toBe(
@@ -1695,10 +1832,11 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
 
-    expect(await screen.findByText("Current sample")).toBeVisible();
-    expect(screen.getByText("Voltage sample")).toBeVisible();
+    fireEvent.click(await screen.findByText("Monitor 说明"));
+    expect(screen.getByText(/Current sample/)).toBeVisible();
+    expect(screen.getByText(/Voltage sample/)).toBeVisible();
     expect(screen.queryByText("Enable RF output before collecting.")).not.toBeInTheDocument();
-    const collect = screen.getByRole("button", { name: "收集 Collect" });
+    const collect = screen.getByRole("button", { name: "Monitor Collect" });
     expect(collect).toBeEnabled();
     fireEvent.click(collect);
 

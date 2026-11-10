@@ -11,14 +11,7 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { ApiError } from "../../api-client";
-import {
-  classes,
-  eyebrow,
-  fieldLabel,
-  formControl,
-  primaryButton,
-  secondaryButton,
-} from "../../ui/styles";
+import { classes, eyebrow, primaryButton, secondaryButton } from "../../ui/styles";
 import type { InstrumentPropertyDraft } from "./InstrumentPropertyInput";
 import {
   applyInstrumentConfiguredDefaults,
@@ -58,13 +51,10 @@ import {
   operationKey,
 } from "./InstrumentInterfaceControls";
 import { DevicePythonGuide } from "./DevicePythonGuide";
-import {
-  DirectMeasurements,
-  type PendingMeasurement,
-  type MeasurementSave,
-} from "./DirectMeasurements";
+import { type PendingMeasurement, type MeasurementSave } from "./DirectMeasurements";
 import { InstrumentExitDialog } from "./InstrumentExitDialog";
-import { CurrentMeasurement, type CurrentMeasurementResult } from "./CurrentMeasurement";
+import { type CurrentMeasurementResult } from "./CurrentMeasurement";
+import { MeasurementWorkbench, acquisitionTargets } from "./MeasurementWorkbench";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
 
 type DraftValue = InstrumentPropertyDraft;
@@ -172,24 +162,43 @@ function InstrumentInspectorContent({
   const [invokeResults, setInvokeResults] = useState<Record<string, InstrumentInvokeReceipt>>({});
   const [outputTouched, setOutputTouched] = useState(false);
   const [showFinishChoice, setShowFinishChoice] = useState(false);
-  const [nextLineOpen, setNextLineOpen] = useState(false);
-  const [nextLineLabel, setNextLineLabel] = useState("");
   const [dismissedExitRequest, setDismissedExitRequest] = useState(exitRequest);
   const finishChoiceOpen = showFinishChoice || (!!session && exitRequest !== dismissedExitRequest);
   const dismissFinishChoice = () => {
     setShowFinishChoice(false);
     setDismissedExitRequest(exitRequest);
   };
-  const markPreviousResult = (reason: string) =>
+  const [recentMeasurements, setRecentMeasurements] = useState<CurrentMeasurementResult[]>([]);
+  const markPreviousResult = (reason: string) => {
     setCurrentMeasurement((current) =>
       current ? { ...current, relationshipChanged: reason } : current,
     );
+    setRecentMeasurements((current) =>
+      current.map((item) => ({ ...item, relationshipChanged: reason })),
+    );
+  };
   const [pendingMeasurements, setPendingMeasurements] = useState<PendingMeasurement[]>([]);
-  const [seriesId, setSeriesId] = useState(() => createInstrumentCommandId("series"));
-  const [lineId, setLineId] = useState(() => createInstrumentCommandId("line"));
-  const [lineLabel, setLineLabel] = useState("");
-  const [lineConfirmed, setLineConfirmed] = useState(false);
-  const [measurementNote, setMeasurementNote] = useState("");
+  const [seriesId] = useState(() => createInstrumentCommandId("series"));
+  const markMeasurementSaved = (commandId: string, recordId?: string) => {
+    setPendingMeasurements((items) =>
+      items.filter((item) => item.selection.command_id !== commandId),
+    );
+    setCurrentMeasurement((item) =>
+      item?.selection.command_id === commandId ? { ...item, savedRecordId: recordId } : item,
+    );
+    setRecentMeasurements((items) => {
+      const updated = items.map((item) =>
+        item.selection.command_id === commandId ? { ...item, savedRecordId: recordId } : item,
+      );
+      const saved = updated.filter((item) => item.savedRecordId);
+      const keep = new Set(saved.slice(-20).map((item) => item.selection.command_id));
+      if (currentMeasurement?.selection.command_id === commandId && !keep.has(commandId)) {
+        keep.delete(keep.values().next().value ?? "");
+        keep.add(commandId);
+      }
+      return updated.filter((item) => !item.savedRecordId || keep.has(item.selection.command_id));
+    });
+  };
   const collectionSelections = useRef<Record<string, MeasurementSave>>({});
   const applyCommandIdRef = useRef<string | undefined>(undefined);
   const configuredDefaultsOperationIdRef = useRef<string | undefined>(undefined);
@@ -232,6 +241,7 @@ function InstrumentInspectorContent({
       if (receipt.status === "applied") {
         setOutputTouched(true);
         collectCommandIdsRef.current = {};
+        collectionSelections.current = {};
         invokeCommandIdsRef.current = {};
         setCollectResults({});
         markPreviousResult("此后已执行设置或设备动作");
@@ -260,6 +270,7 @@ function InstrumentInspectorContent({
         if (receipt.status === "applied") setOutputTouched(true);
         applyCommandIdRef.current = undefined;
         collectCommandIdsRef.current = {};
+        collectionSelections.current = {};
         invokeCommandIdsRef.current = {};
         setApplyResult(undefined);
         setDrafts({});
@@ -315,7 +326,13 @@ function InstrumentInspectorContent({
       const selection = collectionSelections.current[commandId];
       if (receipt.status === "collected" && selection) {
         setOutputTouched(true);
-        setCurrentMeasurement({ target, receipt, selection, receivedAt: new Date().toISOString() });
+        const result = { target, receipt, selection, receivedAt: new Date().toISOString() };
+        setCurrentMeasurement(result);
+        setRecentMeasurements((current) =>
+          current.some((item) => item.selection.command_id === commandId)
+            ? current
+            : [...current, result],
+        );
         setPendingMeasurements((current) =>
           current.some((item) => item.selection.command_id === commandId)
             ? current
@@ -324,6 +341,7 @@ function InstrumentInspectorContent({
       }
       if (receipt.status !== "collected")
         markPreviousResult("最近一次采集未成功，当前仍是上次成功结果");
+      delete collectionSelections.current[commandId];
       const key = acquisitionKey(target);
       delete collectCommandIdsRef.current[key];
       setCollectResults((current) => ({ ...current, [key]: receipt }));
@@ -364,6 +382,7 @@ function InstrumentInspectorContent({
       if (receipt.status === "invoked") {
         setOutputTouched(true);
         collectCommandIdsRef.current = {};
+        collectionSelections.current = {};
         setCollectResults({});
         markPreviousResult("此后已执行设置或设备动作");
         readMutation.mutate();
@@ -417,6 +436,7 @@ function InstrumentInspectorContent({
     applyCommandIdRef.current = undefined;
     configuredDefaultsOperationIdRef.current = undefined;
     collectCommandIdsRef.current = {};
+    collectionSelections.current = {};
     invokeCommandIdsRef.current = {};
     setDrafts({});
     setApplyResult(undefined);
@@ -440,10 +460,11 @@ function InstrumentInspectorContent({
       session_id: requireSession(session).session_id,
       instrument_id: instrumentId,
       command_id: commandId,
+      title: "",
       series_id: seriesId,
-      line_id: lineLabel ? lineId : "",
-      line_label: lineLabel,
-      note: measurementNote,
+      line_id: "",
+      line_label: "",
+      note: "",
     };
     collectMutation.mutate({
       target,
@@ -592,11 +613,16 @@ function InstrumentInspectorContent({
           pending={pendingMeasurements}
           stagedCount={stagedCount}
           problem={interactionError}
-          onSaved={(commandId) =>
-            setPendingMeasurements((current) =>
-              current.filter((item) => item.selection.command_id !== commandId),
+          onSaveAttempt={(attempt) =>
+            setPendingMeasurements((items) =>
+              items.map((item) =>
+                item.selection.command_id === attempt.selection.command_id
+                  ? { ...item, saveAttempted: true }
+                  : item,
+              ),
             )
           }
+          onSaved={markMeasurementSaved}
           onCancel={dismissFinishChoice}
           onFinished={() => {
             setPendingMeasurements([]);
@@ -606,277 +632,196 @@ function InstrumentInspectorContent({
           }}
         />
       )}
-      {currentMeasurement && (
-        <CurrentMeasurement
-          result={currentMeasurement}
+      <div
+        className={classes(
+          "grid min-w-0 items-start gap-4",
+          (acquisitionTargets(description).length > 0 || currentMeasurement) &&
+            "xl:grid-cols-[minmax(0,1fr)_24rem]",
+        )}
+      >
+        <MeasurementWorkbench
+          description={description}
+          connected={connected}
+          disabled={interactionDisabled || pendingMeasurements.length >= 20}
+          collectingTarget={
+            collectMutation.isPending ? collectMutation.variables?.target : undefined
+          }
+          collectResults={collectResults}
+          recent={recentMeasurements}
+          current={currentMeasurement}
           staged={stagedCount > 0}
           sessionId={session?.session_id}
+          pending={finishChoiceOpen ? [] : pendingMeasurements}
+          onCollect={collectAcquisition}
+          onSelect={setCurrentMeasurement}
+          onSaveAttempt={(selection) => {
+            setRecentMeasurements((items) =>
+              items.map((item) =>
+                item.selection.command_id === selection.command_id ? { ...item, selection } : item,
+              ),
+            );
+            setCurrentMeasurement((item) =>
+              item?.selection.command_id === selection.command_id ? { ...item, selection } : item,
+            );
+            setPendingMeasurements((items) =>
+              items.map((item) =>
+                item.selection.command_id === selection.command_id
+                  ? { ...item, selection, saveAttempted: true }
+                  : item,
+              ),
+            );
+          }}
+          onSaved={markMeasurementSaved}
         />
-      )}
-      <DirectMeasurements
-        instrumentId={instrumentId}
-        onResume={(selection) => {
-          setSeriesId(selection.series_id ?? createInstrumentCommandId("series"));
-          setLineId(selection.line_id ?? createInstrumentCommandId("line"));
-          setLineLabel(selection.line_label ?? "");
-          setLineConfirmed(false);
-          setNextLineOpen(false);
-          setMeasurementNote("");
-        }}
-        pending={finishChoiceOpen ? [] : pendingMeasurements}
-        onSaved={(commandId) =>
-          setPendingMeasurements((current) =>
-            current.filter((item) => item.selection.command_id !== commandId),
-          )
-        }
-      />
-      {connected && (
-        <section className="grid gap-2 border border-line p-3 text-xs">
-          <h3>本次测量对象（可留空）</h3>
-          <p>
-            {lineLabel
-              ? lineConfirmed
-                ? `当前线路已就绪：${lineLabel}`
-                : `待确认接线：${lineLabel}`
-              : "未标注测量对象；不表示采集执行结果未知。"}
-          </p>
-          <label className={fieldLabel}>
-            线路名称
-            <input
-              className={formControl}
-              aria-label="线路名称"
-              value={lineLabel}
-              disabled={interactionDisabled}
-              onChange={(event) => {
-                setLineLabel(event.target.value);
-                setLineConfirmed(false);
-              }}
-            />
-          </label>
-          <label className={fieldLabel}>
-            备注 / 异常标记
-            <input
-              className={formControl}
-              aria-label="测量备注"
-              value={measurementNote}
-              disabled={interactionDisabled}
-              onChange={(event) => setMeasurementNote(event.target.value)}
-            />
-          </label>
-          {lineLabel && (
-            <label>
-              <input
-                type="checkbox"
-                checked={lineConfirmed}
-                disabled={interactionDisabled}
-                onChange={(event) => setLineConfirmed(event.target.checked)}
-              />
-              已人工确认当前接线为 {lineLabel}
-            </label>
-          )}
-          <button
-            type="button"
-            className={secondaryButton}
-            disabled={interactionDisabled || nextLineOpen}
-            onClick={() => {
-              setNextLineOpen(true);
-              setNextLineLabel("");
-            }}
-          >
-            开始下一条线路…
-          </button>
-          {nextLineOpen && (
-            <section className="grid gap-2 rounded border border-line p-2" aria-label="下一条线路">
-              <p>当前线路和备注会保留，直到明确切换。已采集记录不会重新归属。</p>
-              <label className={fieldLabel}>
-                下一条线路名称{" "}
-                <input
-                  className={formControl}
-                  aria-label="下一条线路名称"
-                  value={nextLineLabel}
-                  disabled={interactionDisabled}
-                  onChange={(event) => setNextLineLabel(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className={secondaryButton}
-                disabled={interactionDisabled || !nextLineLabel.trim()}
-                onClick={() => {
-                  setLineId(createInstrumentCommandId("line"));
-                  setLineLabel(nextLineLabel.trim());
-                  setLineConfirmed(false);
-                  setMeasurementNote("");
-                  setNextLineOpen(false);
-                }}
-              >
-                切换并确认接线
-              </button>
-              <button
-                type="button"
-                className={secondaryButton}
-                onClick={() => setNextLineOpen(false)}
-              >
-                取消换线
-              </button>
-            </section>
-          )}
-          <p>
-            仪器设置保持不变；同一线路再次采集会追加新尝试。改名不会修改已采集结果，换线请用“开始下一条线路”。
-          </p>
-          {pendingMeasurements.length >= 20 && (
-            <p role="status">请先保存待保存结果，再继续采集。</p>
-          )}
-        </section>
-      )}
 
-      {description ? (
-        <>
-          <div
-            className="mt-[3px] flex items-end justify-between max-[460px]:flex-col max-[460px]:items-start"
-            data-testid="interface-heading"
-          >
-            <div>
-              <span className={eyebrow}>设备控制</span>
-              <h3 className="m-0 text-[0.9rem] font-[650]">接口</h3>
+        {description ? (
+          <div className="grid min-w-0 gap-3 xl:max-h-[calc(100vh-15rem)] xl:overflow-y-auto">
+            <div
+              className="mt-[3px] flex items-end justify-between max-[460px]:flex-col max-[460px]:items-start"
+              data-testid="interface-heading"
+            >
+              <div>
+                <span className={eyebrow}>设备控制</span>
+                <h3 className="m-0 text-[0.9rem] font-[650]">接口</h3>
+              </div>
             </div>
-          </div>
 
-          <div className="text-xs leading-normal text-text-dim">
-            <p>
-              Invoke 调用 operation；Collect 调用 acquisition，可能发起新采集，也可能读取既有结果。
-              请以各项契约说明为准；Collect 不会自动替你准备 payload 或调用另一个 operation。
-              查看能力或展开帮助不会连接设备或发送设备命令。
-            </p>
-            <p>
-              {connected
-                ? interactionDisabled
-                  ? "当前交互尚未结束，请等待完成后继续。"
-                  : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
-                : instrument.availability === "active"
-                  ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
-                  : instrument.availability === "quarantined"
-                    ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
-                    : instrument.availability === "unavailable"
-                      ? "设备不可用。请先处理上方驱动或连接配置问题。"
-                      : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
-            </p>
-            <AuthorWorkflowLinks />
-            {registeredDeviceId && (
-              <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
-            )}
-          </div>
+            <details className="text-xs leading-normal text-text-dim">
+              <summary>接口说明与 Python</summary>
+              <p>
+                Invoke 调用 operation；Collect 调用
+                acquisition，可能发起新采集，也可能读取既有结果。 请以各项契约说明为准；Collect
+                不会自动替你准备 payload 或调用另一个 operation。
+                查看能力或展开帮助不会连接设备或发送设备命令。
+              </p>
+              <p>
+                {connected
+                  ? interactionDisabled
+                    ? "当前交互尚未结束，请等待完成后继续。"
+                    : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
+                  : instrument.availability === "active"
+                    ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
+                    : instrument.availability === "quarantined"
+                      ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
+                      : instrument.availability === "unavailable"
+                        ? "设备不可用。请先处理上方驱动或连接配置问题。"
+                        : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
+              </p>
+              <AuthorWorkflowLinks />
+              {registeredDeviceId && (
+                <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
+              )}
+            </details>
 
-          {(description.interfaces ?? []).length > 0 ||
-          (description.device_schemas ?? []).length > 0 ? (
-            <div className="grid gap-2.5">
-              {(description.interfaces ?? []).flatMap((instrumentInterface) =>
-                interfaceMountPaths(description, instrumentInterface.id).map((mountPath) => (
-                  <InterfaceCard
-                    key={`${instrumentInterface.id}:${mountPath.join("/")}`}
-                    description={description}
-                    instrumentInterface={instrumentInterface}
-                    mountPath={mountPath}
+            {(description.interfaces ?? []).length > 0 ||
+            (description.device_schemas ?? []).length > 0 ? (
+              <div className="grid gap-2.5">
+                {(description.interfaces ?? []).flatMap((instrumentInterface) =>
+                  interfaceMountPaths(description, instrumentInterface.id).map((mountPath) => (
+                    <InterfaceCard
+                      key={`${instrumentInterface.id}:${mountPath.join("/")}`}
+                      description={description}
+                      instrumentInterface={instrumentInterface}
+                      mountPath={mountPath}
+                      connected={connected}
+                      interactionDisabled={interactionDisabled}
+                      state={state}
+                      drafts={declaredDrafts}
+                      collectResults={collectResults}
+                      hideCollectionPlots
+                      hideAcquisitions
+                      invokeResults={invokeResults}
+                      collectionDisabled={pendingMeasurements.length >= 20}
+                      collectingTarget={
+                        collectMutation.isPending ? collectMutation.variables?.target : undefined
+                      }
+                      invokingTarget={
+                        invokeMutation.isPending ? invokeMutation.variables?.target : undefined
+                      }
+                      onStage={(target, draft) => stage(target, draft)}
+                      onCollect={(target) => {
+                        if (pendingMeasurements.length < 20) collectAcquisition(target);
+                      }}
+                      onInvoke={(target, operationArguments) =>
+                        invokeOperation(target, operationArguments)
+                      }
+                      onOperationEdit={editOperation}
+                    />
+                  )),
+                )}
+                {(description.device_schemas ?? []).map((deviceState) => (
+                  <DeviceStateCard
+                    key={deviceState.id}
+                    deviceState={deviceState}
                     connected={connected}
                     interactionDisabled={interactionDisabled}
                     state={state}
                     drafts={declaredDrafts}
-                    collectResults={collectResults}
-                    hideCollectionPlots
-                    invokeResults={invokeResults}
-                    collectionDisabled={
-                      (!!lineLabel && !lineConfirmed) || pendingMeasurements.length >= 20
-                    }
-                    collectingTarget={
-                      collectMutation.isPending ? collectMutation.variables?.target : undefined
-                    }
-                    invokingTarget={
-                      invokeMutation.isPending ? invokeMutation.variables?.target : undefined
-                    }
                     onStage={(target, draft) => stage(target, draft)}
-                    onCollect={(target) => {
-                      if ((!lineLabel || lineConfirmed) && pendingMeasurements.length < 20)
-                        collectAcquisition(target);
-                    }}
-                    onInvoke={(target, operationArguments) =>
-                      invokeOperation(target, operationArguments)
-                    }
-                    onOperationEdit={editOperation}
                   />
-                )),
-              )}
-              {(description.device_schemas ?? []).map((deviceState) => (
-                <DeviceStateCard
-                  key={deviceState.id}
-                  deviceState={deviceState}
-                  connected={connected}
-                  interactionDisabled={interactionDisabled}
-                  state={state}
-                  drafts={declaredDrafts}
-                  onStage={(target, draft) => stage(target, draft)}
-                />
-              ))}
-            </div>
-          ) : (
-            <InspectorEmpty
-              icon={<CircleOff />}
-              title="无交互接口"
-              detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
-            />
-          )}
-
-          {connected && stagedCount > 0 && (
-            <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
-              <div className="grid gap-0.5 max-[460px]:col-span-full">
-                <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
-                <small className="text-xs text-text-dim">
-                  数值仅保留在本地，直到一次性应用全部暂存修改。
-                </small>
+                ))}
               </div>
-              <button
-                type="button"
-                className={secondaryButton}
-                onClick={resetStaged}
-                disabled={applyMutation.isPending}
-              >
-                <RotateCcw size={14} />
-                重置
-              </button>
-              <button
-                type="button"
-                className={primaryButton}
-                onClick={applyStaged}
-                disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
-                title={
-                  interactionDisabled
-                    ? "请等待当前仪器交互完成"
-                    : invalidDraft
-                      ? "应用前请修正无效的暂存值"
-                      : undefined
-                }
-              >
-                {applyMutation.isPending ? (
-                  <LoaderCircle className="animate-spin" size={14} />
-                ) : (
-                  <Check size={14} />
-                )}
-                应用暂存修改
-              </button>
-            </div>
-          )}
-          {applyResult && (
-            <p className={classes(receiptStyle, receiptTone(applyResult))}>
-              应用回执： {instrumentReceiptLabel(applyResult)}
-            </p>
-          )}
-        </>
-      ) : (
-        <InspectorEmpty
-          icon={<CircleOff />}
-          title="设备控制不可用"
-          detail="请核对列出的问题，或编辑此仪器的连接配置。"
-        />
-      )}
+            ) : (
+              <InspectorEmpty
+                icon={<CircleOff />}
+                title="无交互接口"
+                detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
+              />
+            )}
+
+            {connected && stagedCount > 0 && (
+              <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
+                <div className="grid gap-0.5 max-[460px]:col-span-full">
+                  <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
+                  <small className="text-xs text-text-dim">
+                    数值仅保留在本地，直到一次性应用全部暂存修改。
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={resetStaged}
+                  disabled={applyMutation.isPending}
+                >
+                  <RotateCcw size={14} />
+                  重置
+                </button>
+                <button
+                  type="button"
+                  className={primaryButton}
+                  onClick={applyStaged}
+                  disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
+                  title={
+                    interactionDisabled
+                      ? "请等待当前仪器交互完成"
+                      : invalidDraft
+                        ? "应用前请修正无效的暂存值"
+                        : undefined
+                  }
+                >
+                  {applyMutation.isPending ? (
+                    <LoaderCircle className="animate-spin" size={14} />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  应用暂存修改
+                </button>
+              </div>
+            )}
+            {applyResult && (
+              <p className={classes(receiptStyle, receiptTone(applyResult))}>
+                应用回执： {instrumentReceiptLabel(applyResult)}
+              </p>
+            )}
+          </div>
+        ) : (
+          <InspectorEmpty
+            icon={<CircleOff />}
+            title="设备控制不可用"
+            detail="请核对列出的问题，或编辑此仪器的连接配置。"
+          />
+        )}
+      </div>
     </section>
   );
 }

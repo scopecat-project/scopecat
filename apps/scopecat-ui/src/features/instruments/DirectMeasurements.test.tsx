@@ -54,6 +54,7 @@ function saved(mount: string[], nested: string[]): SavedMeasurement {
     saved_at: "2026-01-01T00:00:00Z",
     collected_at: "2026-01-01T00:00:00Z",
     selection: {
+      title: "",
       session_id: "closed",
       instrument_id: "scope",
       command_id: "capture",

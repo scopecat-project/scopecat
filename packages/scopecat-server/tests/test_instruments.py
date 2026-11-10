@@ -3722,6 +3722,7 @@ def test_direct_measurements_save_retry_and_restart_preserve_line_attempts(
                 session_id=session.session_id,
                 instrument_id="source-0",
                 command_id=intent.command_id,
+                title=f"Measurement {index + 1}" if index < 2 else "",
                 series_id="series-one",
                 line_id=line,
                 line_label=line,
@@ -3775,6 +3776,14 @@ def test_direct_measurements_save_retry_and_restart_preserve_line_attempts(
             ).status_code
             == 409
         )
+        # Simulate the persisted pre-title format, without migrating the record.
+        with service.control.write_transaction() as connection:
+            connection.execute(
+                "UPDATE durable_events SET payload_json="
+                "json_remove(payload_json, '$.selection.title') "
+                "WHERE json_extract(payload_json, '$.id')=?",
+                (saved_ids[2],),
+            )
     reopened_provider = _TrackingProvider(_VariantDriver)
     with (
         _runtime(tmp_path, reopened_provider) as runtime,
@@ -3788,6 +3797,12 @@ def test_direct_measurements_save_retry_and_restart_preserve_line_attempts(
             "line-a",
         ]
         assert records[-1]["selection"]["note"] == "suspect; repeat"
+        assert records[-1]["selection"]["title"] == "Measurement 1"
+        assert records[0]["selection"]["title"] == ""
+        assert (
+            runtime.application.direct_measurements.save(selections[2]).id
+            == saved_ids[2]
+        )
         for record_id in saved_ids:
             assert (
                 transport.get(
@@ -4118,3 +4133,20 @@ def test_direct_save_is_fenced_when_cleanup_wins_before_commit(
                 ).fetchone()
                 is None
             )
+
+
+def test_direct_measurement_title_is_optional_and_not_identity() -> None:
+    from scopecat_server.services.direct_measurements import (
+        DirectMeasurementSave,
+        measurement_id,
+    )
+
+    legacy = DirectMeasurementSave(
+        session_id="session", instrument_id="instrument", command_id="command"
+    )
+    assert legacy.title == ""
+    titled = legacy.model_copy(update={"title": "Line A transmission"})
+    assert measurement_id(titled) == measurement_id(legacy)
+    # Persisted selections without the new field continue to parse.
+    old_payload = legacy.model_dump(exclude={"title"})
+    assert DirectMeasurementSave.model_validate(old_payload) == legacy

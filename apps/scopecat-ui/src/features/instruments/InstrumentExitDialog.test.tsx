@@ -15,6 +15,7 @@ vi.mock("./instrument-finish-api", () => ({
 }));
 const pending: PendingMeasurement[] = ["one", "two"].map((id) => ({
   selection: {
+    title: "",
     session_id: "session",
     instrument_id: "scope",
     command_id: id,

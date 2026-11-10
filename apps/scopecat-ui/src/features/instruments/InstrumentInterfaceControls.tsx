@@ -43,6 +43,7 @@ export function InterfaceCard({
   collectingTarget,
   collectionDisabled,
   hideCollectionPlots = false,
+  hideAcquisitions = false,
   invokingTarget,
   interactionDisabled,
   onStage,
@@ -61,6 +62,7 @@ export function InterfaceCard({
   collectingTarget?: InstrumentAcquisitionTarget;
   collectionDisabled?: boolean;
   hideCollectionPlots?: boolean;
+  hideAcquisitions?: boolean;
   invokingTarget?: InstrumentOperationTarget;
   interactionDisabled: boolean;
   onStage: (target: InstrumentStateTarget, draft?: DraftValue) => void;
@@ -71,6 +73,18 @@ export function InterfaceCard({
   ) => void;
   onOperationEdit: (target: InstrumentOperationTarget) => void;
 }) {
+  const hasSettings = (
+    member: Pick<InstrumentInterface, "properties" | "operations" | "components">,
+  ): boolean =>
+    !!member.properties?.length ||
+    !!member.operations?.length ||
+    (member.components ?? []).some(hasSettings);
+  if (
+    hideAcquisitions &&
+    !hasSettings(instrumentInterface) &&
+    (instrumentInterface.acquisitions?.length || instrumentInterface.components?.length)
+  )
+    return null;
   return (
     <article
       className="overflow-hidden rounded-md border border-line bg-panel-soft"
@@ -106,6 +120,7 @@ export function InterfaceCard({
         collectingTarget={collectingTarget}
         collectionDisabled={collectionDisabled}
         hideCollectionPlots={hideCollectionPlots}
+        hideAcquisitions={hideAcquisitions}
         invokingTarget={invokingTarget}
         interactionDisabled={interactionDisabled}
         onStage={onStage}
@@ -194,6 +209,7 @@ function InterfaceEndpoint({
   collectingTarget,
   collectionDisabled,
   hideCollectionPlots = false,
+  hideAcquisitions = false,
   invokingTarget,
   interactionDisabled,
   onStage,
@@ -214,6 +230,7 @@ function InterfaceEndpoint({
   collectingTarget?: InstrumentAcquisitionTarget;
   collectionDisabled?: boolean;
   hideCollectionPlots?: boolean;
+  hideAcquisitions?: boolean;
   invokingTarget?: InstrumentOperationTarget;
   interactionDisabled: boolean;
   onStage: (target: InstrumentStateTarget, draft?: DraftValue) => void;
@@ -290,7 +307,7 @@ function InterfaceEndpoint({
             </div>
           )}
 
-          {(member.acquisitions ?? []).length > 0 && (
+          {!hideAcquisitions && (member.acquisitions ?? []).length > 0 && (
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)]">
               {(member.acquisitions ?? []).map((acquisition) => {
                 const target = { interfaceId, componentPath, acquisition };
@@ -337,6 +354,7 @@ function InterfaceEndpoint({
           collectingTarget={collectingTarget}
           collectionDisabled={collectionDisabled}
           hideCollectionPlots={hideCollectionPlots}
+          hideAcquisitions={hideAcquisitions}
           invokingTarget={invokingTarget}
           interactionDisabled={interactionDisabled}
           onStage={onStage}
@@ -1105,7 +1123,7 @@ export function configuredDefaultsReceiptMessage(
   return `已拒绝配置的默认值： ${receipt.problems.map((problem) => problem.message).join(" ")}`;
 }
 
-function unavailableResults(receipt: InstrumentCollectReceipt): {
+export function unavailableResults(receipt: InstrumentCollectReceipt): {
   count: number;
   reasons: ("missing" | "invalid" | "overload")[];
 } {
@@ -1136,4 +1154,4 @@ const observationSourceLabels: Record<InstrumentStateObservation["source"], stri
   configured_fixed: "配置固定值",
   derived: "推导值",
 };
-const unavailableReasonLabels = { missing: "缺失", invalid: "无效", overload: "过载" };
+export const unavailableReasonLabels = { missing: "缺失", invalid: "无效", overload: "过载" };

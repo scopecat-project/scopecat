@@ -6654,6 +6654,11 @@ export interface components {
             series_id: string;
             /** Session Id */
             session_id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /**
          * DomainTargetBinding

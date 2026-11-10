@@ -486,7 +486,7 @@ export function InstrumentsWorkspace({
     ) : null;
   if (controlDeviceId)
     return (
-      <section aria-label="设备控制" className="mx-auto max-w-6xl">
+      <section aria-label="设备控制" className="min-w-0">
         <div className="p-5 pb-0 max-[680px]:px-[13px]">
           {selected ? (
             <InstrumentHeading

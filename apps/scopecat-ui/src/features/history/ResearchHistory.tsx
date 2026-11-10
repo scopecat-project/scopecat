@@ -12,6 +12,7 @@ import { OpenRunWindow } from "../runs/OpenRunWindow";
 import { DataCleanupHistory } from "./DataCleanup";
 import { ImportedCaptures } from "./ImportedCaptures";
 import { CourseData } from "./CourseData";
+import { DirectMeasurementHistory } from "./DirectMeasurementHistory";
 import { navigate, useLocationUrl } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiClient, apiData } from "../../api-client";
@@ -25,22 +26,26 @@ export function ResearchHistory(props: {
   projectId: string;
 }) {
   const url = useLocationUrl();
-  const apparatus = url.searchParams.get("data") === "apparatus" && !url.searchParams.has("course");
+  const view = url.searchParams.has("course")
+    ? "records"
+    : (url.searchParams.get("data") ?? "records");
   return (
     <>
-      <nav aria-label="数据浏览" className="mb-4 flex gap-3">
+      <nav aria-label="数据浏览" className="mb-4 flex flex-wrap gap-3">
         {[
-          [false, "运行与记录"],
-          [true, "实验装置历史"],
+          ["records", "运行与记录"],
+          ["direct-measurements", "直接测量"],
+          ["apparatus", "实验装置历史"],
         ].map(([active, label]) => (
           <Button
             key={String(label)}
-            aria-pressed={apparatus === active}
+            aria-pressed={view === active}
             onClick={() => {
               const target = new URL(window.location.href);
               target.hash = "history";
               target.searchParams.delete("course");
-              if (active) target.searchParams.set("data", "apparatus");
+              target.searchParams.delete("measurement");
+              if (active !== "records") target.searchParams.set("data", active!);
               else target.searchParams.delete("data");
               navigate(target);
             }}
@@ -49,10 +54,15 @@ export function ResearchHistory(props: {
           </Button>
         ))}
       </nav>
-      <Activity mode={apparatus ? "visible" : "hidden"}>
+      <Activity mode={view === "direct-measurements" ? "visible" : "hidden"}>
+        <DirectMeasurementHistory {...props} />
+      </Activity>
+      <Activity mode={view === "apparatus" ? "visible" : "hidden"}>
         <ApparatusHistory {...props} />
       </Activity>
-      <Activity mode={apparatus ? "hidden" : "visible"}>
+      <Activity
+        mode={view !== "apparatus" && view !== "direct-measurements" ? "visible" : "hidden"}
+      >
         <ResearchRecords {...props} />
       </Activity>
     </>

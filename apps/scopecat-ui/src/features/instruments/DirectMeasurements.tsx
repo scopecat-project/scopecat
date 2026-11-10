@@ -25,6 +25,7 @@ import { createInstrumentCommandId } from "./instrument-api";
 import { secondaryButton } from "../../ui/styles";
 
 export interface PendingMeasurement {
+  saveAttempted?: boolean;
   selection: MeasurementSave;
   acquisition: InstrumentAcquisition;
   receipt: InstrumentCollectReceipt;
@@ -212,7 +213,7 @@ export function DirectMeasurements({
   );
 }
 
-function SavedCurve({ record }: { record: SavedMeasurement }) {
+export function SavedCurve({ record }: { record: SavedMeasurement }) {
   const cache = useQueryClient();
   const detail = useQuery({
     queryKey: ["direct-measurement-detail", record.id],
@@ -248,7 +249,8 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
   return (
     <section className="min-w-0 border-t border-line pt-2">
       <h4>
-        {record.selection.line_label || "未标注测量对象"} · {record.selection.note}
+        {record.selection.title || record.selection.line_label || "未命名测量"} ·{" "}
+        {record.selection.note}
       </h4>
       <p className="text-xs [overflow-wrap:anywhere]">
         {record.id} · {new Date(record.collected_at).toLocaleString()}
@@ -314,7 +316,7 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
   );
 }
 
-function recordedAcquisition(record: SavedMeasurement): InstrumentAcquisition | undefined {
+export function recordedAcquisition(record: SavedMeasurement): InstrumentAcquisition | undefined {
   const { interface_id, component_path = [], acquisition_id } = record.intent;
   const contract = record.description.interfaces?.find((item) => item.id === interface_id);
   if (!contract) return undefined;
