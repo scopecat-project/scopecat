@@ -187,7 +187,7 @@ export function MeasurementWorkbench({
           ))}
         </div>
         {pending.length >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
-        <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
+        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_11rem] lg:grid-cols-[minmax(0,1fr)_15rem]">
           <div className="min-w-0">
             {current ? (
               <CurrentMeasurement result={current} staged={staged} sessionId={sessionId} />
@@ -217,9 +217,9 @@ export function MeasurementWorkbench({
               </div>
             )}
           </div>
-          <aside aria-label="近期结果" className="min-w-0">
+          <aside aria-label="近期结果" className="order-first min-w-0 md:order-last">
             <h4 className="mb-2 text-xs font-semibold">近期结果 · {recent.length}</h4>
-            <div className="grid max-h-[28rem] gap-2 overflow-y-auto">
+            <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:max-h-[28rem] md:overflow-x-hidden md:overflow-y-auto md:pb-0">
               {recent
                 .map((_, index) => recent[recent.length - index - 1]!)
                 .map((item, index) => (
@@ -227,14 +227,19 @@ export function MeasurementWorkbench({
                     key={item.selection.command_id}
                     data-testid={`recent-result-${item.selection.command_id}`}
                     aria-pressed={commandId === item.selection.command_id}
+                    title={
+                      item.selection.title ||
+                      item.target.acquisition.label ||
+                      item.target.acquisition.id
+                    }
                     onClick={() => onSelect(item)}
                     className={classes(
                       secondaryButton,
-                      "h-auto min-w-0 flex-col items-start whitespace-normal text-left",
+                      "h-auto w-36 min-w-0 shrink-0 flex-col items-start whitespace-normal text-left md:w-auto",
                       commandId === item.selection.command_id && "border-blue",
                     )}
                   >
-                    <strong>
+                    <strong className="line-clamp-2 break-words">
                       {recent.length - index}.{" "}
                       {item.selection.title ||
                         item.target.acquisition.label ||
