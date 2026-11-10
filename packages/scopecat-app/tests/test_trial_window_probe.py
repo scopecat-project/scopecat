@@ -140,7 +140,7 @@ def test_navigation_waits_for_ready_then_clicks_and_confirms():
     calls = [call.args[0] for call in evaluate.call_args_list]
     assert "nav button[aria-current=page]" in calls[0]
     assert calls[0] == calls[1]
-    assert calls[2].endswith(".click()")
+    assert '"click"' in calls[2]
     assert "getAttribute('aria-current')" in calls[3]
     assert calls[3] == calls[4]
     assert all("location.hash=" not in script for script in calls)

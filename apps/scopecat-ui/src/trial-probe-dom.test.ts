@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -102,4 +103,89 @@ it("diagnostics omit labels under hidden ancestors", () => {
   const data = diagnose(location.origin);
   expect(data.labels?.map((label) => label.text)).toEqual(["Visible"]);
   expect(JSON.stringify(data)).not.toContain("secret");
+});
+
+// Execute only the actual Python navigation generator definitions, without
+// importing application modules or invoking a native runtime.
+const navigationPrograms: Record<string, string[]> = JSON.parse(
+  execFileSync(
+    process.platform === "win32" ? "python" : "python3",
+    [
+      "-c",
+      `
+import ast, json, sys
+source = open(sys.argv[1], encoding="utf-8").read()
+names = {"navigation_script", "navigate_workspace"}
+nodes = [node for node in ast.parse(source).body if
+    isinstance(node, ast.FunctionDef) and node.name in names or
+    isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "NAVIGATION_ACTION" for t in node.targets)]
+module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
+namespace = {"json":json, "wait":lambda check, *args: check()}
+exec(compile(ast.fix_missing_locations(module), "actual-navigation-generator", "exec"), namespace)
+result = {}
+for label in ["设置 / Settings", "设备与驱动 / Devices and drivers"]:
+    scripts = []
+    def evaluate(script):
+        scripts.append(script)
+        return True
+    namespace["navigate_workspace"](evaluate, label)
+    result[label] = scripts
+print(json.dumps(result))
+`,
+      resolve("../../packages/scopecat-app/src/scopecat_app/trial_window_probe.py"),
+    ],
+    { encoding: "utf8" },
+  ),
+);
+const navigate = (label: string, action: string): boolean => {
+  const index = ["ready", "click", "selected"].indexOf(action);
+  // oxlint-disable-next-line no-eval -- Execute actual Python-generated probe JS in jsdom.
+  return window.eval(navigationPrograms[label]![index]!);
+};
+// Reproduce the old Python ensure_ascii CSS-escaping error for the regression.
+const pythonJSON = (value: string) =>
+  JSON.stringify(value).replace(
+    /[\u0080-\uFFFF]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+
+it("actual Chinese navigation expressions select exactly the real target", () => {
+  document.body.innerHTML =
+    '<nav><button aria-current="page">Current</button><button aria-label="设置 / Settings">设置</button><button aria-label="设备与驱动 / Devices and drivers">设备</button></nav>';
+  for (const label of ["设置 / Settings", "设备与驱动 / Devices and drivers"]) {
+    const target = [...document.querySelectorAll("button")].find(
+      (e) => e.getAttribute("aria-label") === label,
+    )!;
+    target.addEventListener("click", () => {
+      document.querySelectorAll("[aria-current]").forEach((e) => e.removeAttribute("aria-current"));
+      target.setAttribute("aria-current", "page");
+    });
+    expect(navigate(label, "ready")).toBe(true);
+    expect(navigate(label, "selected")).toBe(false);
+    expect(navigate(label, "click")).toBe(true);
+    expect(navigate(label, "selected")).toBe(true);
+  }
+});
+
+it("actual navigation rejects missing current, disabled and duplicate target", () => {
+  document.body.innerHTML = '<nav><button aria-label="设置 / Settings">设置</button></nav>';
+  expect(navigate("设置 / Settings", "ready")).toBe(false);
+  document.querySelector("button")!.setAttribute("aria-current", "page");
+  document.querySelector("button")!.disabled = true;
+  expect(navigate("设置 / Settings", "ready")).toBe(false);
+  document.querySelector("button")!.disabled = false;
+  document.querySelector("nav")!.append(document.querySelector("button")!.cloneNode(true));
+  expect(navigate("设置 / Settings", "ready")).toBe(false);
+  expect(() => navigate("设置 / Settings", "click")).toThrow("not uniquely ready");
+});
+
+it("reproduces the old double-encoded Unicode CSS failure", () => {
+  document.body.innerHTML = '<nav><button aria-label="设置 / Settings">设置</button></nav>';
+  const oldSelector = `button[aria-label=${pythonJSON("设置 / Settings")}]`;
+  expect(document.querySelector(oldSelector)).toBeNull();
+  expect(
+    [...document.querySelectorAll("button")].some(
+      (e) => e.getAttribute("aria-label") === "设置 / Settings",
+    ),
+  ).toBe(true);
 });

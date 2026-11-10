@@ -66,20 +66,34 @@ def is_reopened_controller(
     )
 
 
+NAVIGATION_ACTION = r"""(()=>{
+  const targets=[...document.querySelectorAll('nav button')]
+    .filter(e=>e.getAttribute('aria-label')===LABEL);
+  const ready=Boolean(document.querySelector('nav button[aria-current=page]'))
+    &&targets.length===1&&!targets[0].disabled;
+  if(ACTION==='ready')return ready;
+  if(!ready)throw new Error('Probe navigation target is not uniquely ready');
+  if(ACTION==='click'){targets[0].click();return true;}
+  if(ACTION==='selected')return targets[0].getAttribute('aria-current')==='page';
+  throw new Error('Unknown probe navigation action');
+})()"""
+
+
+def navigation_script(label: str, action: str) -> str:
+    return NAVIGATION_ACTION.replace("LABEL", json.dumps(label)).replace(
+        "ACTION", json.dumps(action)
+    )
+
+
 def navigate_workspace(evaluate: Callable[[str], object], label: str) -> None:
-    """Wait for React navigation, then use its actual button and selected state."""
-    selector = "button[aria-label=" + json.dumps(label) + "]"
-    query = "document.querySelector(" + json.dumps(selector) + ")"
+    """Wait for React navigation, then use its unique actual button."""
     wait(
-        lambda: evaluate(
-            "Boolean(document.querySelector('nav button[aria-current=page]')"
-            f" && {query} && !{query}.disabled)"
-        ),
+        lambda: evaluate(navigation_script(label, "ready")),
         f"React workspace navigation not ready: {label}",
     )
-    evaluate(f"{query}.click()")
+    evaluate(navigation_script(label, "click"))
     wait(
-        lambda: evaluate(f"{query}?.getAttribute('aria-current') === 'page'"),
+        lambda: evaluate(navigation_script(label, "selected")),
         f"Workspace navigation did not select: {label}",
     )
 
