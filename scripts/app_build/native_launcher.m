@@ -33,6 +33,10 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         arguments[i + 3] = argv[i];
         if (!strcmp(argv[i], "--check-result")) check = YES;
+#ifdef SCOPECAT_TRIAL
+        // Explicit one-shot verification must return failures without a modal.
+        if (!strcmp(argv[i], "--trial-window-probe")) check = YES;
+#endif
     }
     // Keep the native process's bundle identity, while argv[0] selects the
     // bundled interpreter for sys.executable and backend subprocesses.

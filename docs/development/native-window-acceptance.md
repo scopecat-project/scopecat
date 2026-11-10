@@ -246,7 +246,10 @@ probe module, never a caller-supplied script. It requires the package's native
 executable, exact `--home` installation root, exact
 `SCOPECAT_LOCATOR_HOME`, an already prepared/stopped trial and no previous report.
 It starts once, uses only its own windows, and reports programmatic assertions;
-it is not a human visual acceptance or a retry/restart loop. Existing hosted-runner
+it is not a human visual acceptance or a retry/restart loop. In this explicit
+trial-only mode, launcher failures return a nonzero exit status without a native
+modal alert; reports and errors remain failures, and nothing restarts the app.
+Normal trial launches and release launches retain their existing alerts. Existing hosted-runner
 requirements remain unchanged for the release acceptance harness.
 
 After signature verification and authorization for the one-shot run, invoke the

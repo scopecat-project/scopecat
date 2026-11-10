@@ -130,3 +130,39 @@ def test_platform_failure_precedes_runtime_construction(
     with pytest.raises(ValueError, match="wrong Cocoa host"):
         run(Path("/no-state-access"))
     runtime.assert_not_called()
+
+
+def test_navigation_waits_for_ready_then_clicks_and_confirms():
+    from scopecat_app.trial_window_probe import navigate_workspace
+
+    evaluate = Mock(side_effect=[False, True, None, False, True])
+    navigate_workspace(evaluate, "设置 / Settings")
+    calls = [call.args[0] for call in evaluate.call_args_list]
+    assert "nav button[aria-current=page]" in calls[0]
+    assert calls[0] == calls[1]
+    assert calls[2].endswith(".click()")
+    assert "getAttribute('aria-current')" in calls[3]
+    assert calls[3] == calls[4]
+    assert all("location.hash=" not in script for script in calls)
+
+
+def test_diagnostics_refuse_non_owned_origin():
+    from scopecat_app.trial_window_probe import page_diagnostics
+
+    view = Mock()
+    view.window.get_current_url.return_value = "https://example.com/private"
+    result = page_diagnostics(view, "http://127.0.0.1:1234")
+    assert result == {"error": "Diagnostic page is not the owned daemon origin"}
+    view.window.evaluate_js.assert_not_called()
+
+
+def test_diagnostics_capture_structure_not_input_values():
+    from scopecat_app.trial_window_probe import page_diagnostics
+
+    view = Mock()
+    view.window.get_current_url.return_value = "http://127.0.0.1:1234/#settings"
+    view.window.evaluate_js.return_value = {"readyState": "complete"}
+    assert page_diagnostics(view, "http://127.0.0.1:1234") == {"readyState": "complete"}
+    script = view.window.evaluate_js.call_args.args[0]
+    assert "visibleText" in script and "labels:" in script and "htmlFor" in script
+    assert ".value" not in script and "Storage" not in script

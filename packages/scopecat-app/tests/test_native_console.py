@@ -232,3 +232,32 @@ def test_build_replaces_console_before_signing_and_rename(
     assert len(signed) == 1 and not signed[0].exists()
     assert not installed[0].exists()
     assert (destination / "Contents/Resources/python/bin/scopecat").is_file()
+
+
+@pytest.mark.parametrize(
+    ("filename", "comparison", "result"),
+    [
+        ("native_launcher.m", '!strcmp(argv[i], "--trial-window-probe")', "YES"),
+        ("native_launcher.c", '!wcscmp(argv[i], L"--trial-window-probe")', "TRUE"),
+    ],
+)
+def test_trial_probe_launcher_suppresses_only_modal(
+    filename: str, comparison: str, result: str
+):
+    """Both platform launchers keep nonzero failures, without a trial probe modal."""
+    from scripts.app_build import native_package
+
+    source = Path(native_package.__file__).with_name(filename).read_text()
+    guard = (
+        "#ifdef SCOPECAT_TRIAL\n"
+        "        // Explicit one-shot verification must return failures "
+        "without a modal.\n"
+        f"        if ({comparison}) check = {result};\n"
+        "#endif"
+    )
+    assert guard in source
+    # Release compilation excludes the sole probe-specific behavior; ordinary
+    # trial launches never set this flag. Python still validates the probe mode.
+    assert "--trial-window-probe" not in source.replace(guard, "")
+    assert "if (result && !check)" in source
+    assert "return result;" in source or "return (int)result;" in source

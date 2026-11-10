@@ -17,8 +17,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return 1;
     BOOL check = FALSE;
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; i < argc; ++i) {
         if (!wcscmp(argv[i], L"--check-result")) check = TRUE;
+#ifdef SCOPECAT_TRIAL
+        // Explicit one-shot verification must return failures without a modal.
+        if (!wcscmp(argv[i], L"--trial-window-probe")) check = TRUE;
+#endif
+    }
     int result = 1;
     wchar_t module[32768];
     DWORD length = GetModuleFileNameW(NULL, module, 32768);

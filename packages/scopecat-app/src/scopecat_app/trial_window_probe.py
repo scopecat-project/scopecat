@@ -66,6 +66,126 @@ def is_reopened_controller(
     )
 
 
+def navigate_workspace(evaluate: Callable[[str], object], label: str) -> None:
+    """Wait for React navigation, then use its actual button and selected state."""
+    selector = "button[aria-label=" + json.dumps(label) + "]"
+    query = "document.querySelector(" + json.dumps(selector) + ")"
+    wait(
+        lambda: evaluate(
+            "Boolean(document.querySelector('nav button[aria-current=page]')"
+            f" && {query} && !{query}.disabled)"
+        ),
+        f"React workspace navigation not ready: {label}",
+    )
+    evaluate(f"{query}.click()")
+    wait(
+        lambda: evaluate(f"{query}?.getAttribute('aria-current') === 'page'"),
+        f"Workspace navigation did not select: {label}",
+    )
+
+
+PAGE_DIAGNOSTICS = r"""(()=>{
+  if(location.origin!==EXPECTED_ORIGIN)
+    return {error:'Diagnostic page is not the owned daemon origin'};
+  const visible=node=>{
+    for(let e=node;e;e=e.parentElement){
+      const css=getComputedStyle(e);
+      if(e.hidden||e.getAttribute('aria-hidden')==='true'
+        ||css.display==='none'||css.visibility==='hidden'
+        ||css.visibility==='collapse')return false;
+    }
+    return true;
+  };
+  const sanitized=node=>{
+    if(!visible(node))return '';
+    const copy=node.cloneNode(true);
+    const originals=[...node.querySelectorAll('*')];
+    const clones=[...copy.querySelectorAll('*')];
+    originals.forEach((e,i)=>{
+      const css=getComputedStyle(e);
+      if(e.matches('input,select,textarea,[contenteditable],script,style,template')
+        ||e.hidden||e.getAttribute('aria-hidden')==='true'
+        ||css.display==='none'||css.visibility==='hidden')clones[i].remove();
+    });
+    return copy.textContent;
+  };
+  return {
+    url:location.href,readyState:document.readyState,
+    visibleText:sanitized(document.body).slice(0,12000),
+    labels:[...document.querySelectorAll('label')].filter(visible).slice(0,60).map(e=>({
+      text:sanitized(e).slice(0,160),htmlFor:e.htmlFor,
+      control:e.control?{tag:e.control.tagName,id:e.control.id}:null,
+      children:[...e.children].map(c=>({tag:c.tagName,role:c.getAttribute('role')}))
+    })),
+    controls:[...document.querySelectorAll('input,select,textarea,button')]
+      .slice(0,100).map(e=>({tag:e.tagName,id:e.id,type:e.type,
+        ariaLabel:e.getAttribute('aria-label'),
+        labelledBy:e.getAttribute('aria-labelledby'),disabled:e.disabled}))
+  };
+})()"""
+
+
+def page_diagnostics(view: DesktopView, base_url: str) -> object:
+    """Only inspect our same-origin synthetic page; exclude values and storage."""
+    location = view.window.get_current_url()
+    from urllib.parse import urlsplit
+
+    expected, actual = urlsplit(base_url), urlsplit(location or "")
+    if (actual.scheme, actual.netloc) != (expected.scheme, expected.netloc):
+        return {"error": "Diagnostic page is not the owned daemon origin"}
+    origin = f"{expected.scheme}://{expected.netloc}"
+    return cast(
+        "object",
+        view.window.evaluate_js(
+            PAGE_DIAGNOSTICS.replace("EXPECTED_ORIGIN", json.dumps(origin))
+        ),
+    )
+
+
+def collect_diagnostics(windows: DesktopWindows, base_url: str) -> list[object]:
+    diagnostics: list[object] = []
+    for view in tuple(windows._views):  # pyright: ignore[reportPrivateUsage] - owned session
+        if not view.close_finished.is_set():
+            try:
+                diagnostics.append(page_diagnostics(view, base_url))
+            except Exception as error:
+                diagnostics.append({"diagnostic_error": str(error)})
+    return diagnostics
+
+
+FIELD_ASSIGNMENT = r"""(()=>{
+  const labels=[...document.querySelectorAll('label')].filter(label=>{
+    const copy=label.cloneNode(true);
+    copy.querySelectorAll('input,select,textarea').forEach(e=>e.remove());
+    return copy.textContent.trim()===LABEL;
+  });
+  if(labels.length===0)return false;
+  if(labels.length!==1)throw new Error('Ambiguous probe label');
+  const label=labels[0];
+  const controls=[...new Set([...(label.control?[label.control]:[]),
+    ...label.querySelectorAll('input,select,textarea')])];
+  if(controls.length!==1)throw new Error('Ambiguous probe control');
+  const e=controls[0];
+  if(e.disabled)return false;
+  const proto=e.tagName==='SELECT'?HTMLSelectElement.prototype:
+    e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:
+    e.tagName==='INPUT'?HTMLInputElement.prototype:null;
+  if(!proto)throw new Error('Unsupported probe control');
+  if(e.tagName==='SELECT'&&![...e.options].some(o=>o.value===VALUE))
+    throw new Error('Missing exact probe select option');
+  Object.getOwnPropertyDescriptor(proto,'value').set.call(e,VALUE);
+  e.dispatchEvent(new Event('input',{bubbles:true}));
+  e.dispatchEvent(new Event('change',{bubbles:true}));
+  return true;
+})()"""
+
+
+def field_assignment(label: str, value: str) -> str:
+    return FIELD_ASSIGNMENT.replace("LABEL", json.dumps(label)).replace(
+        "VALUE", json.dumps(value)
+    )
+
+
 def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[str]:
     """Interact only with the windows created by this process."""
     import httpx2
@@ -83,29 +203,17 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
 
     def button(view: DesktopView, label: str) -> None:
         query = (
-            "[...document.querySelectorAll('button')].find(e=>"
+            "[...document.querySelectorAll('button')].filter(e=>"
             f"e.textContent.trim()==={json.dumps(label)} && !e.disabled)"
         )
-        wait(lambda: js(view, f"Boolean({query})"), f"Missing enabled {label}")
-        js(view, f"{query}.click()")
+        wait(lambda: js(view, f"{query}.length===1"), f"Missing unique enabled {label}")
+        js(view, f"{query}[0].click()")
 
     def fill(view: DesktopView, label: str, value: str) -> None:
-        script = """(()=>{const label=[...document.querySelectorAll('label')]
-        .find(e=>e.textContent.trim()===LABEL);
-        const e=label&&(label.control||label.querySelector('input,select,textarea'));
-        if(!e)return false;
-        const proto=e.tagName==='SELECT'?HTMLSelectElement.prototype:
-          e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:
-          HTMLInputElement.prototype;
-        Object.getOwnPropertyDescriptor(proto,'value').set.call(e,VALUE);
-        e.dispatchEvent(new Event('input',{bubbles:true}));
-        e.dispatchEvent(new Event('change',{bubbles:true}));return true;})()"""
         wait(
             lambda: js(
                 view,
-                script.replace("LABEL", json.dumps(label)).replace(
-                    "VALUE", json.dumps(value)
-                ),
+                field_assignment(label, value),
             ),
             f"Missing input {label}",
         )
@@ -117,11 +225,13 @@ def exercise(windows: DesktopWindows, main: DesktopView, base_url: str) -> list[
             document = cast("dict[str, object]", response.json())
             assert document.get("items") == [], "Probe requires empty trial fixtures"
     ready(main)
-    js(main, "location.hash='settings'")
+    navigate_workspace(lambda script: js(main, script), "设置 / Settings")
     fill(main, "操作者名称", "Isolated native program probe")
     button(main, "保存操作者")
     wait(lambda: text(main, "操作者已保存"), "Operator save did not complete")
-    js(main, "location.hash='instruments'")
+    navigate_workspace(
+        lambda script: js(main, script), "设备与驱动 / Devices and drivers"
+    )
     button(main, "启用模拟设备体验（无硬件）")
     button(main, "添加设备")
     fill(main, "设备名称", "Trial probe virtual VNA")
@@ -369,6 +479,9 @@ def run(home: Path) -> None:
                 evidence["status"] = "passed"
             except Exception:
                 evidence["error"] = traceback.format_exc()
+                evidence["owned_page_diagnostics"] = collect_diagnostics(
+                    windows, record.base_url
+                )
             finally:
                 # Dispose only windows owned by this session after assertions.
                 session.closing.set()
