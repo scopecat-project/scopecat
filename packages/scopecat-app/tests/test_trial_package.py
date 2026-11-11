@@ -462,6 +462,8 @@ def trial_development(
             "user.name=Trial QA",
             "-c",
             "user.email=qa@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "--quiet",
             "-m",
