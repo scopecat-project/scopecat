@@ -16,7 +16,7 @@ from typing import cast
 import psutil
 from filelock import FileLock
 from scripts.app_build.dev_host import MARKER, check_interpreter, clean_environment
-from scripts.app_build.dev_resources import development_home
+from scripts.app_build.dev_resources import development_home, trial_development_policy
 
 from scopecat_app.bundle import file_hash
 
@@ -83,6 +83,7 @@ def compiler_environment() -> tuple[str, dict[str, str]]:
 
 def build_host(source: Path) -> Path:
     """Build with MSVC once per interpreter/source identity, outside the checkout."""
+    policy = trial_development_policy(source=source, entry=Path(__file__).absolute())
     compiler, environment = compiler_environment()
     python = Path(sys.executable).absolute()
     library = Path(sys.base_prefix) / "python3.dll"
@@ -156,7 +157,11 @@ def build_host(source: Path) -> Path:
                         f"/MANIFESTINPUT:{manifest}",
                     ],
                     check=True,
-                    env=environment,
+                    env=(
+                        dict(environment, TEMP=str(staging), TMP=str(staging))
+                        if policy is not None
+                        else environment
+                    ),
                     capture_output=True,
                     timeout=120,
                 )
@@ -186,7 +191,25 @@ def build_host(source: Path) -> Path:
 
 def enter_host(source: Path, home: Path) -> None:
     """Reenter before owner locks; preserve the terminal and propagate exit status."""
+    policy = trial_development_policy(
+        source=source, home=home, entry=Path(__file__).absolute()
+    )
     marker = os.environ.pop(MARKER, None)
+    if policy is not None:
+        from scopecat.trial_policy import checked_path
+
+        actual = checked_path(Path(psutil.Process().exe()))
+        if marker is None and actual != checked_path(Path(sys.executable)):
+            raise ValueError(
+                "Trial development host lost its reentry marker; "
+                "refusing recursive startup"
+            )
+        if marker is not None and not actual.is_relative_to(
+            development_home(source) / "hosts"
+        ):
+            raise ValueError(
+                "Trial development reentry host is outside its isolated cache"
+            )
     if marker is not None:
         selected = cast("dict[str, object]", json.loads(marker))
         if (
@@ -211,7 +234,16 @@ def enter_host(source: Path, home: Path) -> None:
         }
     )
     with subprocess.Popen(  # noqa: S603 - verified locally built host
-        [str(executable), "-E", "-m", "scripts.dev", "--home", str(home.resolve())],
+        [
+            str(executable),
+            "-E",
+            *(["-B"] if policy is not None else []),
+            "-m",
+            "scripts.dev",
+            "--home",
+            str(home.resolve()),
+            *(["--trial-development"] if policy is not None else []),
+        ],
         env=environment,
         cwd=source,
     ) as child:

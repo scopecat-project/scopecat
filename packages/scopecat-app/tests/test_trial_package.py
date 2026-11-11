@@ -1,12 +1,14 @@
 """Trial isolation is proven without starting a native host or a daemon."""
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from unittest.mock import Mock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from scripts.app_build.trial_package import (
@@ -431,4 +433,520 @@ def test_probe_rejects_duplicate_or_conflicting_modes_and_script_arguments(
     )
     with pytest.raises((ValueError, SystemExit)):
         native_bootstrap.main(expected_trial_digest=digest)
+    assert not policy.home.exists()
+
+
+@pytest.fixture
+def trial_development(
+    marked_trial: tuple[Path, TrialPolicy, str], monkeypatch: pytest.MonkeyPatch
+) -> tuple[TrialPolicy, Path]:
+    from scripts import dev
+    from scripts.app_build import dev_host_windows, dev_resources
+
+    _app, policy, _digest = marked_trial
+    source = policy.home.parent / "source"
+    scripts = source / "scripts/app_build"
+    scripts.mkdir(parents=True)
+    for relative in (
+        "dev.py",
+        "app_build/dev_resources.py",
+        "app_build/dev_host_windows.py",
+    ):
+        (source / "scripts" / relative).write_text("# Synthetic source fixture\n")
+    (source / ".gitignore").write_text("node_modules/\n")
+    for command in (
+        ["init", "--quiet"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=Trial QA",
+            "-c",
+            "user.email=qa@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Synthetic source",
+        ],
+    ):
+        subprocess.run(["git", *command], cwd=source, check=True, capture_output=True)  # noqa: S603, S607 - temporary fixture repository
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],  # noqa: S607 - temporary fixture
+        cwd=source,
+        text=True,
+    ).strip()
+    payload = policy.resources / "payload"
+    payload.mkdir()
+    (payload / "bundle.json").write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "sources": {"public": commit},
+                "target": {},
+                "runtime": {},
+                "files": {},
+            }
+        )
+    )
+    activate(monkeypatch, policy)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "executable", str(policy.resources / "python/python.exe"))
+    monkeypatch.setenv(dev_resources.TRIAL_DEVELOPMENT, policy.identity)
+    monkeypatch.setattr(dev, "__file__", str(source / "scripts/dev.py"))
+    monkeypatch.setattr(dev_resources, "__file__", str(scripts / "dev_resources.py"))
+    monkeypatch.setattr(
+        dev_host_windows, "__file__", str(scripts / "dev_host_windows.py")
+    )
+    return policy, source
+
+
+def test_trial_development_paths_are_fixed_without_creating_default_data(
+    trial_development: tuple[TrialPolicy, Path], monkeypatch: pytest.MonkeyPatch
+):
+    from scripts.app_build import dev_resources
+
+    policy, source = trial_development
+    default = Mock(side_effect=AssertionError("Default path must not be consulted"))
+    monkeypatch.setattr(dev_resources, "user_data_path", default)
+    assert (
+        dev_resources.trial_development_policy(source=source, home=policy.state)
+        is policy
+    )
+    assert dev_resources.development_home(source).is_relative_to(
+        policy.home / "development"
+    )
+    default.assert_not_called()
+    assert not policy.home.exists()
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "locator_missing",
+        "locator_wrong",
+        "mode_missing",
+        "mode_wrong",
+        "interpreter",
+        "source",
+        "dirty",
+        "mac",
+    ],
+)
+def test_trial_development_refuses_before_compiler_or_owner(
+    trial_development: tuple[TrialPolicy, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    damage: str,
+):
+    from scripts import dev
+    from scripts.app_build import dev_host_windows, dev_resources
+
+    policy, source = trial_development
+    if damage == "locator_missing":
+        monkeypatch.delenv("SCOPECAT_LOCATOR_HOME")
+    elif damage == "locator_wrong":
+        monkeypatch.setenv("SCOPECAT_LOCATOR_HOME", str(source / "wrong"))
+    elif damage == "mode_missing":
+        monkeypatch.delenv(dev_resources.TRIAL_DEVELOPMENT)
+    elif damage == "mode_wrong":
+        monkeypatch.setenv(dev_resources.TRIAL_DEVELOPMENT, "wrong")
+    elif damage == "interpreter":
+        monkeypatch.setattr(sys, "executable", str(source / "python.exe"))
+    elif damage == "source":
+        source = source.parent / "other-source"
+    elif damage == "dirty":
+        (source / "scripts/dev.py").write_text("# Changed\n")
+    else:
+        monkeypatch.setattr(sys, "platform", "darwin")
+    compiler = Mock()
+    runtime = Mock()
+    monkeypatch.setattr(dev_host_windows, "compiler_environment", compiler)
+    monkeypatch.setattr(dev, "ApplicationRuntime", runtime)
+    with pytest.raises(ValueError, match="Trial"):
+        dev_host_windows.build_host(source)
+    with pytest.raises(ValueError, match="Trial"):
+        dev.run(source, policy.state, browser=False)
+    compiler.assert_not_called()
+    runtime.assert_not_called()
+    assert not policy.home.exists()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["--temporary"],
+        ["--home", "wrong"],
+        ["--home", "STATE", "--home", "STATE"],
+        ["--home", "STATE", "--browser"],
+        ["--home", "STATE", "--trial-development"],
+    ],
+)
+def test_trial_source_entry_rejects_invalid_arguments_before_launch(
+    trial_development: tuple[TrialPolicy, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+):
+    from scripts import dev
+    from scripts.app_build import dev_host_windows
+
+    policy, _source = trial_development
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "dev",
+            "--trial-development",
+            *[str(policy.state) if v == "STATE" else v for v in arguments],
+        ],
+    )
+    launch, runtime = Mock(), Mock()
+    monkeypatch.setattr(dev_host_windows, "enter_host", launch)
+    monkeypatch.setattr(dev, "ApplicationRuntime", runtime)
+    with pytest.raises((ValueError, SystemExit)):
+        dev.main()
+    launch.assert_not_called()
+    runtime.assert_not_called()
+    assert not policy.home.exists()
+
+
+def test_unmarked_source_cannot_enter_trial_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from scripts import dev
+    from scripts.app_build import dev_resources
+
+    monkeypatch.setattr(scopecat, "_TRIAL_POLICY", None, raising=False)
+    monkeypatch.delenv(dev_resources.TRIAL_DEVELOPMENT, raising=False)
+    monkeypatch.setattr(
+        sys, "argv", ["dev", "--trial-development", "--home", str(tmp_path / "unused")]
+    )
+    source = Mock()
+    monkeypatch.setattr(dev, "source_root", source)
+    with pytest.raises(ValueError, match="marked interpreter"):
+        dev.main()
+    source.assert_not_called()
+    monkeypatch.setenv(dev_resources.TRIAL_DEVELOPMENT, "lost-core-marker")
+    with pytest.raises(ValueError, match="marked package interpreter"):
+        dev_resources.trial_development_policy()
+    assert not (tmp_path / "unused").exists()
+
+
+@pytest.mark.parametrize("target", ["source", "entry", "state"])
+def test_trial_source_rejects_alias_before_path_resolution(
+    trial_development: tuple[TrialPolicy, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+):
+    from scripts import dev
+    from scripts.app_build import dev_resources
+
+    policy, source = trial_development
+    if target == "source":
+        moved = source.with_name("moved")
+        source.rename(moved)
+        source.symlink_to(moved, target_is_directory=True)
+    elif target == "entry":
+        entry = source / "scripts/dev.py"
+        renamed = entry.with_name("real.py")
+        entry.rename(renamed)
+        entry.symlink_to(renamed)
+    else:
+        policy.home.mkdir()
+        policy.state.symlink_to(source, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink or junction"):
+        dev_resources.trial_development_policy(
+            source=source, home=policy.state, entry=Path(dev.__file__)
+        )
+    assert not (policy.state / "development.lock").exists()
+
+
+@pytest.mark.parametrize("entry", ["resources", "logged", "native"])
+def test_trial_never_builds_resources_or_replaces_native_dependencies(
+    trial_development: tuple[TrialPolicy, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    entry: str,
+):
+    from scripts.app_build import dev_resources
+
+    policy, source = trial_development
+    outside = source.parent / "forbidden-default-cache"
+    identity = Mock()
+    monkeypatch.setattr(dev_resources, "resource_identity", identity)
+    with pytest.raises(ValueError, match="only uses prepared"):
+        if entry == "resources":
+            dev_resources.prepare_resources(source, outside)
+        elif entry == "logged":
+            dev_resources.prepare_resources_logged(source, outside, outside / "log")
+        else:
+            dev_resources.prepare_native_dependency(outside, outside)
+    identity.assert_not_called()
+    assert not outside.exists() and not policy.home.exists()
+
+
+def test_trial_reentry_preserves_exact_home_interpreter_mode_and_locator(
+    trial_development: tuple[TrialPolicy, Path], monkeypatch: pytest.MonkeyPatch
+):
+    from scripts.app_build import dev_host, dev_host_windows, dev_resources
+
+    policy, source = trial_development
+    executable = policy.home / "development/hosts/Scopecat Dev.exe"
+    monkeypatch.delenv(dev_host.MARKER, raising=False)
+    monkeypatch.setattr(dev_host_windows, "build_host", Mock(return_value=executable))
+    assert (
+        dev_resources.trial_development_policy(source=source, home=policy.state)
+        is policy
+    )
+    monkeypatch.setattr(
+        dev_host_windows, "trial_development_policy", Mock(return_value=policy)
+    )
+    monkeypatch.setattr(
+        dev_host_windows.psutil,
+        "Process",
+        Mock(return_value=SimpleNamespace(exe=lambda: sys.executable)),
+    )
+    launch = MagicMock()
+    launch.return_value.__enter__.return_value.wait.return_value = 23
+    monkeypatch.setattr(dev_host_windows.subprocess, "Popen", launch)
+    with pytest.raises(SystemExit) as outcome:
+        dev_host_windows.enter_host(source, policy.state)
+    assert outcome.value.code == 23
+    assert launch.call_args.args[0] == [
+        str(executable),
+        "-E",
+        "-B",
+        "-m",
+        "scripts.dev",
+        "--home",
+        str(policy.state),
+        "--trial-development",
+    ]
+    env = launch.call_args.kwargs["env"]
+    assert env[dev_resources.TRIAL_DEVELOPMENT] == policy.identity
+    assert env["SCOPECAT_LOCATOR_HOME"] == str(policy.locator)
+    assert json.loads(env[dev_host.MARKER])["python"] == sys.executable
+    assert launch.call_args.kwargs["cwd"] == source
+    assert not policy.home.exists()
+
+
+def test_trial_preparation_reuses_only_matching_prepared_package(
+    trial_development: tuple[TrialPolicy, Path], monkeypatch: pytest.MonkeyPatch
+):
+    from scripts import dev
+
+    from scopecat_app import trial_window_probe
+
+    policy, source = trial_development
+    payload = policy.resources / "payload"
+    runtime = Mock(home=policy.state)
+    selected = SimpleNamespace(
+        python=Path(sys.executable), delivery_root=payload, static_dir=payload / "gui"
+    )
+    runtime.installation.return_value = selected
+    build = Mock()
+    monkeypatch.setattr(dev, "prepare_resources_logged", build)
+    check = Mock()
+    monkeypatch.setattr(trial_window_probe, "platform_preconditions", check)
+    assert (
+        dev.prepare_application(runtime, source, policy.home / "unused-cache")
+        == payload
+    )
+    check.assert_called_once_with(policy)
+    build.assert_not_called()
+    runtime.configure.assert_not_called()
+    runtime.qualify.assert_not_called()
+    runtime.select.assert_not_called()
+    selected.delivery_root = source
+    with pytest.raises(ValueError, match="prepared package installation"):
+        dev.prepare_application(runtime, source, policy.home / "unused-cache")
+    assert not policy.home.exists()
+
+
+@pytest.mark.parametrize("path", ["endpoint", "log", "dependencies"])
+def test_trial_vite_refuses_escaped_paths_or_missing_dependencies_before_spawn(
+    trial_development: tuple[TrialPolicy, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+):
+    from scripts import dev
+
+    policy, source = trial_development
+    endpoint = policy.state / "backend.json"
+    log = policy.state / "logs/vite.log"
+    if path == "endpoint":
+        endpoint = source / "backend.json"
+    if path == "log":
+        log = source / "vite.log"
+    launch, install = Mock(), Mock()
+    monkeypatch.setattr(dev, "trial_development_policy", Mock(return_value=policy))
+    monkeypatch.setattr(dev.subprocess, "Popen", launch)
+    monkeypatch.setattr(dev.subprocess, "run", install)
+    monkeypatch.setattr(dev.shutil, "which", Mock(return_value="node"))
+    with pytest.raises(ValueError, match=r"Trial Vite|locked frontend"):
+        dev.start_vite(source, endpoint, log)
+    launch.assert_not_called()
+    install.assert_not_called()
+    assert not policy.home.exists()
+
+
+def test_trial_native_host_missing_reentry_marker_cannot_recompile_or_respawn(
+    trial_development: tuple[TrialPolicy, Path], monkeypatch: pytest.MonkeyPatch
+):
+    from scripts.app_build import dev_host, dev_host_windows, dev_resources
+
+    policy, source = trial_development
+    host = policy.home / "development/own/hosts/reviewed/Scopecat Dev.exe"
+    monkeypatch.delenv(dev_host.MARKER, raising=False)
+    monkeypatch.setattr(
+        dev_host_windows.psutil,
+        "Process",
+        Mock(return_value=SimpleNamespace(exe=lambda: str(host))),
+    )
+    assert (
+        dev_resources.trial_development_policy(source=source, home=policy.state)
+        is policy
+    )
+    monkeypatch.setattr(
+        dev_host_windows, "trial_development_policy", Mock(return_value=policy)
+    )
+    compiler, build, launch = Mock(), Mock(), Mock()
+    monkeypatch.setattr(dev_host_windows, "compiler_environment", compiler)
+    monkeypatch.setattr(dev_host_windows, "build_host", build)
+    monkeypatch.setattr(dev_host_windows.subprocess, "Popen", launch)
+    with pytest.raises(ValueError, match="lost its reentry marker"):
+        dev_host_windows.enter_host(source, policy.state)
+    compiler.assert_not_called()
+    build.assert_not_called()
+    launch.assert_not_called()
+    assert not policy.home.exists()
+
+
+@pytest.mark.parametrize("missing", ["mode", "locator", "endpoint", None])
+def test_trial_node_child_checks_inheritance_before_loading_dependencies(
+    tmp_path: Path, missing: str | None
+):
+    from scripts import dev
+    from scripts.app_build.dev_resources import TRIAL_DEVELOPMENT
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node required to execute the fixed trial child script")
+    policy = TrialPolicy(
+        "child-qa", tmp_path / "home", tmp_path / "home/locator", tmp_path / "resources"
+    )
+    ui = tmp_path / "source/apps/scopecat-ui"
+    entry = tmp_path / "fixture.mjs"
+    entry.write_text(
+        "export async function createServer(config) { "
+        "console.log(JSON.stringify(config)); return {listen: async () => {}}; }"
+    )
+    endpoint = policy.state / "backend.json"
+    environment = dict(
+        os.environ,
+        **{
+            TRIAL_DEVELOPMENT: policy.identity,
+            "SCOPECAT_LOCATOR_HOME": str(policy.locator),
+            "SCOPECAT_DEV_ENDPOINT_FILE": str(endpoint),
+        },
+    )
+    if missing:
+        environment.pop(
+            {
+                "mode": TRIAL_DEVELOPMENT,
+                "locator": "SCOPECAT_LOCATOR_HOME",
+                "endpoint": "SCOPECAT_DEV_ENDPOINT_FILE",
+            }[missing]
+        )
+    result = subprocess.run(  # noqa: S603 - inert temporary Node fixture, no server or app
+        [
+            node,
+            "--input-type=module",
+            "-e",
+            dev.trial_vite_script(policy, ui, entry, endpoint, 32123),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    if missing:
+        assert result.returncode != 0
+        assert "Trial Vite inherited scope mismatch" in result.stderr
+        assert result.stdout == ""
+    else:
+        assert result.returncode == 0, result.stderr
+        config = json.loads(result.stdout)
+        assert config["cacheDir"] == str(policy.state / "vite-cache")
+        assert config["configLoader"] == "native"
+        assert config["root"] == str(ui)
+        assert config["configFile"] == str(ui / "vite.config.ts")
+        assert config["server"] == {
+            "host": "127.0.0.1",
+            "port": 32123,
+            "strictPort": True,
+        }
+    assert not policy.home.exists()
+
+
+def test_trial_vite_launch_uses_private_cache_without_installing_or_node_overrides(
+    trial_development: tuple[TrialPolicy, Path], monkeypatch: pytest.MonkeyPatch
+):
+    from scripts import dev
+
+    policy, source = trial_development
+    ui = source / "apps/scopecat-ui"
+    entry = ui / "node_modules/vite/dist/node/index.js"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("// Existing synthetic dependency\n")
+    log = policy.state / "logs/vite.log"
+    log.parent.mkdir(parents=True)
+    monkeypatch.setattr(dev, "trial_development_policy", Mock(return_value=policy))
+    monkeypatch.setattr(dev.shutil, "which", Mock(return_value="node"))
+    monkeypatch.setattr(dev, "available_port", lambda: 32123)
+    for name in ("NODE_OPTIONS", "NODE_PATH", "NODE_COMPILE_CACHE"):
+        monkeypatch.setenv(name, "outside-trial")
+    launch = Mock(return_value=SimpleNamespace(poll=lambda: None))
+    install = Mock()
+    monkeypatch.setattr(dev.subprocess, "Popen", launch)
+    monkeypatch.setattr(dev.subprocess, "run", install)
+    client = MagicMock()
+    client.return_value.__enter__.return_value.get.return_value.status_code = 200
+    monkeypatch.setattr(dev.httpx2, "Client", client)
+    _process, url = dev.start_vite(source, policy.state / "backend.json", log)
+    assert url == "http://127.0.0.1:32123"
+    command = launch.call_args.args[0]
+    assert command[:3] == ["node", "--input-type=module", "-e"]
+    assert "vite-cache" in command[3] and "configLoader" in command[3]
+    environment = launch.call_args.kwargs["env"]
+    assert not any(
+        name in environment
+        for name in ("NODE_OPTIONS", "NODE_PATH", "NODE_COMPILE_CACHE")
+    )
+    assert environment["SCOPECAT_DEV_ENDPOINT_FILE"] == str(
+        policy.state / "backend.json"
+    )
+    install.assert_not_called()
+
+
+def test_trial_source_main_requires_stopped_prepared_state_before_compiling(
+    trial_development: tuple[TrialPolicy, Path], monkeypatch: pytest.MonkeyPatch
+):
+    from scripts import dev
+    from scripts.app_build import dev_host_windows
+
+    policy, source = trial_development
+    monkeypatch.setattr(
+        sys, "argv", ["dev", "--home", str(policy.state), "--trial-development"]
+    )
+    monkeypatch.setattr(dev, "source_root", lambda: source)
+    runtime = Mock()
+    runtime.status.return_value.state = "running"
+    monkeypatch.setattr(dev, "ApplicationRuntime", Mock(return_value=runtime))
+    monkeypatch.setattr(
+        dev, "prepare_application", Mock(return_value=policy.resources / "payload")
+    )
+    launch = Mock()
+    monkeypatch.setattr(dev_host_windows, "enter_host", launch)
+    with pytest.raises(ValueError, match="prepared and stopped"):
+        dev.main()
+    launch.assert_not_called()
     assert not policy.home.exists()

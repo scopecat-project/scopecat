@@ -330,3 +330,49 @@ def test_saved_result_observer_restores_on_probe_failure():
     ):
         raise AssertionError("Probe failed")
     assert api.open_saved_measurement is original
+
+
+def test_fixture_requires_actor_before_sources_and_clears_after_device_save():
+    from scopecat_app.trial_window_probe import prepare_virtual_device_fixture
+
+    calls: list[tuple[str, ...]] = []
+    prepare_virtual_device_fixture(
+        lambda label: calls.append(("navigate", label)),
+        lambda label, value: calls.append(("fill", label, value)),
+        lambda label: calls.append(("button", label)),
+        lambda value: calls.append(("persisted", value)),
+        lambda: calls.append(("device-settled",)),
+    )
+    assert calls == [
+        ("navigate", "设置 / Settings"),
+        ("fill", "操作者名称", "Isolated fixture setup"),
+        ("button", "保存操作者"),
+        ("persisted", "Isolated fixture setup"),
+        ("navigate", "设备与驱动 / Devices and drivers"),
+        ("button", "启用模拟设备体验（无硬件）"),
+        ("button", "添加设备"),
+        ("fill", "设备名称", "Trial probe virtual VNA"),
+        ("fill", "驱动", "scopecat.virtual.vna"),
+        ("button", "保存设备"),
+        ("device-settled",),
+        ("navigate", "设置 / Settings"),
+        ("fill", "操作者名称", ""),
+        ("button", "保存操作者"),
+        ("persisted", ""),
+        ("navigate", "设备与驱动 / Devices and drivers"),
+    ]
+
+
+def test_fixture_actor_save_failure_prevents_enabling_sources():
+    from scopecat_app.trial_window_probe import prepare_virtual_device_fixture
+
+    button = Mock()
+    with pytest.raises(RuntimeError, match="save failed"):
+        prepare_virtual_device_fixture(
+            Mock(),
+            Mock(),
+            button,
+            Mock(side_effect=RuntimeError("save failed")),
+            Mock(),
+        )
+    button.assert_called_once_with("保存操作者")

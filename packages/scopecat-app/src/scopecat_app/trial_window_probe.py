@@ -31,6 +31,32 @@ if TYPE_CHECKING:
     from scopecat_app.desktop import DesktopAPI, DesktopView, DesktopWindows
 
 
+def prepare_virtual_device_fixture(
+    navigate: Callable[[str], None],
+    fill: Callable[[str, str], None],
+    button: Callable[[str], None],
+    wait_actor: Callable[[str], None],
+    wait_device: Callable[[], None],
+) -> None:
+    """Prepare through normal UI permissions, then restore the empty-actor case."""
+    navigate("设置 / Settings")
+    fill("操作者名称", "Isolated fixture setup")
+    button("保存操作者")
+    wait_actor("Isolated fixture setup")
+    navigate("设备与驱动 / Devices and drivers")
+    button("启用模拟设备体验（无硬件）")
+    button("添加设备")
+    fill("设备名称", "Trial probe virtual VNA")
+    fill("驱动", "scopecat.virtual.vna")
+    button("保存设备")
+    wait_device()
+    navigate("设置 / Settings")
+    fill("操作者名称", "")
+    button("保存操作者")
+    wait_actor("")
+    navigate("设备与驱动 / Devices and drivers")
+
+
 def guard(home: Path) -> TrialPolicy:
     # Keep all application imports and all state access after this boundary.
     from scopecat.trial_policy import checked_path, current_policy, validate_environment
@@ -407,14 +433,32 @@ def exercise(
             "Probe requires an empty initial actor"
         )
     ready(main)
-    navigate_workspace(
-        lambda script: js(main, script), "设备与驱动 / Devices and drivers"
+
+    def wait_fixture_actor(expected: str) -> None:
+        with httpx2.Client(base_url=base_url, trust_env=False, timeout=5) as client:
+
+            def persisted() -> bool:
+                response = client.get("/api/v1/operator-settings")
+                response.raise_for_status()
+                settings = cast("dict[str, object]", response.json())
+                return settings["operator"] == expected
+
+            wait(persisted, "Fixture operator settings did not persist")
+        wait(lambda: text(main, "操作者已保存"), "Fixture actor save did not settle")
+
+    def wait_fixture_device() -> None:
+        wait(
+            lambda: text(main, CONTROL_WINDOW_LABEL) and not text(main, "保存设备"),
+            "Fixture device save did not settle",
+        )
+
+    prepare_virtual_device_fixture(
+        lambda label: navigate_workspace(lambda script: js(main, script), label),
+        lambda label, value: fill(main, label, value),
+        lambda label: button(main, label),
+        wait_fixture_actor,
+        wait_fixture_device,
     )
-    button(main, "启用模拟设备体验（无硬件）")
-    button(main, "添加设备")
-    fill(main, "设备名称", "Trial probe virtual VNA")
-    fill(main, "驱动", "scopecat.virtual.vna")
-    button(main, "保存设备")
     button(main, CONTROL_WINDOW_LABEL)
     wait(lambda: windows.latest is not main, "Dedicated controller not created")
     control = windows.latest

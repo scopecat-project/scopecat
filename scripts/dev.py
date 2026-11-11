@@ -17,7 +17,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import httpx2
 import psutil
@@ -36,13 +36,46 @@ from scripts.app_build.dev_resources import (
     prepare_native_dependency,
     prepare_resources_logged,
     source_stamp,
+    trial_development_policy,
 )
+
+if TYPE_CHECKING:
+    from scopecat.trial_policy import TrialPolicy
+
+
+def trial_vite_script(
+    policy: TrialPolicy, ui: Path, entry: Path, endpoint: Path, port: int
+) -> str:
+    """The Node child checks inherited scope before loading any source or dependency."""
+    expected = {
+        "SCOPECAT_TRIAL_DEVELOPMENT": policy.identity,
+        "SCOPECAT_LOCATOR_HOME": str(policy.locator),
+        "SCOPECAT_DEV_ENDPOINT_FILE": str(endpoint),
+    }
+    config = {
+        "root": str(ui),
+        "configFile": str(ui / "vite.config.ts"),
+        "configLoader": "native",
+        "cacheDir": str(policy.state / "vite-cache"),
+        "clearScreen": False,
+        "server": {"host": "127.0.0.1", "port": port, "strictPort": True},
+    }
+    return (
+        f"for (const [key,value] of Object.entries({json.dumps(expected)})) {{"
+        "if (process.env[key] !== value) "
+        "throw new Error('Trial Vite inherited scope mismatch: '+key);"
+        "}\n"
+        f"const {{createServer}} = await import({json.dumps(entry.as_uri())});\n"
+        f"const server = await createServer({json.dumps(config)});\n"
+        "await server.listen();\n"
+    )
 
 
 class Arguments(Protocol):
     home: Path | None
     temporary: bool
     browser: bool
+    trial_development: bool
 
 
 def source_root() -> Path:
@@ -59,6 +92,27 @@ def available_port() -> int:
 
 
 def prepare_application(runtime: ApplicationRuntime, source: Path, cache: Path) -> Path:
+    if (
+        policy := trial_development_policy(source=source, home=runtime.home)
+    ) is not None:
+        from scopecat.trial_policy import checked_path
+        from scopecat_app.trial_window_probe import platform_preconditions
+
+        platform_preconditions(policy)
+        payload = checked_path(policy.resources / "payload")
+        selected = (
+            runtime.installation()
+        )  # Must already be prepared by the native package.
+        if (
+            checked_path(selected.python) != checked_path(Path(sys.executable))
+            or selected.delivery_root is None
+            or checked_path(selected.delivery_root) != payload
+            or checked_path(selected.static_dir) != payload / "gui"
+        ):
+            raise ValueError(
+                "Trial development requires its prepared package installation"
+            )
+        return payload
     payload = prepare_resources_logged(
         source, cache, runtime.home / "logs/resources.log"
     )
@@ -76,29 +130,64 @@ def prepare_application(runtime: ApplicationRuntime, source: Path, cache: Path) 
 def start_vite(
     source: Path, endpoint: Path, log: Path
 ) -> tuple[subprocess.Popen[str], str]:
-    pnpm = shutil.which("pnpm")
-    if pnpm is None:
-        raise ValueError("Install Node.js and pnpm before starting source development.")
+    policy = trial_development_policy(source=source)
     ui = source / "apps/scopecat-ui"
-    subprocess.run([pnpm, "install", "--frozen-lockfile"], cwd=ui, check=True)  # noqa: S603
     port = available_port()
+    if policy is not None:
+        from scopecat.trial_policy import checked_path
+
+        if (
+            checked_path(endpoint) != policy.state / "backend.json"
+            or checked_path(log) != policy.state / "logs/vite.log"
+        ):
+            raise ValueError(
+                "Trial Vite endpoint and log must match its isolated state"
+            )
+        node = shutil.which("node")
+        entry = ui / "node_modules/vite/dist/node/index.js"
+        if (
+            node is None
+            or not entry.is_file()
+            or not entry.resolve().is_relative_to(ui / "node_modules")
+        ):
+            raise ValueError(
+                "Prepare this trial source's locked frontend dependencies first"
+            )
+        command = [
+            node,
+            "--input-type=module",
+            "-e",
+            trial_vite_script(policy, ui, entry, endpoint, port),
+        ]
+    else:
+        pnpm = shutil.which("pnpm")
+        if pnpm is None:
+            raise ValueError(
+                "Install Node.js and pnpm before starting source development."
+            )
+        subprocess.run([pnpm, "install", "--frozen-lockfile"], cwd=ui, check=True)  # noqa: S603
+        command = [
+            pnpm,
+            "exec",
+            "vite",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--strictPort",
+            "--clearScreen",
+            "false",
+        ]
     url = f"http://127.0.0.1:{port}"
+    environment = dict(os.environ, SCOPECAT_DEV_ENDPOINT_FILE=str(endpoint))
+    if policy is not None:
+        for name in ("NODE_OPTIONS", "NODE_PATH", "NODE_COMPILE_CACHE"):
+            environment.pop(name, None)
     with log.open("ab") as output:
         process = subprocess.Popen(  # noqa: S603 - fixed source tool, loopback only
-            [
-                pnpm,
-                "exec",
-                "vite",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(port),
-                "--strictPort",
-                "--clearScreen",
-                "false",
-            ],
+            command,
             cwd=ui,
-            env=dict(os.environ, SCOPECAT_DEV_ENDPOINT_FILE=str(endpoint)),
+            env=environment,
             text=True,
             stdin=subprocess.DEVNULL,
             stdout=output,
@@ -232,6 +321,14 @@ def stop_when_idle(runtime: ApplicationRuntime) -> None:
 
 
 def claim_home(source: Path, home: Path) -> None:
+    policy = trial_development_policy(
+        source=source, home=home, entry=Path(__file__).absolute()
+    )
+    if policy is not None:
+        runtime = ApplicationRuntime(home)
+        prepare_application(runtime, source, policy.home / "development/resources")
+        if runtime.status().state != "stopped":
+            raise ValueError("Trial development requires a prepared and stopped trial")
     marker = home / "development.json"
     if marker.exists():
         previous = cast("dict[str, object]", json.loads(marker.read_text()))
@@ -240,7 +337,7 @@ def claim_home(source: Path, home: Path) -> None:
                 "This development home belongs to another checkout; choose "
                 "a different --home."
             )
-    elif any(
+    elif policy is None and any(
         home.joinpath(name).exists()
         for name in (
             "runtime",
@@ -292,6 +389,11 @@ def publish_ui(session: DesktopSession, frontend: psutil.Process) -> None:
 
 
 def run(source: Path, home: Path, *, browser: bool) -> None:
+    policy = trial_development_policy(
+        source=source, home=home, entry=Path(__file__).absolute()
+    )
+    if policy is not None and browser:
+        raise ValueError("Trial development requires its native Windows host")
     home = home.resolve()
     home.mkdir(parents=True, exist_ok=True)
     marker = home / "development.json"
@@ -346,7 +448,7 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
         print(f"Source: {source}\nHome (retained): {home}\nLogs: {logs}", flush=True)
         cache = development_home(source).parent / "resources"
         payload = prepare_application(session.runtime, source, cache)
-        if not browser:
+        if not browser and policy is None:
             prepare_native_dependency(payload, cache)
         interruptible = False
         session.connected(session.runtime.start().base_url)
@@ -432,7 +534,19 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    policy = trial_development_policy()
+    if policy is not None:
+        from scopecat.trial_policy import validate_arguments
+
+        validate_arguments(sys.argv[1:])
+        if sys.argv[1:].count("--trial-development") != 1:
+            raise ValueError(
+                "Trial development requires exactly one explicit mode flag"
+            )
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=policy is None)
+    parser.add_argument(
+        "--trial-development", action="store_true", help=argparse.SUPPRESS
+    )
     homes = parser.add_mutually_exclusive_group()
     homes.add_argument(
         "--home", type=Path, help="Explicit retained blank development data home"
@@ -448,12 +562,24 @@ def main() -> None:
         help="Internal browser inspection with the same backend; no native bridge",
     )
     args = cast("Arguments", cast("object", parser.parse_args()))
+    if args.trial_development != (policy is not None):
+        raise ValueError(
+            "Trial development requires an explicit mode and marked interpreter"
+        )
+    if policy is not None and args.browser:
+        raise ValueError("Trial development requires its native Windows host")
     source = source_root()
     home = args.home or (
         Path(tempfile.mkdtemp(prefix="scopecat-dev-"))
         if args.temporary
         else development_home(source)
     )
+    trial_development_policy(source=source, home=home, entry=Path(__file__).absolute())
+    if policy is not None:
+        runtime = ApplicationRuntime(home)
+        prepare_application(runtime, source, policy.home / "development/resources")
+        if runtime.status().state != "stopped":
+            raise ValueError("Trial development requires a prepared and stopped trial")
     try:
         if sys.platform == "darwin" and not args.browser:
             from scripts.app_build.dev_host import enter_host

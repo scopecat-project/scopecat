@@ -261,6 +261,12 @@ SCOPECAT_LOCATOR_HOME="$TRIAL_LOCATOR" \
   "$TRIAL_NATIVE" --home "$TRIAL_HOME" --trial-window-probe
 ```
 
+The probe requires an empty isolated data space. It saves a temporary fixture
+operator through Settings before enabling the simulation source and creating the
+virtual VNA, then clears that operator through Settings before testing the
+missing-operator close and recovery paths. This setup uses the normal UI
+permissions; it does not relax device or source mutation requirements.
+
 Do not substitute an ordinary or source interpreter. On Mac the native mode
 checks `NSBundle` against the trial's unique ID before any state access. The
 packaged probe additionally verifies the reviewed Cocoa implementation and uses
@@ -273,3 +279,52 @@ for existing or dangling symlinks/junctions, including log, lock and report file
 An unreadable subtree is a failure, not a successful check. These entry checks
 are not an OS sandbox for arbitrary Python code or concurrent filesystem
 replacement. Keep all trial artifacts/data separate from existing installations.
+
+
+## Windows isolated source-lifecycle test
+
+The hidden `scripts.dev --trial-development` mode is only for an explicitly
+approved, fresh Windows trial. It tests the source launcher's real console
+Ctrl+C and desktop exit lifecycle, not normal first-time source preparation.
+Ordinary source development defaults remain unchanged. Do not use this mode
+with an existing user application, a source venv or a release interpreter.
+
+Use a clean checkout at the trial policy's fixed `HOME/../source` path. Its Git
+HEAD must equal the packaged payload's clean public commit. Prepare the trial
+through its native launcher first and confirm it is stopped. Retain the
+`pnpm install --frozen-lockfile` preparation log for that source: the test mode
+requires existing dependencies and does not prove their lock identity by checking
+that files exist. Use the repository's `.node-version`; the selected Node must
+support native loading of `vite.config.ts`. A configuration-load failure leaves
+Ctrl+C qualification untested, even if the installed Vite package accepts that
+Node version. Neither this mode nor its Vite child installs dependencies or
+rebuilds payloads. It uses the packaged, reviewed native backend. Host build/cache
+files, Vite cache and application logs remain under the trial home; source and
+its existing frontend dependencies remain in the sibling checkout.
+
+After inspecting the package policy and exact paths, use its recorded values in
+a dedicated visible console. The following variable values are placeholders,
+not a command to run against an arbitrary existing directory:
+
+```powershell
+$Trial = 'C:\Users\YOUR_USER\scopecat-trials\FRESH_TRIAL'
+$env:SCOPECAT_LOCATOR_HOME = "$Trial\home\locator"
+$env:SCOPECAT_TRIAL_DEVELOPMENT = 'EXACT_ID_FROM_TRIAL_POLICY'
+Remove-Item Env:PYTHONHOME, Env:PYTHONPATH, Env:SCOPECAT_DAEMON_URL, Env:SCOPECAT_DEV_NATIVE_HOST -ErrorAction SilentlyContinue
+Set-Location "$Trial\source"
+& "$Trial\Scopecat\resources\python\python.exe" -E -B -m scripts.dev --trial-development --home "$Trial\home\data"
+```
+
+The outer packaged Python and native source host share that console. The host
+reentry preserves the explicit mode, home and locator, and a missing native
+reentry marker fails rather than spawning another host. The Vite child checks its
+inherited mode, locator and endpoint before loading source or dependencies.
+Missing/mismatched context, path aliases, a different/dirty source commit or an
+unprepared/running trial must be corrected before trying a new launch.
+
+Keep the console transcript, owned process identities and exact candidate SHA
+with the observed result. Exercise cancellation and then a fresh Ctrl+C through
+that console. A programmatic closing callback or a direct SIGINT handler test is
+not evidence of the console interaction. If safe exit cannot be confirmed, retain
+the trial and its reports. Do not stop unrelated processes, delete data, or treat
+forced cleanup as successful exit qualification.
