@@ -1409,6 +1409,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instrument-sessions/{session_id}/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instrument Session Recovery */
+        get: operations["instrument_session_recovery_api_v1_instrument_sessions__session_id__recovery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instruments": {
         parameters: {
             query?: never;
@@ -7571,6 +7588,25 @@ export interface components {
             /** Configured Finish Available */
             configured_finish_available: boolean;
         };
+        /** InstrumentFinishRejection */
+        InstrumentFinishRejection: {
+            /**
+             * Kind
+             * @default instrument_finish_rejected
+             * @constant
+             */
+            kind: "instrument_finish_rejected";
+            /** Message */
+            message: string;
+            /** Operation Id */
+            operation_id: string;
+            /** Session Id */
+            session_id: string;
+        };
+        /** InstrumentFinishRejectionResponse */
+        InstrumentFinishRejectionResponse: {
+            detail: components["schemas"]["InstrumentFinishRejection"];
+        };
         /** InstrumentListView */
         InstrumentListView: {
             /**
@@ -7717,6 +7753,30 @@ export interface components {
             renewed_at: string;
             session_id: components["schemas"]["NonEmptyText"];
             setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /**
+         * InstrumentSessionRecoveryReceipt
+         * @description Read-only recovery facts; neither ownership nor physical-state assurance.
+         */
+        InstrumentSessionRecoveryReceipt: {
+            /** Active Operation Id */
+            active_operation_id: string | null;
+            /** Active Operation Kind */
+            active_operation_kind: ("apply" | "invoke" | "collect") | null;
+            /** Attention Reason */
+            attention_reason: string | null;
+            /** End Status */
+            end_status: ("closed" | "aborted") | null;
+            /** Has Unresolved Operations */
+            has_unresolved_operations: boolean;
+            /** Runtime Retained */
+            runtime_retained: boolean;
+            session_id: components["schemas"]["NonEmptyText"];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "attention_required" | "closed";
         };
         /**
          * InstrumentSpec
@@ -16521,6 +16581,15 @@ export interface operations {
                     "application/json": components["schemas"]["InstrumentSessionEndReceipt"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentFinishRejectionResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -16829,6 +16898,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstrumentStateReadback"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instrument_session_recovery_api_v1_instrument_sessions__session_id__recovery_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentSessionRecoveryReceipt"];
                 };
             };
             /** @description Validation Error */

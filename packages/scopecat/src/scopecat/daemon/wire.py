@@ -1195,6 +1195,19 @@ class InstrumentConfiguredDefaultsApplyCommand(_WireModel):
     operation_id: NonEmptyText
 
 
+class InstrumentSessionRecoveryReceipt(_WireModel):
+    """Read-only recovery facts; neither ownership nor physical-state assurance."""
+
+    session_id: NonEmptyText
+    state: Literal["active", "attention_required", "closed"]
+    end_status: Literal["closed", "aborted"] | None
+    attention_reason: str | None
+    active_operation_id: str | None
+    active_operation_kind: Literal["apply", "invoke", "collect"] | None
+    runtime_retained: bool
+    has_unresolved_operations: bool
+
+
 class InstrumentSessionEndReceipt(_WireModel):
     session_id: NonEmptyText
     status: Literal["closed", "aborted"]
@@ -1257,6 +1270,7 @@ __all__ = [
     "InstrumentSessionLeaseReceipt",
     "InstrumentSessionOpenCommand",
     "InstrumentSessionOpenReceipt",
+    "InstrumentSessionRecoveryReceipt",
     "MeasurementAnalysisInputPayload",
     "MeasurementFlushCommand",
     "MeasurementFlushReceipt",

@@ -3,7 +3,13 @@ import {
   releaseDeviceClose,
   type DeviceCloseStatus,
 } from "../instruments/device-close";
-import { prepareLaunchClose, releaseLaunchClose } from "../launch/launch-close-barrier";
+import {
+  launchCloseSources,
+  prepareLaunchClose,
+  releaseLaunchClose,
+} from "../launch/launch-close-barrier";
+import { draftLocation } from "../launch/draft-location";
+import { navigate } from "../../lib/navigation";
 import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState } from "react";
 import type { components } from "../../api-schema";
@@ -57,6 +63,9 @@ export interface NotebookJourneyStatus {
 }
 
 interface DesktopAPI {
+  close_preflight_status?(): Promise<CloseReview | null>;
+  show_close_blocker?(requestId: string, windowId: string): Promise<void>;
+  cancel_close_preflight?(requestId: string): Promise<boolean>;
   complete_close_preflight?(
     requestId: string,
     status: DeviceCloseStatus | "pending",
@@ -104,6 +113,11 @@ interface DesktopAPI {
   create_source(parent: string, name: string): Promise<string>;
   prepare_author_environment(directory: string): Promise<string>;
   create_author_environment(directory: string, rebuild?: boolean): Promise<string>;
+}
+
+interface CloseReview {
+  requestId: string;
+  windows: { windowId: string; label: string; status: string }[];
 }
 
 interface ExitWork {
@@ -178,8 +192,14 @@ export function DesktopSession() {
   const [waiting, setWaiting] = useState(false);
   const [report, setReport] = useState<ExitReport>();
   const [closeNotice, setCloseNotice] = useState<string>();
+  const closeRequests = useRef(new Set<string>());
+  const cancelledRequests = useRef(new Set<string>());
+  const cancellingRequest = useRef<string | undefined>(undefined);
+  const [activeCloses, setActiveCloses] = useState<string[]>([]);
+  const [closeReview, setCloseReview] = useState<CloseReview | null>();
+  const [cancellingClose, setCancellingClose] = useState(false);
   useEffect(() => {
-    const active = new Set<string>();
+    const active = closeRequests.current;
     const preflight = (event: Event) => {
       const detail: unknown = (event as CustomEvent).detail;
       if (
@@ -193,40 +213,51 @@ export function DesktopSession() {
       const requestId = detail.requestId;
       if (active.has(requestId)) return;
       active.add(requestId);
+      setActiveCloses([...active]);
       closeInProgress.current = true;
       setCloseNotice("正在等待操作完成、释放设备控制并确认输入…");
+      // A responsive page may be waiting on a request rather than human review.
+      // Both waits are cancellable intentions, not evidence an operation was undone.
+      const acknowledgePending = async () => {
+        const api = window.pywebview?.api;
+        if (!api?.complete_close_preflight)
+          throw new Error("Native close acknowledgement is unavailable.");
+        await api.complete_close_preflight(requestId, "pending");
+      };
+      const acknowledged = acknowledgePending();
       void Promise.all([
         prepareLaunchClose(requestId),
-        prepareDeviceClose(requestId, async () => {
-          const api = window.pywebview?.api;
-          if (!api?.complete_close_preflight)
-            throw new Error("Native close acknowledgement is unavailable.");
-          await api.complete_close_preflight(requestId, "pending");
-        }),
-      ]).then(async (statuses) => {
-        const status: DeviceCloseStatus = statuses.includes("unknown")
-          ? "unknown"
-          : statuses.includes("blocked")
-            ? "blocked"
-            : statuses.includes("cancelled")
-              ? "cancelled"
-              : "saved";
-        if (!active.has(requestId)) return;
-        try {
-          const api = window.pywebview?.api;
-          if (!api?.complete_close_preflight)
-            throw new Error("Native close acknowledgement is unavailable.");
-          await api.complete_close_preflight(requestId, status);
-          if (active.has(requestId) && status !== "saved" && status !== "cancelled")
-            setCloseNotice(
-              "窗口已保留：设备控制或输入尚未确认安全交接。请处理页面中的失败或未知结果后再关闭。",
-            );
-        } catch (failure) {
-          // Only the host can release a close barrier. A failed reply is not permission to close.
+        prepareDeviceClose(requestId, () => acknowledged),
+        acknowledged.then(() => "saved" as const),
+      ])
+        .then(async (statuses) => {
+          const status: DeviceCloseStatus = statuses.includes("unknown")
+            ? "unknown"
+            : statuses.includes("blocked")
+              ? "blocked"
+              : statuses.includes("cancelled")
+                ? "cancelled"
+                : "saved";
+          if (!active.has(requestId)) return;
+          try {
+            const api = window.pywebview?.api;
+            if (!api?.complete_close_preflight)
+              throw new Error("Native close acknowledgement is unavailable.");
+            await api.complete_close_preflight(requestId, status);
+            if (active.has(requestId) && status !== "saved" && status !== "cancelled")
+              setCloseNotice(
+                "窗口已保留：设备控制或输入尚未确认安全交接。请处理页面中的失败或未知结果后再关闭。",
+              );
+          } catch (failure) {
+            // Only the host can release a close barrier. A failed reply is not permission to close.
+            if (active.has(requestId))
+              setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
+          }
+        })
+        .catch((failure) => {
           if (active.has(requestId))
             setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
-        }
-      });
+        });
     };
     const release = (event: Event) => {
       const detail: unknown = (event as CustomEvent).detail;
@@ -237,23 +268,97 @@ export function DesktopSession() {
         typeof detail.requestId !== "string"
       )
         return;
-      active.delete(detail.requestId);
+      if (!active.delete(detail.requestId)) return;
+      setActiveCloses([...active]);
+      setCloseReview(undefined);
+      if (cancellingRequest.current === detail.requestId) {
+        cancellingRequest.current = undefined;
+        setCancellingClose(false);
+      }
       closeInProgress.current = active.size > 0;
       releaseLaunchClose(detail.requestId);
       releaseDeviceClose(detail.requestId);
+      const cancelled = cancelledRequests.current.delete(detail.requestId);
       setCloseNotice(
-        "message" in detail && typeof detail.message === "string" ? detail.message : undefined,
+        "message" in detail && typeof detail.message === "string" && detail.message
+          ? detail.message
+          : cancelled
+            ? "已取消本次关闭等待。已提交的保存或设备操作没有撤销，仍需核查结果。"
+            : undefined,
       );
     };
     window.addEventListener("scopecat:close-preflight", preflight);
     window.addEventListener("scopecat:close-release", release);
     return () => {
+      for (const requestId of active) {
+        releaseLaunchClose(requestId);
+        releaseDeviceClose(requestId);
+      }
       active.clear();
       closeInProgress.current = false;
       window.removeEventListener("scopecat:close-preflight", preflight);
       window.removeEventListener("scopecat:close-release", release);
     };
   }, []);
+  const cancelCloseWait = async () => {
+    const requestId = closeReview?.requestId ?? activeCloses[0];
+    const api = window.pywebview?.api;
+    if (
+      !requestId ||
+      !api?.cancel_close_preflight ||
+      cancellingRequest.current === requestId ||
+      closeReview === null
+    )
+      return;
+    cancellingRequest.current = requestId;
+    setCancellingClose(true);
+    cancelledRequests.current.add(requestId);
+    let accepted = false;
+    try {
+      accepted = await api.cancel_close_preflight(requestId);
+      if (!accepted && closeRequests.current.has(requestId)) {
+        cancelledRequests.current.delete(requestId);
+        setCloseNotice("本次关闭已离开确认阶段，未撤销任何操作。请核查当前结果。");
+      }
+    } catch (failure) {
+      cancelledRequests.current.delete(requestId);
+      if (closeRequests.current.has(requestId))
+        setCloseNotice(`取消关闭等待未确认：${String(failure)}`);
+    } finally {
+      if (!accepted && cancellingRequest.current === requestId) {
+        cancellingRequest.current = undefined;
+        setCancellingClose(false);
+      }
+    }
+  };
+  useEffect(() => {
+    const cancel = () => void cancelCloseWait();
+    window.addEventListener("scopecat:cancel-close-wait", cancel);
+    return () => window.removeEventListener("scopecat:cancel-close-wait", cancel);
+  });
+  useEffect(() => {
+    const api = window.pywebview?.api;
+    if (!activeCloses.length || !api?.close_preflight_status) return;
+    const lifecycle: { disposed: boolean; timer?: ReturnType<typeof setTimeout> } = {
+      disposed: false,
+    };
+    const refresh = async () => {
+      try {
+        const next = await api.close_preflight_status?.();
+        if (!lifecycle.disposed && (!next || closeRequests.current.has(next.requestId)))
+          setCloseReview(next ?? null);
+      } catch (failure) {
+        if (!lifecycle.disposed) setCloseNotice(`无法定位关闭等待窗口：${String(failure)}`);
+      } finally {
+        if (!lifecycle.disposed) lifecycle.timer = setTimeout(() => void refresh(), 500);
+      }
+    };
+    void refresh();
+    return () => {
+      lifecycle.disposed = true;
+      clearTimeout(lifecycle.timer);
+    };
+  }, [activeCloses]);
   useEffect(() => {
     if (!open || !window.pywebview) return;
     const lifecycle: { disposed: boolean; timer?: ReturnType<typeof setTimeout> } = {
@@ -368,13 +473,92 @@ export function DesktopSession() {
     }
   };
 
+  const closeControls = (
+    <>
+      {activeCloses.length > 0 &&
+        closeReview !== null &&
+        window.pywebview?.api.cancel_close_preflight && (
+          <section aria-label="关闭等待窗口" className="grid gap-2">
+            <p>取消仅撤销本次关闭意图，不会撤销已提交的保存或设备操作。</p>
+            {closeReview?.windows.map((view) => (
+              <div key={view.windowId} className="flex items-center gap-2">
+                <span>
+                  {view.label} · {view.status === "pending" ? "等待确认或操作结果" : view.status}
+                </span>
+                <button
+                  className={secondaryButton}
+                  onClick={() => {
+                    void window.pywebview?.api
+                      .show_close_blocker?.(closeReview.requestId, view.windowId)
+                      .catch((failure) => setCloseNotice(`定位窗口失败：${String(failure)}`));
+                  }}
+                >
+                  定位窗口
+                </button>
+              </div>
+            ))}
+            <button
+              className={secondaryButton}
+              disabled={cancellingClose}
+              onClick={() => void cancelCloseWait()}
+            >
+              取消本次关闭等待
+            </button>
+          </section>
+        )}
+      {closeNotice &&
+        launchCloseSources().map((source) => (
+          <div key={JSON.stringify(source)}>
+            <span>
+              未确认保存：{source.workspace} / {source.experiment} / {source.draft}{" "}
+            </span>
+            {source.canReturn ? (
+              <button
+                className={secondaryButton}
+                disabled={activeCloses.length > 0}
+                onClick={() => {
+                  const current = launchCloseSources().find(
+                    (item) =>
+                      item.workspace === source.workspace &&
+                      item.experiment === source.experiment &&
+                      item.draft === source.draft,
+                  );
+                  if (closeRequests.current.size || !current?.canReturn) {
+                    setCloseNotice("草稿状态已改变，请在当前工作区核查；未丢弃任何本地输入。");
+                    return;
+                  }
+                  const url = draftLocation({
+                    workspaceId: source.workspace,
+                    experiment: source.experiment,
+                    draftId: source.draft,
+                  });
+                  url.hash = "launch";
+                  url.searchParams.set("preparation", "1");
+                  for (const key of ["procedure", "workbench", "run", "task"])
+                    url.searchParams.delete(key);
+                  navigate(url);
+                }}
+              >
+                返回此草稿
+              </button>
+            ) : (
+              <p>
+                本地输入仍保留在此窗口，但原编辑页已不可用。请保留窗口并恢复原工作区后核查，不要刷新页面。
+              </p>
+            )}
+          </div>
+        ))}
+    </>
+  );
+
   return (
     <>
-      {closeNotice && (
+      {closeNotice && !open && (
         <p role="status" className="border-b border-line bg-panel px-4 py-2 text-sm">
           {closeNotice}
         </p>
       )}
+      {!open && <div className="px-4 text-sm">{closeControls}</div>}
       <Dialog.Root
         open={open}
         onOpenChange={(next) => {
@@ -425,6 +609,8 @@ export function DesktopSession() {
                 <p>Finishing {report.file_operations} file operations.</p>
               )}
               {progress && <p role="status">{progress}</p>}
+              {closeNotice && <p role="status">{closeNotice}</p>}
+              {closeControls}
               {waiting && (
                 <p role="status">
                   Automatic quit is enabled. Waiting does not answer reviews, resolve faults, or

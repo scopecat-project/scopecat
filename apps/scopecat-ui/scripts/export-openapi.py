@@ -204,6 +204,7 @@ _OPERATIONS = {
     ("/api/v1/instrument-sessions/{session_id}/attention", "post"),
     ("/api/v1/instrument-sessions/{session_id}/close", "post"),
     ("/api/v1/instrument-sessions/{session_id}/heartbeat", "post"),
+    ("/api/v1/instrument-sessions/{session_id}/recovery", "get"),
     (
         "/api/v1/instrument-sessions/{session_id}/instruments/{instrument_id}/collect",
         "post",

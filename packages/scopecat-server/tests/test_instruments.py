@@ -4150,3 +4150,213 @@ def test_direct_measurement_title_is_optional_and_not_identity() -> None:
     # Persisted selections without the new field continue to parse.
     old_payload = legacy.model_dump(exclude={"title"})
     assert DirectMeasurementSave.model_validate(old_payload) == legacy
+
+
+def test_session_recovery_is_read_only_and_distinguishes_closed(tmp_path: Path) -> None:
+    provider = _TrackingProvider(_ResyncDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="recovery-read-only",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        control = runtime.application.executor._control
+        before = control.get_instrument_session(opened.session_id)
+        driver = cast("_ResyncDriver", provider.drivers[0])
+        reads = driver.read_count
+        path = f"/api/v1/instrument-sessions/{opened.session_id}/recovery"
+        response = transport.get(path)
+        assert response.status_code == 200
+        assert response.json()["state"] == "active"
+        assert response.json()["runtime_retained"] is True
+        assert response.json()["has_unresolved_operations"] is False
+        assert control.get_instrument_session(opened.session_id) == before
+        assert driver.read_count == reads
+        assert driver.disconnect_count == 0
+        daemon.close_instrument_session(opened.session_id)
+        closed = transport.get(path).json()
+        assert closed["state"] == "closed"
+        assert closed["end_status"] == "closed"
+        assert closed["runtime_retained"] is False
+        assert closed["has_unresolved_operations"] is False
+        assert (
+            transport.get("/api/v1/instrument-sessions/missing/recovery").status_code
+            == 404
+        )
+
+
+def test_session_recovery_retains_unfinished_finish_as_unknown(tmp_path: Path) -> None:
+    from scopecat.control.models import DurableEventInput
+
+    provider = _TrackingProvider(_ResyncDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="recovery-unfinished-finish",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        control = runtime.application.executor._control
+        with control.write_transaction() as connection:
+            control.append_event_in_transaction(
+                connection,
+                DurableEventInput(
+                    kind="instrument_session_finish_selected",
+                    payload={"session_id": opened.session_id, "mode": "keep_current"},
+                ),
+            )
+        daemon.close_instrument_session(opened.session_id)
+        response = transport.get(
+            f"/api/v1/instrument-sessions/{opened.session_id}/recovery"
+        )
+        assert response.status_code == 200
+        assert response.json()["state"] == "closed"
+        assert response.json()["has_unresolved_operations"] is True
+
+
+def test_finish_rejection_is_structured_only_before_selection(tmp_path: Path) -> None:
+    from scopecat.control.models import DurableEventInput
+
+    with (
+        _runtime(tmp_path, _TrackingProvider(_ResyncDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="rejected-finish-open",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        command = {"operation_id": "rejected-finish", "mode": "configured_finish"}
+        url = f"/api/v1/instrument-sessions/{session.session_id}/finish"
+        rejected = transport.post(url, json=command)
+        assert rejected.status_code == 409
+        assert rejected.json()["detail"] == {
+            "kind": "instrument_finish_rejected",
+            "session_id": session.session_id,
+            "operation_id": command["operation_id"],
+            "message": "no configured finish action for every selected device",
+        }
+        control = runtime.application.executor._control
+        with control.write_transaction() as connection:
+            selected = connection.execute(
+                "SELECT 1 FROM durable_events WHERE kind=? "
+                "AND json_extract(payload_json, '$.session_id')=?",
+                ("instrument_session_finish_selected", session.session_id),
+            ).fetchone()
+            assert selected is None
+            # Simulate an admitted request with a now-unavailable finish scope.
+            control.append_event_in_transaction(
+                connection,
+                DurableEventInput(
+                    kind="instrument_session_finish_selected",
+                    payload={"session_id": session.session_id, **command},
+                ),
+            )
+        admitted = transport.post(url, json=command)
+        assert admitted.status_code == 409
+        assert isinstance(admitted.json()["detail"], str)
+        assert "no configured finish action" in admitted.json()["detail"]
+        alternate = transport.post(
+            url, json={"operation_id": "new-finish", "mode": "keep_current"}
+        )
+        assert alternate.status_code == 409
+        assert "already fixed" in alternate.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "kind", ["instrument_collect_finished", "instrument_session_finish_selected"]
+)
+def test_recovery_uncertainty_requires_later_explicit_resolution(
+    tmp_path: Path, kind: str
+) -> None:
+    from scopecat.control.models import DurableEventInput
+
+    provider = _TrackingProvider(_ResyncDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="recovery-resolution",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        control = runtime.application.executor._control
+        with control.write_transaction() as connection:
+            control.append_event_in_transaction(
+                connection,
+                DurableEventInput(
+                    kind=kind,
+                    payload={"session_id": opened.session_id, "status": "unknown"},
+                ),
+            )
+        path = f"/api/v1/instrument-sessions/{opened.session_id}/recovery"
+        assert transport.get(path).json()["has_unresolved_operations"] is True
+        control.mark_instrument_session_unknown(
+            opened.session_id, reason="test-unknown"
+        )
+        assert transport.get(path).json()["state"] == "attention_required"
+        runtime.application.instruments.resolve_attention(opened.session_id)
+        recovered = transport.get(path).json()
+        assert recovered["state"] == "closed"
+        assert recovered["end_status"] == "aborted"
+        assert recovered["has_unresolved_operations"] is False
+
+
+def test_closed_recovery_does_not_erase_unknown_operation_evidence(
+    tmp_path: Path,
+) -> None:
+    from scopecat.control.models import DurableEventInput
+
+    provider = _TrackingProvider(_ResyncDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="recovery-closed-unknown",
+                actor="alice",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        # Model the durable crash gap: finished-unknown persisted, quarantine absent.
+        control = runtime.application.executor._control
+        with control.write_transaction() as connection:
+            control.append_event_in_transaction(
+                connection,
+                DurableEventInput(
+                    kind="instrument_apply_finished",
+                    payload={"session_id": opened.session_id, "status": "unknown"},
+                ),
+            )
+        daemon.close_instrument_session(opened.session_id)
+        recovered = transport.get(
+            f"/api/v1/instrument-sessions/{opened.session_id}/recovery"
+        ).json()
+        assert recovered["state"] == "closed"
+        assert recovered["active_operation_id"] is None
+        assert recovered["has_unresolved_operations"] is True

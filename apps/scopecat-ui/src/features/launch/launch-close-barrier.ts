@@ -1,16 +1,35 @@
 /** Window-owned protection for experiment input; this is not execution ownership. */
 export type LaunchCloseStatus = "saved" | "blocked" | "unknown";
+export interface LaunchCloseSource {
+  workspace: string;
+  experiment: string;
+  draft: string;
+  canReturn: boolean;
+}
 export interface LaunchCloseParticipant {
   freeze(): void;
   flush(): Promise<LaunchCloseStatus>;
   saved(): boolean;
+  sources?(): LaunchCloseSource[];
 }
 const participants = new Map<object, LaunchCloseParticipant>();
-const requests = new Map<string, Promise<LaunchCloseStatus>>();
+const requests = new Map<
+  string,
+  {
+    result: Promise<LaunchCloseStatus>;
+    finish(status: LaunchCloseStatus): void;
+  }
+>();
 let generation = 0;
 
 export function launchCloseBlocked() {
   return requests.size > 0;
+}
+
+export function launchCloseSources(): LaunchCloseSource[] {
+  return [...participants.values()].flatMap((participant) =>
+    participant.saved() ? [] : (participant.sources?.() ?? []),
+  );
 }
 
 export function retainLaunchCloseParticipant(key: object, participant: LaunchCloseParticipant) {
@@ -30,12 +49,12 @@ export function retainLaunchCloseParticipant(key: object, participant: LaunchClo
 
 export function prepareLaunchClose(requestId: string): Promise<LaunchCloseStatus> {
   const existing = requests.get(requestId);
-  if (existing) return existing;
+  if (existing) return existing.result;
   let finish!: (status: LaunchCloseStatus) => void;
   const result = new Promise<LaunchCloseStatus>((resolve) => {
     finish = resolve;
   });
-  requests.set(requestId, result); // Fence mutations synchronously, before any flush awaits.
+  requests.set(requestId, { result, finish }); // Fence mutations synchronously, before any flush awaits.
   const selected = [...participants.values()];
   const observed = generation;
   try {
@@ -58,6 +77,8 @@ export function prepareLaunchClose(requestId: string): Promise<LaunchCloseStatus
 }
 
 export function releaseLaunchClose(requestId: string) {
+  // End only the close wait. Retained input and its in-flight save keep their identity.
+  requests.get(requestId)?.finish("unknown");
   requests.delete(requestId);
 }
 

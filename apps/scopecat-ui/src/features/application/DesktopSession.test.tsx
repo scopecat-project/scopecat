@@ -331,7 +331,10 @@ it.each(["blocked", "unknown"] as const)(
       );
     });
     await waitFor(() =>
-      expect(complete_close_preflight).toHaveBeenCalledExactlyOnceWith("mixed-result", failure),
+      expect(complete_close_preflight.mock.calls).toEqual([
+        ["mixed-result", "pending"],
+        ["mixed-result", failure],
+      ]),
     );
     expect(screen.getByRole("status")).toHaveTextContent("窗口已保留");
     expect(screen.getByRole("status")).toHaveTextContent("失败或未知结果");

@@ -63,11 +63,24 @@ class DesktopAPI:
         self.open_saved_measurement: Callable[[str], None] = lambda _id: None
         self.open_device: Callable[[str], None] = lambda _id: None
         self.close_reply: Callable[[str, str], None] = lambda _id, _status: None
+        self.close_review_status: Callable[[], dict[str, object] | None] = lambda: None
+        self.focus_close_review: Callable[[str, str], None] = lambda _id, _view: None
+        self.cancel_close_review: Callable[[str], bool] = lambda _id: False
 
     def complete_close_preflight(self, requestId: str, status: str) -> None:
         if status not in {"saved", "blocked", "unknown", "pending", "cancelled"}:
             raise ValueError("Invalid close preflight status")
         self.close_reply(requestId, status)
+
+    def close_preflight_status(self) -> dict[str, object] | None:
+        return self.close_review_status()
+
+    def show_close_blocker(self, requestId: str, windowId: str) -> None:
+        self.focus_close_review(requestId, windowId)
+
+    def cancel_close_preflight(self, requestId: str) -> bool:
+        """Cancel only the review intent, never an already submitted operation."""
+        return self.cancel_close_review(requestId)
 
     def new_window(self) -> None:
         with self._session.operation(allow_files=True):
@@ -699,6 +712,7 @@ class DesktopView:
     close_in_progress: bool = False
     close_authorized: bool = False
     close_finished: threading.Event = field(default_factory=threading.Event)
+    review_id: str = field(default_factory=lambda: uuid4().hex)
 
 
 class DesktopWindows:
@@ -722,6 +736,49 @@ class DesktopWindows:
         self._closing_certificate: tuple[str, tuple[DesktopView, ...]] | None = None
         self._certificate: tuple[str, tuple[DesktopView, ...]] | None = None
         self._confirmed_device_views: tuple[DesktopView, ...] = ()
+        self._review_request: str | None = None
+        self._review_cancelled = False
+
+    def _review_status(self) -> dict[str, object] | None:
+        with self._lock:
+            if self._certificate is None or self._review_request is None:
+                return None
+            request_id, views = self._certificate
+            return {
+                "requestId": request_id,
+                "windows": [
+                    {
+                        "windowId": view.review_id,
+                        "label": (
+                            f"Device: {view.device_id}"
+                            if view.device_id is not None
+                            else f"Scopecat window {index + 1}"
+                        ),
+                        "status": view.close_status or "checking",
+                    }
+                    for index, view in enumerate(views)
+                    if view.close_status != "saved"
+                ],
+            }
+
+    def _show_close_blocker(self, request_id: str, window_id: str) -> None:
+        with self._lock:
+            if self._certificate is None or self._review_request != request_id:
+                raise ValueError("This close review is no longer active")
+            view = next(
+                (item for item in self._certificate[1] if item.review_id == window_id),
+                None,
+            )
+            if view is None or view not in self._views:
+                raise ValueError("The requested close-review window is unavailable")
+        show_window(view.window)
+
+    def _cancel_close_review(self, request_id: str) -> bool:
+        with self._lock:
+            if self._review_request != request_id or self._session.closing.is_set():
+                return False
+            self._review_cancelled = True
+            return True
 
     def _clear_device_confirmation(self) -> None:
         with self._lock:
@@ -774,16 +831,30 @@ class DesktopWindows:
                 logging.getLogger(__name__).exception("Could not show retained view")
 
     def _reply(self, view: DesktopView, request_id: str, status: str) -> None:
+        reveal = False
         with self._lock:
             if (
                 view in self._views
                 and view.close_request == request_id
                 and view.close_status in {None, "pending"}
             ):
+                reveal = (
+                    status == "pending"
+                    and view.close_status is None
+                    and view.device_id is not None
+                )
                 view.close_status = status
                 view.close_reply_thread = threading.current_thread()
                 if status != "pending":
                     view.close_ready.set()
+        if reveal:
+            # A hidden controller must be reachable during review, not only on failure.
+            try:
+                show_window(view.window)
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Could not show close-review window"
+                )
 
     @staticmethod
     def _dispatch(view: DesktopView, event: str, detail: dict[str, str]) -> None:
@@ -836,6 +907,8 @@ class DesktopWindows:
                         )
                     if any(item.close_status == "cancelled" for item in views):
                         raise CloseCancelled
+                    if self._review_cancelled:
+                        raise CloseCancelled
                     if view.close_ready.is_set():
                         break
                     timed_out = time.monotonic() >= deadline
@@ -869,6 +942,8 @@ class DesktopWindows:
                 if not views or any(view not in self._views for view in views):
                     raise ValueError("The requested view is no longer available")
                 self._certificate = (request_id, views)
+                self._review_request = request_id
+                self._review_cancelled = False
                 for view in views:
                     view.close_request = request_id
                     view.close_status = None
@@ -894,6 +969,11 @@ class DesktopWindows:
             with self._lock:
                 if any(view.close_status != "saved" for view in views):
                     raise ValueError("The page changed while confirming saved input")
+                if self._review_cancelled:
+                    raise CloseCancelled
+                # Beyond this point the caller can submit shutdown. Cancellation
+                # must never claim to undo that operation or race its certificate.
+                self._review_request = None
                 self._remember_device_confirmation(
                     views, application=confirm_devices and selected is None
                 )
@@ -903,6 +983,8 @@ class DesktopWindows:
             message = str(error)
             raise
         finally:
+            with self._lock:
+                self._review_request = None
             for view in views:
                 with self._lock:
                     retain = view.close_authorized and view.close_status == "saved"
@@ -1114,6 +1196,9 @@ class DesktopWindows:
             api.close_reply = lambda request_id, status: self._reply(
                 view, request_id, status
             )
+            api.close_review_status = self._review_status
+            api.focus_close_review = self._show_close_blocker
+            api.cancel_close_review = self._cancel_close_review
 
             def close() -> bool:
                 if self._session.closing.is_set():

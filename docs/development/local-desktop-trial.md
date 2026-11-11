@@ -121,3 +121,29 @@ Local builds use ad-hoc signing, not a trusted/notarized release. Preserve start
 errors instead of changing macOS security settings. Source checks and browser
 simulations do not establish native editor, clipboard, dialog or window acceptance;
 record those observations separately in their owning issue.
+
+## Direct-control close recovery qualification
+
+For the #1492/#1493 follow-up, start with an empty isolated data space rather
+than pre-filling the operator. The trial-window probe covers the visible
+connection refusal, closing that empty controller, entering an operator in the
+same reopened controller, and using the actual saved-result button/desktop
+bridge. Its native closing callback is a program assertion, not evidence that a
+person clicked the operating system's close button.
+
+Keep the following evidence separate and bind it to the final candidate:
+
+- UI/service fault injection: a rejected request versus an unknown response,
+  preserved request identity, lost-session result retention, failed or pending
+  save/finish, cancelling only the close intent, and late responses.
+- Native WebView probe: real frontend controls and bridge, close-event callback,
+  repeated close/cancel, controller ownership release, and saved-result reuse.
+- Platform interaction: actual window X, application Quit and Windows source
+  launcher's console Ctrl+C. A JavaScript click or native API callback does not
+  qualify an OS input event. If safe input tools are unavailable, report that
+  boundary rather than substituting an auto-launching observer.
+
+Use a fresh fixed-home/fixed-locator trial for each native run. Keep existing
+trials and default data untouched. All fixtures must use simulation drivers;
+software shutdown and released ownership do not prove physical outputs stopped.
+These checks do not implement or qualify the separate emergency-exit proposal.

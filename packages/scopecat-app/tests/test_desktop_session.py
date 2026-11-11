@@ -603,6 +603,9 @@ def close_fixture() -> tuple[Mock, DesktopSession, DesktopWindows, list[DesktopV
         api.close_reply = lambda request, status, view=view: windows._reply(
             view, request, status
         )
+        api.close_review_status = windows._review_status
+        api.focus_close_review = windows._show_close_blocker
+        api.cancel_close_review = windows._cancel_close_review
         views.append(view)
     windows._views = views
     return runtime, session, windows, views
@@ -1645,3 +1648,83 @@ def test_user_cancel_never_hides_another_views_failed_close(
         ]
         assert len(messages) == 1
         assert "Input is not confirmed saved" in messages[0]
+
+
+def test_hidden_pending_window_can_be_located_and_cancelled_from_saved_view(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    runtime, session, windows, views = close_fixture()
+    views[1].device_id = "scope-a"
+    shown = Mock()
+    monkeypatch.setattr("scopecat_app.desktop.show_window", shown)
+    pending = threading.Event()
+    acknowledge(views[0])
+
+    def dispatch(script: str):
+        if "scopecat:close-preflight" in script:
+            request = views[1].close_request
+            assert request is not None
+            views[1].api.complete_close_preflight(request, "pending")
+            pending.set()
+
+    mock_window(views[1]).run_js.side_effect = dispatch
+    outcomes: list[object] = []
+    worker = threading.Thread(
+        target=lambda: outcomes.append(views[0].api.request_exit())
+    )
+    worker.start()
+    try:
+        assert pending.wait(2)
+        worker.join(windows.preflight_timeout * 3)
+        assert worker.is_alive(), "Responsive reviews do not expire by elapsed time"
+        request = views[0].close_request
+        assert request is not None
+        review = views[0].api.close_preflight_status()
+        assert review == {
+            "requestId": request,
+            "windows": [
+                {
+                    "windowId": views[1].review_id,
+                    "label": "Device: scope-a",
+                    "status": "pending",
+                }
+            ],
+        }
+        shown.assert_called_once_with(views[1].window)
+        views[0].api.show_close_blocker(request, views[1].review_id)
+        assert shown.call_count == 2
+        with pytest.raises(ValueError, match="no longer active"):
+            views[0].api.show_close_blocker("old", views[1].review_id)
+        assert not views[0].api.cancel_close_preflight("old")
+        assert views[0].api.cancel_close_preflight(request)
+    finally:
+        if views[0].close_request is not None:
+            views[0].api.cancel_close_preflight(views[0].close_request)
+        worker.join(2)
+    assert not worker.is_alive()
+    assert outcomes == ["cancelled"]
+    assert views[0].api.close_preflight_status() is None
+    assert not session.closing.is_set()
+    assert not windows._preflight_lock.locked()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    for view in views:
+        assert view.close_request is None
+        mock_window(view).destroy.assert_not_called()
+    # A submitted operation can later succeed; it cannot revive the cancelled quit.
+    views[1].api.complete_close_preflight(request, "saved")
+    assert not session.closing.is_set()
+    runtime.stop_if_idle.assert_not_called()
+
+
+def test_close_cancellation_is_not_available_after_preflight_hands_off_shutdown():
+    _runtime, _session, windows, views = close_fixture()
+    for view in views:
+        acknowledge(view)
+    with windows.preflight():
+        request = views[0].close_request
+        assert request is not None
+        assert views[0].api.close_preflight_status() is None
+        assert not views[0].api.cancel_close_preflight(request)
+        windows._validate_certificate()
+    assert not views[0].api.cancel_close_preflight(request)

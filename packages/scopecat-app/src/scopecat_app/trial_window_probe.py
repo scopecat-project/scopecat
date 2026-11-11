@@ -16,7 +16,8 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from importlib import import_module
 from importlib.metadata import distribution
 from importlib.util import find_spec
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     import psutil
 
     from scopecat.trial_policy import TrialPolicy
-    from scopecat_app.desktop import DesktopView, DesktopWindows
+    from scopecat_app.desktop import DesktopAPI, DesktopView, DesktopWindows
 
 
 def guard(home: Path) -> TrialPolicy:
@@ -279,6 +280,92 @@ def request_native_close(view: DesktopView) -> None:
 
 
 CONTROL_WINDOW_LABEL = "打开控制窗口"
+MISSING_ACTOR_NOTICE = "当前连接需要操作署名"
+
+
+BUTTON_ACTION = r"""(()=>{
+  const visible=node=>{
+    for(let e=node;e;e=e.parentElement){
+      const css=getComputedStyle(e);
+      if(e.hidden||e.getAttribute('aria-hidden')==='true'
+        ||css.display==='none'||css.visibility==='hidden'
+        ||css.visibility==='collapse')return false;
+    }
+    return true;
+  };
+  const targets=[...document.querySelectorAll('button')]
+    .filter(e=>e.textContent.trim()===LABEL&&visible(e));
+  const ready=targets.length===1&&!targets[0].matches(':disabled');
+  if(ACTION==='ready')return ready;
+  if(ACTION==='click'&&ready){targets[0].click();return true;}
+  throw new Error('Probe button is not uniquely ready');
+})()"""
+
+
+def button_script(label: str, action: str) -> str:
+    return BUTTON_ACTION.replace("LABEL", json.dumps(label)).replace(
+        "ACTION", json.dumps(action)
+    )
+
+
+def click_button(evaluate: Callable[[str], object], label: str) -> None:
+    """Use the rendered button, including its normal frontend bridge handler."""
+    wait(
+        lambda: evaluate(button_script(label, "ready")),
+        f"Missing unique enabled visible button: {label}",
+    )
+    evaluate(button_script(label, "click"))
+
+
+RECENT_RESULT_ACTION = r"""(()=>{
+  const targets=[...document.querySelectorAll('button[data-testid]')]
+    .filter(e=>e.getAttribute('data-testid')===TEST_ID);
+  const ready=targets.length===1&&!targets[0].matches(':disabled');
+  if(ACTION==='ready')return ready;
+  if(!ready)throw new Error('Probe recent result is not uniquely ready');
+  if(ACTION==='click'){targets[0].click();return true;}
+  if(ACTION==='selected')return targets[0].getAttribute('aria-pressed')==='true';
+  throw new Error('Unknown recent-result probe action');
+})()"""
+
+
+def recent_result_script(command_id: str, action: str) -> str:
+    return RECENT_RESULT_ACTION.replace(
+        "TEST_ID", json.dumps(f"recent-result-{command_id}")
+    ).replace("ACTION", json.dumps(action))
+
+
+def select_recent_result(evaluate: Callable[[str], object], command_id: str) -> None:
+    wait(
+        lambda: evaluate(recent_result_script(command_id, "ready")),
+        "Saved result is not in the actual recent-results controls",
+    )
+    evaluate(recent_result_script(command_id, "click"))
+    wait(
+        lambda: evaluate(recent_result_script(command_id, "selected")),
+        "Recent-results button did not select its exact measurement",
+    )
+
+
+@contextmanager
+def observe_saved_result_opens(api: DesktopAPI) -> Generator[list[str]]:
+    """Observe successful real host dispatch, never forge a bridge response.
+
+    A second request reuses the same view, so window identity alone cannot prove
+    that its frontend button and native bridge actually finished.
+    """
+    opened: list[str] = []
+    original = api.open_saved_measurement
+
+    def observed(record_id: str) -> None:
+        original(record_id)
+        opened.append(record_id)
+
+    api.open_saved_measurement = observed
+    try:
+        yield opened
+    finally:
+        api.open_saved_measurement = original
 
 
 def exercise(
@@ -297,12 +384,7 @@ def exercise(
         return bool(js(view, f"document.body.innerText.includes({json.dumps(value)})"))
 
     def button(view: DesktopView, label: str) -> None:
-        query = (
-            "[...document.querySelectorAll('button')].filter(e=>"
-            f"e.textContent.trim()==={json.dumps(label)} && !e.disabled)"
-        )
-        wait(lambda: js(view, f"{query}.length===1"), f"Missing unique enabled {label}")
-        js(view, f"{query}[0].click()")
+        click_button(lambda script: js(view, script), label)
 
     def fill(view: DesktopView, label: str, value: str) -> None:
         wait(
@@ -319,11 +401,12 @@ def exercise(
             response.raise_for_status()
             document = cast("dict[str, object]", response.json())
             assert document.get("items") == [], "Probe requires empty trial fixtures"
+        response = client.get("/api/v1/operator-settings")
+        response.raise_for_status()
+        assert response.json()["operator"] == "", (
+            "Probe requires an empty initial actor"
+        )
     ready(main)
-    navigate_workspace(lambda script: js(main, script), "设置 / Settings")
-    fill(main, "操作者名称", "Isolated native program probe")
-    button(main, "保存操作者")
-    wait(lambda: text(main, "操作者已保存"), "Operator save did not complete")
     navigate_workspace(
         lambda script: js(main, script), "设备与驱动 / Devices and drivers"
     )
@@ -337,8 +420,43 @@ def exercise(
     control = windows.latest
     ready(control)
     button(control, "连接")
-    wait(lambda: text(control, "交互会话已连接"), "Connection missing")
-    # A real native closing event, not synthetic preflight-success replies.
+    wait(lambda: text(control, MISSING_ACTOR_NOTICE), "Missing actor was not explained")
+    assert not text(control, "交互会话已连接")
+    # Programmatic native closing callback, not an OS titlebar click.
+    request_native_close(control)
+    wait(control.close_finished.is_set, "Rejected connection prevented window closure")
+    passed.append("missing-actor-rejection-native-closing-callback-completes")
+    previous = control
+    button(main, CONTROL_WINDOW_LABEL)
+    wait(
+        lambda: is_reopened_controller(windows.latest, main, previous),
+        "Rejected controller was not reopened for the same device",
+    )
+    control = windows.latest
+    ready(control)
+    button(control, "连接")
+    wait(
+        lambda: text(control, MISSING_ACTOR_NOTICE), "Reopened actor rejection missing"
+    )
+    fill(control, "操作者名称", "Isolated native program probe")
+    button(control, "保存操作者")
+    with httpx2.Client(base_url=base_url, trust_env=False, timeout=5) as client:
+
+        def actor_saved() -> bool:
+            response = client.get("/api/v1/operator-settings")
+            response.raise_for_status()
+            settings = cast("dict[str, object]", response.json())
+            return settings["operator"] == "Isolated native program probe"
+
+        wait(actor_saved, "Same-window operator settings did not persist")
+    assert windows.latest is control and not control.close_finished.is_set()
+    button(control, "连接")
+    wait(
+        lambda: text(control, "交互会话已连接"),
+        "Same-window connection recovery missing",
+    )
+    assert not text(control, MISSING_ACTOR_NOTICE)
+    passed.append("missing-actor-same-window-settings-and-connect-recovery")
     request_native_close(control)
     wait(control.close_finished.is_set, "Empty controller did not close")
     passed.append("empty-controller-native-closing-event-observed")
@@ -416,6 +534,19 @@ def exercise(
             )
             passed.append("repeated-close-one-dialog-cancel-keeps-pending-no-error")
         button(control, "保存所选结果")
+        if index == 0:
+            fill(control, "标题", "Cancelled synthetic title")
+            button(control, "取消")
+            wait(
+                lambda: (
+                    js(control, "document.querySelectorAll('[role=dialog]').length")
+                    == 0
+                ),
+                "Cancelled save dialog did not dismiss",
+            )
+            assert text(control, "待保存")
+            passed.append("cancel-save-keeps-pending-result")
+            button(control, "保存所选结果")
         fill(control, "标题", f"Native program result {index + 1}")
         button(control, "保存")
         wait(
@@ -432,11 +563,13 @@ def exercise(
         records = document["items"]
         assert len(records) == 2, "Probe requires fresh synthetic data"
         titles: dict[str, str] = {}
+        commands: dict[str, str] = {}
         for record in records:
             result = client.get(f"/api/v1/direct-measurements/{record['id']}")
             result.raise_for_status()
             detail = cast("dict[str, dict[str, str]]", result.json())
             titles[str(record["id"])] = detail["selection"]["title"]
+            commands[str(record["id"])] = detail["selection"]["command_id"]
     ids = [str(record["id"]) for record in records]
     assert set(titles.values()) == {
         "Native program result 1",
@@ -455,14 +588,32 @@ def exercise(
             f"Saved result {record_id} did not render its exact title",
         )
 
-    control.api.open_saved_measurement_window(ids[0])
-    a = windows.latest
-    result_ready(a, ids[0])
-    control.api.open_saved_measurement_window(ids[0])
-    assert windows.latest is a
-    control.api.open_saved_measurement_window(ids[1])
-    b = windows.latest
-    result_ready(b, ids[1])
+    with observe_saved_result_opens(control.api) as opened:
+
+        def open_result(record_id: str) -> DesktopView:
+            select_recent_result(
+                lambda script: js(control, script), commands[record_id]
+            )
+            before = len(opened)
+            button(control, "查看已保存结果")
+            wait(
+                lambda: len(opened) > before,
+                "Saved-result frontend button did not finish its native bridge call",
+            )
+            assert opened[before:] == [record_id], (
+                "Bridge dispatched a different result"
+            )
+            wait(
+                lambda: js(control, button_script("查看已保存结果", "ready")),
+                "Saved-result bridge promise did not settle",
+            )
+            result_ready(windows.latest, record_id)
+            return windows.latest
+
+        a = open_result(ids[0])
+        assert open_result(ids[0]) is a
+        b = open_result(ids[1])
+    passed.append("saved-result-frontend-button-native-bridge-round-trip")
     assert (
         b is not a
         and not control.close_finished.is_set()
@@ -557,6 +708,11 @@ def run(home: Path) -> None:
         "status": "failed",
         "scope": "native-window-program-assertions-not-visual",
         "trial": policy.identity,
+        "not_tested": [
+            "OS titlebar X or close-button pointer interaction",
+            "Windows development-launcher console Ctrl+C",
+            "Uncertain save or finish HTTP failure in the native application",
+        ],
     }
     guard(home)
     report_file = report.open("x", encoding="utf-8")

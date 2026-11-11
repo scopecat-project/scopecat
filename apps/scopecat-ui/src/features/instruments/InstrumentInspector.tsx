@@ -56,6 +56,8 @@ import { InstrumentExitDialog } from "./InstrumentExitDialog";
 import { type CurrentMeasurementResult } from "./CurrentMeasurement";
 import { MeasurementWorkbench, acquisitionTargets } from "./MeasurementWorkbench";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
+import { useInstrumentFinishRecovery } from "./instrument-finish-recovery";
+import { getInstrumentSessionRecovery } from "./instrument-session-recovery";
 
 type DraftValue = InstrumentPropertyDraft;
 
@@ -67,11 +69,16 @@ interface InstrumentInspectorProps {
   registeredDeviceId?: string;
   releaseUnconfirmed?: boolean;
   session?: InstrumentSession;
+  recoverySession?: InstrumentSession;
   sessionError?: string;
+  sessionErrorBlocksClose?: boolean;
   connectPending: boolean;
   closePending: boolean;
   onConnect: () => void;
   onClose: () => void;
+  onRecoveryFinished?: () => void;
+  onRestoreSession?: () => void;
+  restorePending?: boolean;
   onSessionLost: (message: string) => void;
   onDisconnectOwner: () => void;
   exitRequest?: number;
@@ -81,17 +88,17 @@ interface InstrumentInspectorProps {
 
 export function InstrumentInspector(props: InstrumentInspectorProps) {
   const [currentMeasurement, setCurrentMeasurement] = useState<CurrentMeasurementResult>();
-  const { instrument, session } = props;
+  const { instrument, session, recoverySession } = props;
   const instrumentId = instrument.instrument_id;
-  const connected = session?.instrument_ids.includes(instrumentId) ?? false;
+  const retainedSession = session ?? recoverySession;
   const description =
-    session?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
+    retainedSession?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
     instrument.description ??
     undefined;
   const targetKey = [...instrumentStateTargets(description).keys()];
   const inspectorKey = JSON.stringify([
     instrumentId,
-    connected ? session?.session_id : null,
+    retainedSession?.session_id ?? null,
     targetKey,
   ]);
   return (
@@ -112,11 +119,16 @@ function InstrumentInspectorContent({
   registeredDeviceId,
   releaseUnconfirmed = false,
   session,
+  recoverySession,
   sessionError,
+  sessionErrorBlocksClose = true,
   connectPending,
   closePending,
   onConnect,
   onClose,
+  onRecoveryFinished,
+  onRestoreSession,
+  restorePending = false,
   onSessionLost,
   onDisconnectOwner,
   onCloseProblem,
@@ -131,8 +143,24 @@ function InstrumentInspectorContent({
   const queryClient = useQueryClient();
   const instrumentId = instrument.instrument_id;
   const connected = session?.instrument_ids.includes(instrumentId) ?? false;
+  const retainedSession = session ?? recoverySession;
+  const finishRecovery = useInstrumentFinishRecovery(retainedSession?.session_id);
+  const finishFixed = !!finishRecovery.state && finishRecovery.state.phase !== "rejected";
+  const recovery = useQuery({
+    queryKey: ["instrument-session-recovery", recoverySession?.session_id],
+    queryFn: () => getInstrumentSessionRecovery(recoverySession!.session_id),
+    enabled: !!recoverySession && !session,
+    refetchInterval: 3000,
+  });
+  const recoverySessionClosed =
+    !recovery.isFetching &&
+    !recovery.error &&
+    recovery.data?.state === "closed" &&
+    !recovery.data.runtime_retained &&
+    !recovery.data.active_operation_id &&
+    !recovery.data.active_operation_kind;
   const description =
-    session?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
+    retainedSession?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
     instrument.description ??
     undefined;
   const sharedObservation = useQuery({
@@ -164,12 +192,23 @@ function InstrumentInspectorContent({
   const [invokeResults, setInvokeResults] = useState<Record<string, InstrumentInvokeReceipt>>({});
   const [outputTouched, setOutputTouched] = useState(false);
   const [showFinishChoice, setShowFinishChoice] = useState(false);
+  const [isolationReviewed, setIsolationReviewed] = useState(false);
   const [dismissedExitRequest, setDismissedExitRequest] = useState(exitRequest);
-  const finishChoiceOpen = showFinishChoice || (!!session && exitRequest !== dismissedExitRequest);
+  const finishChoiceOpen =
+    showFinishChoice || (!!retainedSession && exitRequest !== dismissedExitRequest);
   const dismissFinishChoice = () => {
     setShowFinishChoice(false);
     setDismissedExitRequest(exitRequest);
   };
+  useEffect(() => {
+    const cancel = () => {
+      finishRecovery.cancelWaiting();
+      if (finishChoiceOpen) setShowFinishChoice(true);
+      setDismissedExitRequest(exitRequest);
+    };
+    window.addEventListener("scopecat:device-close-cancelled", cancel);
+    return () => window.removeEventListener("scopecat:device-close-cancelled", cancel);
+  }, [exitRequest, finishChoiceOpen, finishRecovery]);
   const [collectionCollapsed, setCollectionCollapsed] = useState(false);
   const [recentMeasurements, setRecentMeasurements] = useState<CurrentMeasurementResult[]>([]);
   const markPreviousResult = (reason: string) => {
@@ -400,7 +439,9 @@ function InstrumentInspectorContent({
   });
   const resolveMutation = useMutation({
     mutationKey: ["device-control", instrumentId],
-    mutationFn: () => {
+    mutationFn: (originalSessionId?: string) => {
+      if (originalSessionId && originalSessionId === recoverySession?.session_id)
+        return resolveInstrumentAttention(originalSessionId);
       if (instrument.owner_kind !== "instrument_session" || !instrument.owner_id) {
         throw new Error("此待处理状态不属于交互会话。");
       }
@@ -408,6 +449,7 @@ function InstrumentInspectorContent({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instruments"] });
+      await queryClient.invalidateQueries({ queryKey: ["instrument-session-recovery"] });
     },
   });
 
@@ -502,14 +544,24 @@ function InstrumentInspectorContent({
     mutationError(collectMutation.error) ??
     mutationError(invokeMutation.error) ??
     mutationError(resolveMutation.error);
+  const closeError =
+    (sessionErrorBlocksClose ? sessionError : undefined) ??
+    mutationError(readMutation.error) ??
+    mutationError(applyMutation.error) ??
+    mutationError(configuredDefaultsMutation.error) ??
+    mutationError(collectMutation.error) ??
+    mutationError(invokeMutation.error) ??
+    mutationError(resolveMutation.error);
   const interactionPending =
     readMutation.isPending ||
     applyMutation.isPending ||
     configuredDefaultsMutation.isPending ||
     collectMutation.isPending ||
     invokeMutation.isPending;
+  const recoveryCloseAllowed =
+    recoverySessionClosed && !interactionPending && !resolveMutation.isPending;
   const interactionDisabled =
-    closePending || interactionPending || releaseUnconfirmed || finishChoiceOpen;
+    closePending || interactionPending || releaseUnconfirmed || finishChoiceOpen || finishFixed;
   const configuredDefaultsDisabled =
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
@@ -526,19 +578,21 @@ function InstrumentInspectorContent({
     Object.values(invokeResults).some((receipt) => receipt.status !== "invoked");
   useEffect(() => {
     onCloseProblem?.(
-      !!interactionError ||
+      !!closeError ||
         failedReceipt ||
         pendingMeasurements.length > 0 ||
         outputTouched ||
-        stagedCount > 0,
+        stagedCount > 0 ||
+        finishFixed,
     );
   }, [
-    interactionError,
+    closeError,
     failedReceipt,
     onCloseProblem,
     pendingMeasurements.length,
     outputTouched,
     stagedCount,
+    finishFixed,
   ]);
 
   return (
@@ -564,8 +618,10 @@ function InstrumentInspectorContent({
         connected={connected}
         releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connectPending}
+        connectDisabled={!!recoverySession}
         closePending={closePending}
         interactionPending={interactionPending}
+        recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
         refreshPending={readMutation.isPending}
         stateAvailable={declaredTargets.size > 0}
         configuredDefaultsVisible={hasConfiguredDefaults}
@@ -575,7 +631,18 @@ function InstrumentInspectorContent({
         resolvePending={resolveMutation.isPending}
         onConnect={onConnect}
         onClose={() => {
-          if (pendingMeasurements.length > 0 || outputTouched) setShowFinishChoice(true);
+          if (
+            finishFixed ||
+            pendingMeasurements.length > 0 ||
+            outputTouched ||
+            stagedCount > 0 ||
+            applyMutation.error ||
+            configuredDefaultsMutation.error ||
+            collectMutation.error ||
+            invokeMutation.error ||
+            failedReceipt
+          )
+            setShowFinishChoice(true);
           else onClose();
         }}
         onDisconnectOwner={onDisconnectOwner}
@@ -600,6 +667,110 @@ function InstrumentInspectorContent({
           {interactionError}
         </div>
       )}
+      {finishFixed && !finishChoiceOpen && (
+        <section className="grid gap-2 rounded border border-line p-3" aria-label="收尾结果待核查">
+          <p className="text-xs">
+            原收尾选择已提交，常规设备操作暂不可用。取消关闭等待不会取消动作；请核查原请求结果。
+          </p>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => setShowFinishChoice(true)}
+          >
+            核查原收尾结果
+          </button>
+        </section>
+      )}
+
+      {recoverySession && !session && (
+        <section className="grid gap-2 rounded border border-line p-3" aria-label="恢复原会话待办">
+          <h3 className="text-sm font-semibold">原会话已中断，结果与待办仍保留</h3>
+          <p className="text-xs">
+            近期结果、{pendingMeasurements.length} 条未保存结果和 {stagedCount}{" "}
+            项未发送设置仍属于原会话。
+            可选择原结果尝试保存，不会重新采集。后台若已释放回执，首次保存可能失败；已保存记录可按原身份核查。
+            当前设备输出与未确认操作不会因会话中断而变成已停止或已取消。
+          </p>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => setShowFinishChoice(true)}
+          >
+            核查原会话与保存待办
+          </button>
+          {recovery.isPending && <p role="status">正在只读核查原会话…</p>}
+          {recovery.error && (
+            <p role="alert">
+              无法核实原会话：{recovery.error.message}。未保存结果和未知操作仍保留。
+            </p>
+          )}
+          {recovery.data && (
+            <p className="text-xs" role="status">
+              {recovery.data.state === "closed"
+                ? "后台已确认原会话结束。"
+                : recovery.data.state === "active"
+                  ? "原会话仍在后台活动。"
+                  : "原会话仍需处理隔离，请先保存结果，再按现有入口核对设备。"}
+              {recovery.data.has_unresolved_operations
+                ? " 仍有未决动作，不能把关闭窗口视为动作已取消。"
+                : " 后台未登记未决动作；这不证明物理输出已停止。"}
+              {!recovery.data.runtime_retained &&
+                " 后台不再保留该会话的未保存回执，首次保存可能不可用。"}
+            </p>
+          )}
+          <button
+            type="button"
+            className={secondaryButton}
+            disabled={recovery.isFetching}
+            onClick={() => void recovery.refetch()}
+          >
+            重新核查原会话
+          </button>
+          {recovery.data?.state === "active" &&
+            !recovery.data.has_unresolved_operations &&
+            !finishFixed && (
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={restorePending || recovery.isFetching || !!recovery.error}
+                onClick={onRestoreSession}
+              >
+                恢复原会话控制
+              </button>
+            )}
+          {recovery.data?.state === "attention_required" && (
+            <div className="grid gap-2 border-t border-line pt-2">
+              <p className="text-xs">
+                请先核对设备和未确认操作。处理隔离沿用后台的隔离解除流程，可能清理原会话资源；不会补采或证明输出已停止。
+                请先尝试保存。若后台回执已释放，处理隔离也不能找回它；本页曲线和未保存标记仍保留，之后仍须明确处置。
+              </p>
+              <label className="text-xs">
+                <input
+                  type="checkbox"
+                  checked={isolationReviewed}
+                  disabled={resolveMutation.isPending || finishRecovery.state?.phase === "pending"}
+                  onChange={(event) => setIsolationReviewed(event.target.checked)}
+                />{" "}
+                已核查设备，理解处理隔离可能释放原会话的后台回执
+              </label>
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={
+                  !isolationReviewed ||
+                  resolveMutation.isPending ||
+                  finishRecovery.state?.phase === "pending" ||
+                  recovery.isFetching ||
+                  !!recovery.error
+                }
+                onClick={() => resolveMutation.mutate(recoverySession.session_id)}
+              >
+                处理原会话隔离（保留本页结果）
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {configuredDefaultsResult && (
         <p
@@ -621,9 +792,21 @@ function InstrumentInspectorContent({
         </div>
       )}
 
-      {finishChoiceOpen && session && (
+      {finishChoiceOpen && retainedSession && (
         <InstrumentExitDialog
-          sessionId={session.session_id}
+          sessionId={retainedSession.session_id}
+          finishRecovery={finishRecovery}
+          sessionUnavailable={!session}
+          recoveryCloseAllowed={recoveryCloseAllowed}
+          recoveryUnresolved={recovery.data?.has_unresolved_operations ?? true}
+          closeWaiting={exitRequest !== dismissedExitRequest}
+          reviewRequest={exitRequest}
+          onRecoveryFinished={() => {
+            setPendingMeasurements([]);
+            setOutputTouched(false);
+            dismissFinishChoice();
+            onRecoveryFinished?.();
+          }}
           pending={pendingMeasurements}
           stagedCount={stagedCount}
           problem={interactionError}
@@ -645,7 +828,8 @@ function InstrumentInspectorContent({
             setPendingMeasurements([]);
             setOutputTouched(false);
             dismissFinishChoice();
-            onClose();
+            if (recoverySession) onRecoveryFinished?.();
+            else onClose();
           }}
         />
       )}

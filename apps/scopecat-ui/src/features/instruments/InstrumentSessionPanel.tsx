@@ -18,8 +18,10 @@ export function InstrumentSessionPanel({
   connected,
   releaseUnconfirmed = false,
   connectPending,
+  connectDisabled = false,
   closePending,
   interactionPending,
+  recoveryBlocked = false,
   refreshPending,
   stateAvailable,
   configuredDefaultsVisible,
@@ -39,8 +41,10 @@ export function InstrumentSessionPanel({
   connected: boolean;
   releaseUnconfirmed?: boolean;
   connectPending: boolean;
+  connectDisabled?: boolean;
   closePending: boolean;
   interactionPending: boolean;
+  recoveryBlocked?: boolean;
   refreshPending: boolean;
   stateAvailable: boolean;
   configuredDefaultsVisible: boolean;
@@ -95,7 +99,13 @@ export function InstrumentSessionPanel({
             type="button"
             className={secondaryButton}
             onClick={onRefresh}
-            disabled={interactionPending || closePending || releaseUnconfirmed || !stateAvailable}
+            disabled={
+              interactionPending ||
+              recoveryBlocked ||
+              closePending ||
+              releaseUnconfirmed ||
+              !stateAvailable
+            }
             title={
               !stateAvailable
                 ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"
@@ -141,7 +151,7 @@ export function InstrumentSessionPanel({
           type="button"
           className={secondaryButton}
           onClick={onResolve}
-          disabled={!canResolve || resolvePending}
+          disabled={!canResolve || resolvePending || recoveryBlocked}
           title={canResolve ? "确认已隔离的交互会话并释放" : "请从所属运行流程处理此占用方"}
         >
           {resolvePending ? (
@@ -175,7 +185,7 @@ export function InstrumentSessionPanel({
             type="button"
             className={secondaryButton}
             onClick={onDisconnectOwner}
-            disabled={closePending}
+            disabled={closePending || recoveryBlocked}
             title="断开此后台服务持有的交互会话"
           >
             {closePending ? (
@@ -212,7 +222,13 @@ export function InstrumentSessionPanel({
           连接后可读取或调整仪器。完成后释放控制，让实验可以使用它。选中设备不会连接。
         </small>
       </div>
-      <button type="button" className={primaryButton} onClick={onConnect} disabled={connectPending}>
+      <button
+        type="button"
+        className={primaryButton}
+        onClick={onConnect}
+        disabled={connectPending || connectDisabled}
+        title={connectDisabled ? "请先核查原会话与保存待办，不能用新会话覆盖原结果。" : undefined}
+      >
         {connectPending ? <LoaderCircle className="animate-spin" size={14} /> : <Cable size={14} />}
         连接
       </button>

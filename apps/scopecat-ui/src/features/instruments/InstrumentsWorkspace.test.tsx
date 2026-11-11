@@ -90,6 +90,8 @@ vi.mock("./direct-measurement-api", () => ({
 }));
 
 import { getInstrumentFinishPlan, finishInstrumentSession } from "./instrument-finish-api";
+import { getInstrumentSessionRecovery } from "./instrument-session-recovery";
+vi.mock("./instrument-session-recovery", () => ({ getInstrumentSessionRecovery: vi.fn() }));
 vi.mock("./instrument-finish-api", () => ({
   getInstrumentFinishPlan: vi.fn(),
   finishInstrumentSession: vi.fn(),
@@ -103,6 +105,16 @@ beforeEach(() => {
   vi.mocked(finishInstrumentSession).mockResolvedValue({
     session_id: "session-1",
     status: "closed",
+  });
+  vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+    session_id: "session-1",
+    state: "closed",
+    end_status: "closed",
+    attention_reason: null,
+    active_operation_id: null,
+    active_operation_kind: null,
+    runtime_retained: false,
+    has_unresolved_operations: false,
   });
   vi.mocked(listDirectMeasurements).mockResolvedValue({ items: [], next_cursor: null });
   sessionStorage.clear();
@@ -1522,8 +1534,9 @@ describe("instrument workspace", () => {
       if (stage === "unmount") rendered.unmount();
       else await act(async () => vi.advanceTimersByTimeAsync(10_000));
       if (stage === "bridge") await act(async () => acknowledge());
-      expect(await result).toBe("blocked");
-      expect(screen.queryByRole("dialog", { name: "结束控制前的待办" })).not.toBeInTheDocument();
+      expect(await result).toBe(stage === "unmount" ? "unknown" : "blocked");
+      expect(!!screen.queryByRole("dialog", { name: "结束控制前的待办" })).toBe(stage === "review");
+      expect(!!screen.queryByRole("region", { name: "恢复结束确认" })).toBe(stage === "review");
       expect(finishInstrumentSession).not.toHaveBeenCalled();
       releaseDeviceClose("lost-review");
     },
@@ -1546,7 +1559,7 @@ describe("instrument workspace", () => {
     });
     await screen.findByRole("dialog", { name: "结束控制前的待办" });
     fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
-    expect(await screen.findByText(/保存失败：disk unavailable/)).toBeVisible();
+    expect(await screen.findByText(/保存尚未确认：disk unavailable/)).toBeVisible();
     expect(settled).not.toHaveBeenCalled();
     expect(closeInstrumentSession).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
@@ -3005,7 +3018,8 @@ function mockInventory(view: Awaited<ReturnType<typeof getInstruments>>) {
   return vi.mocked(getInstruments).mockResolvedValue(view);
 }
 
-vi.mock("../application/OperatorSettings", () => ({
+vi.mock("../application/OperatorSettings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../application/OperatorSettings")>()),
   readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "local-operator" })),
 }));
 
@@ -3192,3 +3206,494 @@ it("warns about a name shared with history without assuming physical identity", 
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
   expect(saveDevice).not.toHaveBeenCalled();
 });
+
+describe("connection rejection and retained session recovery", () => {
+  it("keeps empty attribution local, allows an empty window to close, and uses the updated setting", async () => {
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 0, operator: "" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ revision: 0, operator: "" })),
+    );
+    renderWorkspace("drive-source");
+    fireEvent.click(await screen.findByRole("button", { name: "连接" }));
+    expect(await screen.findByText(/当前连接需要操作署名/)).toBeVisible();
+    expect(await screen.findByRole("textbox", { name: "操作者名称" })).toBeVisible();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+    await act(async () => expect(await prepareDeviceClose("empty-actor")).toBe("saved"));
+    act(() => releaseDeviceClose("empty-actor"));
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "lab" });
+    await connectInstrument();
+    expect(openInstrumentSession).toHaveBeenCalledWith(
+      "drive-source",
+      "lab",
+      expect.anything(),
+      expect.any(String),
+    );
+    expect(screen.queryByRole("textbox", { name: "操作者名称" })).not.toBeInTheDocument();
+  });
+
+  it("releases a schema-rejected attempt even if native close began while the request was pending", async () => {
+    let reject!: (error: unknown) => void;
+    vi.mocked(openInstrumentSession).mockImplementationOnce(
+      () =>
+        new Promise((_, no) => {
+          reject = no;
+        }),
+    );
+    renderWorkspace("drive-source");
+    fireEvent.click(await screen.findByRole("button", { name: "连接" }));
+    await waitFor(() => expect(openInstrumentSession).toHaveBeenCalledTimes(1));
+    let outcome!: Promise<string>;
+    act(() => {
+      outcome = prepareDeviceClose("rejected-open");
+    });
+    await act(async () => {
+      reject(
+        new ApiError("body.actor: invalid", 422, [{ loc: ["body", "actor"], msg: "invalid" }]),
+      );
+      expect(await outcome).toBe("saved");
+    });
+    act(() => releaseDeviceClose("rejected-open"));
+    expect(await screen.findByText(/连接请求未被接纳/)).toBeVisible();
+    const previous = vi.mocked(openInstrumentSession).mock.calls[0]!;
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "updated" });
+    await connectInstrument();
+    const next = vi.mocked(openInstrumentSession).mock.calls[1]!;
+    expect(next[1]).toBe("updated");
+    expect(next[3]).not.toBe(previous[3]);
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("does not mistake a later schema rejection for proof that an earlier unknown open never ran", async () => {
+    vi.mocked(openInstrumentSession)
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockRejectedValueOnce(new ApiError("schema changed", 422, [{ loc: ["body", "actor"] }]));
+    renderWorkspace("drive-source");
+    fireEvent.click(await screen.findByRole("button", { name: "连接" }));
+    await screen.findByText("response lost");
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "other" });
+    fireEvent.click(screen.getByRole("button", { name: "用原请求核查连接结果" }));
+    await screen.findByText("schema changed");
+    await act(async () => expect(await prepareDeviceClose("unknown-open")).toBe("blocked"));
+    act(() => releaseDeviceClose("unknown-open"));
+    expect(vi.mocked(openInstrumentSession).mock.calls[1]).toEqual(
+      vi.mocked(openInstrumentSession).mock.calls[0],
+    );
+    expect(readOperatorSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the original open identity when an automatic retry ends in schema rejection", async () => {
+    vi.mocked(openInstrumentSession)
+      .mockRejectedValueOnce(new ApiError("transport unavailable"))
+      .mockRejectedValueOnce(new ApiError("schema changed", 422, [{ loc: ["body", "actor"] }]));
+    renderWorkspace("drive-source");
+    fireEvent.click(await screen.findByRole("button", { name: "连接" }));
+    await screen.findByText("schema changed");
+    expect(openInstrumentSession).toHaveBeenCalledTimes(2);
+    await act(async () => expect(await prepareDeviceClose("auto-unknown-open")).toBe("blocked"));
+    act(() => releaseDeviceClose("auto-unknown-open"));
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "other" });
+    fireEvent.click(screen.getByRole("button", { name: "用原请求核查连接结果" }));
+    await screen.findByText("交互会话已连接");
+    expect(vi.mocked(openInstrumentSession).mock.calls[2]).toEqual(
+      vi.mocked(openInstrumentSession).mock.calls[0],
+    );
+    expect(readOperatorSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["pending", "unknown"])(
+    "never bypasses a %s finish when returning to release control",
+    async (phase) => {
+      let resolve!: (value: Awaited<ReturnType<typeof finishInstrumentSession>>) => void;
+      if (phase === "pending")
+        vi.mocked(finishInstrumentSession).mockImplementationOnce(
+          () =>
+            new Promise((yes) => {
+              resolve = yes;
+            }),
+        );
+      else
+        vi.mocked(finishInstrumentSession).mockRejectedValueOnce(new Error("finish response lost"));
+      renderWorkspace("drive-source");
+      await connectInstrument();
+      fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
+        target: { value: "6000000000" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+      fireEvent.click(await screen.findByRole("button", { name: "保持当前状态并结束" }));
+      await waitFor(() => expect(finishInstrumentSession).toHaveBeenCalledTimes(1));
+      if (phase === "unknown") await screen.findByText(/finish response lost/);
+      fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Sample Collect" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+      await screen.findByRole("dialog", { name: "结束控制前的待办" });
+      expect(closeInstrumentSession).not.toHaveBeenCalled();
+      expect(finishInstrumentSession).toHaveBeenCalledTimes(1);
+      if (phase === "pending") {
+        await act(async () => resolve({ session_id: "session-1", status: "closed" }));
+        await screen.findByRole("button", { name: "确认结束控制" });
+      } else {
+        fireEvent.click(screen.getByRole("button", { name: "核查原收尾结果（保持当前状态）" }));
+      }
+      await waitFor(() =>
+        expect(finishInstrumentSession).toHaveBeenCalledTimes(phase === "pending" ? 1 : 2),
+      );
+      expect(vi.mocked(finishInstrumentSession).mock.calls.at(-1)).toEqual(
+        vi.mocked(finishInstrumentSession).mock.calls[0],
+      );
+    },
+  );
+
+  it("retains both results through session loss and saves original selections before confirming a read-only close", async () => {
+    vi.mocked(saveDirectMeasurement).mockImplementation(
+      async (selection) =>
+        ({ id: `saved-${selection.command_id}`, selection }) as Awaited<
+          ReturnType<typeof saveDirectMeasurement>
+        >,
+    );
+    const { ids } = await loseWithTwoResults();
+    expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "断开会话" })).toBeDisabled();
+    let outcome!: Promise<string>;
+    act(() => {
+      outcome = prepareDeviceClose("lost-results-close");
+    });
+    const dialog = await screen.findByRole("dialog", { name: "结束控制前的待办" });
+    expect(within(dialog).getByText("未保存结果：2")).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存全部未保存结果" }));
+    const confirm = within(dialog).getByRole("button", { name: "确认待办并关闭窗口" });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(
+      vi
+        .mocked(saveDirectMeasurement)
+        .mock.calls.map(([value]) => value.command_id)
+        .sort(),
+    ).toEqual(ids.sort());
+    expect(
+      vi
+        .mocked(saveDirectMeasurement)
+        .mock.calls.every(([value]) => value.session_id === "session-1"),
+    ).toBe(true);
+    fireEvent.click(confirm);
+    expect(await outcome).toBe("saved");
+    act(() => releaseDeviceClose("lost-results-close"));
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains failed saves and requires explicit discard after the old session is confirmed closed", async () => {
+    vi.mocked(saveDirectMeasurement).mockRejectedValue(
+      new ApiError("unsaved collection is no longer retained", 404),
+    );
+    await loseWithTwoResults();
+    fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
+    const dialog = await screen.findByRole("dialog", { name: "结束控制前的待办" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存全部未保存结果" }));
+    await waitFor(() => expect(within(dialog).getAllByText(/保存尚未确认/)).toHaveLength(2));
+    expect(within(dialog).getByText("未保存结果：2")).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+    expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    fireEvent.click(screen.getByRole("button", { name: "确认待办并关闭窗口" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "恢复原会话待办" })).not.toBeInTheDocument(),
+    );
+    expect(saveDirectMeasurement).toHaveBeenCalledTimes(2);
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("allows explicitly reviewed isolation recovery without silently discarding unsavable results", async () => {
+    vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+      session_id: "session-1",
+      state: "attention_required",
+      end_status: null,
+      attention_reason: "operation_unknown",
+      active_operation_id: null,
+      active_operation_kind: null,
+      runtime_retained: false,
+      has_unresolved_operations: true,
+    });
+    vi.mocked(saveDirectMeasurement).mockRejectedValue(
+      new ApiError("collection no longer retained", 404),
+    );
+    await loseWithTwoResults();
+    fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
+    await waitFor(() => expect(screen.getAllByText(/保存尚未确认/)).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+    const resolveIsolation = screen.getByRole("button", { name: "处理原会话隔离（保留本页结果）" });
+    expect(resolveIsolation).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "已核查设备，理解处理隔离可能释放原会话的后台回执" }),
+    );
+    vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+      session_id: "session-1",
+      state: "closed",
+      end_status: "aborted",
+      attention_reason: null,
+      active_operation_id: null,
+      active_operation_kind: null,
+      runtime_retained: false,
+      has_unresolved_operations: false,
+    });
+    fireEvent.click(resolveIsolation);
+    await waitFor(() =>
+      expect(resolveInstrumentAttention).toHaveBeenCalledExactlyOnceWith("session-1"),
+    );
+    await screen.findByText(/后台已确认原会话结束/);
+    expect(
+      screen
+        .getAllByTestId(/^recent-result-/)
+        .every((item) => item.textContent?.includes("待保存")),
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
+    expect(screen.getByText("未保存结果：2")).toBeVisible();
+    expect(screen.getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    fireEvent.click(screen.getByRole("button", { name: "确认待办并关闭窗口" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("requires fresh pending-result and historical-unknown choices before closing only the ended view", async () => {
+    vi.mocked(finishInstrumentSession).mockRejectedValueOnce(new Error("finish response lost"));
+    vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+      session_id: "session-1",
+      state: "closed",
+      end_status: "aborted",
+      attention_reason: null,
+      active_operation_id: null,
+      active_operation_kind: null,
+      runtime_retained: false,
+      has_unresolved_operations: true,
+    });
+    await loseWithTwoResults(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+      fireEvent.click(await screen.findByRole("checkbox", { name: /明确放弃这 2 条/ }));
+      fireEvent.click(screen.getByRole("button", { name: "保持当前状态并结束" }));
+      await screen.findByText(/finish response lost/);
+      fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+    let first!: Promise<string>;
+    act(() => {
+      first = prepareDeviceClose("historical-unknown-first");
+    });
+    await screen.findByRole("dialog", { name: "结束控制前的待办" });
+    const acknowledgement = screen.getByRole("checkbox", {
+      name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
+    });
+    const confirm = screen.getByRole("button", { name: "确认待办并关闭窗口" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    expect(confirm).toBeDisabled();
+    fireEvent.click(acknowledgement);
+    expect(confirm).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+    expect(await first).toBe("cancelled");
+    act(() => releaseDeviceClose("historical-unknown-first"));
+    let second!: Promise<string>;
+    act(() => {
+      second = prepareDeviceClose("historical-unknown-second");
+    });
+    await screen.findByRole("dialog", { name: "结束控制前的待办" });
+    expect(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ })).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
+      }),
+    ).not.toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "确认待办并关闭窗口" }));
+    expect(await second).toBe("saved");
+    act(() => releaseDeviceClose("historical-unknown-second"));
+    expect(finishInstrumentSession).toHaveBeenCalledTimes(1);
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+    expect(resolveInstrumentAttention).not.toHaveBeenCalled();
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
+    expect(
+      vi
+        .mocked(getInstrumentSessionRecovery)
+        .mock.results.every((result) => result.type === "return"),
+    ).toBe(true);
+  });
+
+  it("preserves a fixed unknown finish through explicitly reviewed isolation recovery", async () => {
+    vi.mocked(getInstrumentFinishPlan).mockResolvedValue({
+      actions: [],
+      configured_finish_available: true,
+    });
+    vi.mocked(finishInstrumentSession).mockRejectedValueOnce(
+      new Error("configured finish response lost"),
+    );
+    vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+      session_id: "session-1",
+      state: "attention_required",
+      end_status: null,
+      attention_reason: "finish_unknown",
+      active_operation_id: null,
+      active_operation_kind: null,
+      runtime_retained: false,
+      has_unresolved_operations: true,
+    });
+    await loseWithTwoResults(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
+      fireEvent.click(await screen.findByRole("checkbox", { name: /明确放弃这 2 条/ }));
+      const finish = screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" });
+      await waitFor(() => expect(finish).toBeEnabled());
+      fireEvent.click(finish);
+      await screen.findByText(/configured finish response lost/);
+      fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "已核查设备，理解处理隔离可能释放原会话的后台回执" }),
+    );
+    vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+      session_id: "session-1",
+      state: "closed",
+      end_status: "aborted",
+      attention_reason: null,
+      active_operation_id: null,
+      active_operation_kind: null,
+      runtime_retained: false,
+      has_unresolved_operations: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "处理原会话隔离（保留本页结果）" }));
+    await waitFor(() =>
+      expect(resolveInstrumentAttention).toHaveBeenCalledExactlyOnceWith("session-1"),
+    );
+    await screen.findByText(/后台已确认原会话结束/);
+    expect(
+      screen
+        .getAllByTestId(/^recent-result-/)
+        .every((item) => item.textContent?.includes("待保存")),
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
+    expect(screen.getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "确认待办并关闭窗口" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(finishInstrumentSession).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(finishInstrumentSession).mock.calls[0]![1].mode).toBe("configured_finish");
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+    expect(abortInstrumentSession).not.toHaveBeenCalled();
+    expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not treat a missing recovery record as closed or discard results on cancellation", async () => {
+    vi.mocked(getInstrumentSessionRecovery).mockRejectedValue(
+      new ApiError("session not found", 404),
+    );
+    await loseWithTwoResults();
+    expect(await screen.findByText(/无法核实原会话/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    expect(screen.getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+    expect(
+      screen
+        .getAllByTestId(/^recent-result-/)
+        .every((item) => item.textContent?.includes("待保存")),
+    ).toBe(true);
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("restores only the original active session without replacing retained results or attribution", async () => {
+    vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
+      session_id: "session-1",
+      state: "active",
+      end_status: null,
+      attention_reason: null,
+      active_operation_id: null,
+      active_operation_kind: null,
+      runtime_retained: true,
+      has_unresolved_operations: false,
+    });
+    const { ids } = await loseWithTwoResults();
+    mockInventory({
+      setup: session().setup,
+      problems: [],
+      items: [
+        instrument({
+          availability: "active",
+          owner_kind: "instrument_session",
+          owner_id: "session-1",
+        }),
+      ],
+    });
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "other" });
+    fireEvent.click(await screen.findByRole("button", { name: "恢复原会话控制" }));
+    await screen.findByText("交互会话已连接");
+    expect(renewInstrumentSession).toHaveBeenCalledExactlyOnceWith("session-1");
+    expect(openInstrumentSession).toHaveBeenCalledTimes(1);
+    expect(
+      screen
+        .getAllByTestId(/^recent-result-/)
+        .map((item) => item.getAttribute("data-testid")!.replace("recent-result-", "")),
+    ).toEqual(ids);
+    expect(screen.getByRole("button", { name: "Sample Collect" })).toBeEnabled();
+  });
+});
+
+async function loseWithTwoResults(beforeLoss?: () => Promise<void>) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Infinity },
+      mutations: { retry: false },
+    },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <InstrumentsWorkspace daemonUnavailable={false} controlDeviceId="drive-source" />
+    </QueryClientProvider>,
+  );
+  await connectInstrument();
+  fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+  await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(1));
+  fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+  await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2));
+  const ids = screen
+    .getAllByTestId(/^recent-result-/)
+    .map((item) => item.getAttribute("data-testid")!.replace("recent-result-", ""));
+  await beforeLoss?.();
+  mockInventory({
+    setup: session().setup,
+    problems: [],
+    items: [
+      instrument({
+        availability: "active",
+        owner_kind: "instrument_session",
+        owner_id: "new-owner",
+      }),
+    ],
+  });
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["instruments"] });
+  });
+  await screen.findByRole("region", { name: "恢复原会话待办" });
+  await waitFor(() => expect(getInstrumentSessionRecovery).toHaveBeenCalledWith("session-1"));
+  return { client, ids };
+}

@@ -276,3 +276,57 @@ def test_winforms_backend_requires_reviewed_package():
         check_winforms_identity("6.2.1", WINFORMS_SHA256)
     with pytest.raises(ValueError, match="reviewed WinForms"):
         check_winforms_identity(WINFORMS_VERSION, "modified")
+
+
+def test_button_waits_then_clicks_frontend_control():
+    from scopecat_app.trial_window_probe import click_button
+
+    evaluate = Mock(side_effect=[False, True, True])
+    click_button(evaluate, "查看已保存结果")
+    calls = [call.args[0] for call in evaluate.call_args_list]
+    assert calls[0] == calls[1]
+    assert '"ready"' in calls[0]
+    assert '"click"' in calls[2]
+    assert all("pywebview.api" not in script for script in calls)
+
+
+def test_recent_result_requires_exact_selection_after_click():
+    from scopecat_app.trial_window_probe import select_recent_result
+
+    evaluate = Mock(side_effect=[False, True, True, False, True])
+    select_recent_result(evaluate, "receipt-id")
+    calls = [call.args[0] for call in evaluate.call_args_list]
+    assert calls[0] == calls[1]
+    assert '"click"' in calls[2]
+    assert calls[3] == calls[4]
+    assert "getAttribute('aria-pressed')" in calls[3]
+    assert all('"recent-result-receipt-id"' in script for script in calls)
+
+
+def test_saved_result_observer_records_only_completed_dispatch_and_restores():
+    from scopecat_app.trial_window_probe import observe_saved_result_opens
+
+    api = Mock()
+    original = api.open_saved_measurement
+    with observe_saved_result_opens(api) as opened:
+        api.open_saved_measurement("first")
+        original.assert_called_once_with("first")
+        assert opened == ["first"]
+        original.side_effect = ValueError("Host refused")
+        with pytest.raises(ValueError, match="Host refused"):
+            api.open_saved_measurement("second")
+        assert opened == ["first"]
+    assert api.open_saved_measurement is original
+
+
+def test_saved_result_observer_restores_on_probe_failure():
+    from scopecat_app.trial_window_probe import observe_saved_result_opens
+
+    api = Mock()
+    original = api.open_saved_measurement
+    with (
+        pytest.raises(AssertionError, match="Probe failed"),
+        observe_saved_result_opens(api),
+    ):
+        raise AssertionError("Probe failed")
+    assert api.open_saved_measurement is original

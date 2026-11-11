@@ -189,3 +189,90 @@ it("reproduces the old double-encoded Unicode CSS failure", () => {
     ),
   ).toBe(true);
 });
+
+const controlPrograms: { button: string[]; recent: string[] } = JSON.parse(
+  execFileSync(
+    process.platform === "win32" ? "python" : "python3",
+    [
+      "-c",
+      `
+import ast, json, sys
+source = open(sys.argv[1], encoding="utf-8").read()
+names = {"button_script", "recent_result_script"}
+constants = {"BUTTON_ACTION", "RECENT_RESULT_ACTION"}
+nodes = [node for node in ast.parse(source).body if
+    isinstance(node, ast.FunctionDef) and node.name in names or
+    isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in constants for t in node.targets)]
+module = ast.Module(body=nodes, type_ignores=[])
+namespace = {"json":json}
+exec(compile(ast.fix_missing_locations(module), "actual-control-generators", "exec"), namespace)
+print(json.dumps({
+    "button": [namespace["button_script"]("查看已保存结果", action) for action in ["ready", "click"]],
+    "recent": [namespace["recent_result_script"]("receipt-id", action) for action in ["ready", "click", "selected"]],
+}))
+`,
+      resolve("../../packages/scopecat-app/src/scopecat_app/trial_window_probe.py"),
+    ],
+    { encoding: "utf8" },
+  ),
+);
+const control = (kind: "button" | "recent", action: "ready" | "click" | "selected"): boolean => {
+  // oxlint-disable-next-line no-eval -- Exercise actual Python-generated probe selectors in jsdom.
+  return window.eval(controlPrograms[kind][["ready", "click", "selected"].indexOf(action)]!);
+};
+
+describe("native probe frontend-button actions", () => {
+  it("clicks the rendered Chinese result button's actual handler", () => {
+    document.body.innerHTML = "<button>查看已保存结果</button>";
+    const dispatched: string[] = [];
+    document.querySelector("button")!.addEventListener("click", () => dispatched.push("result"));
+    expect(control("button", "ready")).toBe(true);
+    expect(dispatched).toEqual([]);
+    expect(control("button", "click")).toBe(true);
+    expect(dispatched).toEqual(["result"]);
+  });
+
+  it.each([
+    "<button disabled>查看已保存结果</button>",
+    "<fieldset disabled><button>查看已保存结果</button></fieldset>",
+    "<section hidden><button>查看已保存结果</button></section>",
+    '<section aria-hidden="true"><button>查看已保存结果</button></section>',
+    '<section style="display:none"><button>查看已保存结果</button></section>',
+    '<section style="visibility:hidden"><button>查看已保存结果</button></section>',
+    "<button>查看已保存结果</button><button>查看已保存结果</button>",
+    '<a href="/result">查看已保存结果</a>',
+  ])("refuses unavailable or ambiguous frontend targets: %s", (html) => {
+    document.body.innerHTML = html;
+    expect(control("button", "ready")).toBe(false);
+    expect(() => control("button", "click")).toThrow("not uniquely ready");
+  });
+
+  it("does not confuse a hidden stale button with the current frontend button", () => {
+    document.body.innerHTML =
+      "<button hidden>查看已保存结果</button><button>查看已保存结果</button>";
+    expect(control("button", "ready")).toBe(true);
+  });
+
+  it("selects the exact recent result and requires its pressed acknowledgment", () => {
+    document.body.innerHTML =
+      '<button data-testid="recent-result-other" aria-pressed="true">Other</button><button data-testid="recent-result-receipt-id" aria-pressed="false">Result</button>';
+    const target = document.querySelector<HTMLButtonElement>(
+      '[data-testid="recent-result-receipt-id"]',
+    )!;
+    target.addEventListener("click", () => target.setAttribute("aria-pressed", "true"));
+    expect(control("recent", "ready")).toBe(true);
+    expect(control("recent", "selected")).toBe(false);
+    expect(control("recent", "click")).toBe(true);
+    expect(control("recent", "selected")).toBe(true);
+  });
+
+  it.each([
+    '<button data-testid="recent-result-other">Wrong result</button>',
+    '<fieldset disabled><button data-testid="recent-result-receipt-id">Result</button></fieldset>',
+    '<button data-testid="recent-result-receipt-id">Result</button><button data-testid="recent-result-receipt-id">Duplicate</button>',
+  ])("rejects a missing, disabled or ambiguous recent result: %s", (html) => {
+    document.body.innerHTML = html;
+    expect(control("recent", "ready")).toBe(false);
+    expect(() => control("recent", "click")).toThrow("not uniquely ready");
+  });
+});
