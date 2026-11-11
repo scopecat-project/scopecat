@@ -243,8 +243,11 @@ afterEach(async () => {
   window.history.replaceState(null, "", "/");
 });
 async function selectPrepared() {
+  // The new catalog can arrive later, and the previous experiment also has Note.
+  await screen.findByRole("option", { name: "Prepared experiment" });
   fireEvent.change(await screen.findByLabelText("实验类型"), { target: { value: "prepared" } });
-  await screen.findByLabelText("Note");
+  await waitFor(() => expect(screen.getByLabelText("实验类型")).toHaveValue("prepared"));
+  await waitFor(() => expect(screen.getByLabelText("Note")).toBeEnabled());
 }
 async function previewReady() {
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
@@ -253,6 +256,31 @@ async function previewReady() {
   await screen.findByText("预览就绪", { exact: true });
   await waitFor(() => expect(screen.queryByText("正在检查相关设备变更…")).toBeNull());
 }
+it("waits for experiment selection before opening its measurement context", async () => {
+  render(<Harness />);
+  await screen.findByText("实验输入已保存到应用数据。", { exact: true });
+  const fallback = globalThis.fetch;
+  let releaseOperator: (() => void) | undefined;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (new URL(request.url).pathname.endsWith("/operator-settings"))
+      await new Promise<void>((resolve) => {
+        releaseOperator = resolve;
+      });
+    return fallback(request);
+  });
+  let selected = false;
+  const selection = selectPrepared().then(() => {
+    selected = true;
+  });
+  await waitFor(() => expect(releaseOperator).toBeDefined());
+  expect(screen.getByLabelText("实验类型")).toHaveValue("first");
+  expect(selected).toBe(false);
+  releaseOperator!();
+  await selection;
+  expect(screen.getByLabelText("实验类型")).toHaveValue("prepared");
+  fireEvent.click(screen.getByRole("button", { name: "浏览样品、批次与记录集" }));
+  expect(screen.getByLabelText("Registered target")).toBeVisible();
+});
 it("distinguishes preview waiting from submission confirmation without allowing duplicates", async () => {
   render(<Harness />);
   await selectPrepared();
