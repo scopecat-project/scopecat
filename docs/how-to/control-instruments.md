@@ -490,12 +490,32 @@ outside its safe integer range; such values are labeled approximate, and the
 JSON diagnostic is not an exact integer representation either. Technical receipt
 and source evidence remain in a separate disclosure.
 
-The acquisition panel is optional. Collect without entering a title, line or
+The device workbench starts with a centered control area. Acquisition actions stay
+with the controls; collecting does not force the results area open. Use **展开结果**
+to review the curve and the recent-result list below it. **收起控制** makes more
+room for results, and **收起结果** returns to control-only work. Each area can be
+shown independently, with a visible way to return to the other area.
+
+When both areas are shown, drag their divider to change the proportions. The
+separator also supports Left/Right, Shift+Left/Right for larger steps, and Home/End
+for its bounds. Double-click restores its initial split. Hiding and reopening an
+area preserves the split within the current workbench. Each area scrolls separately.
+When the container is too narrow for two usable areas, **控制 / 结果** switches
+between the same mounted views rather than rebuilding their controls.
+
+**连接配置** and **Python 示例** remain explicit control-area views. Viewing them
+does not release the session or perform a device action. Connection editing keeps
+its existing ownership restrictions: release control before editing in device
+management. Switching views, hiding an area or resizing preserves staged input,
+operation arguments, selected result, curve representation and save-dialog target.
+These layout choices do not add automatic refresh or a generic stop command.
+
+The results area is optional. Collect without entering a title, line or
 note, then use **近期结果** to select an earlier receipt. **保存所选结果** opens a
 dialog for that selected result's title, optional measurement object and note.
 New collections do not change the dialog's target. Cancel preserves the result;
 saving marks it retained without removing it from the recent list. Hiding the
-panel preserves its selection and returns device controls to the primary area.
+results area preserves its selection; it does not discard or save a receipt.
 
 A save retry retains the original payload even when the response was lost. Use
 **重试保存** to confirm that operation before editing its attribution; the stable

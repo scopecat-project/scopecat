@@ -606,6 +606,62 @@ export function InstrumentsWorkspace({
     }
     void api.open_device_window(id).catch((error) => setWindowError(errorMessage(error)));
   };
+  const connectionDetails = selectedDevice ? (
+    <div className="grid gap-3 text-sm">
+      <p className="text-text-dim">
+        已保存的连接配置。查看不会连接或断开设备；编辑请先释放控制，再前往设备管理。
+      </p>
+      <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
+      <dl className="grid gap-2" aria-label="已保存连接设置">
+        {connectionOptionFields(
+          catalog.data?.drivers
+            .find((driver) => driver.driver_id === selectedDevice.revision.content.driver.driver_id)
+            ?.connections.find(
+              (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
+            )?.options_schema,
+        ).map((field) => {
+          const value = selectedDevice.revision.content.connection.options?.[field.id];
+          return (
+            <div key={field.id} className="min-w-0">
+              <dt className="font-semibold">{field.label}</dt>
+              <dd className="break-all">
+                {field.sensitive ? (
+                  value == null ? (
+                    "未设置"
+                  ) : (
+                    "已设置（已隐藏）"
+                  )
+                ) : value == null ? (
+                  (field.choiceLabels?.[""] ?? "未指定")
+                ) : field.stringMap && typeof value === "object" && !Array.isArray(value) ? (
+                  <ul>
+                    {Object.entries(value).map(([name, entry]) => (
+                      <li key={name}>
+                        {name}：{typeof entry === "string" ? entry : "复杂值"}
+                      </li>
+                    ))}
+                  </ul>
+                ) : typeof value === "string" ? (
+                  (field.choiceLabels?.[value] ?? value)
+                ) : typeof value === "boolean" ? (
+                  value ? (
+                    "是"
+                  ) : (
+                    "否"
+                  )
+                ) : typeof value === "number" ? (
+                  String(value)
+                ) : (
+                  "复杂设置（编辑时查看）"
+                )}
+              </dd>
+              {field.description && <dd className="text-sm text-text-dim">{field.description}</dd>}
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  ) : undefined;
   const inspector =
     selected &&
     selectedDevice &&
@@ -619,6 +675,7 @@ export function InstrumentsWorkspace({
         displayLabel={selectedDevice.device.label}
         hideHeading={!!controlDeviceId}
         registeredDeviceId={selectedDevice.device.id}
+        configuration={connectionDetails}
         session={session}
         recoverySession={recoverySession}
         sessionError={sessionError}
@@ -983,62 +1040,7 @@ export function InstrumentsWorkspace({
               className="grid gap-3 rounded-lg border border-line bg-panel p-3"
               aria-label="连接与环境"
             >
-              <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
-              <dl className="grid gap-2" aria-label="已保存连接设置">
-                {connectionOptionFields(
-                  catalog.data?.drivers
-                    .find(
-                      (driver) =>
-                        driver.driver_id === selectedDevice.revision.content.driver.driver_id,
-                    )
-                    ?.connections.find(
-                      (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
-                    )?.options_schema,
-                ).map((field) => {
-                  const value = selectedDevice.revision.content.connection.options?.[field.id];
-                  return (
-                    <div key={field.id} className="min-w-0">
-                      <dt className="font-semibold">{field.label}</dt>
-                      <dd className="break-all">
-                        {field.sensitive ? (
-                          value == null ? (
-                            "未设置"
-                          ) : (
-                            "已设置（已隐藏）"
-                          )
-                        ) : value == null ? (
-                          (field.choiceLabels?.[""] ?? "未指定")
-                        ) : field.stringMap &&
-                          typeof value === "object" &&
-                          !Array.isArray(value) ? (
-                          <ul>
-                            {Object.entries(value).map(([name, entry]) => (
-                              <li key={name}>
-                                {name}：{typeof entry === "string" ? entry : "复杂值"}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : typeof value === "string" ? (
-                          (field.choiceLabels?.[value] ?? value)
-                        ) : typeof value === "boolean" ? (
-                          value ? (
-                            "是"
-                          ) : (
-                            "否"
-                          )
-                        ) : typeof value === "number" ? (
-                          String(value)
-                        ) : (
-                          "复杂设置（编辑时查看）"
-                        )}
-                      </dd>
-                      {field.description && (
-                        <dd className="text-sm text-text-dim">{field.description}</dd>
-                      )}
-                    </div>
-                  );
-                })}
-              </dl>
+              {connectionDetails}
               {selectedDevice.device.state !== "retired" && (
                 <>
                   <p>使用“编辑设备”修改连接与驱动环境。设备调试不需要样品或实验路由。</p>

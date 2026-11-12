@@ -223,6 +223,116 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
+  it("retains drafts, original results and a pending save while C views and viewport change", async () => {
+    const withOperations = instrumentWithOperations();
+    mockInventory({ setup: session().setup, problems: [], items: [withOperations] });
+    vi.mocked(openInstrumentSession).mockResolvedValue(
+      session({ descriptions: [withOperations.description!] }),
+    );
+    let viewportWidth = 1200;
+    const geometry = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(() => ({
+        width: viewportWidth,
+        height: 600,
+        left: 0,
+        right: viewportWidth,
+        top: 200,
+        bottom: 800,
+        x: 0,
+        y: 200,
+        toJSON: () => ({}),
+      }));
+    let finishCollect!: (value: Awaited<ReturnType<typeof collectInstrumentAcquisition>>) => void;
+    vi.mocked(collectInstrumentAcquisition).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishCollect = resolve;
+        }),
+    );
+    let finishSave!: (value: Awaited<ReturnType<typeof saveDirectMeasurement>>) => void;
+    vi.mocked(saveDirectMeasurement).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    try {
+      renderWorkspace("drive-source");
+      await connectInstrument({ revealResults: false });
+      const layout = screen.getByTestId("instrument-workbench-layout");
+      expect(layout).toHaveAttribute("data-collection-collapsed", "true");
+      const property = screen.getByRole("spinbutton", { name: /CW frequency/ });
+      const argument = screen.getByRole("textbox", { name: /Profile name/ });
+      fireEvent.change(property, { target: { value: "6000000000" } });
+      fireEvent.change(argument, { target: { value: "keep argument" } });
+      fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+      await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledOnce());
+      fireEvent.click(screen.getByRole("button", { name: "连接配置" }));
+      expect(screen.getByRole("region", { name: "设备连接配置" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "释放物理连接" })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Python 示例" }));
+      await act(async () =>
+        finishCollect({ status: "collected", problems: [], readback: { values: {} } }),
+      );
+      expect(await screen.findByText("1 条待保存")).toBeVisible();
+      expect(layout).toHaveAttribute("data-collection-collapsed", "true");
+      fireEvent.click(screen.getByRole("button", { name: "控制" }));
+      expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toBe(property);
+      expect(property).toHaveValue(6000000000);
+      expect(screen.getByRole("textbox", { name: /Profile name/ })).toBe(argument);
+      expect(argument).toHaveValue("keep argument");
+      fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
+      const original = screen.getByTestId(/^recent-result-/);
+      const originalId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]![3];
+      fireEvent.click(screen.getByRole("button", { name: "Sample Collect" }));
+      await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2));
+      fireEvent.click(original);
+      fireEvent.click(screen.getByRole("button", { name: "收起控制" }));
+      fireEvent.click(screen.getByRole("button", { name: "展开控制" }));
+      expect(original).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+      const dialog = await screen.findByRole("dialog", { name: "保存测量" });
+      const title = within(dialog).getByRole("textbox", { name: "标题" });
+      fireEvent.change(title, { target: { value: "Original result" } });
+      fireEvent.change(within(dialog).getByRole("textbox", { name: "备注" }), {
+        target: { value: "Keep metadata" },
+      });
+      viewportWidth = 500;
+      fireEvent(window, new Event("resize"));
+      expect(screen.getByRole("dialog", { name: "保存测量" })).toBe(dialog);
+      expect(title).toHaveValue("Original result");
+      fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+      await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledOnce());
+      viewportWidth = 1200;
+      fireEvent(window, new Event("resize"));
+      expect(dialog).toBeVisible();
+      expect(title).toHaveValue("Original result");
+      await act(async () =>
+        finishSave({ id: "layout-original" } as Awaited<ReturnType<typeof saveDirectMeasurement>>),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(saveDirectMeasurement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command_id: originalId,
+          title: "Original result",
+          note: "Keep metadata",
+        }),
+      );
+      expect(original).toHaveAttribute("aria-pressed", "true");
+      expect(original).toHaveTextContent("已保存");
+      expect(property).toHaveValue(6000000000);
+      expect(argument).toHaveValue("keep argument");
+      expect(openInstrumentSession).toHaveBeenCalledOnce();
+      expect(closeInstrumentSession).not.toHaveBeenCalled();
+      expect(applyInstrumentState).not.toHaveBeenCalled();
+      expect(invokeInstrumentOperation).not.toHaveBeenCalled();
+      expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
+    } finally {
+      geometry.mockRestore();
+    }
+  });
+
   it("shows one device heading with status, description and refresh in a control window", async () => {
     renderWorkspace("drive-source");
     await screen.findByText("Virtual microwave source");
@@ -517,9 +627,10 @@ describe("instrument workspace", () => {
       renderWorkspace();
       await screen.findByRole("button", { name: "连接" });
       fireEvent.click(screen.getByRole("button", { name: "连接与环境" }));
-      expect(await screen.findByText("/opt/sdk")).toBeVisible();
-      expect(screen.getByText("main：192.0.2.1")).toBeVisible();
-      expect(screen.getAllByText("已设置（已隐藏）")).toHaveLength(2);
+      const details = within(screen.getByRole("region", { name: "连接与环境" }));
+      expect(await details.findByText("/opt/sdk")).toBeVisible();
+      expect(details.getByText("main：192.0.2.1")).toBeVisible();
+      expect(details.getAllByText("已设置（已隐藏）")).toHaveLength(2);
       expect(screen.queryByText(/never-show-header/)).not.toBeInTheDocument();
       expect(screen.queryByText("never-show-this")).not.toBeInTheDocument();
       expect(screen.queryByText("hidden-extra")).not.toBeInTheDocument();
@@ -1443,13 +1554,13 @@ describe("instrument workspace", () => {
     fireEvent.click(first);
     const layout = screen.getByTestId("instrument-workbench-layout");
     expect(layout).toHaveAttribute("data-collection-collapsed", "false");
-    fireEvent.click(screen.getByRole("button", { name: "收起采集面板" }));
+    fireEvent.click(screen.getByRole("button", { name: "收起结果" }));
     expect(layout).toHaveAttribute("data-collection-collapsed", "true");
     expect(layout).not.toHaveClass("xl:grid-cols-[minmax(0,1fr)_24rem]");
     expect(screen.getByText("2 条待保存")).toBeVisible();
-    expect(screen.getByTestId("instrument-control-panel")).toHaveClass("max-w-6xl");
+    expect(screen.getByTestId("instrument-control-panel")).toBeVisible();
     expect(screen.queryByRole("region", { name: "当前测量结果" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "展开采集面板" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
     expect(layout).toHaveAttribute("data-collection-collapsed", "false");
     expect(first).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("region", { name: "当前测量结果" })).toBeVisible();
@@ -2371,9 +2482,11 @@ function renderWorkspace(controlDeviceId?: string) {
   );
 }
 
-async function connectInstrument() {
+async function connectInstrument({ revealResults = true } = {}) {
   fireEvent.click(await screen.findByRole("button", { name: "连接" }));
   await screen.findByText("交互会话已连接");
+  const reveal = screen.queryByRole("button", { name: "展开结果" });
+  if (revealResults && reveal) fireEvent.click(reveal);
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "重新核查后台待保存结果" })).toBeEnabled(),
   );
@@ -3766,6 +3879,7 @@ it("recovers and explicitly discards an old pending result while disconnected wi
   vi.mocked(readPendingMeasurementReceipt).mockResolvedValue({ status: "collected", problems: [] });
   renderWorkspace("drive-source");
   expect(await screen.findByTestId("recent-result-recovered-original")).toHaveTextContent("待保存");
+  fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
   expect(screen.getByText(/从后台恢复的原采集结果/)).toBeVisible();
   expect(openInstrumentSession).not.toHaveBeenCalled();
   expect(collectInstrumentAcquisition).not.toHaveBeenCalled();

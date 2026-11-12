@@ -52,6 +52,7 @@ export function acquisitionTargets(
 export function MeasurementWorkbench({
   collapsed,
   onCollapsedChange,
+  layoutManaged = false,
   description,
   connected,
   disabled,
@@ -68,6 +69,7 @@ export function MeasurementWorkbench({
   onSaveAttempt,
   onSaved,
 }: {
+  layoutManaged?: boolean;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   description?: InstrumentDescription;
@@ -86,6 +88,8 @@ export function MeasurementWorkbench({
   onSaveAttempt: (selection: MeasurementSave) => void;
   onSaved: (commandId: string, recordId?: string, selection?: MeasurementSave) => void;
 }) {
+  const host = useRef<HTMLElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
   const cache = useQueryClient();
   const [target, setTarget] = useState<CurrentMeasurementResult>();
   const [title, setTitle] = useState("");
@@ -152,57 +156,41 @@ export function MeasurementWorkbench({
   };
   return (
     <section
+      ref={host}
       aria-label="交互采集"
       className={classes(
         "min-w-0",
         collapsed ? "justify-self-start" : "rounded-md border border-line bg-panel-soft p-3",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {!collapsed && <h3 className="text-sm font-semibold">采集</h3>}
-        <button
-          className={secondaryButton}
-          onClick={() => onCollapsedChange(!collapsed)}
-          aria-expanded={!collapsed}
-        >
-          {collapsed ? "展开采集面板" : "收起采集面板"}
-        </button>
-        {collapsed && pending.length > 0 && (
-          <span className="text-xs text-text-dim">{pending.length} 条待保存</span>
-        )}
-      </div>
-      <div hidden={collapsed}>
-        <div className="my-3 flex flex-wrap gap-2">
-          {targets.map((item) => (
-            <div key={acquisitionKey(item)}>
-              <button
-                className={primaryButton}
-                disabled={!connected || disabled}
-                onClick={() => onCollect(item)}
-                title={`${item.interfaceId} / ${item.componentPath.join("/")}`}
-              >
-                {collectingTarget && acquisitionKey(collectingTarget) === acquisitionKey(item)
-                  ? "采集中…"
-                  : `${item.acquisition.label ?? item.acquisition.id} Collect`}
-              </button>
-              <details className="mt-1 text-xs text-text-dim">
-                <summary>{item.acquisition.label ?? item.acquisition.id} 说明</summary>
-                {item.acquisition.description && <p>{item.acquisition.description}</p>}
-                <p>
-                  {item.acquisition.results.map((result) => result.label ?? result.id).join(" · ")}
-                </p>
-              </details>
-              {collectResults[acquisitionKey(item)]?.status &&
-                collectResults[acquisitionKey(item)]?.status !== "collected" && (
-                  <p role="status" className="text-xs text-yellow">
-                    {instrumentReceiptLabel(collectResults[acquisitionKey(item)]?.status ?? "")}
-                  </p>
-                )}
-            </div>
-          ))}
+      {!layoutManaged && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {!collapsed && <h3 className="text-sm font-semibold">采集</h3>}
+          <button
+            className={secondaryButton}
+            onClick={() => onCollapsedChange(!collapsed)}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? "展开采集面板" : "收起采集面板"}
+          </button>
+          {collapsed && pending.length > 0 && (
+            <span className="text-xs text-text-dim">{pending.length} 条待保存</span>
+          )}
         </div>
-        {pending.length >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
-        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_11rem] lg:grid-cols-[minmax(0,1fr)_15rem]">
+      )}
+      <div hidden={collapsed}>
+        {!layoutManaged && (
+          <MeasurementAcquisitionActions
+            description={description}
+            connected={connected}
+            disabled={disabled}
+            collectingTarget={collectingTarget}
+            collectResults={collectResults}
+            pendingCount={pending.length}
+            onCollect={onCollect}
+          />
+        )}
+        <div className="grid min-w-0 gap-3">
           <div className="min-w-0">
             {current ? (
               <CurrentMeasurement result={current} staged={staged} sessionId={sessionId} />
@@ -212,7 +200,12 @@ export function MeasurementWorkbench({
             {current && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {canSave && (
-                  <button className={primaryButton} disabled={saveDisabled} onClick={openSave}>
+                  <button
+                    ref={saveButton}
+                    className={primaryButton}
+                    disabled={saveDisabled}
+                    onClick={openSave}
+                  >
                     保存所选结果
                   </button>
                 )}
@@ -225,9 +218,9 @@ export function MeasurementWorkbench({
               </div>
             )}
           </div>
-          <aside aria-label="近期结果" className="order-first min-w-0 md:order-last">
+          <aside aria-label="近期结果" className="min-w-0">
             <h4 className="mb-2 text-xs font-semibold">近期结果 · {recent.length}</h4>
-            <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:max-h-[28rem] md:overflow-x-hidden md:overflow-y-auto md:pb-0">
+            <div className="grid gap-2">
               {recent
                 .map((_, index) => recent[recent.length - index - 1]!)
                 .map((item, index) => (
@@ -243,7 +236,7 @@ export function MeasurementWorkbench({
                     onClick={() => onSelect(item)}
                     className={classes(
                       secondaryButton,
-                      "h-auto w-36 min-w-0 shrink-0 flex-col items-start whitespace-normal text-left md:w-auto",
+                      "h-auto w-full min-w-0 flex-col items-start whitespace-normal text-left",
                       !!current &&
                         sameMeasurement(current.selection, item.selection) &&
                         "border-blue",
@@ -278,7 +271,25 @@ export function MeasurementWorkbench({
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdrop} />
           <Dialog.Viewport className={dialogViewport}>
-            <Dialog.Popup className={classes(dialogPopup, "p-4")}>
+            <Dialog.Popup
+              className={classes(dialogPopup, "p-4")}
+              finalFocus={() => {
+                if (!layoutManaged) return true;
+                if (!host.current?.closest("[hidden]"))
+                  return (
+                    saveButton.current ??
+                    host.current?.closest<HTMLElement>(".device-pane-scroll") ??
+                    true
+                  );
+                // Resizing can restore a wide control-only layout while the portal is open.
+                // Return focus to its visible results entry, without opening results or losing drafts.
+                return (
+                  host.current
+                    .closest(".device-control-layout")
+                    ?.querySelector<HTMLButtonElement>('[data-pane="results"]') ?? true
+                );
+              }}
+            >
               <Dialog.Title className={dialogTitle}>保存测量</Dialog.Title>
               <Dialog.Description className="text-xs text-text-dim">
                 {target?.target.acquisition.label ?? target?.target.acquisition.id} ·{" "}
@@ -337,6 +348,62 @@ export function MeasurementWorkbench({
           </Dialog.Viewport>
         </Dialog.Portal>
       </Dialog.Root>
+    </section>
+  );
+}
+
+/** Acquisition stays in the control pane, independent of result visibility. */
+export function MeasurementAcquisitionActions({
+  description,
+  connected,
+  disabled,
+  collectingTarget,
+  collectResults,
+  pendingCount,
+  onCollect,
+}: {
+  description?: InstrumentDescription;
+  connected: boolean;
+  disabled: boolean;
+  collectingTarget?: InstrumentAcquisitionTarget;
+  collectResults: Record<string, InstrumentCollectReceipt>;
+  pendingCount: number;
+  onCollect: (target: InstrumentAcquisitionTarget) => void;
+}) {
+  const targets = acquisitionTargets(description);
+  if (!targets.length) return null;
+  return (
+    <section aria-label="采集操作">
+      <div className="my-3 flex flex-wrap gap-2">
+        {targets.map((item) => (
+          <div key={acquisitionKey(item)}>
+            <button
+              className={primaryButton}
+              disabled={!connected || disabled}
+              onClick={() => onCollect(item)}
+              title={`${item.interfaceId} / ${item.componentPath.join("/")}`}
+            >
+              {collectingTarget && acquisitionKey(collectingTarget) === acquisitionKey(item)
+                ? "采集中…"
+                : `${item.acquisition.label ?? item.acquisition.id} Collect`}
+            </button>
+            <details className="mt-1 text-xs text-text-dim">
+              <summary>{item.acquisition.label ?? item.acquisition.id} 说明</summary>
+              {item.acquisition.description && <p>{item.acquisition.description}</p>}
+              <p>
+                {item.acquisition.results.map((result) => result.label ?? result.id).join(" · ")}
+              </p>
+            </details>
+            {collectResults[acquisitionKey(item)]?.status &&
+              collectResults[acquisitionKey(item)]?.status !== "collected" && (
+                <p role="status" className="text-xs text-yellow">
+                  {instrumentReceiptLabel(collectResults[acquisitionKey(item)]?.status ?? "")}
+                </p>
+              )}
+          </div>
+        ))}
+      </div>
+      {pendingCount >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
     </section>
   );
 }
