@@ -238,3 +238,52 @@ rows = session.run(run_id).result().rows_as(MeanResult[MeanIQ])
 作者计算抛出异常时，Notebook 展示的运行失败会标明计算操作、异常类型和消息；完整 traceback
 保留在 worker 日志中。修复并保存函数，按所用会话的上述刷新路径选择修订，再准备新请求。
 失败任务和先前成功的结果保留各自原来的身份；刷新不会重新提交失败的采集，也不会改写数据。
+
+
+## 单次采集的 shot 统计与保留 {#shot-statistics-and-retention}
+
+单比特标定需要相干 IQ 均值时，可以复用公共的点内计算：
+
+```python
+from scopecat_quantum.measurement_computes import iq_shot_statistics
+
+# experiment 是 ExperimentContext，capture.iq_shots 是已声明的采集输出。
+stats = iq_shot_statistics(experiment, capture.iq_shots)
+return {"stats": stats}  # 保存 stats/count 和 stats/mean，不保存原始 shots。
+```
+
+输入必须是显式 `unit="ratio"` 的 `complex128` 数组，且只有一个
+`ArrayDimension("shot", ..., kind="shot", unit="count")` 局部轴。
+每个逻辑点的完整数组到达后，计算产生一个整数 `count` 和一个保持实部、虚部的
+`mean`。它不是幅度平均，也不是分类后的状态计数。均值使用实部与虚部分别按最大绝对值
+归一化的算术平均，避免有限大值求和溢出和相同次正规值的提前下溢。
+
+`count` 是该数组包含的全部有效 shots 数量。空数组和非有限值被拒绝，不会静默忽略
+NaN、补零或把缺失样本计入数量。整个输入不可用时，沿用普通 compute 的不可用原因
+传播，两个统计量都不可用，不伪造 `count=0`。部分不可用数组也不能传入原生 NumPy
+compute，因为裸数组无法携带缺失掩码；该点计算失败，不会发布一个看似完整的均值。
+完整的物理存储分区可以先物化为一个逻辑数组，此处没有跨次到达的累计状态。
+
+保存意图由实验的普通返回树决定，不需要新的记录模型或保存执行器。例如在具体实验中
+声明必填结构参数 `retain: Literal["raw", "stats", "both"]`，然后选择：
+
+```python
+result = {"delay": delay, "phase": phase}
+if retain in {"raw", "both"}:
+    result["raw"] = capture.iq_shots
+if retain in {"stats", "both"}:
+    result["stats"] = iq_shot_statistics(experiment, capture.iq_shots)
+return result
+```
+
+完整可运行的例子见
+[`retained_ramsey`](../../testing/reference_lab/src/reference_lab/workflows/retained_ramsey.py)：
+在现有单比特 Ramsey 的 delay/phase 扫描上，先显式选择保存 raw、stats 或 both。
+raw 模式不声明统计计算；both 模式可以独立核对原始数组、count 与复数均值。
+新运行的 stats-only 选择不删除已有数据，也不承诺从均值恢复原始 shots。
+读出优化、重新分类、分布、方差/协方差及逐 shot 关联分析仍需保留相应数据。
+
+统计结果保留归约轴、统计量、单次采集范围及非有限值策略的元数据；输入身份和轴长度
+沿用原有运行请求、计算图与采集来源。统计值只证明对应已收到数组的归约，不证明所有
+扫描点已经完成，也不证明物理独立性。中断或失败仍以运行状态和已提交点为准。
+此切片不实现跨 chunk 增量、重试去重/检查点、方差、不确定度或改变设备的反馈。
