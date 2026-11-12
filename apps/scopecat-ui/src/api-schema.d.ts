@@ -4510,8 +4510,8 @@ export interface components {
          * @description Versioned author qualification of execution, analysis and physical inputs.
          *
          *     Whole catalog schema and complete setup/subject/scenario remain exact fences.
-         *     All table rows are compared, including newly matching selection members.
-         *     Globals, closures, files or unsupported queries left unqualified are unknown.
+         *     Selected rows include newly matching members. Globals, closures, files or
+         *     unsupported queries left unqualified are unknown.
          */
         CalibrationDependencies: {
             analysis?: components["schemas"]["DependencyCoverage"] | null;
@@ -6359,6 +6359,11 @@ export interface components {
             /** Reasons */
             reasons: string[];
             /**
+             * Row Comparisons
+             * @default []
+             */
+            row_comparisons: components["schemas"]["RowDependencyComparison"][];
+            /**
              * Status
              * @enum {string}
              */
@@ -6366,17 +6371,22 @@ export interface components {
         };
         /**
          * DependencyCoverage
-         * @description A reviewed, complete set of whole parameters for one dependency domain.
+         * @description A reviewed, complete set of whole parameters and selected table rows.
          *
-         *     Empty parameters explicitly declares independence. Missing coverage instead
-         *     means unknown. The basis must describe code/physical assumptions, including
-         *     external inputs; observed reads alone cannot establish completeness.
+         *     Empty parameters and rows explicitly declare independence. Missing coverage
+         *     instead means unknown. The basis must describe code/physical assumptions,
+         *     including external inputs; observed reads cannot establish completeness.
          */
         DependencyCoverage: {
             /** Basis */
             basis: string;
             /** Parameters */
             parameters: string[];
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["TableRowDependency"][];
         };
         /** DeviceConnection */
         DeviceConnection: {
@@ -11758,6 +11768,27 @@ export interface components {
             /** Routes */
             routes?: components["schemas"]["ResourceRoute"][];
         };
+        /**
+         * RowDependencyComparison
+         * @description Explain one declared selector without claiming observed-read coverage.
+         */
+        RowDependencyComparison: {
+            /** After Count */
+            after_count?: number | null;
+            /** Before Count */
+            before_count?: number | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "selector_invalid" | "selection_membership_changed" | "selected_rows_changed" | "selected_rows_unchanged";
+            selector: components["schemas"]["TableRowDependency"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unchanged" | "changed" | "unknown";
+        };
         /** RunAddress */
         RunAddress: {
             /** Collection Id */
@@ -13621,6 +13652,20 @@ export interface components {
              * @enum {string}
              */
             shape: "table";
+        };
+        /**
+         * TableRowDependency
+         * @description Complete rows selected by a conjunction of typed equality predicates.
+         *
+         *     Selection is evaluated again in both saved revisions, including empty and
+         *     newly matching sets. Predicates use parameter-query scalar equality, not
+         *     arbitrary Python or relation expressions. Row order remains significant.
+         */
+        TableRowDependency: {
+            /** Equals */
+            equals: components["schemas"]["ScalarParameterValue"][];
+            /** Parameter */
+            parameter: string;
         };
         /** TargetCatalogPage */
         TargetCatalogPage: {

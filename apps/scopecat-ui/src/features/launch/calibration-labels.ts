@@ -72,6 +72,11 @@ const reasons: Record<string, string> = {
   parameter_schema_changed: "参数结构已变化。",
   declared_parameter_missing: "缺少声明的参数。",
   dependency_values_changed: "依赖参数值已变化。",
+  selector_coverage_unknown: "行选择条件的覆盖范围未知。",
+  selector_invalid: "选择条件或参数表无效，不能确认依赖。",
+  selection_membership_changed: "选择成员已变化。",
+  selected_rows_changed: "选中行的值或顺序已变化。",
+  selected_rows_unchanged: "选中行未变化。",
   declared_dependencies_unchanged: "声明的依赖未变化。",
 };
 export const calibrationStatusLabel = (value: string) =>

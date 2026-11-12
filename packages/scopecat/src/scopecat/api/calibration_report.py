@@ -108,6 +108,15 @@ class CalibrationReportView(CalibrationReport):
                         + "; changed parameters: "
                         + (", ".join(comparison.changed_parameters) or "none")
                     )
+                    for row in comparison.row_comparisons:
+                        selector = ", ".join(
+                            f"{cell.id}={cell.value!r}" for cell in row.selector.equals
+                        )
+                        facts.append(
+                            f"Selected rows: {row.selector.parameter} [{selector}]; "
+                            f"{row.status}: {row.reason}; "
+                            f"members {row.before_count} -> {row.after_count}"
+                        )
             details.append(
                 f"<details><summary>{escape(requirement.id)} evidence</summary><ul>"
                 + "".join(f"<li>{escape(fact)}</li>" for fact in facts)
