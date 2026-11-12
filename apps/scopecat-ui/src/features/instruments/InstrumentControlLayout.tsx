@@ -42,6 +42,7 @@ export function InstrumentControlLayout({
   const splitter = useRef<HTMLDivElement>(null);
   const pointer = useRef<number | undefined>(undefined);
   const compactMode = useRef(false);
+  const pendingMeasureFrame = useRef<number | undefined>(undefined);
   const lastFocusedPane = useRef<"control" | "results">("control");
   const pendingFocus = useRef<{ element: HTMLElement; pane: "control" | "results" } | undefined>(
     undefined,
@@ -77,13 +78,25 @@ export function InstrumentControlLayout({
     };
     measure();
     const handle = splitter.current;
+    // Measuring writes our height and can resize the observed parent. Defer that
+    // work outside ResizeObserver delivery and coalesce notifications per frame.
+    const scheduleMeasure = () => {
+      if (pendingMeasureFrame.current !== undefined) return;
+      pendingMeasureFrame.current = window.requestAnimationFrame(() => {
+        pendingMeasureFrame.current = undefined;
+        measure();
+      });
+    };
     const observer =
-      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(scheduleMeasure);
     observer?.observe(element);
     if (element.parentElement) observer?.observe(element.parentElement);
     window.addEventListener("resize", measure);
     return () => {
       observer?.disconnect();
+      if (pendingMeasureFrame.current !== undefined)
+        window.cancelAnimationFrame(pendingMeasureFrame.current);
+      pendingMeasureFrame.current = undefined;
       window.removeEventListener("resize", measure);
       if (pointer.current !== undefined && handle?.hasPointerCapture(pointer.current))
         handle.releasePointerCapture(pointer.current);

@@ -9,8 +9,28 @@ let width = 1200;
 let measure: () => void;
 const disconnect = vi.fn();
 const mounted = vi.fn();
+let frameId = 0;
+const frames = new Map<number, FrameRequestCallback>();
+function flushFrames() {
+  const pending = [...frames.values()];
+  frames.clear();
+  for (const callback of pending) callback(0);
+}
 beforeEach(() => {
   width = 1200;
+  frameId = 0;
+  frames.clear();
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn((callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    }),
+  );
+  vi.stubGlobal(
+    "cancelAnimationFrame",
+    vi.fn((id: number) => frames.delete(id)),
+  );
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => ({
     width,
     height: 600,
@@ -69,6 +89,7 @@ function resize(value: number) {
   act(() => {
     width = value;
     measure();
+    flushFrames();
   });
 }
 
@@ -237,4 +258,60 @@ it("preserves wide visibility and restores focus to the results entry when its c
   expect(result).not.toBeVisible();
   expect(screen.getByRole("button", { name: "展开结果" })).toHaveFocus();
   expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+});
+
+it("measures synchronously at mount and coalesces observer notifications into one frame", () => {
+  show();
+  const layout = screen.getByTestId("instrument-workbench-layout");
+  expect(layout.style.getPropertyValue("--device-workspace-height")).toBe(
+    `${Math.max(320, window.innerHeight - 160 - 20)}px`,
+  );
+  expect(requestAnimationFrame).not.toHaveBeenCalled();
+  const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+  bounds.mockClear();
+  act(() => {
+    width = 560;
+    measure();
+    measure();
+    measure();
+  });
+  expect(bounds).not.toHaveBeenCalled();
+  expect(requestAnimationFrame).toHaveBeenCalledOnce();
+  expect(layout).toHaveAttribute("data-compact", "false");
+  act(flushFrames);
+  expect(bounds).toHaveBeenCalledOnce();
+  expect(layout).toHaveAttribute("data-compact", "true");
+  resize(1200);
+  expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+});
+
+it("cancels a pending measurement on unmount", () => {
+  const rendered = show();
+  act(() => {
+    measure();
+    measure();
+  });
+  const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+  bounds.mockClear();
+  rendered.unmount();
+  expect(disconnect).toHaveBeenCalledOnce();
+  expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
+  expect(frames.size).toBe(0);
+  act(flushFrames);
+  expect(bounds).not.toHaveBeenCalled();
+});
+
+it("retains its last usable measurement while hidden and measures again when revealed", () => {
+  show();
+  const layout = screen.getByTestId("instrument-workbench-layout");
+  const height = layout.style.getPropertyValue("--device-workspace-height");
+  resize(0);
+  expect(layout).toHaveAttribute("data-compact", "false");
+  expect(layout.style.getPropertyValue("--device-workspace-height")).toBe(height);
+  resize(560);
+  expect(layout).toHaveAttribute("data-compact", "true");
+  resize(0);
+  expect(layout).toHaveAttribute("data-compact", "true");
+  resize(1200);
+  expect(layout).toHaveAttribute("data-compact", "false");
 });

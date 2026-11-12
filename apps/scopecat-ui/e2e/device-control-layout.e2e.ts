@@ -126,6 +126,10 @@ test("control inputs and headings stay readable and complete curves resize at ev
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
+  await page.addInitScript(`
+    window.controlLayoutErrors = [];
+    window.addEventListener("error", (event) => window.controlLayoutErrors.push(event.message));
+  `);
   const root = await mkdtemp(join(tmpdir(), "scopecat-curve-layout-"));
   const fixture = startDeviceFixture(
     "../../packages/scopecat-server/tests/fixtures/device_curve_daemon.py",
@@ -574,6 +578,27 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    // Session teardown/rebuild changes the workbench's top and parent height.
+    // Wait beyond the closing render to catch deferred ResizeObserver errors.
+    const settledLayout = await page.evaluate<{
+      errors: string[];
+      frames: string[];
+    }>(`(async () => {
+      for (let frame = 0; frame < 4; frame++)
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      const frames = [];
+      for (let frame = 0; frame < 4; frame++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const layout = document.querySelector('[data-testid="instrument-workbench-layout"]');
+        frames.push(JSON.stringify([layout, layout.parentElement].map((element) => {
+          const { width, height, top } = element.getBoundingClientRect();
+          return { width, height, top };
+        })));
+      }
+      return { errors: window.controlLayoutErrors, frames };
+    })()`);
+    expect(settledLayout.errors).toEqual([]);
+    expect(new Set(settledLayout.frames).size).toBe(1);
     await page.goto(`${url}${resultHref}`);
     const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390]) {
