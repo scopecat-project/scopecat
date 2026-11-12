@@ -198,6 +198,14 @@ export function BoundedMeasurement({
               result,
               acquisition?.results.find((item) => item.id === coordinateId),
             );
+            const xLabel = coordinateId
+              ? `${coordinateId} (${coordinate?.unit ?? "未知单位"})`
+              : "原始下标";
+            const yUnit =
+              field.dtype === "complex128" && state.representation === "phase"
+                ? "rad"
+                : (field.unit ?? "未知单位");
+            const yLabel = `${result.label ?? result.id} (${yUnit})`;
             const chartKey = JSON.stringify([
               identity,
               field.request_id,
@@ -219,82 +227,99 @@ export function BoundedMeasurement({
                 aligned &&
                 !field.unit_truncated &&
                 !coordinate?.unit_truncated ? (
-                  <EChart
-                    ariaLabel={`${field.request_id} 局部曲线`}
-                    height={260}
-                    pointCount={y.length}
-                    seriesCount={1}
-                    seriesLabels={[field.request_id]}
-                    interactionKey={chartKey}
-                    interactionStore={{
-                      read: (key) => state.zoom.get(key),
-                      write: (key, value) => {
-                        for (const oldKey of state.zoom.keys()) {
-                          const old = JSON.parse(oldKey) as unknown[];
-                          if (
-                            old[1] === field.request_id &&
-                            old[3] === state.representation &&
-                            oldKey !== key
-                          )
-                            state.zoom.delete(oldKey);
-                        }
-                        state.zoom.set(key, value);
-                      },
-                    }}
-                    option={{
-                      animation: false,
-                      tooltip: { trigger: "axis" },
-                      grid: {
-                        left: 10,
-                        right: 15,
-                        top: 20,
-                        bottom: 55,
-                        outerBoundsMode: "same",
-                        outerBoundsContain: "all",
-                      },
-                      xAxis: {
-                        type: "value",
-                        name: coordinateId
-                          ? `${coordinateId} (${coordinate?.unit ?? "未知单位"})`
-                          : "原始下标",
-                        splitNumber: 3,
-                        nameTextStyle: { textMargin: 3 },
-                        axisLabel: {
-                          hideOverlap: true,
-                          textMargin: 3,
-                          margin: 12,
-                          formatter: formatPreviewTick,
+                  <>
+                    <p className="text-xs [overflow-wrap:anywhere]">
+                      纵轴 {yLabel}；横轴 {xLabel}
+                    </p>
+                    <EChart
+                      ariaLabel={`${field.request_id} 局部曲线`}
+                      height={260}
+                      pointCount={y.length}
+                      seriesCount={1}
+                      seriesLabels={[field.request_id]}
+                      interactionKey={chartKey}
+                      interactionStore={{
+                        read: (key) => state.zoom.get(key),
+                        write: (key, value) => {
+                          for (const oldKey of state.zoom.keys()) {
+                            const old = JSON.parse(oldKey) as unknown[];
+                            if (
+                              old[1] === field.request_id &&
+                              old[3] === state.representation &&
+                              oldKey !== key
+                            )
+                              state.zoom.delete(oldKey);
+                          }
+                          state.zoom.set(key, value);
                         },
-                        scale: true,
-                      },
-                      yAxis: {
-                        type: "value",
-                        nameTextStyle: { textMargin: 3 },
-                        axisLabel: {
-                          hideOverlap: true,
-                          textMargin: 3,
-                          formatter: formatPreviewTick,
+                      }}
+                      option={{
+                        animation: false,
+                        tooltip: { trigger: "axis" },
+                        grid: {
+                          left: 10,
+                          right: 15,
+                          top: 20,
+                          bottom: 55,
+                          outerBoundsMode: "same",
+                          outerBoundsContain: "all",
                         },
-                        name:
-                          field.dtype === "complex128" && state.representation === "phase"
-                            ? "rad"
-                            : (field.unit ?? "未知单位"),
-                        scale: true,
-                      },
-                      dataZoom: [{ type: "inside" }, { type: "slider" }],
-                      series: [
-                        {
-                          type: "line",
-                          showSymbol: false,
-                          connectNulls: false,
-                          data: y.map((sample, index) => [
-                            x ? x[index] : field.start + index,
-                            sample,
-                          ]),
+                        xAxis: {
+                          type: "value",
+                          name: xLabel,
+                          splitNumber: 3,
+                          nameTextStyle: { textMargin: 3 },
+                          axisLabel: {
+                            hideOverlap: true,
+                            textMargin: 3,
+                            margin: 12,
+                            formatter: formatPreviewTick,
+                          },
+                          scale: true,
                         },
-                      ],
-                    }}
-                  />
+                        yAxis: {
+                          type: "value",
+                          nameTextStyle: { textMargin: 3 },
+                          axisLabel: {
+                            hideOverlap: true,
+                            textMargin: 3,
+                            formatter: formatPreviewTick,
+                          },
+                          name: yUnit,
+                          scale: true,
+                        },
+                        // Match the pane, not the viewport. Full names/units stay in the
+                        // wrapping caption; only duplicate in-chart names disappear.
+                        // Restore them explicitly because ECharts merges media options.
+                        media: [
+                          {
+                            query: { maxWidth: 420 },
+                            // Three target intervals can leave only one label after
+                            // ECharts fits GHz-offset ticks into a narrow plot.
+                            option: { xAxis: { name: "", splitNumber: 2 }, yAxis: { name: "" } },
+                          },
+                          {
+                            option: {
+                              xAxis: { name: xLabel, splitNumber: 3 },
+                              yAxis: { name: yUnit },
+                            },
+                          },
+                        ],
+                        dataZoom: [{ type: "inside" }, { type: "slider" }],
+                        series: [
+                          {
+                            type: "line",
+                            showSymbol: false,
+                            connectNulls: false,
+                            data: y.map((sample, index) => [
+                              x ? x[index] : field.start + index,
+                              sample,
+                            ]),
+                          },
+                        ],
+                      }}
+                    />
+                  </>
                 ) : (
                   <p>此字段不具备对齐的一维坐标，保留数值窗口，不绘制推测曲线。</p>
                 )}

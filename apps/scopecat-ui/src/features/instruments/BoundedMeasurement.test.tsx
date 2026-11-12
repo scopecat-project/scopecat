@@ -277,11 +277,18 @@ it("releases the preview queue after a timed out request", async () => {
 it("uses narrow-chart collision bounds and compact tick labels without changing scientific coordinates", async () => {
   const fields = [
     { request_id: "frequency", unit: "Hz", values: [4_800_000_000, 4_900_000_000] },
-    { request_id: "signal", unit: "V", values: [1, 2] },
+    {
+      request_id: "signal",
+      unit: "V",
+      values: [
+        { real: 1, imag: 0 },
+        { real: 0, imag: 2 },
+      ],
+    },
   ].map((field) => ({
     ...field,
     kind: "array",
-    dtype: "float64",
+    dtype: field.request_id === "signal" ? "complex128" : "float64",
     unit_truncated: false,
     shape: [2],
     total_count: 2,
@@ -318,8 +325,9 @@ it("uses narrow-chart collision bounds and compact tick labels without changing 
           { id: "frequency", role: "coordinate", dtype: "float64", unit: "Hz" },
           {
             id: "signal",
+            label: "Very long signal label with complete units",
             role: "observable",
-            dtype: "float64",
+            dtype: "complex128",
             unit: "V",
             axes: [
               {
@@ -350,6 +358,46 @@ it("uses narrow-chart collision bounds and compact tick labels without changing 
       },
     ],
   });
+  expect(screen.getByText(/^纵轴 /)).toHaveTextContent(
+    "纵轴 Very long signal label with complete units (V)；横轴 frequency (Hz)",
+  );
+  expect(option).toMatchObject({
+    xAxis: { axisLabel: { formatter: formatPreviewTick } },
+    yAxis: { axisLabel: { formatter: formatPreviewTick } },
+    media: [
+      {
+        query: { maxWidth: 420 },
+        option: { xAxis: { name: "" }, yAxis: { name: "" } },
+      },
+      { option: { xAxis: { name: "frequency (Hz)" }, yAxis: { name: "V" } } },
+    ],
+  });
+  for (const [representation, values, unit] of [
+    ["phase", [0, Math.PI / 2], "rad"],
+    ["real", [1, 0], "V"],
+    ["imag", [0, 2], "V"],
+    ["magnitude", [1, 2], "V"],
+  ] as const) {
+    fireEvent.change(screen.getByLabelText("复数表示"), { target: { value: representation } });
+    const current = vi.mocked(EChart).mock.calls.at(-1)![0].option;
+    expect(current).toMatchObject({
+      tooltip: { trigger: "axis" },
+      series: [
+        {
+          data: [
+            [4_800_000_000, values[0]],
+            [4_900_000_000, values[1]],
+          ],
+        },
+      ],
+      media: [
+        { option: { xAxis: { name: "" }, yAxis: { name: "" } } },
+        { option: { xAxis: { name: "frequency (Hz)" }, yAxis: { name: unit } } },
+      ],
+    });
+    expect(screen.getByText(/^纵轴 /)).toHaveTextContent(`(${unit})；横轴 frequency (Hz)`);
+  }
+  expect(new Set([5e9, 5.0002e9, 5.001e9].map(formatPreviewTick)).size).toBe(3);
   expect(formatPreviewTick(4_800_000_000)).toBe("4.8e+9");
   expect(formatPreviewTick(4_800_000_001)).not.toBe(formatPreviewTick(4_800_000_000));
 });

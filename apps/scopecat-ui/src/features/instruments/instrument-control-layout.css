@@ -1,0 +1,100 @@
+.device-control-layout {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: var(--device-workspace-height, max(20rem, calc(100dvh - 18rem)));
+  gap: 10px;
+}
+.device-pane-switch,
+.device-view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.device-pane-switch [aria-pressed="true"],
+.device-view-switch [aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.device-pane-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+.device-pane-grid[data-both="true"] {
+  grid-template-columns: minmax(0, var(--device-control-split)) 12px minmax(
+      0,
+      var(--device-result-split)
+    );
+}
+.device-control-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 48rem;
+  justify-self: center;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-panel);
+}
+.device-view-switch {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-line);
+}
+.device-pane-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 12px;
+  flex: 1;
+}
+.device-acquisition-actions {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-panel-soft);
+}
+.device-results-pane {
+  padding: 0 4px 0 0;
+}
+.device-pane-divider {
+  display: grid;
+  place-items: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  border-radius: 4px;
+}
+.device-pane-divider span {
+  width: 3px;
+  height: 32px;
+  background: var(--color-line-strong);
+  border-radius: 3px;
+}
+.device-pane-divider:hover,
+.device-pane-divider.is-dragging {
+  background: var(--color-accent-soft);
+}
+.device-pane-divider:focus-visible,
+.device-pane-scroll:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+.device-control-layout [hidden] {
+  display: none !important;
+}
+
+.device-pane-grid[data-both="true"] .device-control-pane {
+  max-width: none;
+}

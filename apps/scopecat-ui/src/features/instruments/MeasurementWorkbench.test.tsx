@@ -39,7 +39,7 @@ const results: CurrentMeasurementResult[] = ["one", "two"].map((id) => ({
   },
   receivedAt: "2026-01-01T12:00:00Z",
 }));
-function Harness() {
+function Harness({ layoutManaged = false } = {}) {
   const [collapsed, setCollapsed] = useState(false);
   const [current, setCurrent] = useState(results[1]);
   const [recent, setRecent] = useState(results);
@@ -51,6 +51,7 @@ function Harness() {
   );
   return (
     <MeasurementWorkbench
+      layoutManaged={layoutManaged}
       collapsed={collapsed}
       onCollapsedChange={setCollapsed}
       description={description}
@@ -87,12 +88,12 @@ function Harness() {
     />
   );
 }
-function show() {
+function show(layoutManaged = false) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <Harness />
+      <Harness layoutManaged={layoutManaged} />
     </QueryClientProvider>,
   );
 }
@@ -262,12 +263,139 @@ it("warns before saving an unverified original without blocking its preservation
   await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));
 });
 
-it("places selected-result actions before the potentially tall content while retaining the recent-results column", () => {
+it("keeps save and compact selection above content with the full recent list below", () => {
   show();
   const actions = screen.getByLabelText("所选结果操作");
   const content = screen.getByLabelText("当前测量结果");
   expect(actions.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(actions).getByRole("button", { name: "保存所选结果" })).toBeVisible();
-  expect(screen.getByLabelText("近期结果")).toHaveClass("md:order-last");
+  const recent = screen.getByRole("complementary", { name: "近期结果" });
+  expect(content.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(actions).getByRole("combobox", { name: "选择近期结果" })).toBeVisible();
   expect(screen.getByTestId("recent-result-one")).toBeVisible();
+});
+
+it("shares one selected result between the compact selector and full list without losing save drafts", async () => {
+  show();
+  const select = screen.getByRole("combobox", { name: "选择近期结果" });
+  const options = within(select).getAllByRole("option") as HTMLOptionElement[];
+  const first = options[1]!;
+  expect(select).toHaveValue(options[0]!.value);
+  fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  let dialog = screen.getByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText("标题"), { target: { value: "Retained draft" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  fireEvent.change(select, { target: { value: first.value } });
+  expect(screen.getByTestId("recent-result-one")).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByLabelText("当前测量结果")).toHaveTextContent("Curve one");
+  fireEvent.click(screen.getByTestId("recent-result-two"));
+  expect(select).toHaveValue(options[0]!.value);
+  fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByLabelText("标题")).toHaveValue("Retained draft");
+});
+
+it("does not present another original when the current result is outside the recent list", () => {
+  const onSelect = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MeasurementWorkbench
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
+        description={description}
+        connected
+        disabled={false}
+        collectResults={{}}
+        recent={[results[0]!]}
+        current={results[1]}
+        staged={false}
+        pending={[]}
+        onCollect={vi.fn()}
+        onSelect={onSelect}
+        onSaveAttempt={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  const select = screen.getByRole("combobox", { name: "选择近期结果" });
+  const displayed = within(select).getByRole("option", {
+    name: /当前显示（近期列表外）/,
+  }) as HTMLOptionElement;
+  expect(displayed).toBeDisabled();
+  expect(displayed.selected).toBe(true);
+  expect(select).toHaveValue(displayed.value);
+  expect(screen.getByLabelText("当前测量结果")).toHaveTextContent("Curve two");
+  expect(onSelect).not.toHaveBeenCalled();
+  const recent = within(select).getByRole("option", { name: /^1\./ }) as HTMLOptionElement;
+  fireEvent.change(select, { target: { value: recent.value } });
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith(results[0]);
+});
+
+it("keeps the managed action strip sticky within the entire result and recent-list block", () => {
+  show(true);
+  const actions = screen.getByRole("group", { name: "所选结果操作" });
+  const content = screen.getByLabelText("当前测量结果");
+  const recent = screen.getByRole("complementary", { name: "近期结果" });
+  expect(actions).toHaveClass("sticky", "top-0", "z-10", "bg-panel-soft", "flex-wrap");
+  expect(actions.parentElement).toBe(recent.parentElement);
+  expect(actions.parentElement).toContainElement(content);
+  expect(actions.parentElement!.firstElementChild).toBe(actions);
+  expect(within(actions).getByRole("button", { name: "保存所选结果" })).toBeEnabled();
+  expect(within(actions).getByRole("combobox", { name: "选择近期结果" })).toBeVisible();
+});
+
+it("keeps keyboard scroll targets below a wrapping sticky strip and restores the pane inset on unmount", () => {
+  let height = 48;
+  let resize!: () => void;
+  const disconnect = vi.fn();
+  const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    get height() {
+      return height;
+    },
+    width: 260,
+    x: 0,
+    y: 0,
+    left: 0,
+    right: 260,
+    top: 0,
+    bottom: 48,
+    toJSON: () => ({}),
+  });
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        resize = callback;
+      }
+      observe() {}
+      disconnect = disconnect;
+    },
+  );
+  try {
+    const view = render(
+      <div
+        data-testid="result-scroll"
+        className="device-pane-scroll"
+        style={{ scrollPaddingTop: "12px" }}
+      >
+        <QueryClientProvider client={new QueryClient()}>
+          <Harness layoutManaged />
+        </QueryClientProvider>
+      </div>,
+    );
+    const pane = screen.getByTestId("result-scroll");
+    expect(pane.style.scrollPaddingTop).toBe("56px");
+    height = 92;
+    resize();
+    expect(pane.style.scrollPaddingTop).toBe("100px");
+    height = 0;
+    resize();
+    expect(pane.style.scrollPaddingTop).toBe("100px");
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(pane.style.scrollPaddingTop).toBe("12px");
+  } finally {
+    geometry.mockRestore();
+    vi.unstubAllGlobals();
+  }
 });
