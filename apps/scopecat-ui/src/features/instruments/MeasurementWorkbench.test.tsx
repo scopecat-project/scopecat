@@ -261,3 +261,13 @@ it("warns before saving an unverified original without blocking its preservation
   fireEvent.click(within(dialog).getByRole("button", { name: /^保存$/ }));
   await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));
 });
+
+it("places selected-result actions before the potentially tall content while retaining the recent-results column", () => {
+  show();
+  const actions = screen.getByLabelText("所选结果操作");
+  const content = screen.getByLabelText("当前测量结果");
+  expect(actions.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(actions).getByRole("button", { name: "保存所选结果" })).toBeVisible();
+  expect(screen.getByLabelText("近期结果")).toHaveClass("md:order-last");
+  expect(screen.getByTestId("recent-result-one")).toBeVisible();
+});

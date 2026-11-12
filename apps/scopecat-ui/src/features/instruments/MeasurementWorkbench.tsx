@@ -228,18 +228,12 @@ export function MeasurementWorkbench({
         {pending.length >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
         <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_11rem] lg:grid-cols-[minmax(0,1fr)_15rem]">
           <div className="min-w-0">
-            {current ? (
-              <CurrentMeasurement
-                result={current}
-                staged={staged}
-                sessionId={sessionId}
-                displayStore={displayStore}
-              />
-            ) : (
-              <p className="py-16 text-center text-sm text-text-dim">采集后在这里查看曲线</p>
-            )}
             {current && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div
+                role="group"
+                aria-label="所选结果操作"
+                className="mb-2 flex flex-wrap items-center gap-2"
+              >
                 {canSave && (
                   <button className={primaryButton} disabled={saveDisabled} onClick={openSave}>
                     保存所选结果
@@ -252,6 +246,16 @@ export function MeasurementWorkbench({
                   </>
                 )}
               </div>
+            )}
+            {current ? (
+              <CurrentMeasurement
+                result={current}
+                staged={staged}
+                sessionId={sessionId}
+                displayStore={displayStore}
+              />
+            ) : (
+              <p className="py-16 text-center text-sm text-text-dim">采集后在这里查看曲线</p>
             )}
           </div>
           <aside aria-label="近期结果" className="order-first min-w-0 md:order-last">

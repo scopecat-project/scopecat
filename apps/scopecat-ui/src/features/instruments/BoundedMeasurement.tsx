@@ -1,3 +1,4 @@
+import { secondaryButton, formControl } from "../../ui/styles";
 import { useState } from "react";
 import type { InstrumentAcquisition } from "../../api-contract";
 import { unavailableReasonLabels } from "./InstrumentInterfaceControls";
@@ -15,9 +16,17 @@ export interface MeasurementDisplayState {
   previousStarts?: number[];
   representation: Representation;
   field?: string;
+  dataOpen?: boolean;
   zoom: Map<string, ChartInteraction>;
 }
 export type MeasurementDisplayStore = Map<string, MeasurementDisplayState>;
+/** Tick labels only: the series, tooltip and exact-value table keep original units/values. */
+export function formatPreviewTick(value: number) {
+  const magnitude = Math.abs(value);
+  return Number.isFinite(value) && (magnitude >= 1e6 || (magnitude > 0 && magnitude < 0.001))
+    ? value.toExponential()
+    : String(value);
+}
 export function previewNumbers(
   field: PreviewField,
   representation: Representation,
@@ -229,9 +238,37 @@ export function BoundedMeasurement({
                     option={{
                       animation: false,
                       tooltip: { trigger: "axis" },
-                      xAxis: { type: "value", name: coordinateId ?? "原始下标", scale: true },
+                      grid: {
+                        left: 10,
+                        right: 15,
+                        top: 20,
+                        bottom: 55,
+                        outerBoundsMode: "same",
+                        outerBoundsContain: "all",
+                      },
+                      xAxis: {
+                        type: "value",
+                        name: coordinateId
+                          ? `${coordinateId} (${coordinate?.unit ?? "未知单位"})`
+                          : "原始下标",
+                        splitNumber: 3,
+                        nameTextStyle: { textMargin: 3 },
+                        axisLabel: {
+                          hideOverlap: true,
+                          textMargin: 3,
+                          margin: 12,
+                          formatter: formatPreviewTick,
+                        },
+                        scale: true,
+                      },
                       yAxis: {
                         type: "value",
+                        nameTextStyle: { textMargin: 3 },
+                        axisLabel: {
+                          hideOverlap: true,
+                          textMargin: 3,
+                          formatter: formatPreviewTick,
+                        },
                         name:
                           field.dtype === "complex128" && state.representation === "phase"
                             ? "rad"
@@ -258,96 +295,116 @@ export function BoundedMeasurement({
               </section>
             );
           })}
-          <label>
-            起始下标{" "}
-            <input
-              aria-label="预览起始下标"
-              type="number"
-              min={0}
-              max={Number.MAX_SAFE_INTEGER}
-              value={state.start}
-              onChange={(event) => {
-                const start = Number(event.target.value);
-                if (Number.isSafeInteger(start) && start >= 0)
-                  update({ start, previousStarts: [] });
-              }}
-            />
-          </label>
-          <button
-            disabled={state.start === 0}
-            onClick={() =>
-              update({
-                start: state.previousStarts?.at(-1) ?? Math.max(0, state.start - 512),
-                previousStarts: state.previousStarts?.slice(0, -1),
-              })
-            }
+          <div
+            role="group"
+            aria-label="局部窗口导航"
+            className="flex flex-wrap items-center gap-2 text-xs"
           >
-            上一页数据
-          </button>
-          <button
-            disabled={!next.length}
-            onClick={() =>
-              update({
-                start: Math.min(...next),
-                previousStarts: [...(state.previousStarts ?? []), state.start],
-              })
-            }
-          >
-            下一页数据
-          </button>
-          <label>
-            结果字段{" "}
-            <select
-              aria-label="精确结果字段"
-              value={selected?.request_id ?? ""}
-              onChange={(event) =>
-                update({ field: event.target.value, start: 0, previousStarts: [] })
+            <label>
+              起始下标{" "}
+              <input
+                className={`${formControl} w-28`}
+                aria-label="预览起始下标"
+                type="number"
+                min={0}
+                max={Number.MAX_SAFE_INTEGER}
+                value={state.start}
+                onChange={(event) => {
+                  const start = Number(event.target.value);
+                  if (Number.isSafeInteger(start) && start >= 0)
+                    update({ start, previousStarts: [] });
+                }}
+              />
+            </label>
+            <button
+              className={secondaryButton}
+              disabled={state.start === 0}
+              onClick={() =>
+                update({
+                  start: state.previousStarts?.at(-1) ?? Math.max(0, state.start - 512),
+                  previousStarts: state.previousStarts?.slice(0, -1),
+                })
               }
             >
-              {[
-                ...new Set([
-                  ...(acquisition?.results.map((field) => field.id) ?? []),
-                  ...fields.map((field) => field.request_id),
-                ]),
-              ].map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selected && (
-            <>
-              <p>
-                {selected.dtype} · {selected.unit ?? "未知单位"}
-                {selected.unit_truncated ? "（单位已截断）" : ""} · C-order 原始下标；int64
-                保留十进制原值，超出安全整数范围不绘图。
-              </p>
-              {selected.reason && <p>{selected.reason}</p>}
-              <div className="max-h-72 overflow-auto">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>原始下标</th>
-                      <th>原始数值</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.values.map((value, index) => (
-                      <tr key={selected.start + index}>
-                        <td>{selected.start + index}</td>
-                        <td>
-                          {typeof value === "string" ? value : JSON.stringify(value)}
-                          {selected.truncated_indices.includes(selected.start + index) &&
-                            "（文本已截断）"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+              上一页数据
+            </button>
+            <button
+              className={secondaryButton}
+              disabled={!next.length}
+              onClick={() =>
+                update({
+                  start: Math.min(...next),
+                  previousStarts: [...(state.previousStarts ?? []), state.start],
+                })
+              }
+            >
+              下一页数据
+            </button>
+          </div>
+          <details
+            open={state.dataOpen ?? false}
+            onToggle={(event) => {
+              const dataOpen = event.currentTarget.open;
+              if (dataOpen !== (state.dataOpen ?? false)) update({ dataOpen });
+            }}
+          >
+            <summary className="cursor-pointer text-xs">查看局部原始数值（按窗口）</summary>
+            <div className="mt-2 grid min-w-0 gap-2 text-xs">
+              <label>
+                结果字段{" "}
+                <select
+                  aria-label="精确结果字段"
+                  value={selected?.request_id ?? ""}
+                  onChange={(event) =>
+                    update({ field: event.target.value, start: 0, previousStarts: [] })
+                  }
+                >
+                  {[
+                    ...new Set([
+                      ...(acquisition?.results.map((field) => field.id) ?? []),
+                      ...fields.map((field) => field.request_id),
+                    ]),
+                  ].map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selected && (
+                <>
+                  <p>
+                    {selected.dtype} · {selected.unit ?? "未知单位"}
+                    {selected.unit_truncated ? "（单位已截断）" : ""} · C-order 原始下标；int64
+                    保留十进制原值，超出安全整数范围不绘图。
+                  </p>
+                  {selected.reason && <p>{selected.reason}</p>}
+                  <div role="region" aria-label="局部原始数值表" className="max-h-72 overflow-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>原始下标</th>
+                          <th>原始数值</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selected.values.map((value, index) => (
+                          <tr key={selected.start + index}>
+                            <td>{selected.start + index}</td>
+                            <td>
+                              {typeof value === "string" ? value : JSON.stringify(value)}
+                              {selected.truncated_indices.includes(selected.start + index) &&
+                                "（文本已截断）"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
           <details>
             <summary>有界证据摘要（不是完整回执）</summary>
             <pre className="max-h-72 overflow-auto">

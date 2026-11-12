@@ -41,7 +41,7 @@ export function PendingResultSettings() {
         此数据空间的设置跨窗口共享，仅影响之后被后台接纳的新采集。已有和正在采集的结果保持原策略，不会迁移或删除。
       </p>
       <p className="text-sm text-text-soft">
-        两种方式都使用有界预览，保存仍保留完整科学原始数据；临时保留不等于正式保存，也不保证后台重启后恢复。
+        两种方式都使用有界预览，保存仍保留完整原始回执；临时保留不等于正式保存，也不保证后台重启后恢复。
       </p>
       <section aria-label="后台载荷容量" className="grid gap-1 text-sm">
         <h4>当前后台容量</h4>

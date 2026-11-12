@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { BoundedMeasurement } from "./BoundedMeasurement";
+import { EChart } from "../../ui/EChart";
+import { BoundedMeasurement, formatPreviewTick } from "./BoundedMeasurement";
 import { readMeasurementPreview } from "./measurement-preview";
+vi.mock("../../ui/EChart", () => ({ EChart: vi.fn(() => <div data-testid="bounded-chart" />) }));
+async function openNumericTable() {
+  const details = (await screen.findByText("查看局部原始数值（按窗口）")).closest("details")!;
+  details.open = true;
+  fireEvent(details, new Event("toggle"));
+}
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -46,7 +53,11 @@ it("shows exact unsafe int64 strings without loading full receipts", async () =>
     }),
   );
   render(<BoundedMeasurement source={{ recordId: "integer-window" }} />);
-  expect(await screen.findByText("9007199254740993")).toBeVisible();
+  expect(await screen.findByText("9007199254740993")).not.toBeVisible();
+  await openNumericTable();
+  expect(screen.getByText("9007199254740993")).toBeVisible();
+  expect(screen.getByLabelText("局部原始数值表")).toHaveClass("max-h-72", "overflow-auto");
+  expect(screen.getByLabelText("局部窗口导航")).toHaveClass("flex", "flex-wrap");
   expect(requests).toEqual(["/api/v1/direct-measurements/integer-window/preview"]);
   expect(screen.getByText(/不是全局概览/)).toBeVisible();
 });
@@ -71,7 +82,7 @@ it("does not start a queued request after cancellation", async () => {
 });
 
 it("keeps representation and pagination independently of payload eviction or selection", async () => {
-  const { fireEvent, waitFor } = await import("@testing-library/react");
+  const { waitFor } = await import("@testing-library/react");
   const store = new Map();
   vi.stubGlobal(
     "fetch",
@@ -111,12 +122,19 @@ it("keeps representation and pagination independently of payload eviction or sel
   const view = render(<BoundedMeasurement source={{ recordId: "state-a" }} displayStore={store} />);
   await waitFor(() => expect(screen.getByText("下一页数据")).toBeEnabled());
   fireEvent.change(screen.getByLabelText("复数表示"), { target: { value: "phase" } });
+  await openNumericTable();
   fireEvent.click(screen.getByText("下一页数据"));
   await waitFor(() => expect(store.get("saved:state-a").start).toBe(2));
   view.rerender(<BoundedMeasurement source={{ recordId: "state-b" }} displayStore={store} />);
   expect(screen.getByLabelText("复数表示")).toHaveValue("magnitude");
+  expect(
+    (await screen.findByText("查看局部原始数值（按窗口）")).closest("details"),
+  ).not.toHaveAttribute("open");
   view.rerender(<BoundedMeasurement source={{ recordId: "state-a" }} displayStore={store} />);
   expect(screen.getByLabelText("复数表示")).toHaveValue("phase");
+  expect(
+    (await screen.findByText("查看局部原始数值（按窗口）")).closest("details"),
+  ).toHaveAttribute("open");
   expect(store.get("saved:state-a").start).toBe(2);
 });
 
@@ -166,6 +184,7 @@ it("does not display a late result after changing identity", async () => {
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   view.rerender(<BoundedMeasurement source={{ recordId: "late-new" }} />);
   await act(async () => release(response("old-value")));
+  await openNumericTable();
   expect(await screen.findByRole("cell", { name: "new-value" })).toBeVisible();
   expect(screen.queryByRole("cell", { name: "old-value" })).not.toBeInTheDocument();
 });
@@ -253,4 +272,84 @@ it("releases the preview queue after a timed out request", async () => {
   expect(await first).toHaveProperty("message", "preview timeout");
   await expect(second).resolves.toMatchObject({ method: "exact_slice" });
   timer.mockRestore();
+});
+
+it("uses narrow-chart collision bounds and compact tick labels without changing scientific coordinates", async () => {
+  const fields = [
+    { request_id: "frequency", unit: "Hz", values: [4_800_000_000, 4_900_000_000] },
+    { request_id: "signal", unit: "V", values: [1, 2] },
+  ].map((field) => ({
+    ...field,
+    kind: "array",
+    dtype: "float64",
+    unit_truncated: false,
+    shape: [2],
+    total_count: 2,
+    start: 0,
+    returned_count: 2,
+    next_start: null,
+    complete: true,
+    truncated_indices: [],
+    metadata: {},
+    metadata_truncated: false,
+  }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        method: "exact_slice",
+        status: "collected",
+        raw_bytes: 32,
+        fields,
+        fields_truncated: false,
+        metadata: {},
+        metadata_truncated: false,
+        problems: [],
+        problems_truncated: false,
+      }),
+    ),
+  );
+  render(
+    <BoundedMeasurement
+      source={{ recordId: "narrow-axis" }}
+      acquisition={{
+        id: "capture",
+        results: [
+          { id: "frequency", role: "coordinate", dtype: "float64", unit: "Hz" },
+          {
+            id: "signal",
+            role: "observable",
+            dtype: "float64",
+            unit: "V",
+            axes: [
+              {
+                id: "frequency",
+                kind: "frequency",
+                coordinate_result: "frequency",
+                size: 2,
+                unit: "Hz",
+              },
+            ],
+          },
+        ],
+      }}
+    />,
+  );
+  await screen.findByTestId("bounded-chart");
+  const option = vi.mocked(EChart).mock.calls.at(-1)![0].option;
+  expect(option).toMatchObject({
+    grid: { outerBoundsMode: "same", outerBoundsContain: "all", bottom: 55 },
+    xAxis: { name: "frequency (Hz)", splitNumber: 3, axisLabel: { hideOverlap: true, margin: 12 } },
+    yAxis: { axisLabel: { hideOverlap: true } },
+    series: [
+      {
+        data: [
+          [4_800_000_000, 1],
+          [4_900_000_000, 2],
+        ],
+      },
+    ],
+  });
+  expect(formatPreviewTick(4_800_000_000)).toBe("4.8e+9");
+  expect(formatPreviewTick(4_800_000_001)).not.toBe(formatPreviewTick(4_800_000_000));
 });
