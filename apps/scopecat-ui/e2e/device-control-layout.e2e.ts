@@ -625,10 +625,65 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(saveDialog).toBeHidden();
     await expect(page.getByRole("button", { name: "展开结果", exact: true })).toBeFocused();
+    // Both sweeps are now saved. Unknown-shape existing-trace reads reserve the
+    // full wire envelope, which intentionally cannot fit the memory-only default
+    // even in an empty store. Opt this isolated fixture into disk through the
+    // normal settings API, without changing budgets or the default policy.
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(`${url}/api/v1/pending-result-capacity`);
+        expect(response.ok()).toBe(true);
+        const capacity: components["schemas"]["PendingResultCapacity"] = await response.json();
+        return [capacity.memory_bytes, capacity.work_bytes, capacity.disk_bytes];
+      })
+      .toEqual([0, 0, 0]);
+    const settingsResponse = await page.request.get(`${url}/api/v1/pending-result-settings`);
+    expect(settingsResponse.ok()).toBe(true);
+    const settings: components["schemas"]["PendingResultSettings"] = await settingsResponse.json();
+    expect(settings.storage_policy).toBe("memory_only");
+    const diskSettings = await page.request.put(`${url}/api/v1/pending-result-settings`, {
+      data: { revision: settings.revision, storage_policy: "allow_temporary_disk" },
+    });
+    expect(diskSettings.ok()).toBe(true);
+    expect(await diskSettings.json()).toEqual({
+      revision: settings.revision + 1,
+      storage_policy: "allow_temporary_disk",
+    });
+    const previousResults = await page
+      .getByTestId(/^recent-result-/)
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-testid")));
+    expect(previousResults).toHaveLength(2);
     await page.setViewportSize({ width: 390, height: 900 });
     await showControls(page);
+    const readResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/collect-review") &&
+        response.request().postDataJSON().interface_id === "scopecat.existing_network_trace/v1",
+    );
     await read.click();
+    const readReceipt = await readResponse;
+    expect(readReceipt.ok()).toBe(true);
+    const summary: components["schemas"]["CollectReviewReceipt"] = await readReceipt.json();
+    expect(summary.status).toBe("collected");
+    expect(summary.problems).toEqual([]);
+    expect(summary.pending?.receipt_validation).toBe("verified");
+    expect(summary.pending?.intent.acquisition_id).toBe("read_trace");
+    const selection = summary.pending!.selection;
+    expect(previousResults).not.toContain(`recent-result-${selection.command_id}`);
     await showResults(page);
+    await expect(page.getByTestId(/^recent-result-/)).toHaveCount(3);
+    await expect(page.getByTestId(`recent-result-${selection.command_id}`)).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByRole("combobox", { name: "选择近期结果", exact: true })).toHaveValue(
+      JSON.stringify([selection.session_id, selection.instrument_id, selection.command_id]),
+    );
+    await expect(
+      current.getByText("scopecat.existing_network_trace/v1 / 设备 / read_trace"),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
     await expectFittedCurve(curve);
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
