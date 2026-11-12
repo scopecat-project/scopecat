@@ -5,11 +5,23 @@ import { readOperatorSettings } from "../application/OperatorSettings";
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hardwareReceiptResponse } from "./receipt-fixture.test-support";
+import { producerReceipts } from "./receipt-fixture.test-support";
+import { usePendingMeasurements } from "./use-pending-measurements";
+import type { MeasurementPreview } from "./measurement-preview";
 import { ApiError } from "../../api-client";
 import type {
+  InstrumentCollectReceipt,
   InstrumentInterface,
   InstrumentSession,
   InstrumentSessionLease,
@@ -105,8 +117,61 @@ vi.mock("./instrument-finish-api", () => ({
   getInstrumentFinishPlan: vi.fn(),
   finishInstrumentSession: vi.fn(),
 }));
+function previewFixture(
+  receipt: InstrumentCollectReceipt = {
+    status: "collected",
+    problems: [],
+    readback: { values: {} },
+  },
+): MeasurementPreview {
+  return {
+    method: "exact_slice",
+    status: receipt.status,
+    raw_bytes: 1024,
+    fields: Object.entries(receipt.readback?.values ?? {}).map(([request_id, value]) => {
+      if (value.kind === "partitioned_array") throw new Error("Unexpected partitioned fixture");
+      const shape = value.kind === "scalar" ? [] : value.shape;
+      const values =
+        value.kind === "unavailable"
+          ? []
+          : value.kind === "scalar"
+            ? [value.value]
+            : value.values.flat(Infinity);
+      return {
+        request_id,
+        kind: value.kind,
+        dtype: value.dtype,
+        unit: value.unit ?? null,
+        unit_truncated: false,
+        shape,
+        total_count: value.kind === "unavailable" ? null : values.length,
+        start: 0,
+        returned_count: values.length,
+        next_start: null,
+        complete: true,
+        values: (value.dtype === "int64"
+          ? values.map(String)
+          : values) as MeasurementPreview["fields"][number]["values"],
+        truncated_indices: [],
+        metadata: {},
+        metadata_truncated: false,
+        reason: value.kind === "unavailable" ? value.reason : null,
+      };
+    }),
+    fields_truncated: false,
+    metadata: {},
+    metadata_truncated: false,
+    problems: [],
+    problems_truncated: false,
+  };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(previewFixture())),
+  );
   vi.mocked(listPendingMeasurements).mockResolvedValue({ items: [] });
   vi.mocked(discardDirectMeasurement).mockResolvedValue({ status: "discarded", record_id: null });
   vi.mocked(getInstrumentFinishPlan).mockResolvedValue({
@@ -174,7 +239,7 @@ beforeEach(() => {
   vi.mocked(collectInstrumentAcquisition).mockResolvedValue({
     status: "collected",
     problems: [],
-    readback: { values: {} },
+    pending: null,
   });
   vi.mocked(invokeInstrumentOperation).mockResolvedValue({
     status: "invoked",
@@ -782,7 +847,7 @@ describe("instrument workspace", () => {
             resolve({
               status: "collected",
               problems: [],
-              readback: { values: {} },
+              pending: null,
             });
         }),
     );
@@ -1396,23 +1461,36 @@ describe("instrument workspace", () => {
     vi.mocked(openInstrumentSession).mockResolvedValue(
       session({ descriptions: [view.description] }),
     );
-    vi.mocked(collectInstrumentAcquisition).mockResolvedValue({
-      status: "collected",
-      problems: [],
-      readback: {
-        values: {
-          trace: { kind: "array", dtype: "float64", shape: [3], unit: "ratio", values: [1, 2, 3] },
-        },
-      },
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          previewFixture({
+            status: "collected",
+            problems: [],
+            readback: {
+              values: {
+                trace: {
+                  kind: "array",
+                  dtype: "float64",
+                  shape: [3],
+                  unit: "ratio",
+                  values: [1, 2, 3],
+                },
+              },
+            },
+          }),
+        ),
+      ),
+    );
     renderWorkspace();
     await connectInstrument();
     fireEvent.click(screen.getAllByRole("button", { name: "Sample Collect" })[0]!);
     const current = await screen.findByRole("region", { name: "当前测量结果" });
-    expect(within(current).getByRole("img", { name: /完整曲线/ })).toBeVisible();
+    expect(await within(current).findByRole("img", { name: /局部曲线/ })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Read existing Collect" }));
     await waitFor(() => expect(within(current).getByText(/Read existing ·/)).toBeVisible());
-    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
     fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
       target: { value: "6000000000" },
     });
@@ -1421,15 +1499,16 @@ describe("instrument workspace", () => {
     await waitFor(() =>
       expect(within(current).getByText(/此后已执行设置或设备动作/)).toBeVisible(),
     );
-    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
     vi.mocked(collectInstrumentAcquisition).mockResolvedValueOnce({
       status: "not_collected",
       problems: [],
+      pending: null,
     });
     fireEvent.click(screen.getAllByRole("button", { name: "Sample Collect" })[0]!);
     await waitFor(() => expect(within(current).getByText(/最近一次采集未成功/)).toBeVisible());
     expect(within(current).getByText(/Read existing ·/)).toBeVisible();
-    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
   });
 
   it("collapses the parent layout without losing selected or pending results", async () => {
@@ -1591,6 +1670,7 @@ describe("instrument workspace", () => {
       id: "saved-one",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
@@ -1639,6 +1719,7 @@ describe("instrument workspace", () => {
       id: "saved-capacity",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
@@ -1685,6 +1766,7 @@ describe("instrument workspace", () => {
       id: "saved-capacity",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
@@ -1730,6 +1812,7 @@ describe("instrument workspace", () => {
       id: "saved-through-exit",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
@@ -1767,26 +1850,46 @@ describe("instrument workspace", () => {
     expect(finishInstrumentSession).not.toHaveBeenCalled();
   });
 
-  it("displays a current Python HTTP receipt through the real collection API", async () => {
+  it("displays a bounded projection of Python receipt values through the JSON collection API", async () => {
+    const view = instrument();
+    const member = view.description!.interfaces![0]!;
+    member.acquisitions![0]!.results[0] = {
+      ...member.acquisitions![0]!.results[0]!,
+      unit: null,
+      axes: [{ id: "sample", kind: "sample", size: 2 }],
+    };
+    mockInventory({ setup: session().setup, problems: [], items: [view] });
+    vi.mocked(openInstrumentSession).mockResolvedValue(
+      session({ descriptions: [view.description!] }),
+    );
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(hardwareReceiptResponse()));
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        Response.json(
+          url.endsWith("/collect-review")
+            ? { status: "collected", problems: [], pending: null }
+            : previewFixture(producerReceipts[0]!.expected),
+        ),
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
     expect(await screen.findByRole("region", { name: "当前测量结果" })).toBeVisible();
-    fireEvent.click(screen.getByText("结果数据（数值与可用性）"));
+
     await waitFor(() =>
       expect(
         within(screen.getByRole("combobox", { name: "精确结果字段" })).getAllByRole("option"),
       ).toHaveLength(15),
     );
     expect(screen.getByRole("status")).toHaveTextContent("2 项结果不可用");
-    expect(screen.getByRole("status")).toHaveTextContent("原因： 无效、缺失");
-    expect(screen.getByRole("img", { name: /完整曲线/i })).toBeVisible();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(/原因：\s*无效、缺失/);
+    expect(screen.getByRole("img", { name: /局部曲线/i })).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it.each([
@@ -1795,9 +1898,15 @@ describe("instrument workspace", () => {
   ] as const)("handles current Python receipt status %i", async (index, message) => {
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(() => Promise.resolve(hardwareReceiptResponse(index)));
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        Response.json({
+          status: producerReceipts[index]!.expected.status,
+          problems: producerReceipts[index]!.expected.problems,
+          pending: null,
+        }),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     renderWorkspace();
     await screen.findAllByText("Drive source");
@@ -1808,41 +1917,48 @@ describe("instrument workspace", () => {
   });
 
   it("summarizes unavailable collect results without plotting them", async () => {
-    vi.mocked(collectInstrumentAcquisition).mockResolvedValueOnce({
-      status: "collected",
-      problems: [],
-      readback: {
-        values: {
-          "private-overload-result": {
-            kind: "unavailable",
-            reason: "overload",
-            dtype: "float64",
-            unit: "ratio",
-            shape: [],
-            metadata: {},
-          },
-          "private-missing-result": {
-            kind: "unavailable",
-            reason: "missing",
-            dtype: "float64",
-            unit: "ratio",
-            shape: [128],
-            metadata: {},
-          },
-        },
-      },
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          previewFixture({
+            status: "collected",
+            problems: [],
+            readback: {
+              values: {
+                "private-overload-result": {
+                  kind: "unavailable",
+                  reason: "overload",
+                  dtype: "float64",
+                  unit: "ratio",
+                  shape: [],
+                  metadata: {},
+                },
+                "private-missing-result": {
+                  kind: "unavailable",
+                  reason: "missing",
+                  dtype: "float64",
+                  unit: "ratio",
+                  shape: [128],
+                  metadata: {},
+                },
+              },
+            },
+          }),
+        ),
+      ),
+    );
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
 
-    const summary = await screen.findByRole("status");
+    const summary = await screen.findByText(/2 项结果不可用/);
     expect(summary).toHaveTextContent("2 项结果不可用");
-    expect(summary).toHaveTextContent("原因： 缺失、过载");
+    expect(summary).toHaveTextContent(/原因：\s*缺失、过载/);
     expect(summary).not.toHaveTextContent("private-overload-result");
     expect(summary).not.toHaveTextContent("private-missing-result");
-    expect(screen.queryByRole("img", { name: /完整曲线/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /局部曲线/i })).not.toBeInTheDocument();
     expect(screen.queryByText("JSON preview")).not.toBeInTheDocument();
   });
 
@@ -3750,7 +3866,9 @@ it("recovers and explicitly discards an old pending result while disconnected wi
       {
         selection,
         description,
+        receipt_validation: "verified" as const,
         collected_at: "2026-11-12T01:00:00Z",
+        raw_bytes: 1024,
         intent: {
           instrument_id: "drive-source",
           command_id: selection.command_id,
@@ -3779,7 +3897,7 @@ it("recovers and explicitly discards an old pending result while disconnected wi
   fireEvent.click(screen.getByRole("button", { name: "重新核查后台待保存结果" }));
   await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledTimes(2));
   expect(screen.queryByTestId("recent-result-recovered-original")).not.toBeInTheDocument();
-  expect(readPendingMeasurementReceipt).toHaveBeenCalledOnce();
+  expect(readPendingMeasurementReceipt).not.toHaveBeenCalled();
 });
 
 it("saves and discards recovered results with reused command IDs without aliasing sessions", async () => {
@@ -3798,7 +3916,9 @@ it("saves and discards recovered results with reused command IDs without aliasin
       series_id: "",
     },
     description,
+    receipt_validation: "verified" as const,
     collected_at: "2026-11-12T01:00:00Z",
+    raw_bytes: 1024,
     intent: {
       instrument_id: "drive-source",
       command_id: "reused-command",
@@ -3829,5 +3949,69 @@ it("saves and discards recovered results with reused command IDs without aliasin
   fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
   expect(screen.getByTestId("recent-result-reused-command")).toHaveTextContent("old-a");
   expect(screen.getByTestId("recent-result-reused-command")).toHaveTextContent("已保存");
+  expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
+});
+
+it("ignores a late pending listing after switching instrument identity without fetching originals", async () => {
+  type Page = Awaited<ReturnType<typeof listPendingMeasurements>>;
+  let finishOld!: (page: Page) => void;
+  let finishNew!: (page: Page) => void;
+  vi.mocked(listPendingMeasurements)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishNew = resolve;
+        }),
+    );
+  const recovered = vi.fn();
+  const { rerender } = renderHook(
+    ({ instrumentId }) => usePendingMeasurements(instrumentId, recovered),
+    {
+      initialProps: { instrumentId: "old-device" },
+    },
+  );
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledWith("old-device"));
+  rerender({ instrumentId: "new-device" });
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledWith("new-device"));
+  const description = instrument().description!;
+  const member = description.interfaces!.find((entry) => entry.acquisitions?.length)!;
+  const makeItem = (instrument_id: string): Page["items"][number] => ({
+    selection: {
+      instrument_id,
+      session_id: "old-session",
+      command_id: "same-command",
+      title: "",
+      note: "",
+      line_id: "",
+      line_label: "",
+      series_id: "",
+    },
+    description,
+    receipt_validation: "verified" as const,
+    collected_at: "2026-11-12T01:00:00Z",
+    raw_bytes: 1024,
+    intent: {
+      instrument_id,
+      command_id: "same-command",
+      interface_id: member.id,
+      acquisition_id: member.acquisitions![0]!.id,
+      retain_result: true,
+    },
+  });
+  await act(async () => finishOld({ items: [makeItem("old-device")] }));
+  expect(recovered).not.toHaveBeenCalled();
+  await act(async () => finishNew({ items: [makeItem("new-device")] }));
+  expect(recovered).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      selection: expect.objectContaining({ instrument_id: "new-device" }),
+    }),
+  );
+  expect(readPendingMeasurementReceipt).not.toHaveBeenCalled();
   expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
 });

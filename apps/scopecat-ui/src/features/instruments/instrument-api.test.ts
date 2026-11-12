@@ -1,15 +1,11 @@
-import {
-  hardwareReceiptResponse,
-  producerReceipts,
-  unsupportedAvailabilityResponse,
-} from "./receipt-fixture.test-support";
+import { unsupportedAvailabilityResponse } from "./receipt-fixture.test-support";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   InstrumentAcquisition,
   InstrumentOperation,
   InstrumentSession,
 } from "../../api-contract";
-import { requestHeaders, requestJson, requestMethod, requestPath } from "../../test/http";
+import { requestJson, requestMethod, requestPath } from "../../test/http";
 import {
   applyInstrumentConfiguredDefaults,
   applyInstrumentState,
@@ -266,7 +262,7 @@ describe("interactive collection request shaping", () => {
 
   it("sends only acquisition identity for daemon-side planning", async () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-      Promise.resolve(hardwareReceiptResponse()),
+      Promise.resolve(Response.json({ status: "collected", problems: [], pending: null })),
     );
     vi.stubGlobal("fetch", fetchMock);
     const target: InstrumentAcquisitionTarget = {
@@ -298,15 +294,12 @@ describe("interactive collection request shaping", () => {
 
     await expect(
       sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry"),
-    ).resolves.toEqual(producerReceipts[0]!.expected);
+    ).resolves.toEqual({ status: "collected", problems: [], pending: null });
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(requestPath(fetchMock.mock.calls[0]?.[0])).toBe(
-      "/api/v1/instrument-sessions/session-1/instruments/vna-1/collect",
+      "/api/v1/instrument-sessions/session-1/instruments/vna-1/collect-review",
     );
-    expect(
-      requestHeaders(fetchMock.mock.calls[0]?.[0], fetchMock.mock.calls[0]?.[1]).get("Accept"),
-    ).toBe(producerReceipts[0]!.media_type);
     await expect(
       requestJson(fetchMock.mock.calls[0]?.[0], fetchMock.mock.calls[0]?.[1]),
     ).resolves.toEqual({
@@ -316,13 +309,14 @@ describe("interactive collection request shaping", () => {
       component_path: ["readout"],
       acquisition_id: "sweep",
       result_ids: [],
+      retain_result: true,
     });
   });
   it("uses caller idempotency ids across repeated mutating requests", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(
-        requestPath(input).endsWith("/collect")
-          ? hardwareReceiptResponse()
+        requestPath(input).endsWith("/collect-review")
+          ? Response.json({ status: "collected", problems: [], pending: null })
           : new Response("{}", {
               status: 200,
               headers: { "Content-Type": "application/json" },
@@ -371,10 +365,10 @@ describe("interactive collection request shaping", () => {
     await invokeInstrumentOperation(session(), "vna-1", operationTarget, [], "invoke-retry");
     await expect(
       sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry"),
-    ).resolves.toEqual(producerReceipts[0]!.expected);
+    ).resolves.toEqual({ status: "collected", problems: [], pending: null });
     await expect(
       sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry"),
-    ).resolves.toEqual(producerReceipts[0]!.expected);
+    ).resolves.toEqual({ status: "collected", problems: [], pending: null });
     await closeInstrumentSession("session-1");
     await closeInstrumentSession("session-1");
 

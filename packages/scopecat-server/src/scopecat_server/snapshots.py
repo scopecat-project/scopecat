@@ -29,6 +29,9 @@ from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, RUNTIME_BINDING_NAME
 
 from scopecat_server.services.operator_settings import OPERATOR_SETTINGS_FILE
+from scopecat_server.services.pending_result_settings import (
+    PENDING_RESULT_SETTINGS_FILE,
+)
 from scopecat_server.storage.sqlite.data_reference_schema import (
     DIRECT_MEASUREMENT_EVENT_KIND,
 )
@@ -153,13 +156,9 @@ def create_snapshot(
                 if relative.name.endswith(".tmp") and relative.name.startswith("."):
                     continue
                 _copy(data_root / "objects" / relative, objects / relative)
-            operator_settings = data_root / OPERATOR_SETTINGS_FILE
-            if operator_settings.is_symlink():
-                raise SnapshotError("operator settings must be a regular data file")
-            if operator_settings.is_file():
-                _copy(
-                    operator_settings, captured / data_relative / OPERATOR_SETTINGS_FILE
-                )
+            _copy_data_settings(data_root, captured / data_relative)
+            # The policy is a durable preference, but pending-results/ contains
+            # unsaved process-lifetime originals and is deliberately not copied.
             receipts = data_root / "author-jobs"
             if receipts.exists():
                 for relative in _files(receipts):
@@ -421,6 +420,18 @@ def verify_store_files(project: Path, *, data_relative: Path = _PROJECT_DATA) ->
         return version
 
 
+def _copy_data_settings(source: Path, destination: Path) -> None:
+    for name, label in (
+        (OPERATOR_SETTINGS_FILE, "operator settings"),
+        (PENDING_RESULT_SETTINGS_FILE, "pending-result settings"),
+    ):
+        selected = source / name
+        if selected.is_symlink():
+            raise SnapshotError(f"{label} must be a regular data file")
+        if selected.is_file():
+            _copy(selected, destination / name)
+
+
 def _allowed_path(path: PurePosixPath, *, application: bool = False) -> bool:
     if application:
         if path.as_posix() in {
@@ -440,6 +451,7 @@ def _allowed_path(path: PurePosixPath, *, application: bool = False) -> bool:
         path.is_relative_to(PurePosixPath(".scopecat/author-jobs"))
         or path.is_relative_to(PurePosixPath(".scopecat/practice"))
         or path == PurePosixPath(".scopecat", OPERATOR_SETTINGS_FILE)
+        or path == PurePosixPath(".scopecat", PENDING_RESULT_SETTINGS_FILE)
         or path == PurePosixPath(_DATABASE)
         or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) in {4, 7})
     )

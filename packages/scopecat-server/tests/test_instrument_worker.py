@@ -1278,6 +1278,8 @@ def test_worker_availability_failure_reaches_collect_consumer_without_reexecutio
     tmp_path: Path,
     mode: str,
 ) -> None:
+    from scopecat_server.services.pending_result_settings import PendingResultSettings
+
     project = _copy_project(tmp_path)
     (project / "array-availability-mode").write_text(mode)
     with (
@@ -1287,6 +1289,15 @@ def test_worker_availability_failure_reaches_collect_consumer_without_reexecutio
         TestClient(runtime.app()) as transport,
         _http_daemon_client(transport) as daemon,
     ):
+        # This ragged result has unknown size. Explicitly admit it so the test
+        # reaches the worker availability fault, rather than memory-only policy.
+        settings = runtime.application.pending_result_settings
+        settings.save(
+            PendingResultSettings(
+                revision=settings.read().revision,
+                storage_policy="allow_temporary_disk",
+            )
+        )
         session = runtime.application.instruments.open_session(
             InstrumentSessionOpenCommand(
                 operation_id="availability-session",

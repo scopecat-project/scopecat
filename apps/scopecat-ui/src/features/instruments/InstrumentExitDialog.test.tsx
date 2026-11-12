@@ -35,7 +35,6 @@ const pending: PendingMeasurement[] = ["one", "two"].map((id) => ({
     note: "fixed attribution",
   },
   acquisition: { id: "sweep", results: [] },
-  receipt: { status: "collected", problems: [] },
 }));
 beforeEach(() => {
   vi.resetAllMocks();
@@ -716,4 +715,21 @@ it("does not treat an unfinished or failed pending discovery as an empty queue",
     </QueryClientProvider>,
   );
   expect(screen.getByRole("button", { name: "保持当前状态并结束" })).toBeEnabled();
+});
+
+it("keeps invalid originals saveable but explicitly warns in the departure dialog", async () => {
+  const item = {
+    ...pending[0]!,
+    receipt_validation: "invalid" as const,
+    validation_reason: "result contract mismatch",
+  };
+  vi.mocked(saveDirectMeasurement).mockResolvedValue({
+    id: "invalid-original",
+    selection: item.selection,
+  } as SavedMeasurement);
+  show([item]);
+  expect(screen.getByText("无效原件（契约不匹配）")).toBeVisible();
+  expect(screen.getByText(/保存不表示它是合格科学数据/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "保存此结果" }));
+  await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));
 });

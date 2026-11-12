@@ -4,26 +4,31 @@ Small append-only catalog entries reuse durable events. Large immutable receipts
 use the existing object store and current-format snapshot ownership.
 """
 
+import mmap
 import sqlite3
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime
-from hashlib import sha256
+from hashlib import file_digest, sha256
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from scopecat.control.models import DurableEventInput
-from scopecat.daemon.hardware_receipt_wire import encode_collect_receipt
+from scopecat.kernel.problems import Problem
 from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.instruments.commands import InteractiveCollectIntent
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.instruments.retained_receipt import RawCollectReceipt
 from scopecat_server.instruments.runtime import InstrumentRuntime
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.data_cleanup import require_retained_references
 from scopecat_server.storage.sqlite.data_reference_schema import (
     DIRECT_MEASUREMENT_EVENT_KIND,
 )
+from scopecat_server.storage.sqlite.object_store import ObjectCorruptError
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 _KIND = DIRECT_MEASUREMENT_EVENT_KIND
@@ -52,6 +57,10 @@ class DirectMeasurementSave(DirectMeasurementIdentity):
 
 
 class PendingDirectMeasurement(BaseModel):
+    receipt_validation: Literal["verified", "unverified", "invalid"] = "verified"
+    validation_reason: str | None = Field(default=None, max_length=512)
+    validation_code: str | None = Field(default=None, max_length=100)
+    raw_bytes: int
     selection: DirectMeasurementSave
     collected_at: datetime
     description: InstrumentDescription
@@ -60,6 +69,12 @@ class PendingDirectMeasurement(BaseModel):
 
 class PendingDirectMeasurementPage(BaseModel):
     items: list[PendingDirectMeasurement]
+
+
+class CollectReviewReceipt(BaseModel):
+    status: Literal["collected", "not_collected", "unknown"]
+    problems: list[Problem]
+    pending: PendingDirectMeasurement | None
 
 
 class DirectMeasurementNoteCommand(BaseModel):
@@ -81,6 +96,9 @@ class _NoteEvent(BaseModel):
 class DirectMeasurement(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    receipt_validation: Literal["verified", "unverified", "invalid"] = "verified"
+    validation_reason: str | None = Field(default=None, max_length=512)
+    validation_code: str | None = Field(default=None, max_length=100)
     id: str
     saved_at: datetime
     collected_at: datetime
@@ -173,6 +191,10 @@ class DirectMeasurements:
                         collected_at=value[2].collected_at,
                         description=value[1],
                         intent=value[2].intent,
+                        raw_bytes=self._raw(value[2].receipt).size_bytes,
+                        receipt_validation=value[2].receipt_validation,
+                        validation_reason=value[2].validation_reason,
+                        validation_code=value[2].validation_code,
                     )
                     for key, value in self.instruments.pending_collections.list(
                         instrument_id
@@ -180,12 +202,98 @@ class DirectMeasurements:
                 ]
             )
 
-    def pending_receipt(self, selection: DirectMeasurementIdentity) -> bytes:
+    @staticmethod
+    def _raw(receipt: object) -> RawCollectReceipt:
+        from scopecat.sdk.instruments.commands import CollectReceipt
+
+        if isinstance(receipt, RawCollectReceipt):
+            return receipt
+        if isinstance(receipt, CollectReceipt):
+            return RawCollectReceipt.from_receipt(receipt)
+        raise TypeError("invalid retained receipt")
+
+    def pending_one(
+        self, selection: DirectMeasurementIdentity
+    ) -> PendingDirectMeasurement | None:
         with self.instruments.pending_collections.disposition_lock:
-            _, _, replay = self.instruments.retained_collection(
-                selection.session_id, selection.instrument_id, selection.command_id
+            value = self.instruments.pending_collections.find(
+                (selection.session_id, selection.instrument_id, selection.command_id)
             )
-            return encode_collect_receipt(replay.receipt)
+            if value is None:
+                return None
+            return PendingDirectMeasurement(
+                selection=DirectMeasurementSave(
+                    session_id=selection.session_id,
+                    instrument_id=selection.instrument_id,
+                    command_id=selection.command_id,
+                ),
+                collected_at=value[2].collected_at,
+                description=value[1],
+                intent=value[2].intent,
+                raw_bytes=self._raw(value[2].receipt).size_bytes,
+                receipt_validation=value[2].receipt_validation,
+                validation_reason=value[2].validation_reason,
+                validation_code=value[2].validation_code,
+            )
+
+    @contextmanager
+    def pending_raw_receipt(
+        self, selection: DirectMeasurementIdentity, *, require_verified: bool = False
+    ) -> Generator[RawCollectReceipt]:
+        key = (selection.session_id, selection.instrument_id, selection.command_id)
+        with (
+            self.instruments.pending_collections.lease(key) as retained,
+            self.instruments.pending_collections.working_bytes(1024 * 1024),
+        ):
+            if require_verified and retained[2].receipt_validation != "verified":
+                raise BackendConflict(
+                    "This diagnostic original has not passed contract validation; "
+                    "it remains available for saving or download, not plotting"
+                )
+            yield self._raw(retained[2].receipt)
+
+    @contextmanager
+    def raw_receipt(
+        self, record_id: str, *, require_verified: bool = False
+    ) -> Generator[RawCollectReceipt]:
+        """Borrow a verified saved original; no views may escape this context."""
+        record = self.get(record_id)
+        if require_verified and record.receipt_validation != "verified":
+            raise BackendConflict(
+                "This diagnostic original has not passed contract validation; "
+                "it remains available for download, not plotting"
+            )
+        digest = record.receipt_digest
+        with (
+            self.instruments.pending_collections.working_bytes(8 * 1024 * 1024 * 64),
+            self.store.objects.path_for(digest).open("rb") as source,
+        ):
+            if f"sha256:{file_digest(source, 'sha256').hexdigest()}" != digest:
+                raise ObjectCorruptError("saved direct receipt checksum mismatch")
+            with mmap.mmap(source.fileno(), 0, access=mmap.ACCESS_READ) as mapping:
+                raw = RawCollectReceipt.from_http_buffer(
+                    memoryview(mapping), defer_view=True
+                )
+                if record.receipt_validation == "verified":
+                    try:
+                        raw = raw.with_view()
+                    except ValueError as error:
+                        raw = raw.with_contract_error(str(error))
+                    except MemoryError:
+                        pass
+                try:
+                    yield raw
+                finally:
+                    for attachment in raw.attachments:
+                        if isinstance(attachment, memoryview):
+                            attachment.release()
+
+    def pending_receipt(self, selection: DirectMeasurementIdentity) -> bytes:
+        with (
+            self.pending_raw_receipt(selection) as raw,
+            self.instruments.pending_collections.materialize(raw),
+        ):
+            return raw.to_bytes()
 
     def save(self, selection: DirectMeasurementSave) -> DirectMeasurement:
         # All disposition operations share this lock, including another service
@@ -213,7 +321,15 @@ class DirectMeasurements:
             selection.instrument_id,
             selection.command_id,
         )
-        digest = self.store.objects.put(encode_collect_receipt(replay.receipt)).digest
+        with (
+            self.pending_raw_receipt(selection) as raw,
+            self.instruments.pending_collections.staging_file(raw.size_bytes) as staged,
+        ):
+            self.store.objects.bootstrap()
+            with staged.open("wb") as output:
+                for segment in raw.segments():
+                    output.write(segment)
+            digest = self.store.objects.put_file(staged).digest
         record = DirectMeasurement(
             id=record_id,
             saved_at=datetime.now(UTC),
@@ -224,6 +340,9 @@ class DirectMeasurements:
             intent=replay.intent,
             observed_before_collection=replay.observed_before_collection,
             receipt_digest=digest,
+            receipt_validation=replay.receipt_validation,
+            validation_reason=replay.validation_reason,
+            validation_code=replay.validation_code,
         )
         with self.store.sqlite.write_transaction() as connection:
             previous = self._find(connection, record_id)
@@ -347,4 +466,8 @@ class DirectMeasurements:
         return self.get(record_id)
 
     def receipt(self, record_id: str) -> bytes:
-        return self.store.objects.read(self.get(record_id).receipt_digest)
+        with (
+            self.raw_receipt(record_id) as raw,
+            self.instruments.pending_collections.materialize(raw),
+        ):
+            return raw.to_bytes()

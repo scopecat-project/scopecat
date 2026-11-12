@@ -45,6 +45,7 @@ from .backend import (
     InstrumentBackendUnavailable,
     InstrumentHandle,
 )
+from .retained_receipt import RawCollectReceipt
 
 
 class InstrumentActorError(RuntimeError):
@@ -305,6 +306,16 @@ class OwnedInstrument:
 
     def collect(self, request: BackendCollectRequest) -> CollectReceipt:
         return self._actor.collect(self, request)
+
+    def collect_raw(
+        self,
+        request: BackendCollectRequest,
+        *,
+        maximum_receipt_bytes: int | None = None,
+    ) -> RawCollectReceipt:
+        return self._actor.collect_raw(
+            self, request, maximum_receipt_bytes=maximum_receipt_bytes
+        )
 
     def prepare_acquisitions(
         self,
@@ -583,6 +594,35 @@ class _InstrumentActor:
             endpoint, handle = self._require_owned(owned)
             try:
                 receipt = endpoint.collect(handle, request)
+            except Exception:
+                self._require_cache().mark_all_unknown("collect_outcome_unknown")
+                raise
+            if receipt.status != "collected":
+                self._require_cache().mark_all_unknown("collect_outcome_unknown")
+            return receipt
+
+    def collect_raw(
+        self,
+        owned: OwnedInstrument,
+        request: BackendCollectRequest,
+        *,
+        maximum_receipt_bytes: int | None = None,
+    ) -> RawCollectReceipt:
+        with self._lock:
+            endpoint, handle = self._require_owned(owned)
+            try:
+                raw_collect = getattr(endpoint, "collect_raw", None)
+                receipt = (
+                    raw_collect(
+                        handle, request, maximum_receipt_bytes=maximum_receipt_bytes
+                    )
+                    if callable(raw_collect)
+                    else RawCollectReceipt.from_receipt(
+                        endpoint.collect(handle, request), defer_view=True
+                    )
+                )
+                if not isinstance(receipt, RawCollectReceipt):
+                    raise TypeError("backend returned an invalid raw receipt owner")
             except Exception:
                 self._require_cache().mark_all_unknown("collect_outcome_unknown")
                 raise

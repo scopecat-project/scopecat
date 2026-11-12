@@ -1,3 +1,4 @@
+import { ReceiptValidationNotice } from "./ReceiptValidation";
 import { measurementKey } from "./measurement-identity";
 import type { MeasurementSave } from "./direct-measurement-api";
 import { useEffect, useRef, useState } from "react";
@@ -233,6 +234,7 @@ export function InstrumentExitDialog({
                     {item.selection.line_label || "未标注测量对象"} ·{" "}
                     {item.acquisition.label ?? item.acquisition.id} · {item.selection.note}
                   </span>
+                  <ReceiptValidationNotice value={item} />
                   <button
                     type="button"
                     className={secondaryButton}

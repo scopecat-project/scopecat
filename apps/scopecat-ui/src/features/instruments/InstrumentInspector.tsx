@@ -235,7 +235,9 @@ function InstrumentInspectorContent({
       {
         selection: result.selection,
         acquisition: result.target.acquisition,
-        receipt: result.receipt,
+        receipt_validation: result.receipt_validation,
+        validation_reason: result.validation_reason,
+        validation_code: result.validation_code,
       },
     ]);
     setCurrentMeasurement((current) => current ?? result);
@@ -416,7 +418,23 @@ function InstrumentInspectorContent({
       if (receipt.status === "collected" && selection) {
         pendingRecovery.remember(selection);
         setOutputTouched(true);
-        const result = { target, receipt, selection, receivedAt: new Date().toISOString() };
+        const originalTarget = receipt.pending
+          ? acquisitionTargets(receipt.pending.description).find(
+              (item) =>
+                item.interfaceId === receipt.pending!.intent.interface_id &&
+                item.acquisition.id === receipt.pending!.intent.acquisition_id &&
+                JSON.stringify(item.componentPath) ===
+                  JSON.stringify(receipt.pending!.intent.component_path ?? []),
+            )
+          : undefined;
+        const result = {
+          receipt_validation: receipt.pending?.receipt_validation,
+          validation_reason: receipt.pending?.validation_reason,
+          validation_code: receipt.pending?.validation_code,
+          target: originalTarget ?? target,
+          selection,
+          receivedAt: receipt.pending?.collected_at ?? new Date().toISOString(),
+        };
         setCurrentMeasurement(result);
         setRecentMeasurements((current) =>
           current.some((item) => sameMeasurement(item.selection, selection))
@@ -426,7 +444,16 @@ function InstrumentInspectorContent({
         setPendingMeasurements((current) =>
           current.some((item) => sameMeasurement(item.selection, selection))
             ? current
-            : [...current, { selection, acquisition: target.acquisition, receipt }],
+            : [
+                ...current,
+                {
+                  selection,
+                  acquisition: result.target.acquisition,
+                  receipt_validation: result.receipt_validation,
+                  validation_reason: result.validation_reason,
+                  validation_code: result.validation_code,
+                },
+              ],
         );
       }
       if (receipt.status !== "collected")
@@ -434,7 +461,10 @@ function InstrumentInspectorContent({
       delete collectionSelections.current[commandId];
       const key = acquisitionKey(target);
       delete collectCommandIdsRef.current[key];
-      setCollectResults((current) => ({ ...current, [key]: receipt }));
+      setCollectResults((current) => ({
+        ...current,
+        [key]: { status: receipt.status, problems: receipt.problems },
+      }));
       if (receipt.status === "unknown") {
         onSessionLost("收集结果未知。后台服务已隔离此会话，需操作者核对。");
       }

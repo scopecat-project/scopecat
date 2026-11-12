@@ -1,10 +1,15 @@
+import { ReceiptValidationNotice, isVerifiedReceipt } from "./ReceiptValidation";
 import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import type { InstrumentAcquisition, InstrumentCollectReceipt } from "../../api-contract";
-import { ApiError } from "../../api-client";
 import { EChart } from "../../ui/EChart";
 import { curveNumbers } from "./AcquisitionCurve";
-import { decodeCollectReceipt } from "./hardware-receipt-wire";
+import { previewNumbers } from "./BoundedMeasurement";
+import {
+  readMeasurementPreview,
+  type MeasurementPreview,
+  type PreviewField,
+} from "./measurement-preview";
 import type { SavedMeasurement } from "./direct-measurement-api";
 
 export const COMPARISON_LIMIT = 4;
@@ -20,23 +25,23 @@ export function measurementGroupKey(record: SavedMeasurement): string {
   ]);
 }
 
-export function measurementReceiptQuery(record: SavedMeasurement) {
-  return {
-    queryKey: ["direct-measurement-receipt", record.id],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/v1/direct-measurements/${encodeURIComponent(record.id)}/receipt`,
-      );
-      if (!response.ok) throw new ApiError("保存的回执读取失败", response.status);
-      return decodeCollectReceipt(await response.arrayBuffer());
-    },
-  };
-}
-
 type Representation = "magnitude" | "phase" | "real" | "imag";
 type Entry = { record: SavedMeasurement; acquisition: InstrumentAcquisition | undefined };
 type Curve = { recordId: string; label: string; data: (number | null)[][] };
 type Group = { key: string; resultId: string; xLabel: string; yLabel: string; curves: Curve[] };
+
+function validWindow(field: PreviewField, length: number): boolean {
+  return (
+    field.kind === "array" &&
+    field.shape.length === 1 &&
+    field.total_count === field.shape[0] &&
+    field.total_count != null &&
+    field.returned_count === length &&
+    field.start >= 0 &&
+    field.start + length <= field.total_count &&
+    field.truncated_indices.length === 0
+  );
+}
 
 /** Stable serialization avoids treating object property insertion order as evidence. */
 function canonical(value: unknown): string {
@@ -90,20 +95,26 @@ function knownNetworkResults(record: SavedMeasurement, acquisition: InstrumentAc
 }
 
 export function comparisonGroups(
-  entries: (Entry & { receipt?: InstrumentCollectReceipt })[],
+  entries: (Entry & { receipt?: InstrumentCollectReceipt; preview?: MeasurementPreview })[],
   representation: Representation,
 ) {
   const groups = new Map<string, Group>();
   const excluded: string[] = [];
-  for (const { record, acquisition, receipt } of entries) {
-    if (!receipt) continue;
+  for (const { record, acquisition, receipt, preview } of entries) {
+    if (!isVerifiedReceipt(record)) {
+      excluded.push(`${record.id}：原件未通过契约验证，不参与比较。`);
+      continue;
+    }
+    if (!receipt && !preview) continue;
     if (!acquisition) {
       excluded.push(`${record.id}：采集契约或组件路径无法解析。`);
       continue;
     }
     for (const result of acquisition.results.filter((item) => item.role !== "coordinate")) {
       const reason = `${record.id} / ${result.id}`;
-      const values = receipt.readback?.values ?? {};
+      const values = preview
+        ? Object.fromEntries(preview.fields.map((field) => [field.request_id, field]))
+        : (receipt?.readback?.values ?? {});
       const value = values[result.id];
       const axis = result.axes?.length === 1 ? result.axes[0] : undefined;
       const coordinateId = axis?.coordinate_result;
@@ -111,8 +122,16 @@ export function comparisonGroups(
         (item) => item.id === coordinateId && item.role === "coordinate",
       );
       const coordinate = coordinateId ? values[coordinateId] : undefined;
-      const y = value && curveNumbers(value, representation);
-      const x = coordinate && curveNumbers(coordinate, "real");
+      const y =
+        value &&
+        ("returned_count" in value
+          ? previewNumbers(value, representation)
+          : curveNumbers(value, representation));
+      const x =
+        coordinate &&
+        ("returned_count" in coordinate
+          ? previewNumbers(coordinate, "real")
+          : curveNumbers(coordinate, "real"));
       if (
         !y ||
         !x ||
@@ -120,8 +139,17 @@ export function comparisonGroups(
         value?.kind !== "array" ||
         coordinate?.kind !== "array" ||
         coordinate.dtype === "complex128" ||
-        value.shape[0] !== y.length ||
-        coordinate.shape[0] !== x.length ||
+        value.shape.length !== 1 ||
+        coordinate.shape.length !== 1 ||
+        !("returned_count" in value ? validWindow(value, y.length) : value.shape[0] === y.length) ||
+        !("returned_count" in coordinate
+          ? validWindow(coordinate, x.length)
+          : coordinate.shape[0] === x.length) ||
+        ("start" in value &&
+          "start" in coordinate &&
+          (value.start !== coordinate.start || value.total_count !== coordinate.total_count)) ||
+        ("unit_truncated" in value && value.unit_truncated) ||
+        ("unit_truncated" in coordinate && coordinate.unit_truncated) ||
         value.dtype !== result.dtype ||
         coordinate.dtype !== coordinateContract?.dtype ||
         (result.unit != null && result.unit !== value.unit) ||
@@ -163,7 +191,7 @@ export function comparisonGroups(
       };
       group.curves.push({
         recordId: record.id,
-        label: `${record.id} · ${record.selection.line_label || "未标注测量对象"} · ${new Date(record.collected_at).toLocaleString()}`,
+        label: `${record.id} · ${record.selection.line_label || "未标注测量对象"} · ${new Date(record.collected_at).toLocaleString()}${"returned_count" in value ? ` · 窗口 ${value.start + 1}–${value.start + value.returned_count}/${value.total_count}` : ""}`,
         data: y.map((sample, index) => [x[index] ?? null, sample]),
       });
       groups.set(key, group);
@@ -185,7 +213,7 @@ export function comparisonGroups(
 
 function conditionEvidence(
   record: SavedMeasurement,
-  receipt?: InstrumentCollectReceipt,
+  receipt?: InstrumentCollectReceipt | MeasurementPreview,
 ): Record<string, unknown> {
   return {
     设备: [
@@ -199,15 +227,27 @@ function conditionEvidence(
     "系列/线路": [record.selection.series_id, record.selection.line_id],
     设置快照: record.setup,
     采集前观测: record.observed_before_collection,
-    回执生成证据: [receipt?.metadata ?? null, receipt?.readback?.metadata ?? null],
+    回执生成证据:
+      receipt && "method" in receipt
+        ? [
+            receipt.metadata,
+            "有界证据，未返回字段未知",
+            receipt.metadata_truncated,
+            receipt.fields.map((field) => [
+              field.request_id,
+              field.metadata,
+              field.metadata_truncated,
+            ]),
+          ]
+        : [receipt?.metadata ?? null, receipt?.readback?.metadata ?? null],
   };
 }
 
 export function conditionDifferences(
   record: SavedMeasurement,
   baseline: SavedMeasurement,
-  receipt?: InstrumentCollectReceipt,
-  baselineReceipt?: InstrumentCollectReceipt,
+  receipt?: InstrumentCollectReceipt | MeasurementPreview,
+  baselineReceipt?: InstrumentCollectReceipt | MeasurementPreview,
 ): string[] {
   const before = conditionEvidence(baseline, baselineReceipt);
   return Object.entries(conditionEvidence(record, receipt))
@@ -217,11 +257,27 @@ export function conditionDifferences(
 
 export function MeasurementComparison({ entries }: { entries: Entry[] }) {
   const [representation, setRepresentation] = useState<Representation>("magnitude");
+  const [start, setStart] = useState(0);
+  const candidates = entries.slice(0, COMPARISON_LIMIT);
+  const selected = candidates.filter(({ record }) => isVerifiedReceipt(record));
   const receipts = useQueries({
-    queries: entries.map(({ record }) => measurementReceiptQuery(record)),
+    queries: selected.map(({ record }) => ({
+      queryKey: ["direct-measurement-comparison-preview", record.id, start],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        readMeasurementPreview({ recordId: record.id }, start, signal),
+      gcTime: 0,
+      staleTime: Infinity,
+      retry: false,
+    })),
   });
+  const next = receipts.flatMap(
+    (receipt) =>
+      receipt.data?.fields
+        .map((field) => field.next_start)
+        .filter((value): value is number => value != null && value > start) ?? [],
+  );
   const { groups, excluded } = comparisonGroups(
-    entries.map((entry, index) => ({ ...entry, receipt: receipts[index]?.data })),
+    selected.map((entry, index) => ({ ...entry, preview: receipts[index]?.data })),
     representation,
   );
   return (
@@ -230,11 +286,45 @@ export function MeasurementComparison({ entries }: { entries: Entry[] }) {
       className="grid min-w-0 gap-3 border-t border-line pt-2 [overflow-wrap:anywhere]"
     >
       <h4 className="text-sm font-semibold">同轴比较</h4>
+      {candidates
+        .filter(({ record }) => !isVerifiedReceipt(record))
+        .map(({ record }) => (
+          <section key={record.id}>
+            <p>{record.id}：已排除比较</p>
+            <ReceiptValidationNotice value={record} />
+          </section>
+        ))}
       <p className="text-xs text-text-dim">
         仅叠加同设备、组件和兼容采集契约且坐标/数值单位一致的曲线。仅已知 network_sweep/sweep 与
         existing_network_trace/read_trace
         可跨接口叠加。同轴仅用于观察，不证明物理等价；线路或设置可能不同。每条曲线保留真实坐标，不插值、不重采样、不做差。
       </p>
+      <p className="text-xs">
+        比较仅使用连续原始数据窗口，不是全局概览；未显示范围的峰值与差异未知。每条记录保留原始总长度与真实坐标，不补齐或插值。回执证据有界显示，未返回或截断的证据不能判定相同。
+      </p>
+      <div className="flex gap-2">
+        <button type="button" disabled={start === 0} onClick={() => setStart(0)}>
+          比较首段
+        </button>
+        <button
+          type="button"
+          disabled={!next.length || receipts.some((receipt) => receipt.isPending)}
+          onClick={() => setStart(Math.min(...next))}
+        >
+          比较下一段
+        </button>
+      </div>
+      {selected.map(({ record }, index) => (
+        <p key={record.id} className="text-xs">
+          {record.id}：
+          {receipts[index]?.data?.fields
+            .map(
+              (field) =>
+                `${field.request_id} ${field.returned_count ? field.start + 1 : 0}–${field.start + field.returned_count}/${field.total_count ?? "未知"}${field.complete ? "（完整）" : "（局部窗口）"}`,
+            )
+            .join("；") ?? "窗口待读取"}
+        </p>
+      ))}
       <label className="text-xs">
         比较复数表示{" "}
         <select
@@ -252,18 +342,21 @@ export function MeasurementComparison({ entries }: { entries: Entry[] }) {
       {receipts.map(
         (receipt, index) =>
           receipt.error && (
-            <p key={entries[index]!.record.id} role="alert">
-              {entries[index]!.record.id}：{receipt.error.message}；其他记录仍可查看。
+            <p key={selected[index]!.record.id} role="alert">
+              {selected[index]!.record.id}：{receipt.error.message}；其他记录仍可查看。
+              <button type="button" onClick={() => void receipt.refetch()}>
+                重试比较记录 {selected[index]!.record.id}
+              </button>
             </p>
           ),
       )}
       <div className="grid gap-2 text-xs">
-        {entries.map(({ record }, index) => (
+        {selected.map(({ record }, index) => (
           <details key={record.id}>
             <summary>
               {record.id} · 条件与证据
               {index > 0
-                ? `（与首条差异：${conditionDifferences(record, entries[0]!.record, receipts[index]?.data, receipts[0]?.data).join("、") || "已记录字段未见差异，不代表条件相同"}）`
+                ? `（与首条差异：${conditionDifferences(record, selected[0]!.record, receipts[index]?.data, receipts[0]?.data).join("、") || "已记录字段未见差异，不代表条件相同"}）`
                 : "（参考记录）"}
             </summary>
             <p>
@@ -286,7 +379,14 @@ export function MeasurementComparison({ entries }: { entries: Entry[] }) {
                         status: receipts[index].data.status,
                         problems: receipts[index].data.problems,
                         metadata: receipts[index].data.metadata ?? null,
-                        readback_metadata: receipts[index].data.readback?.metadata ?? null,
+                        metadata_truncated: receipts[index].data.metadata_truncated,
+                        fields_truncated: receipts[index].data.fields_truncated,
+                        field_metadata: receipts[index].data.fields.map((field) => ({
+                          request_id: field.request_id,
+                          metadata: field.metadata,
+                          metadata_truncated: field.metadata_truncated,
+                        })),
+                        unreturned_evidence: "未知；有界预览不是完整回执",
                       }
                     : "尚未读取",
                 },
@@ -299,7 +399,7 @@ export function MeasurementComparison({ entries }: { entries: Entry[] }) {
       </div>
       {groups.map((group) => (
         <EChart
-          key={group.key}
+          key={`${group.key}:${start}`}
           ariaLabel={`${group.resultId} 同轴比较`}
           height={320}
           pointCount={group.curves.reduce((count, curve) => count + curve.data.length, 0)}
@@ -337,7 +437,9 @@ export function MeasurementComparison({ entries }: { entries: Entry[] }) {
         </p>
       ))}
       {!groups.length && !receipts.some((receipt) => receipt.isPending) && (
-        <p className="text-xs">当前没有可同轴叠加的曲线。下方保留每条记录的独立视图与原始回执。</p>
+        <p className="text-xs">
+          当前没有可同轴叠加的曲线。下方保留每条记录的独立有界视图；保存的完整原始回执不变。
+        </p>
       )}
     </section>
   );
