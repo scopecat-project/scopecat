@@ -92,6 +92,30 @@ export function MeasurementWorkbench({
 }) {
   const host = useRef<HTMLElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
+  const actions = useRef<HTMLDivElement>(null);
+  const hasCurrent = !!current;
+  useEffect(() => {
+    if (!layoutManaged || !hasCurrent) return;
+    const strip = actions.current;
+    const pane = host.current?.closest<HTMLElement>(".device-pane-scroll");
+    if (!strip || !pane) return;
+    const previousPadding = pane.style.scrollPaddingTop;
+    const measure = () => {
+      const height = strip.getBoundingClientRect().height;
+      // Hidden panes report zero; keep the last visible inset until shown again.
+      if (height > 0) pane.style.scrollPaddingTop = `${height + 8}px`;
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+    observer?.observe(strip);
+    if (!observer) window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      if (!observer) window.removeEventListener("resize", measure);
+      pane.style.scrollPaddingTop = previousPadding;
+    };
+  }, [layoutManaged, hasCurrent]);
   const cache = useQueryClient();
   const [displayStore] = useState<MeasurementDisplayStore>(() => new Map());
   const [target, setTarget] = useState<CurrentMeasurementResult>();
@@ -215,79 +239,83 @@ export function MeasurementWorkbench({
           />
         )}
         <div className="grid min-w-0 gap-3">
-          <div className="min-w-0">
-            {current && (
-              <div
-                role="group"
-                aria-label="所选结果操作"
-                className="mb-2 flex flex-wrap items-center gap-2"
-              >
-                {canSave && (
-                  <button
-                    ref={saveButton}
-                    className={primaryButton}
-                    disabled={saveDisabled}
-                    onClick={openSave}
+          {current && (
+            <div
+              ref={actions}
+              role="group"
+              aria-label="所选结果操作"
+              className={classes(
+                "flex flex-wrap items-center gap-2",
+                // This shares the full result/list containing block, so it stays
+                // available even after scrolling past the current preview.
+                layoutManaged && "sticky top-0 z-10 bg-panel-soft py-2",
+              )}
+            >
+              {canSave && (
+                <button
+                  ref={saveButton}
+                  className={primaryButton}
+                  disabled={saveDisabled}
+                  onClick={openSave}
+                >
+                  保存所选结果
+                </button>
+              )}
+              {recent.length > 0 && (
+                <label className="flex min-w-0 max-w-full flex-1 basis-48 items-center gap-2 text-xs">
+                  <span className="shrink-0">近期结果</span>
+                  <select
+                    aria-label="选择近期结果"
+                    className={classes(formControl, "w-full min-w-0 max-w-64")}
+                    value={measurementKey(current.selection)}
+                    onChange={(event) => {
+                      const result = recent.find(
+                        (item) => measurementKey(item.selection) === event.target.value,
+                      );
+                      if (result) onSelect(result);
+                    }}
                   >
-                    保存所选结果
-                  </button>
-                )}
-                {recent.length > 0 && (
-                  <label className="flex min-w-0 max-w-full flex-1 basis-48 items-center gap-2 text-xs">
-                    <span className="shrink-0">近期结果</span>
-                    <select
-                      aria-label="选择近期结果"
-                      className={classes(formControl, "w-full min-w-0 max-w-64")}
-                      value={measurementKey(current.selection)}
-                      onChange={(event) => {
-                        const result = recent.find(
-                          (item) => measurementKey(item.selection) === event.target.value,
-                        );
-                        if (result) onSelect(result);
-                      }}
-                    >
-                      {!recent.some((item) =>
-                        sameMeasurement(item.selection, current.selection),
-                      ) && (
-                        <option value={measurementKey(current.selection)} disabled>
-                          当前显示（近期列表外） ·{" "}
-                          {current.selection.title ||
-                            current.target.acquisition.label ||
-                            current.target.acquisition.id}
+                    {!recent.some((item) => sameMeasurement(item.selection, current.selection)) && (
+                      <option value={measurementKey(current.selection)} disabled>
+                        当前显示（近期列表外） ·{" "}
+                        {current.selection.title ||
+                          current.target.acquisition.label ||
+                          current.target.acquisition.id}
+                      </option>
+                    )}
+                    {recent
+                      .map((_, index) => recent[recent.length - index - 1]!)
+                      .map((item, index) => (
+                        <option
+                          key={measurementKey(item.selection)}
+                          value={measurementKey(item.selection)}
+                        >
+                          {recent.length - index}.{" "}
+                          {item.selection.title ||
+                            item.target.acquisition.label ||
+                            item.target.acquisition.id}
+                          {" · "}
+                          {item.savedRecordId
+                            ? "已保存"
+                            : pending.some((entry) =>
+                                  sameMeasurement(entry.selection, item.selection),
+                                )
+                              ? "待保存"
+                              : "未保存"}
                         </option>
-                      )}
-                      {recent
-                        .map((_, index) => recent[recent.length - index - 1]!)
-                        .map((item, index) => (
-                          <option
-                            key={measurementKey(item.selection)}
-                            value={measurementKey(item.selection)}
-                          >
-                            {recent.length - index}.{" "}
-                            {item.selection.title ||
-                              item.target.acquisition.label ||
-                              item.target.acquisition.id}
-                            {" · "}
-                            {item.savedRecordId
-                              ? "已保存"
-                              : pending.some((entry) =>
-                                    sameMeasurement(entry.selection, item.selection),
-                                  )
-                                ? "待保存"
-                                : "未保存"}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                )}
-                {commandId && current.savedRecordId && (
-                  <>
-                    <span role="status">已保存</span>
-                    <SavedMeasurementLink recordId={current.savedRecordId} />
-                  </>
-                )}
-              </div>
-            )}
+                      ))}
+                  </select>
+                </label>
+              )}
+              {commandId && current.savedRecordId && (
+                <>
+                  <span role="status">已保存</span>
+                  <SavedMeasurementLink recordId={current.savedRecordId} />
+                </>
+              )}
+            </div>
+          )}
+          <div className="min-w-0">
             {current ? (
               <CurrentMeasurement
                 result={current}

@@ -498,7 +498,8 @@ and source evidence remain in a separate disclosure.
 The device workbench starts with a centered control area. Acquisition actions stay
 with the controls; collecting does not force the results area open. Use **展开结果**
 to review the curve and the recent-result list below it. The compact **近期结果**
-selector stays beside the save actions above the preview, so selecting an original
+selector stays beside the save actions above the preview; both remain visible while
+the results area scrolls, so selecting an original
 does not require scrolling past a long preview. It shares the same selection as
 the full list below; switching results retains their preview window, complex
 representation and unsent save metadata. **收起控制** makes more

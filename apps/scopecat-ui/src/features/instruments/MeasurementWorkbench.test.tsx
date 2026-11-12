@@ -39,7 +39,7 @@ const results: CurrentMeasurementResult[] = ["one", "two"].map((id) => ({
   },
   receivedAt: "2026-01-01T12:00:00Z",
 }));
-function Harness() {
+function Harness({ layoutManaged = false } = {}) {
   const [collapsed, setCollapsed] = useState(false);
   const [current, setCurrent] = useState(results[1]);
   const [recent, setRecent] = useState(results);
@@ -51,6 +51,7 @@ function Harness() {
   );
   return (
     <MeasurementWorkbench
+      layoutManaged={layoutManaged}
       collapsed={collapsed}
       onCollapsedChange={setCollapsed}
       description={description}
@@ -87,12 +88,12 @@ function Harness() {
     />
   );
 }
-function show() {
+function show(layoutManaged = false) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <Harness />
+      <Harness layoutManaged={layoutManaged} />
     </QueryClientProvider>,
   );
 }
@@ -328,4 +329,73 @@ it("does not present another original when the current result is outside the rec
   const recent = within(select).getByRole("option", { name: /^1\./ }) as HTMLOptionElement;
   fireEvent.change(select, { target: { value: recent.value } });
   expect(onSelect).toHaveBeenCalledExactlyOnceWith(results[0]);
+});
+
+it("keeps the managed action strip sticky within the entire result and recent-list block", () => {
+  show(true);
+  const actions = screen.getByRole("group", { name: "所选结果操作" });
+  const content = screen.getByLabelText("当前测量结果");
+  const recent = screen.getByRole("complementary", { name: "近期结果" });
+  expect(actions).toHaveClass("sticky", "top-0", "z-10", "bg-panel-soft", "flex-wrap");
+  expect(actions.parentElement).toBe(recent.parentElement);
+  expect(actions.parentElement).toContainElement(content);
+  expect(actions.parentElement!.firstElementChild).toBe(actions);
+  expect(within(actions).getByRole("button", { name: "保存所选结果" })).toBeEnabled();
+  expect(within(actions).getByRole("combobox", { name: "选择近期结果" })).toBeVisible();
+});
+
+it("keeps keyboard scroll targets below a wrapping sticky strip and restores the pane inset on unmount", () => {
+  let height = 48;
+  let resize!: () => void;
+  const disconnect = vi.fn();
+  const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    get height() {
+      return height;
+    },
+    width: 260,
+    x: 0,
+    y: 0,
+    left: 0,
+    right: 260,
+    top: 0,
+    bottom: 48,
+    toJSON: () => ({}),
+  });
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        resize = callback;
+      }
+      observe() {}
+      disconnect = disconnect;
+    },
+  );
+  try {
+    const view = render(
+      <div
+        data-testid="result-scroll"
+        className="device-pane-scroll"
+        style={{ scrollPaddingTop: "12px" }}
+      >
+        <QueryClientProvider client={new QueryClient()}>
+          <Harness layoutManaged />
+        </QueryClientProvider>
+      </div>,
+    );
+    const pane = screen.getByTestId("result-scroll");
+    expect(pane.style.scrollPaddingTop).toBe("56px");
+    height = 92;
+    resize();
+    expect(pane.style.scrollPaddingTop).toBe("100px");
+    height = 0;
+    resize();
+    expect(pane.style.scrollPaddingTop).toBe("100px");
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(pane.style.scrollPaddingTop).toBe("12px");
+  } finally {
+    geometry.mockRestore();
+    vi.unstubAllGlobals();
+  }
 });

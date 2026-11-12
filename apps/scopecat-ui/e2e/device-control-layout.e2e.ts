@@ -459,6 +459,57 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await page.getByRole("button", { name: "收起结果", exact: true }).click();
     await page.getByRole("button", { name: "展开结果", exact: true }).click();
     await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(120);
+    // The saved pane offset must not scroll frequent actions out of reach. This
+    // includes the bottom of the full recent list, beyond the current preview.
+    await resultScroll.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    const savedOffset = await resultScroll.evaluate((element) => element.scrollTop);
+    expect(savedOffset).toBeGreaterThan(120);
+    for (const width of [1280, 390, 1280]) {
+      await page.setViewportSize({ width, height: 600 });
+      await showResults(page);
+      const actions = page.getByRole("group", { name: "所选结果操作" });
+      await expect(
+        actions.getByRole("button", { name: "保存所选结果", exact: true }),
+      ).toBeInViewport();
+      await expect(
+        actions.getByRole("combobox", { name: "选择近期结果", exact: true }),
+      ).toBeInViewport();
+      const selector = actions.getByRole("combobox", { name: "选择近期结果", exact: true });
+      await selector.focus();
+      await expect(selector).toBeFocused();
+      const representation = current.getByRole("combobox", { name: "复数表示" });
+      // The actual measured sticky height, including wrapped narrow rows, is
+      // reserved for keyboard/programmatic scroll targets rather than hiding focus.
+      await expect
+        .poll(async () => {
+          const inset = await resultScroll.evaluate((element) =>
+            parseFloat(
+              element.ownerDocument.defaultView!.getComputedStyle(element).scrollPaddingTop,
+            ),
+          );
+          return inset >= (await actions.boundingBox())!.height;
+        })
+        .toBe(true);
+      await representation.evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await representation.focus();
+      await expect(representation).toBeFocused();
+      await expect(async () => {
+        const bar = (await actions.boundingBox())!;
+        const field = (await representation.boundingBox())!;
+        expect(field.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+      }).toPass();
+      await resultScroll.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+    }
+    await page.getByRole("button", { name: "收起结果", exact: true }).click();
+    await page.getByRole("button", { name: "展开结果", exact: true }).click();
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
+    await resultScroll.evaluate((element) => {
+      element.scrollTop = 120;
+    });
     const draft = page.getByTestId("interface-property-start_frequency").getByRole("spinbutton");
     const draftedValue = String(Number(await draft.inputValue()) + 1);
     await draft.fill(draftedValue);

@@ -294,9 +294,16 @@ export function BoundedMeasurement({
                         media: [
                           {
                             query: { maxWidth: 420 },
-                            option: { xAxis: { name: "" }, yAxis: { name: "" } },
+                            // Three target intervals can leave only one label after
+                            // ECharts fits GHz-offset ticks into a narrow plot.
+                            option: { xAxis: { name: "", splitNumber: 2 }, yAxis: { name: "" } },
                           },
-                          { option: { xAxis: { name: xLabel }, yAxis: { name: yUnit } } },
+                          {
+                            option: {
+                              xAxis: { name: xLabel, splitNumber: 3 },
+                              yAxis: { name: yUnit },
+                            },
+                          },
                         ],
                         dataZoom: [{ type: "inside" }, { type: "slider" }],
                         series: [
