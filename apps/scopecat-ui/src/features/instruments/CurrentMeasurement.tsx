@@ -39,7 +39,7 @@ export function CurrentMeasurement({
   return (
     <section
       aria-label="当前测量结果"
-      className="grid min-w-0 gap-2 rounded border border-line p-3"
+      className="grid min-w-0 max-w-full grid-cols-1 gap-2 rounded border border-line p-3 [overflow-wrap:anywhere]"
     >
       <h3 className="text-sm font-semibold">{selection.title || "当前测量结果"}</h3>
       <p className="text-xs">

@@ -147,7 +147,10 @@ export function BoundedMeasurement({
     .map((field) => field.next_start)
     .filter((value): value is number => value != null);
   return (
-    <section className="grid min-w-0 gap-2" aria-label="有界结果预览">
+    <section
+      className="grid min-w-0 max-w-full grid-cols-1 gap-2 [overflow-wrap:anywhere]"
+      aria-label="有界结果预览"
+    >
       <p className="text-xs">
         连续原始数据窗口，不是全局概览或降采样。翻页查看其他范围；图内缩放仅作用于本窗口，切换窗口后重新缩放。保存始终使用完整原始数据。
       </p>
@@ -202,7 +205,10 @@ export function BoundedMeasurement({
               state.representation,
             ]);
             return (
-              <section key={field.request_id}>
+              <section
+                key={field.request_id}
+                className="min-w-0 max-w-full [overflow-wrap:anywhere]"
+              >
                 <p>
                   {field.request_id} · {field.complete ? "完整" : "局部"}{" "}
                   {field.returned_count ? field.start + 1 : 0}–{field.start + field.returned_count}{" "}
@@ -349,7 +355,7 @@ export function BoundedMeasurement({
             }}
           >
             <summary className="cursor-pointer text-xs">查看局部原始数值（按窗口）</summary>
-            <div className="mt-2 grid min-w-0 gap-2 text-xs">
+            <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs">
               <label>
                 结果字段{" "}
                 <select
