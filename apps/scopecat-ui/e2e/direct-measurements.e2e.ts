@@ -149,6 +149,22 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
       });
     }
 
+    // End the synthetic control session without disposing its collected results.
+    const originalSession = new URL((await firstResponse).url()).pathname.split("/")[4];
+    const closed = await page.request.post(
+      `${url}/api/v1/instrument-sessions/${encodeURIComponent(originalSession)}/close`,
+    );
+    expect(closed.ok()).toBeTruthy();
+    // A page reload loses local pending state but not the daemon's original receipts.
+    // Recovery must rediscover both original identities without another collect.
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.reload();
+    await expect(recent).toHaveCount(2);
+    await page.getByTestId(firstId!).click();
+    await expect(current.getByText(/完整 \d+ 点/)).toHaveText(original!);
+    await expect(current.getByText(/从后台恢复的原采集结果/)).toBeVisible();
+    expect(collections).toBe(2);
+
     // A rejected save followed by a lost successful response both preserve the
     // same command and metadata on retry, without another collection.
     const saves: unknown[] = [];
@@ -201,16 +217,16 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     expect(record.selection.line_label).toBe("line-a");
     expect(record.selection.command_id).toBe(firstId!.replace("recent-result-", ""));
 
-    // The other result is still unsaved, so normal release remains guarded.
-    await page.getByRole("button", { name: "释放控制", exact: true }).click();
+    // The disconnected pending review can save the other original result too.
+    await page.getByRole("button", { name: "处理恢复的待保存结果", exact: true }).click();
     const exit = page.getByRole("dialog", { name: "结束控制前的待办", exact: true });
     await expect(exit.getByRole("heading", { name: "未保存结果：1", exact: true })).toBeVisible();
     await expect(
-      exit.getByRole("button", { name: "保持当前状态并结束", exact: true }),
+      exit.getByRole("button", { name: "确认待办并关闭窗口", exact: true }),
     ).toBeDisabled();
     await exit.getByRole("button", { name: "保存全部未保存结果", exact: true }).click();
     await expect(exit.getByRole("heading", { name: "未保存结果：0", exact: true })).toBeVisible();
-    await exit.getByRole("button", { name: "继续控制", exact: true }).click();
+    await exit.getByRole("button", { name: "返回工作台（保留待核查状态）", exact: true }).click();
     const controlUrl = page.url();
     const popup = page.waitForEvent("popup");
     await page.getByRole("link", { name: "查看已保存结果", exact: true }).click();
@@ -240,9 +256,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await expect(savedResult.getByRole("img", { name: /完整曲线/ })).toBeVisible();
 
     // Historical browsing remains in the main application, separate from the
-    // single-result browser tab. End control normally before navigating away.
-    await page.getByRole("button", { name: "释放控制", exact: true }).click();
-    await exit.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
+    // single-result browser tab. The original control session is already closed.
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: /Data$/ }).click();
     await page.getByRole("button", { name: "直接测量", exact: true }).click();

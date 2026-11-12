@@ -7,7 +7,7 @@ use the existing object store and current-format snapshot ownership.
 import sqlite3
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from scopecat.control.models import DurableEventInput
@@ -27,19 +27,39 @@ from scopecat_server.storage.sqlite.data_reference_schema import (
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 _KIND = DIRECT_MEASUREMENT_EVENT_KIND
+_DISCARDED_KIND = "direct_measurement_discarded_v1"
 
 
-class DirectMeasurementSave(BaseModel):
+class DirectMeasurementIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     session_id: str = Field(min_length=1, max_length=200)
     instrument_id: str = Field(min_length=1, max_length=200)
     command_id: str = Field(min_length=1, max_length=200)
+
+
+class DirectMeasurementDiscardReceipt(BaseModel):
+    status: Literal["discarded", "saved", "not_retained"]
+    record_id: str | None = None
+
+
+class DirectMeasurementSave(DirectMeasurementIdentity):
     title: str = Field(default="", max_length=500)
     series_id: str = Field(default="", max_length=200)
     line_id: str = Field(default="", max_length=200)
     line_label: str = Field(default="", max_length=500)
     note: str = Field(default="", max_length=4000)
+
+
+class PendingDirectMeasurement(BaseModel):
+    selection: DirectMeasurementSave
+    collected_at: datetime
+    description: InstrumentDescription
+    intent: InteractiveCollectIntent
+
+
+class PendingDirectMeasurementPage(BaseModel):
+    items: list[PendingDirectMeasurement]
 
 
 class DirectMeasurementNoteCommand(BaseModel):
@@ -78,7 +98,7 @@ class DirectMeasurementPage(BaseModel):
     next_cursor: int | None = None
 
 
-def measurement_id(selection: DirectMeasurementSave) -> str:
+def measurement_id(selection: DirectMeasurementIdentity) -> str:
     identity = [selection.session_id, selection.instrument_id, selection.command_id]
     import json
 
@@ -142,14 +162,52 @@ class DirectMeasurements:
             next_cursor=cast("int", rows[limit - 1][0]) if len(rows) > limit else None,
         )
 
+    def pending(self, instrument_id: str) -> PendingDirectMeasurementPage:
+        with self.instruments.pending_collections.disposition_lock:
+            return PendingDirectMeasurementPage(
+                items=[
+                    PendingDirectMeasurement(
+                        selection=DirectMeasurementSave(
+                            session_id=key[0], instrument_id=key[1], command_id=key[2]
+                        ),
+                        collected_at=value[2].collected_at,
+                        description=value[1],
+                        intent=value[2].intent,
+                    )
+                    for key, value in self.instruments.pending_collections.list(
+                        instrument_id
+                    )
+                ]
+            )
+
+    def pending_receipt(self, selection: DirectMeasurementIdentity) -> bytes:
+        with self.instruments.pending_collections.disposition_lock:
+            _, _, replay = self.instruments.retained_collection(
+                selection.session_id, selection.instrument_id, selection.command_id
+            )
+            return encode_collect_receipt(replay.receipt)
+
     def save(self, selection: DirectMeasurementSave) -> DirectMeasurement:
+        # All disposition operations share this lock, including another service
+        # facade for the same runtime. A timed-out HTTP caller does not cancel it.
+        with self.instruments.pending_collections.disposition_lock:
+            record = self._save(selection)
+            self.instruments.pending_collections.release(
+                (selection.session_id, selection.instrument_id, selection.command_id)
+            )
+            return record
+
+    def _save(self, selection: DirectMeasurementSave) -> DirectMeasurement:
         record_id = measurement_id(selection)
         # Check retained identity before resolving a volatile session: retry works
         # even after close/restart and cannot collect a second time.
         with self.store.sqlite.read_connection() as connection:
             previous = self._find(connection, record_id)
+            discarded = self._was_discarded(connection, record_id)
         if previous is not None:
             return self._same_selection(previous, selection)
+        if discarded:
+            raise BackendConflict("collection was explicitly discarded")
         session, description, replay = self.instruments.retained_collection(
             selection.session_id,
             selection.instrument_id,
@@ -182,6 +240,50 @@ class DirectMeasurements:
                 ),
             )
         return record
+
+    @staticmethod
+    def _was_discarded(connection: sqlite3.Connection, record_id: str) -> bool:
+        return (
+            connection.execute(
+                "SELECT 1 FROM durable_events WHERE kind=? "
+                "AND json_extract(payload_json, '$.id')=? LIMIT 1",
+                (_DISCARDED_KIND, record_id),
+            ).fetchone()
+            is not None
+        )
+
+    def discard(
+        self, selection: DirectMeasurementIdentity
+    ) -> DirectMeasurementDiscardReceipt:
+        key = (selection.session_id, selection.instrument_id, selection.command_id)
+        record_id = measurement_id(selection)
+        with self.instruments.pending_collections.disposition_lock:
+            with self.store.sqlite.write_transaction() as connection:
+                saved = self._find(connection, record_id)
+                if saved is not None:
+                    receipt = DirectMeasurementDiscardReceipt(
+                        status="saved", record_id=record_id
+                    )
+                else:
+                    if not self._was_discarded(connection, record_id):
+                        if self.instruments.pending_collections.find(key) is None:
+                            return DirectMeasurementDiscardReceipt(
+                                status="not_retained"
+                            )
+                        # Only the identity is durable. Unsaved payloads are not
+                        # silently persisted; this tombstone makes retry safe.
+                        self.control.append_event_in_transaction(
+                            connection,
+                            DurableEventInput(
+                                kind=_DISCARDED_KIND,
+                                payload={"id": record_id},
+                            ),
+                        )
+                    receipt = DirectMeasurementDiscardReceipt(status="discarded")
+            # Release only after commit. On any storage error, retain the result
+            # so the same identity can be retried after an unknown response.
+            self.instruments.pending_collections.release(key)
+            return receipt
 
     @staticmethod
     def _same_selection(

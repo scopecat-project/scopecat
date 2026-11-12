@@ -1,3 +1,4 @@
+import { measurementKey, sameMeasurement } from "./measurement-identity";
 import { SavedMeasurementLink } from "./SavedMeasurementView";
 import { useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
@@ -83,7 +84,7 @@ export function MeasurementWorkbench({
   onCollect: (target: InstrumentAcquisitionTarget) => void;
   onSelect: (result: CurrentMeasurementResult) => void;
   onSaveAttempt: (selection: MeasurementSave) => void;
-  onSaved: (commandId: string, recordId?: string) => void;
+  onSaved: (commandId: string, recordId?: string, selection?: MeasurementSave) => void;
 }) {
   const cache = useQueryClient();
   const [target, setTarget] = useState<CurrentMeasurementResult>();
@@ -96,16 +97,18 @@ export function MeasurementWorkbench({
   const targets = acquisitionTargets(description);
   if (!targets.length && !current) return null;
   const commandId = current?.selection.command_id;
-  const canSave = pending.some((item) => item.selection.command_id === commandId);
+  const canSave = pending.some(
+    (item) => !!current && sameMeasurement(item.selection, current.selection),
+  );
   const pendingTarget = pending.find(
-    (item) => item.selection.command_id === target?.selection.command_id,
+    (item) => !!target && sameMeasurement(item.selection, target.selection),
   );
   const frozen = pendingTarget?.saveAttempted ? pendingTarget.selection : undefined;
   const openSave = () => {
     if (!current || !canSave || saveDisabled) return;
     const selection =
-      pending.find((item) => item.selection.command_id === current.selection.command_id)
-        ?.selection ?? current.selection;
+      pending.find((item) => sameMeasurement(item.selection, current.selection))?.selection ??
+      current.selection;
     setTarget(current);
     setTitle(selection.title ?? "");
     setLine(selection.line_label ?? "");
@@ -135,7 +138,7 @@ export function MeasurementWorkbench({
     setError("");
     try {
       const record = await saveDirectMeasurement(selection);
-      onSaved(id, record.id);
+      onSaved(id, record.id, selection);
       setTarget(undefined);
       void cache.invalidateQueries({ queryKey: ["direct-measurements"] });
     } catch (reason) {
@@ -229,9 +232,9 @@ export function MeasurementWorkbench({
                 .map((_, index) => recent[recent.length - index - 1]!)
                 .map((item, index) => (
                   <button
-                    key={item.selection.command_id}
+                    key={measurementKey(item.selection)}
                     data-testid={`recent-result-${item.selection.command_id}`}
-                    aria-pressed={commandId === item.selection.command_id}
+                    aria-pressed={!!current && sameMeasurement(current.selection, item.selection)}
                     title={
                       item.selection.title ||
                       item.target.acquisition.label ||
@@ -241,7 +244,9 @@ export function MeasurementWorkbench({
                     className={classes(
                       secondaryButton,
                       "h-auto w-36 min-w-0 shrink-0 flex-col items-start whitespace-normal text-left md:w-auto",
-                      commandId === item.selection.command_id && "border-blue",
+                      !!current &&
+                        sameMeasurement(current.selection, item.selection) &&
+                        "border-blue",
                     )}
                   >
                     <strong className="line-clamp-2 break-words">
@@ -254,9 +259,7 @@ export function MeasurementWorkbench({
                       {new Date(item.receivedAt).toLocaleTimeString()} ·{" "}
                       {item.savedRecordId
                         ? "已保存"
-                        : pending.some(
-                              (entry) => entry.selection.command_id === item.selection.command_id,
-                            )
+                        : pending.some((entry) => sameMeasurement(entry.selection, item.selection))
                           ? "待保存"
                           : "未保存"}
                     </span>

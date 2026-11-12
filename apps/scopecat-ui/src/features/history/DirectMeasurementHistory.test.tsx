@@ -44,6 +44,7 @@ function measurement(id: string, title?: string): SavedMeasurement {
       interfaces: [],
     },
     intent: {
+      retain_result: true,
       instrument_id: "vna",
       command_id: id,
       interface_id: "network",

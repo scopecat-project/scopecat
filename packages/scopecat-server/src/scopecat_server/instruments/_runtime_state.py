@@ -39,6 +39,9 @@ INTERACTIVE_REPLAY_LIMIT = 256
 
 @dataclass(slots=True)
 class InstrumentOperationLedger:
+    # Identity-only guard survives receipt eviction, then leaves with this live
+    # session. Never evict these IDs and accidentally repeat an acquisition.
+    started_collections: set[str] = field(default_factory=set)
     _operations: OrderedDict[str, InstrumentOperationReplay] = field(
         default_factory=OrderedDict
     )
@@ -79,6 +82,13 @@ class CollectReceiptReplay:
 
 
 @dataclass(frozen=True, slots=True)
+class CollectRetainedReplay:
+    """Small ledger marker; the receipt belongs to the pending-result store."""
+
+    intent: InteractiveCollectIntent
+
+
+@dataclass(frozen=True, slots=True)
 class CollectRejectionReplay:
     intent: InteractiveCollectIntent
     receipt: CollectReceipt
@@ -101,6 +111,7 @@ type InstrumentOperationReplay = (
     ApplyReplay
     | InvokeReplay
     | CollectReceiptReplay
+    | CollectRetainedReplay
     | CollectRejectionReplay
     | CollectFailureReplay
     | ConfiguredDefaultsReplay

@@ -67,6 +67,7 @@ function saved(mount: string[], nested: string[]): SavedMeasurement {
     observed_before_collection: null,
     receipt_digest: "digest",
     intent: {
+      retain_result: true,
       instrument_id: "scope",
       command_id: "capture",
       interface_id: "test.scope/v1",

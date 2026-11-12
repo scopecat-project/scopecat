@@ -456,9 +456,11 @@ Python 可通过 `lab.devices.driver_sources()` 读取同一来源集合与诊�
 
 The device window can retain a successful Collect receipt with **保存此结果**.
 Saving copies the already returned result; retrying a failed save does not issue
-another acquisition. Save before ending the control session: unsaved receipts
-are volatile and are not recoverable after the session is released or the daemon
-restarts. Saved receipts appear in **数据 → 直接测量** after reopening. Their arrays,
+another acquisition. Successful unsaved receipts remain available while the
+same daemon process is running, even after control-session expiry, release or
+isolation cleanup. Saving and explicit discard do not reconnect the device or
+renew its control lease. Unsaved receipts are volatile and are not recoverable
+after the daemon restarts. Saved receipts appear in **数据 → 直接测量** after reopening. Their arrays,
 coordinates, units, complex values, device description and acquisition selection
 are retained without rewriting an experiment run.
 
@@ -505,16 +507,35 @@ window in place. On desktop, opening the same record focuses its existing result
 window; different records can remain open side by side. Browser mode uses a new
 tab. Browse and search history in the main window's **数据 → 直接测量** page.
 The existing device-history disclosure remains available during
-this transition. The first journey does not add cross-device observations,
-unsaved-result recovery or a new retention policy: the existing control-session
-lifetime and limit of 20 unsaved receipts still apply.
+this transition. Pending results are independent of the bounded command-replay
+cache: later applies, invokes and collections cannot evict an unsaved result.
+The daemon reserves capacity before refreshing or collecting: at most 20 pending
+results per instrument across sessions and 100 across the daemon. These are
+result-count limits, not a byte-size budget. The high-level Python instrument
+handle returns data to Python without adding it to this UI pending queue; raw
+interactive collect requests retain by default and can explicitly opt out with
+`retain_result=false`. At capacity, save or explicitly
+discard existing results before collecting again; releasing a session alone does
+not free pending-result capacity. Failed or rejected collection releases its
+reservation. Successful save and confirmed discard free the pending payload and
+slot only after the durable disposition commits. A small identity-only guard grows
+with collections in a live control session, preventing an evicted command ID from
+triggering another acquisition; session cleanup releases that guard.
 
 Window close and **释放控制** use the same **结束控制前的待办** dialog when
 results or output choices remain. When closing a window, completing the choices
 continues that close. Save individual results or all pending results
 there; a partial save failure retains the failed items for retry without another
-acquisition. Alternatively select explicit discard, then choose the existing
-output disposition. Cancel retains unsaved results even after selecting discard.
+acquisition. Alternatively select explicit discard and submit its separate
+confirmation, then choose the existing output disposition. Selecting the checkbox
+alone does not discard anything. Cancel stops waiting but does not undo an
+already submitted save or discard; late receipts still update the original result.
+An unknown response keeps the pending identity for retry. Reopening the device
+inspector can rediscover pending receipts from the same backend without connecting
+a device. This also covers a received result whose later audit step failed. A
+backend-confirmed missing receipt permits a separate explicit local-forget choice;
+network errors or generic failures do not silently remove pending results.
+Concurrent save and discard cannot both win: a confirmed save is reported as saved rather than deleted.
 No output choice is preselected, and an uncertain finish retains its original
 command identity and mode. Closing the dialog is not evidence that output stopped.
 

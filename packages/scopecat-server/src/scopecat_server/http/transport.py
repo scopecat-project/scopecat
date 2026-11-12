@@ -466,9 +466,12 @@ from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
 from scopecat_server.services.direct_measurements import (
     DirectMeasurement,
+    DirectMeasurementDiscardReceipt,
+    DirectMeasurementIdentity,
     DirectMeasurementNoteCommand,
     DirectMeasurementPage,
     DirectMeasurementSave,
+    PendingDirectMeasurementPage,
 )
 from scopecat_server.services.manual_lines import ManualLineScanPage, ManualLineScanView
 from scopecat_server.services.operator_settings import OperatorSettings
@@ -2262,6 +2265,27 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/direct-measurements")
     def save_direct_measurement(command: DirectMeasurementSave) -> DirectMeasurement:
         return application.direct_measurements.save(command)
+
+    @app.get(f"{_API_PREFIX}/direct-measurements/pending")
+    def pending_direct_measurements(instrument_id: str) -> PendingDirectMeasurementPage:
+        return application.direct_measurements.pending(instrument_id)
+
+    @app.post(
+        f"{_API_PREFIX}/direct-measurements/pending/receipt", response_class=Response
+    )
+    def pending_direct_measurement_receipt(
+        command: DirectMeasurementIdentity,
+    ) -> Response:
+        return Response(
+            content=application.direct_measurements.pending_receipt(command),
+            media_type=HARDWARE_RECEIPT_MEDIA_TYPE,
+        )
+
+    @app.post(f"{_API_PREFIX}/direct-measurements/discard")
+    def discard_direct_measurement(
+        command: DirectMeasurementIdentity,
+    ) -> DirectMeasurementDiscardReceipt:
+        return application.direct_measurements.discard(command)
 
     @app.get(f"{_API_PREFIX}/direct-measurements")
     def list_direct_measurements(before: int | None = None) -> DirectMeasurementPage:
