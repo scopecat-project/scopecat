@@ -1,6 +1,8 @@
+import { ReceiptValidationNotice } from "./ReceiptValidation";
+import type { MeasurementDisplayStore } from "./BoundedMeasurement";
 import { measurementKey, sameMeasurement } from "./measurement-identity";
 import { SavedMeasurementLink } from "./SavedMeasurementView";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
@@ -91,7 +93,19 @@ export function MeasurementWorkbench({
   const host = useRef<HTMLElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
   const cache = useQueryClient();
+  const [displayStore] = useState<MeasurementDisplayStore>(() => new Map());
   const [target, setTarget] = useState<CurrentMeasurementResult>();
+  const drafts = useRef(new Map<string, { title: string; line: string; note: string }>());
+  useEffect(() => {
+    const alive = new Set([
+      ...recent.map((item) => measurementKey(item.selection)),
+      ...pending.map((item) => measurementKey(item.selection)),
+      ...(current ? [measurementKey(current.selection)] : []),
+    ]);
+    for (const key of drafts.current.keys()) if (!alive.has(key)) drafts.current.delete(key);
+    for (const key of displayStore.keys())
+      if (!alive.has(key) && !drafts.current.has(key)) displayStore.delete(key);
+  }, [recent, pending, current, displayStore]);
   const [title, setTitle] = useState("");
   const [line, setLine] = useState("");
   const [note, setNote] = useState("");
@@ -114,10 +128,19 @@ export function MeasurementWorkbench({
       pending.find((item) => sameMeasurement(item.selection, current.selection))?.selection ??
       current.selection;
     setTarget(current);
-    setTitle(selection.title ?? "");
-    setLine(selection.line_label ?? "");
-    setNote(selection.note ?? "");
+    const draft = drafts.current.get(measurementKey(selection));
+    setTitle(draft?.title ?? selection.title ?? "");
+    setLine(draft?.line ?? selection.line_label ?? "");
+    setNote(draft?.note ?? selection.note ?? "");
     setError("");
+  };
+  const editDraft = (change: Partial<{ title: string; line: string; note: string }>) => {
+    if (!target) return;
+    const value = { title, line, note, ...change };
+    drafts.current.set(measurementKey(target.selection), value);
+    setTitle(value.title);
+    setLine(value.line);
+    setNote(value.note);
   };
   const save = async () => {
     if (!target || saving.current) return;
@@ -143,6 +166,7 @@ export function MeasurementWorkbench({
     try {
       const record = await saveDirectMeasurement(selection);
       onSaved(id, record.id, selection);
+      drafts.current.delete(measurementKey(target.selection));
       setTarget(undefined);
       void cache.invalidateQueries({ queryKey: ["direct-measurements"] });
     } catch (reason) {
@@ -192,13 +216,12 @@ export function MeasurementWorkbench({
         )}
         <div className="grid min-w-0 gap-3">
           <div className="min-w-0">
-            {current ? (
-              <CurrentMeasurement result={current} staged={staged} sessionId={sessionId} />
-            ) : (
-              <p className="py-16 text-center text-sm text-text-dim">采集后在这里查看曲线</p>
-            )}
             {current && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div
+                role="group"
+                aria-label="所选结果操作"
+                className="mb-2 flex flex-wrap items-center gap-2"
+              >
                 {canSave && (
                   <button
                     ref={saveButton}
@@ -209,6 +232,54 @@ export function MeasurementWorkbench({
                     保存所选结果
                   </button>
                 )}
+                {recent.length > 0 && (
+                  <label className="flex min-w-0 max-w-full flex-1 basis-48 items-center gap-2 text-xs">
+                    <span className="shrink-0">近期结果</span>
+                    <select
+                      aria-label="选择近期结果"
+                      className={classes(formControl, "w-full min-w-0 max-w-64")}
+                      value={measurementKey(current.selection)}
+                      onChange={(event) => {
+                        const result = recent.find(
+                          (item) => measurementKey(item.selection) === event.target.value,
+                        );
+                        if (result) onSelect(result);
+                      }}
+                    >
+                      {!recent.some((item) =>
+                        sameMeasurement(item.selection, current.selection),
+                      ) && (
+                        <option value={measurementKey(current.selection)} disabled>
+                          当前显示（近期列表外） ·{" "}
+                          {current.selection.title ||
+                            current.target.acquisition.label ||
+                            current.target.acquisition.id}
+                        </option>
+                      )}
+                      {recent
+                        .map((_, index) => recent[recent.length - index - 1]!)
+                        .map((item, index) => (
+                          <option
+                            key={measurementKey(item.selection)}
+                            value={measurementKey(item.selection)}
+                          >
+                            {recent.length - index}.{" "}
+                            {item.selection.title ||
+                              item.target.acquisition.label ||
+                              item.target.acquisition.id}
+                            {" · "}
+                            {item.savedRecordId
+                              ? "已保存"
+                              : pending.some((entry) =>
+                                    sameMeasurement(entry.selection, item.selection),
+                                  )
+                                ? "待保存"
+                                : "未保存"}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
                 {commandId && current.savedRecordId && (
                   <>
                     <span role="status">已保存</span>
@@ -216,6 +287,16 @@ export function MeasurementWorkbench({
                   </>
                 )}
               </div>
+            )}
+            {current ? (
+              <CurrentMeasurement
+                result={current}
+                staged={staged}
+                sessionId={sessionId}
+                displayStore={displayStore}
+              />
+            ) : (
+              <p className="py-16 text-center text-sm text-text-dim">采集后在这里查看曲线</p>
             )}
           </div>
           <aside aria-label="近期结果" className="min-w-0">
@@ -295,6 +376,7 @@ export function MeasurementWorkbench({
                 {target?.target.acquisition.label ?? target?.target.acquisition.id} ·{" "}
                 {target && new Date(target.receivedAt).toLocaleString()}
               </Dialog.Description>
+              {target && <ReceiptValidationNotice value={target} />}
               <div className="my-3 grid gap-3">
                 <label className={fieldLabel}>
                   标题
@@ -303,7 +385,7 @@ export function MeasurementWorkbench({
                     value={title}
                     maxLength={500}
                     disabled={busy || !!frozen}
-                    onChange={(event) => setTitle(event.target.value)}
+                    onChange={(event) => editDraft({ title: event.target.value })}
                   />
                 </label>
                 <label className={fieldLabel}>
@@ -313,7 +395,7 @@ export function MeasurementWorkbench({
                     value={line}
                     maxLength={500}
                     disabled={busy || !!frozen}
-                    onChange={(event) => setLine(event.target.value)}
+                    onChange={(event) => editDraft({ line: event.target.value })}
                   />
                 </label>
                 <label className={fieldLabel}>
@@ -323,7 +405,7 @@ export function MeasurementWorkbench({
                     value={note}
                     maxLength={4000}
                     disabled={busy || !!frozen}
-                    onChange={(event) => setNote(event.target.value)}
+                    onChange={(event) => editDraft({ note: event.target.value })}
                   />
                 </label>
               </div>

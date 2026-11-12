@@ -3,12 +3,12 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { listPendingMeasurements, readPendingMeasurementReceipt } from "./direct-measurement-api";
 import { usePendingMeasurements } from "./use-pending-measurements";
-import type { InstrumentCollectReceipt } from "../../api-contract";
 vi.mock("./direct-measurement-api", () => ({
   listPendingMeasurements: vi.fn(),
   readPendingMeasurementReceipt: vi.fn(),
 }));
 const item: Awaited<ReturnType<typeof listPendingMeasurements>>["items"][number] = {
+  raw_bytes: 24,
   selection: {
     session_id: "old-session",
     instrument_id: "scope",
@@ -19,6 +19,7 @@ const item: Awaited<ReturnType<typeof listPendingMeasurements>>["items"][number]
     line_label: "",
     series_id: "",
   },
+  receipt_validation: "verified" as const,
   collected_at: "2026-11-12T01:00:00Z",
   description: {
     instrument_id: "scope",
@@ -41,11 +42,9 @@ const item: Awaited<ReturnType<typeof listPendingMeasurements>>["items"][number]
     retain_result: true,
   },
 };
-const receipt: InstrumentCollectReceipt = { status: "collected", problems: [] };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listPendingMeasurements).mockResolvedValue({ items: [item] });
-  vi.mocked(readPendingMeasurementReceipt).mockResolvedValue(receipt);
 });
 afterEach(cleanup);
 it("recovers the original result and description across sessions, then skips already known identities", async () => {
@@ -55,7 +54,6 @@ it("recovers the original result and description across sessions, then skips alr
   expect(receive.mock.calls[0]![0]).toMatchObject({
     selection: item.selection,
     target: { interfaceId: "original-interface", acquisition: { label: "Original sweep" } },
-    receipt,
     receivedAt: item.collected_at,
   });
   expect(receive.mock.calls[0]![0].relationshipChanged).toContain("不代表当前设备状态");
@@ -63,37 +61,37 @@ it("recovers the original result and description across sessions, then skips alr
     await result.current.recover();
   });
   expect(receive).toHaveBeenCalledOnce();
-  expect(readPendingMeasurementReceipt).toHaveBeenCalledExactlyOnceWith(item.selection);
+  expect(readPendingMeasurementReceipt).not.toHaveBeenCalled();
 });
-it("does not resurrect a locally resolved result when its pending receipt read arrives late", async () => {
-  let resolve!: (value: InstrumentCollectReceipt) => void;
-  vi.mocked(readPendingMeasurementReceipt).mockReturnValue(
+it("does not resurrect a locally resolved result when its pending identity listing arrives late", async () => {
+  let resolve!: (value: Awaited<ReturnType<typeof listPendingMeasurements>>) => void;
+  vi.mocked(listPendingMeasurements).mockReturnValue(
     new Promise((done) => {
       resolve = done;
     }),
   );
   const receive = vi.fn();
   const { result } = renderHook(() => usePendingMeasurements("scope", receive));
-  await waitFor(() => expect(readPendingMeasurementReceipt).toHaveBeenCalledOnce());
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledOnce());
   act(() => result.current.remember(item.selection));
   await act(async () => {
-    resolve(receipt);
+    resolve({ items: [item] });
   });
   expect(receive).not.toHaveBeenCalled();
 });
-it("ignores receipt recovery after unmount", async () => {
-  let resolve!: (value: InstrumentCollectReceipt) => void;
-  vi.mocked(readPendingMeasurementReceipt).mockReturnValue(
+it("ignores identity recovery after unmount", async () => {
+  let resolve!: (value: Awaited<ReturnType<typeof listPendingMeasurements>>) => void;
+  vi.mocked(listPendingMeasurements).mockReturnValue(
     new Promise((done) => {
       resolve = done;
     }),
   );
   const receive = vi.fn();
   const { unmount } = renderHook(() => usePendingMeasurements("scope", receive));
-  await waitFor(() => expect(readPendingMeasurementReceipt).toHaveBeenCalledOnce());
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledOnce());
   unmount();
   await act(async () => {
-    resolve(receipt);
+    resolve({ items: [item] });
   });
   expect(receive).not.toHaveBeenCalled();
 });
@@ -124,5 +122,5 @@ it("recovers reused command IDs from distinct sessions independently", async () 
     "old-session",
     "another-session",
   ]);
-  expect(readPendingMeasurementReceipt).toHaveBeenCalledTimes(2);
+  expect(readPendingMeasurementReceipt).not.toHaveBeenCalled();
 });

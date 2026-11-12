@@ -1,12 +1,16 @@
-import type { InstrumentCollectReceipt } from "../../api-contract";
+import {
+  ReceiptValidationNotice,
+  OriginalReceiptDownload,
+  isVerifiedReceipt,
+  type ReceiptValidation,
+} from "./ReceiptValidation";
 import type { InstrumentAcquisitionTarget } from "./instrument-api";
 import type { MeasurementSave } from "./direct-measurement-api";
-import { unavailableResults, unavailableReasonLabels } from "./InstrumentInterfaceControls";
-import { AcquisitionCurve } from "./AcquisitionCurve";
+import { BoundedMeasurement, type MeasurementDisplayStore } from "./BoundedMeasurement";
+import { measurementKey } from "./measurement-identity";
 
-export interface CurrentMeasurementResult {
+export interface CurrentMeasurementResult extends ReceiptValidation {
   target: InstrumentAcquisitionTarget;
-  receipt: InstrumentCollectReceipt;
   selection: MeasurementSave;
   receivedAt: string;
   relationshipChanged?: string;
@@ -17,13 +21,14 @@ export function CurrentMeasurement({
   result,
   staged,
   sessionId,
+  displayStore,
 }: {
   result: CurrentMeasurementResult;
   staged: boolean;
   sessionId?: string;
+  displayStore?: MeasurementDisplayStore;
 }) {
-  const { target, receipt, selection } = result;
-  const unavailable = unavailableResults(receipt);
+  const { target, selection } = result;
   const action =
     target.interfaceId === "scopecat.network_sweep/v1" && target.acquisition.id === "sweep"
       ? "新采集"
@@ -34,7 +39,7 @@ export function CurrentMeasurement({
   return (
     <section
       aria-label="当前测量结果"
-      className="grid min-w-0 gap-2 rounded border border-line p-3"
+      className="grid min-w-0 max-w-full grid-cols-1 gap-2 rounded border border-line p-3 [overflow-wrap:anywhere]"
     >
       <h3 className="text-sm font-semibold">{selection.title || "当前测量结果"}</h3>
       <p className="text-xs">
@@ -59,13 +64,16 @@ export function CurrentMeasurement({
           有未发送的设置草稿，尚未应用到设备，也未改变这条曲线。
         </p>
       )}
-      {unavailable.count > 0 && (
-        <p role="status" className="text-xs text-yellow">
-          {unavailable.count} 项结果不可用 · 原因：{" "}
-          {unavailable.reasons.map((reason) => unavailableReasonLabels[reason]).join("、")}
-        </p>
+      <ReceiptValidationNotice value={result} />
+      {result.savedRecordId && <OriginalReceiptDownload recordId={result.savedRecordId} />}
+      {isVerifiedReceipt(result) && (
+        <BoundedMeasurement
+          source={result.savedRecordId ? { recordId: result.savedRecordId } : { selection }}
+          acquisition={target.acquisition}
+          displayStore={displayStore}
+          displayKey={measurementKey(selection)}
+        />
       )}
-      <AcquisitionCurve receipt={receipt} acquisition={target.acquisition} />
     </section>
   );
 }

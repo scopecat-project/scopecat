@@ -27,7 +27,6 @@ const description: InstrumentDescription = {
 };
 const results: CurrentMeasurementResult[] = ["one", "two"].map((id) => ({
   target: acquisitionTargets(description)[0]!,
-  receipt: { status: "collected", problems: [] },
   selection: {
     session_id: "session",
     instrument_id: "vna",
@@ -48,7 +47,6 @@ function Harness() {
     results.map((item) => ({
       selection: item.selection,
       acquisition: item.target.acquisition,
-      receipt: item.receipt,
     })),
   );
   return (
@@ -201,7 +199,6 @@ it.each([true, false])(
               ? results.map((item) => ({
                   selection: item.selection,
                   acquisition: item.target.acquisition,
-                  receipt: item.receipt,
                 }))
               : []
           }
@@ -221,3 +218,114 @@ it.each([true, false])(
     expect(saveDirectMeasurement).not.toHaveBeenCalled();
   },
 );
+
+it("warns before saving an unverified original without blocking its preservation", async () => {
+  const item = {
+    ...results[1]!,
+    receipt_validation: "unverified" as const,
+    validation_reason: "budget exceeded",
+  };
+  vi.mocked(saveDirectMeasurement).mockResolvedValue({
+    id: "diagnostic-original",
+  } as SavedMeasurement);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MeasurementWorkbench
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
+        description={description}
+        connected
+        disabled={false}
+        collectResults={{}}
+        recent={[item]}
+        current={item}
+        staged={false}
+        pending={[
+          {
+            selection: item.selection,
+            acquisition: item.target.acquisition,
+            receipt_validation: item.receipt_validation,
+          },
+        ]}
+        onCollect={vi.fn()}
+        onSelect={vi.fn()}
+        onSaveAttempt={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText("未验证原件（验证未完成）")).toBeVisible();
+  expect(within(dialog).getByText(/保存不表示它是合格科学数据/)).toBeVisible();
+  fireEvent.click(within(dialog).getByRole("button", { name: /^保存$/ }));
+  await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));
+});
+
+it("keeps save and compact selection above content with the full recent list below", () => {
+  show();
+  const actions = screen.getByLabelText("所选结果操作");
+  const content = screen.getByLabelText("当前测量结果");
+  expect(actions.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(actions).getByRole("button", { name: "保存所选结果" })).toBeVisible();
+  const recent = screen.getByRole("complementary", { name: "近期结果" });
+  expect(content.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(actions).getByRole("combobox", { name: "选择近期结果" })).toBeVisible();
+  expect(screen.getByTestId("recent-result-one")).toBeVisible();
+});
+
+it("shares one selected result between the compact selector and full list without losing save drafts", async () => {
+  show();
+  const select = screen.getByRole("combobox", { name: "选择近期结果" });
+  const options = within(select).getAllByRole("option") as HTMLOptionElement[];
+  const first = options[1]!;
+  expect(select).toHaveValue(options[0]!.value);
+  fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  let dialog = screen.getByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText("标题"), { target: { value: "Retained draft" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  fireEvent.change(select, { target: { value: first.value } });
+  expect(screen.getByTestId("recent-result-one")).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByLabelText("当前测量结果")).toHaveTextContent("Curve one");
+  fireEvent.click(screen.getByTestId("recent-result-two"));
+  expect(select).toHaveValue(options[0]!.value);
+  fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByLabelText("标题")).toHaveValue("Retained draft");
+});
+
+it("does not present another original when the current result is outside the recent list", () => {
+  const onSelect = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MeasurementWorkbench
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
+        description={description}
+        connected
+        disabled={false}
+        collectResults={{}}
+        recent={[results[0]!]}
+        current={results[1]}
+        staged={false}
+        pending={[]}
+        onCollect={vi.fn()}
+        onSelect={onSelect}
+        onSaveAttempt={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  const select = screen.getByRole("combobox", { name: "选择近期结果" });
+  const displayed = within(select).getByRole("option", {
+    name: /当前显示（近期列表外）/,
+  }) as HTMLOptionElement;
+  expect(displayed).toBeDisabled();
+  expect(displayed.selected).toBe(true);
+  expect(select).toHaveValue(displayed.value);
+  expect(screen.getByLabelText("当前测量结果")).toHaveTextContent("Curve two");
+  expect(onSelect).not.toHaveBeenCalled();
+  const recent = within(select).getByRole("option", { name: /^1\./ }) as HTMLOptionElement;
+  fireEvent.change(select, { target: { value: recent.value } });
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith(results[0]);
+});

@@ -64,7 +64,7 @@ async function expectFittedCurve(chart: Locator) {
       ).getBBox();
       return {
         plot: { width: plot.width, height: plot.height },
-        caption: element.parentElement!.querySelector("p")!.textContent,
+        caption: element.previousElementSibling!.textContent,
         xTicks: [...svg.querySelectorAll('text[text-anchor="middle"]')]
           .map((label) => label.textContent ?? "")
           .filter((text) => /^-?[\d,.]+(?:e[+-]?\d+)?$/.test(text)),
@@ -102,8 +102,9 @@ async function expectFittedCurve(chart: Locator) {
       expect(layout.xTicks.some((tick) => tick.includes("e+"))).toBe(true);
     } else {
       expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
-      expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
-      expect(layout.xTicks.some((tick) => tick.includes(","))).toBe(true);
+      // Bounded previews keep scientific tick labels at every width; these are
+      // display-only and retain the exact values rather than restoring comma labels.
+      expect(layout.xTicks.some((tick) => tick.includes("e+"))).toBe(true);
     }
     for (const label of layout.labels) {
       expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
@@ -122,7 +123,7 @@ async function expectFittedCurve(chart: Locator) {
   }).toPass({ timeout: 5_000, intervals: [100, 250, 500] });
 }
 
-test("control inputs and headings stay readable and complete curves resize at every entry", async ({
+test("control inputs and headings stay readable and bounded curves resize at every entry", async ({
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
@@ -180,6 +181,20 @@ test("control inputs and headings stay readable and complete curves resize at ev
               if (result.id === "s_parameter") result.label = longAxisLabel;
       await route.fulfill({ response, json: session });
     });
+    // The review summary now carries the authoritative acquisition contract.
+    // Modify only its presentation label, never retained bytes or save identity.
+    await page.route(
+      "**/api/v1/instrument-sessions/*/instruments/*/collect-review",
+      async (route) => {
+        const response = await route.fetch();
+        const summary: components["schemas"]["CollectReviewReceipt"] = await response.json();
+        for (const contract of summary.pending?.description.interfaces ?? [])
+          for (const acquisition of contract.acquisitions ?? [])
+            for (const result of acquisition.results)
+              if (result.id === "s_parameter") result.label = longAxisLabel;
+        await route.fulfill({ response, json: summary });
+      },
+    );
     await page.getByRole("button", { name: "连接", exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     await page.screenshot({
@@ -199,6 +214,10 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const read = page.getByTitle("scopecat.existing_network_trace/v1 / ", { exact: true });
     await sweep.click();
     await showResults(page);
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
+    await expect(
+      page.getByRole("combobox", { name: "选择近期结果", exact: true }),
+    ).toBeInViewport();
     // Keep the same region and curve locatable while deliberately hidden below.
     const current = page.getByRole("region", {
       name: "当前测量结果",
@@ -206,7 +225,7 @@ test("control inputs and headings stay readable and complete curves resize at ev
       includeHidden: true,
     });
     const curve = current.getByRole("img", {
-      name: "s_parameter 完整曲线",
+      name: "s_parameter 局部曲线",
       includeHidden: true,
     });
     for (const width of [390, 1280, 390, 760, 1280]) {
@@ -232,7 +251,7 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const narrowWidth = (await narrowResults.boundingBox())!.width;
     expect(narrowWidth).toBeGreaterThanOrEqual(300);
     expect(narrowWidth).toBeLessThanOrEqual(350);
-    await expect(curve.locator("..").locator("p").first()).toContainText(longAxisLabel);
+    await expect(current.getByText(/^纵轴 /)).toContainText(longAxisLabel);
     for (const value of ["phase", "real", "imag", "magnitude"]) {
       await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
       await expectFittedCurve(curve);
@@ -514,7 +533,8 @@ test("control inputs and headings stay readable and complete curves resize at ev
     await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
     for (const name of ["标题", "线路名称", "备注"]) {
       const input = saveDialog.getByRole("textbox", { name, exact: true });
-      await expect(input).toHaveValue("");
+      // The bounded-result display/save store retains drafts after Cancel.
+      await expect(input).toHaveValue(name === "标题" ? "Resize draft" : "");
       const appearance = await input.evaluate((element) => {
         const css = element.ownerDocument.defaultView!.getComputedStyle(element);
         const bounds = element.getBoundingClientRect();
@@ -600,7 +620,7 @@ test("control inputs and headings stay readable and complete curves resize at ev
     expect(settledLayout.errors).toEqual([]);
     expect(new Set(settledLayout.frames).size).toBe(1);
     await page.goto(`${url}${resultHref}`);
-    const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
+    const savedCurve = page.getByRole("img", { name: "s_parameter 局部曲线" });
     for (const width of [390, 1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(savedCurve);
