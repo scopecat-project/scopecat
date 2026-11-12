@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api-schema";
 
 type DeviceView = components["schemas"]["DeviceView"];
+const longAxisLabel = "s_parameter · measured transmission (complex)";
 const deviceName = "Synthetic VNA " + "long-device-label-".repeat(5);
 
 async function showResults(page: Page) {
@@ -55,7 +56,18 @@ async function expectFittedCurve(chart: Locator) {
     const layout = await chart.evaluate((element) => {
       const svg = element.querySelector("svg")!;
       const bounds = svg.getBoundingClientRect();
+      // The first clip belongs to the line series, not the dataZoom overview.
+      const plot = (
+        svg.querySelector("clipPath path") as unknown as {
+          getBBox(): { width: number; height: number };
+        }
+      ).getBBox();
       return {
+        plot: { width: plot.width, height: plot.height },
+        caption: element.parentElement!.querySelector("p")!.textContent,
+        xTicks: [...svg.querySelectorAll('text[text-anchor="middle"]')]
+          .map((label) => label.textContent ?? "")
+          .filter((text) => /^-?[\d,.]+(?:e[+-]?\d+)?$/.test(text)),
         width: bounds.width,
         containerWidth: element.clientWidth,
         left: bounds.left,
@@ -79,8 +91,20 @@ async function expectFittedCurve(chart: Locator) {
     expect(layout.left).toBeGreaterThanOrEqual(0);
     expect(layout.right).toBeLessThanOrEqual(layout.viewport);
     expect(layout.overflow).toBeLessThanOrEqual(1);
-    expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
-    expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
+    expect(layout.caption).toContain("横轴 frequency (Hz)");
+    expect(layout.caption).toContain("纵轴 s_parameter");
+    expect(layout.plot.width).toBeGreaterThanOrEqual(140);
+    expect(layout.plot.height).toBeGreaterThanOrEqual(100);
+    expect(new Set(layout.xTicks).size).toBeGreaterThanOrEqual(2);
+    if (layout.width <= 420) {
+      expect(layout.plot.width / layout.width).toBeGreaterThanOrEqual(0.5);
+      expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(false);
+      expect(layout.xTicks.some((tick) => tick.includes("e+"))).toBe(true);
+    } else {
+      expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
+      expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
+      expect(layout.xTicks.some((tick) => tick.includes(","))).toBe(true);
+    }
     for (const label of layout.labels) {
       expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
       expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
@@ -140,6 +164,18 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const controlUrl = `${url}/?device-control=${encodeURIComponent(devices[0].device.id)}`;
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(controlUrl);
+    // Exercise a long display label without changing device data or backend save identity.
+    await page.route("**/api/v1/instrument-sessions", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      const response = await route.fetch();
+      const session: components["schemas"]["InstrumentSessionOpenReceipt"] = await response.json();
+      for (const description of session.descriptions)
+        for (const contract of description.interfaces ?? [])
+          for (const acquisition of contract.acquisitions ?? [])
+            for (const result of acquisition.results)
+              if (result.id === "s_parameter") result.label = longAxisLabel;
+      await route.fulfill({ response, json: session });
+    });
     await page.getByRole("button", { name: "连接", exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     await page.screenshot({
@@ -177,6 +213,88 @@ test("control inputs and headings stay readable and complete curves resize at ev
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
     }
+    // Native regression: around 893px, a 59/41 split leaves a roughly 300px results pane.
+    // Contained SVG labels alone used to pass while the actual plot shrank to about 57px.
+    await page.setViewportSize({ width: 893, height: 700 });
+    await showResults(page);
+    await showControls(page);
+    const narrowDivider = page.getByRole("separator", { name: "调整控制与结果区域大小" });
+    await narrowDivider.dblclick();
+    await narrowDivider.focus();
+    await page.keyboard.press("Shift+ArrowRight");
+    for (let step = 0; step < 3; step++) await page.keyboard.press("ArrowRight");
+    await expect(narrowDivider).toHaveAttribute("aria-valuenow", "59");
+    const narrowResults = page.getByRole("region", { name: "采集结果工作区", exact: true });
+    const narrowWidth = (await narrowResults.boundingBox())!.width;
+    expect(narrowWidth).toBeGreaterThanOrEqual(300);
+    expect(narrowWidth).toBeLessThanOrEqual(350);
+    await expect(curve.locator("..").locator("p").first()).toContainText(longAxisLabel);
+    for (const value of ["phase", "real", "imag", "magnitude"]) {
+      await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
+      await expectFittedCurve(curve);
+    }
+    await curve.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "../../.test-results/layout-c-chart-893.png", fullPage: true });
+    // Preserve this original result before adding the high-offset sample. The final
+    // session-close check must still require every pending result to be accounted for.
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    const originalSave = page.getByRole("dialog", { name: "保存测量", exact: true });
+    await originalSave.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(originalSave).toBeHidden();
+    // A 1 MHz span around 5 GHz must not round distinct narrow ticks to "5.00e+9".
+    await page
+      .getByTestId("interface-property-start_frequency")
+      .getByRole("spinbutton")
+      .fill("5000000000");
+    await page
+      .getByTestId("interface-property-stop_frequency")
+      .getByRole("spinbutton")
+      .fill("5001000000");
+    const apply = page.getByRole("button", { name: "应用暂存修改", exact: true });
+    await apply.click();
+    await expect(apply).toBeDisabled();
+    await sweep.click();
+    await expect(page.getByTestId(/^recent-result-/)).toHaveCount(2);
+    await expectFittedCurve(curve);
+    const closeTicks = await curve.locator('svg text[text-anchor="middle"]').allTextContents();
+    const closeValues = closeTicks
+      .filter((text) => /^-?[\d,.]+(?:e[+-]?\d+)?$/.test(text))
+      .map((text) => Number(text.replaceAll(",", "")));
+    expect(new Set(closeValues).size).toBeGreaterThanOrEqual(2);
+    expect(Math.min(...closeValues)).toBeGreaterThanOrEqual(5e9);
+    expect(Math.max(...closeValues)).toBeLessThanOrEqual(5.001e9);
+    await curve.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: "../../.test-results/layout-c-chart-offset-893.png",
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    const narrowSave = page.getByRole("dialog", { name: "保存测量", exact: true });
+    await narrowSave.getByRole("textbox", { name: "标题", exact: true }).fill("Narrow plot draft");
+    await page.setViewportSize({ width: 800, height: 600 });
+    await expect(page.getByTestId("instrument-workbench-layout")).toHaveAttribute(
+      "data-compact",
+      "true",
+    );
+    await expect(narrowSave).toBeVisible();
+    await expect(narrowSave.getByRole("textbox", { name: "标题", exact: true })).toHaveValue(
+      "Narrow plot draft",
+    );
+    await page.screenshot({
+      path: "../../.test-results/layout-c-chart-save-800.png",
+      fullPage: true,
+    });
+    await narrowSave.getByRole("button", { name: "取消", exact: true }).click();
+    await showResults(page);
+    await narrowResults.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expectFittedCurve(curve);
+    await curve.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "../../.test-results/layout-c-chart-800.png", fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await showResults(page);
+    await narrowDivider.dblclick();
     // A 1920px viewport still leaves only a narrow settings column. Fields
     // must adapt to that container rather than using viewport-wide two columns.
     await page.setViewportSize({ width: 1920, height: 1080 });
