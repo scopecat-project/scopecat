@@ -46,7 +46,9 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     const url = command("start").trim().split("\n").at(-1)!;
     started = true;
     await page.goto(`${url}/#settings`);
-    await expect(page.getByLabel("未保存结果暂存方式", { exact: true })).toHaveValue("memory_only");
+    await expect(
+      page.getByRole("combobox", { name: "未保存结果暂存方式", exact: true }),
+    ).toHaveValue("memory_only");
     await page.getByLabel("操作者名称", { exact: true }).fill("Isolated direct measurement tester");
     await page.getByRole("button", { name: "保存操作者", exact: true }).click();
     await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
@@ -136,7 +138,10 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     // Existing originals stay in their original mode across policy changes.
     const settingsPage = await page.context().newPage();
     await settingsPage.goto(`${url}/#settings`);
-    const policy = settingsPage.getByLabel("未保存结果暂存方式", { exact: true });
+    const policy = settingsPage.getByRole("combobox", {
+      name: "未保存结果暂存方式",
+      exact: true,
+    });
     await expect(policy).toHaveValue("memory_only");
     await policy.selectOption("allow_temporary_disk");
     const diskPolicyResponse = settingsPage.waitForResponse(

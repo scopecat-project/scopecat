@@ -256,7 +256,7 @@ it("warns before saving an unverified original without blocking its preservation
   );
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
   const dialog = screen.getByRole("dialog");
-  expect(within(dialog).getByText("未验证原件（解析预算不足）")).toBeVisible();
+  expect(within(dialog).getByText("未验证原件（验证未完成）")).toBeVisible();
   expect(within(dialog).getByText(/保存不表示它是合格科学数据/)).toBeVisible();
   fireEvent.click(within(dialog).getByRole("button", { name: /^保存$/ }));
   await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));

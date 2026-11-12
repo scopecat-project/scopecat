@@ -80,6 +80,7 @@ it("loads memory default without writing and explains existing disk results", as
     </QueryClientProvider>,
   );
   expect(await screen.findByLabelText("未保存结果暂存方式")).toHaveValue("memory_only");
+  expect(screen.getByRole("combobox", { name: "未保存结果暂存方式" })).toHaveValue("memory_only");
   expect(screen.getByText(/之前已接纳的采集仍可能完成临时写盘/)).toBeVisible();
   expect(screen.getByRole("button", { name: "保存暂存设置" })).toBeDisabled();
   expect(fetch.mock.calls).toHaveLength(2);
