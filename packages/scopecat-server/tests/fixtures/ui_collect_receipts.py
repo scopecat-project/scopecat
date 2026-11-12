@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import base64
 import json
+from contextlib import nullcontext
 from typing import Any
 from unittest.mock import Mock
 
 import numpy as np
 from fastapi.testclient import TestClient
-from scopecat.daemon.hardware_receipt_wire import encode_collect_receipt
+from scopecat.daemon.hardware_receipt_wire import (
+    decode_collect_receipt,
+    encode_collect_receipt,
+)
 from scopecat.kernel.problems import (
     ExternalLocation,
     ModelLocation,
@@ -27,9 +31,11 @@ from scopecat.records.measurement import (
     MeasurementScalar,
     MeasurementUnavailable,
 )
+from scopecat.sdk.attachments import AttachmentBundle, AttachmentBundleLimits
 from scopecat.sdk.instruments.commands import CollectReceipt
 
 from scopecat_server.http.transport import create_app
+from scopecat_server.instruments.retained_receipt import RawCollectReceipt
 
 values: dict[str, MeasurementAcquisitionValue] = {
     "float": MeasurementScalar.create(value=1.5),
@@ -110,20 +116,33 @@ for sample in (
     receipt,
     CollectReceipt(status="not_collected", problems=receipt.problems),
 ):
-    application.instruments.collect.return_value = sample
+    application.instruments.collect_original.return_value = nullcontext(
+        RawCollectReceipt.from_receipt(sample)
+    )
     response = client.post(
         "/api/v1/instrument-sessions/session-1/instruments/vna-1/collect",
         json=request,
         headers={"Accept": "application/vnd.scopecat.hardware-receipt.v2"},
     )
     assert response.status_code == 200, response.text
-    assert application.instruments.collect.call_args.args[:2] == ("session-1", "vna-1")
+    assert application.instruments.collect_original.call_args.args[:2] == (
+        "session-1",
+        "vna-1",
+    )
     assert (
-        application.instruments.collect.call_args.args[2].command_id
+        application.instruments.collect_original.call_args.args[2].command_id
         == "collect-contract"
     )
     content = response.content
-    assert content == encode_collect_receipt(sample)
+    expected_bundle = AttachmentBundle.from_bytes(
+        encode_collect_receipt(sample), AttachmentBundleLimits()
+    )
+    actual_bundle = AttachmentBundle.from_bytes(content, AttachmentBundleLimits())
+    # Worker framing canonicalizes diagnostic mapping keys. Preserve all header
+    # semantics and exact scientific attachment bytes, not JSON key insertion order.
+    assert json.loads(actual_bundle.header) == json.loads(expected_bundle.header)
+    assert actual_bundle.attachments == expected_bundle.attachments
+    assert decode_collect_receipt(content) == sample
     expected: dict[str, Any] = json.loads(sample.model_dump_json())
     # The UI omits availability for fully available arrays.
     # Do not erase actual diagnostics.
@@ -139,7 +158,7 @@ for sample in (
             "content_base64": base64.b64encode(content).decode("ascii"),
         }
     )
-application.instruments.collect.return_value = CollectReceipt(
+unsupported_receipt = CollectReceipt(
     readback=InstrumentReadback(
         values={
             "trace": MeasurementArray.create(
@@ -149,6 +168,16 @@ application.instruments.collect.return_value = CollectReceipt(
         }
     )
 )
+
+
+# Keep the binary producer's unsupported-representation error contract. Real
+# instrument admission/retention is covered separately; this fixture starts no
+# endpoint or device and uses the same binary error mapper as other producers.
+def unsupported_carrier(*_args: object) -> bytes:
+    return encode_collect_receipt(unsupported_receipt)
+
+
+application.instruments.collect_original.side_effect = unsupported_carrier
 response = client.post(
     "/api/v1/instrument-sessions/session-1/instruments/vna-1/collect",
     json=request,

@@ -5,11 +5,23 @@ import { readOperatorSettings } from "../application/OperatorSettings";
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hardwareReceiptResponse } from "./receipt-fixture.test-support";
+import { producerReceipts } from "./receipt-fixture.test-support";
+import { usePendingMeasurements } from "./use-pending-measurements";
+import type { MeasurementPreview } from "./measurement-preview";
 import { ApiError } from "../../api-client";
 import type {
+  InstrumentCollectReceipt,
   InstrumentInterface,
   InstrumentSession,
   InstrumentSessionLease,
@@ -83,10 +95,19 @@ vi.mock("./instrument-api", async (importOriginal) => ({
   resolveInstrumentAttention: vi.fn(),
 }));
 
-import { listDirectMeasurements, saveDirectMeasurement } from "./direct-measurement-api";
+import {
+  discardDirectMeasurement,
+  listDirectMeasurements,
+  listPendingMeasurements,
+  readPendingMeasurementReceipt,
+  saveDirectMeasurement,
+} from "./direct-measurement-api";
 vi.mock("./direct-measurement-api", () => ({
   listDirectMeasurements: vi.fn(),
+  listPendingMeasurements: vi.fn(),
+  readPendingMeasurementReceipt: vi.fn(),
   saveDirectMeasurement: vi.fn(),
+  discardDirectMeasurement: vi.fn(),
 }));
 
 import { getInstrumentFinishPlan, finishInstrumentSession } from "./instrument-finish-api";
@@ -96,8 +117,63 @@ vi.mock("./instrument-finish-api", () => ({
   getInstrumentFinishPlan: vi.fn(),
   finishInstrumentSession: vi.fn(),
 }));
+function previewFixture(
+  receipt: InstrumentCollectReceipt = {
+    status: "collected",
+    problems: [],
+    readback: { values: {} },
+  },
+): MeasurementPreview {
+  return {
+    method: "exact_slice",
+    status: receipt.status,
+    raw_bytes: 1024,
+    fields: Object.entries(receipt.readback?.values ?? {}).map(([request_id, value]) => {
+      if (value.kind === "partitioned_array") throw new Error("Unexpected partitioned fixture");
+      const shape = value.kind === "scalar" ? [] : value.shape;
+      const values =
+        value.kind === "unavailable"
+          ? []
+          : value.kind === "scalar"
+            ? [value.value]
+            : value.values.flat(Infinity);
+      return {
+        request_id,
+        kind: value.kind,
+        dtype: value.dtype,
+        unit: value.unit ?? null,
+        unit_truncated: false,
+        shape,
+        total_count: value.kind === "unavailable" ? null : values.length,
+        start: 0,
+        returned_count: values.length,
+        next_start: null,
+        complete: true,
+        values: (value.dtype === "int64"
+          ? values.map(String)
+          : values) as MeasurementPreview["fields"][number]["values"],
+        truncated_indices: [],
+        metadata: {},
+        metadata_truncated: false,
+        reason: value.kind === "unavailable" ? value.reason : null,
+      };
+    }),
+    fields_truncated: false,
+    metadata: {},
+    metadata_truncated: false,
+    problems: [],
+    problems_truncated: false,
+  };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(previewFixture())),
+  );
+  vi.mocked(listPendingMeasurements).mockResolvedValue({ items: [] });
+  vi.mocked(discardDirectMeasurement).mockResolvedValue({ status: "discarded", record_id: null });
   vi.mocked(getInstrumentFinishPlan).mockResolvedValue({
     actions: [],
     configured_finish_available: false,
@@ -163,7 +239,7 @@ beforeEach(() => {
   vi.mocked(collectInstrumentAcquisition).mockResolvedValue({
     status: "collected",
     problems: [],
-    readback: { values: {} },
+    pending: null,
   });
   vi.mocked(invokeInstrumentOperation).mockResolvedValue({
     status: "invoked",
@@ -771,7 +847,7 @@ describe("instrument workspace", () => {
             resolve({
               status: "collected",
               problems: [],
-              readback: { values: {} },
+              pending: null,
             });
         }),
     );
@@ -1385,23 +1461,36 @@ describe("instrument workspace", () => {
     vi.mocked(openInstrumentSession).mockResolvedValue(
       session({ descriptions: [view.description] }),
     );
-    vi.mocked(collectInstrumentAcquisition).mockResolvedValue({
-      status: "collected",
-      problems: [],
-      readback: {
-        values: {
-          trace: { kind: "array", dtype: "float64", shape: [3], unit: "ratio", values: [1, 2, 3] },
-        },
-      },
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          previewFixture({
+            status: "collected",
+            problems: [],
+            readback: {
+              values: {
+                trace: {
+                  kind: "array",
+                  dtype: "float64",
+                  shape: [3],
+                  unit: "ratio",
+                  values: [1, 2, 3],
+                },
+              },
+            },
+          }),
+        ),
+      ),
+    );
     renderWorkspace();
     await connectInstrument();
     fireEvent.click(screen.getAllByRole("button", { name: "Sample Collect" })[0]!);
     const current = await screen.findByRole("region", { name: "当前测量结果" });
-    expect(within(current).getByRole("img", { name: /完整曲线/ })).toBeVisible();
+    expect(await within(current).findByRole("img", { name: /局部曲线/ })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Read existing Collect" }));
     await waitFor(() => expect(within(current).getByText(/Read existing ·/)).toBeVisible());
-    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
     fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
       target: { value: "6000000000" },
     });
@@ -1410,15 +1499,16 @@ describe("instrument workspace", () => {
     await waitFor(() =>
       expect(within(current).getByText(/此后已执行设置或设备动作/)).toBeVisible(),
     );
-    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
     vi.mocked(collectInstrumentAcquisition).mockResolvedValueOnce({
       status: "not_collected",
       problems: [],
+      pending: null,
     });
     fireEvent.click(screen.getAllByRole("button", { name: "Sample Collect" })[0]!);
     await waitFor(() => expect(within(current).getByText(/最近一次采集未成功/)).toBeVisible());
     expect(within(current).getByText(/Read existing ·/)).toBeVisible();
-    expect(screen.getAllByRole("img", { name: /完整曲线/ })).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
   });
 
   it("collapses the parent layout without losing selected or pending results", async () => {
@@ -1559,7 +1649,7 @@ describe("instrument workspace", () => {
     });
     await screen.findByRole("dialog", { name: "结束控制前的待办" });
     fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
-    expect(await screen.findByText(/保存尚未确认：disk unavailable/)).toBeVisible();
+    expect(await screen.findByText(/保存(?:或放弃)?尚未确认：disk unavailable/)).toBeVisible();
     expect(settled).not.toHaveBeenCalled();
     expect(closeInstrumentSession).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
@@ -1580,10 +1670,12 @@ describe("instrument workspace", () => {
       id: "saved-one",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
       intent: {
+        retain_result: true,
         command_id: selection.command_id,
         instrument_id: selection.instrument_id,
         interface_id: "scopecat.rf_output/v1",
@@ -1605,7 +1697,7 @@ describe("instrument workspace", () => {
       target: { value: "first sweep" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
-    await screen.findByText(/保存尚未确认：disk unavailable/);
+    await screen.findByText(/保存(?:或放弃)?尚未确认：disk unavailable/);
     expect(within(dialog).getByRole("textbox", { name: "线路名称" })).toBeDisabled();
     expect(within(dialog).getByRole("textbox", { name: "标题" })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole("button", { name: "重试保存" }));
@@ -1627,10 +1719,12 @@ describe("instrument workspace", () => {
       id: "saved-capacity",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
       intent: {
+        retain_result: true,
         command_id: selection.command_id,
         instrument_id: selection.instrument_id,
         interface_id: "scopecat.rf_output/v1",
@@ -1672,10 +1766,12 @@ describe("instrument workspace", () => {
       id: "saved-capacity",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
       intent: {
+        retain_result: true,
         command_id: selection.command_id,
         instrument_id: selection.instrument_id,
         interface_id: "scopecat.rf_output/v1",
@@ -1716,10 +1812,12 @@ describe("instrument workspace", () => {
       id: "saved-through-exit",
       selection,
       saved_at: "2026-11-04T00:00:00Z",
+      receipt_validation: "verified" as const,
       collected_at: "2026-11-04T00:00:00Z",
       setup: session().setup,
       description: instrument().description!,
       intent: {
+        retain_result: true,
         command_id: selection.command_id,
         instrument_id: selection.instrument_id,
         interface_id: "scopecat.rf_output/v1",
@@ -1752,26 +1850,46 @@ describe("instrument workspace", () => {
     expect(finishInstrumentSession).not.toHaveBeenCalled();
   });
 
-  it("displays a current Python HTTP receipt through the real collection API", async () => {
+  it("displays a bounded projection of Python receipt values through the JSON collection API", async () => {
+    const view = instrument();
+    const member = view.description!.interfaces![0]!;
+    member.acquisitions![0]!.results[0] = {
+      ...member.acquisitions![0]!.results[0]!,
+      unit: null,
+      axes: [{ id: "sample", kind: "sample", size: 2 }],
+    };
+    mockInventory({ setup: session().setup, problems: [], items: [view] });
+    vi.mocked(openInstrumentSession).mockResolvedValue(
+      session({ descriptions: [view.description!] }),
+    );
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(hardwareReceiptResponse()));
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        Response.json(
+          url.endsWith("/collect-review")
+            ? { status: "collected", problems: [], pending: null }
+            : previewFixture(producerReceipts[0]!.expected),
+        ),
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
     expect(await screen.findByRole("region", { name: "当前测量结果" })).toBeVisible();
-    fireEvent.click(screen.getByText("结果数据（数值与可用性）"));
+
     await waitFor(() =>
       expect(
         within(screen.getByRole("combobox", { name: "精确结果字段" })).getAllByRole("option"),
       ).toHaveLength(15),
     );
     expect(screen.getByRole("status")).toHaveTextContent("2 项结果不可用");
-    expect(screen.getByRole("status")).toHaveTextContent("原因： 无效、缺失");
-    expect(screen.getByRole("img", { name: /完整曲线/i })).toBeVisible();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(/原因：\s*无效、缺失/);
+    expect(screen.getByRole("img", { name: /局部曲线/i })).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it.each([
@@ -1780,9 +1898,15 @@ describe("instrument workspace", () => {
   ] as const)("handles current Python receipt status %i", async (index, message) => {
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(() => Promise.resolve(hardwareReceiptResponse(index)));
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        Response.json({
+          status: producerReceipts[index]!.expected.status,
+          problems: producerReceipts[index]!.expected.problems,
+          pending: null,
+        }),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     renderWorkspace();
     await screen.findAllByText("Drive source");
@@ -1793,41 +1917,48 @@ describe("instrument workspace", () => {
   });
 
   it("summarizes unavailable collect results without plotting them", async () => {
-    vi.mocked(collectInstrumentAcquisition).mockResolvedValueOnce({
-      status: "collected",
-      problems: [],
-      readback: {
-        values: {
-          "private-overload-result": {
-            kind: "unavailable",
-            reason: "overload",
-            dtype: "float64",
-            unit: "ratio",
-            shape: [],
-            metadata: {},
-          },
-          "private-missing-result": {
-            kind: "unavailable",
-            reason: "missing",
-            dtype: "float64",
-            unit: "ratio",
-            shape: [128],
-            metadata: {},
-          },
-        },
-      },
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          previewFixture({
+            status: "collected",
+            problems: [],
+            readback: {
+              values: {
+                "private-overload-result": {
+                  kind: "unavailable",
+                  reason: "overload",
+                  dtype: "float64",
+                  unit: "ratio",
+                  shape: [],
+                  metadata: {},
+                },
+                "private-missing-result": {
+                  kind: "unavailable",
+                  reason: "missing",
+                  dtype: "float64",
+                  unit: "ratio",
+                  shape: [128],
+                  metadata: {},
+                },
+              },
+            },
+          }),
+        ),
+      ),
+    );
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Sample Collect" }));
 
-    const summary = await screen.findByRole("status");
+    const summary = await screen.findByText(/2 项结果不可用/);
     expect(summary).toHaveTextContent("2 项结果不可用");
-    expect(summary).toHaveTextContent("原因： 缺失、过载");
+    expect(summary).toHaveTextContent(/原因：\s*缺失、过载/);
     expect(summary).not.toHaveTextContent("private-overload-result");
     expect(summary).not.toHaveTextContent("private-missing-result");
-    expect(screen.queryByRole("img", { name: /完整曲线/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /局部曲线/i })).not.toBeInTheDocument();
     expect(screen.queryByText("JSON preview")).not.toBeInTheDocument();
   });
 
@@ -1862,6 +1993,9 @@ describe("instrument workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
     expect(closeInstrumentSession).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+    });
     fireEvent.click(await screen.findByRole("button", { name: "保持当前状态并结束" }));
     await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(2), {
       timeout: 2_000,
@@ -2356,6 +2490,9 @@ function renderWorkspace(controlDeviceId?: string) {
 async function connectInstrument() {
   fireEvent.click(await screen.findByRole("button", { name: "连接" }));
   await screen.findByText("交互会话已连接");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "重新核查后台待保存结果" })).toBeEnabled(),
+  );
 }
 
 function mockInstrumentSessionOwnership({ releasedAfterRefresh = false } = {}) {
@@ -3394,13 +3531,18 @@ describe("connection rejection and retained session recovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
     const dialog = await screen.findByRole("dialog", { name: "结束控制前的待办" });
     fireEvent.click(within(dialog).getByRole("button", { name: "保存全部未保存结果" }));
-    await waitFor(() => expect(within(dialog).getAllByText(/保存尚未确认/)).toHaveLength(2));
+    await waitFor(() =>
+      expect(within(dialog).getAllByText(/保存(?:或放弃)?尚未确认/)).toHaveLength(2),
+    );
     expect(within(dialog).getByText("未保存结果：2")).toBeVisible();
     expect(within(dialog).getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole("button", { name: "返回工作台（保留待核查状态）" }));
     expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+    });
     fireEvent.click(screen.getByRole("button", { name: "确认待办并关闭窗口" }));
     await waitFor(() =>
       expect(screen.queryByRole("region", { name: "恢复原会话待办" })).not.toBeInTheDocument(),
@@ -3427,12 +3569,14 @@ describe("connection rejection and retained session recovery", () => {
     await loseWithTwoResults();
     fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
     fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
-    await waitFor(() => expect(screen.getAllByText(/保存尚未确认/)).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText(/保存(?:或放弃)?尚未确认/)).toHaveLength(2));
     fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
     const resolveIsolation = screen.getByRole("button", { name: "处理原会话隔离（保留本页结果）" });
     expect(resolveIsolation).toBeDisabled();
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "已核查设备，理解处理隔离可能释放原会话的后台回执" }),
+      screen.getByRole("checkbox", {
+        name: "已核查设备，理解处理隔离不会确认未决动作或自动保存结果",
+      }),
     );
     vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
       session_id: "session-1",
@@ -3458,6 +3602,9 @@ describe("connection rejection and retained session recovery", () => {
     expect(screen.getByText("未保存结果：2")).toBeVisible();
     expect(screen.getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+    });
     fireEvent.click(screen.getByRole("button", { name: "确认待办并关闭窗口" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2);
@@ -3465,7 +3612,7 @@ describe("connection rejection and retained session recovery", () => {
     expect(closeInstrumentSession).not.toHaveBeenCalled();
   });
 
-  it("requires fresh pending-result and historical-unknown choices before closing only the ended view", async () => {
+  it("requires fresh historical-unknown acknowledgement after confirmed result discard", async () => {
     vi.mocked(finishInstrumentSession).mockRejectedValueOnce(new Error("finish response lost"));
     vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
       session_id: "session-1",
@@ -3480,6 +3627,9 @@ describe("connection rejection and retained session recovery", () => {
     await loseWithTwoResults(async () => {
       fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
       fireEvent.click(await screen.findByRole("checkbox", { name: /明确放弃这 2 条/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+      });
       fireEvent.click(screen.getByRole("button", { name: "保持当前状态并结束" }));
       await screen.findByText(/finish response lost/);
       fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
@@ -3495,7 +3645,6 @@ describe("connection rejection and retained session recovery", () => {
     });
     const confirm = screen.getByRole("button", { name: "确认待办并关闭窗口" });
     expect(confirm).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
     expect(confirm).toBeDisabled();
     fireEvent.click(acknowledgement);
     expect(confirm).toBeEnabled();
@@ -3507,13 +3656,12 @@ describe("connection rejection and retained session recovery", () => {
       second = prepareDeviceClose("historical-unknown-second");
     });
     await screen.findByRole("dialog", { name: "结束控制前的待办" });
-    expect(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: /明确放弃这/ })).not.toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", {
         name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
       }),
     ).not.toBeChecked();
-    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
     fireEvent.click(
       screen.getByRole("checkbox", {
         name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
@@ -3555,6 +3703,9 @@ describe("connection rejection and retained session recovery", () => {
     await loseWithTwoResults(async () => {
       fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
       fireEvent.click(await screen.findByRole("checkbox", { name: /明确放弃这 2 条/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+      });
       const finish = screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" });
       await waitFor(() => expect(finish).toBeEnabled());
       fireEvent.click(finish);
@@ -3563,7 +3714,9 @@ describe("connection rejection and retained session recovery", () => {
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "已核查设备，理解处理隔离可能释放原会话的后台回执" }),
+      screen.getByRole("checkbox", {
+        name: "已核查设备，理解处理隔离不会确认未决动作或自动保存结果",
+      }),
     );
     vi.mocked(getInstrumentSessionRecovery).mockResolvedValue({
       session_id: "session-1",
@@ -3580,14 +3733,10 @@ describe("connection rejection and retained session recovery", () => {
       expect(resolveInstrumentAttention).toHaveBeenCalledExactlyOnceWith("session-1"),
     );
     await screen.findByText(/后台已确认原会话结束/);
-    expect(
-      screen
-        .getAllByTestId(/^recent-result-/)
-        .every((item) => item.textContent?.includes("待保存")),
-    ).toBe(true);
+    expect(screen.queryAllByTestId(/^recent-result-/)).toHaveLength(0);
+    expect(discardDirectMeasurement).toHaveBeenCalledTimes(2);
     fireEvent.click(screen.getByRole("button", { name: "核查原会话与保存待办" }));
     expect(screen.getByRole("button", { name: "确认待办并关闭窗口" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这 2 条/ }));
     fireEvent.click(
       screen.getByRole("checkbox", {
         name: "我理解历史设备动作结果仍未知，关闭窗口不会确认或重发动作",
@@ -3697,3 +3846,172 @@ async function loseWithTwoResults(beforeLoss?: () => Promise<void>) {
   await waitFor(() => expect(getInstrumentSessionRecovery).toHaveBeenCalledWith("session-1"));
   return { client, ids };
 }
+
+it("recovers and explicitly discards an old pending result while disconnected without collecting again", async () => {
+  const description = instrument().description!;
+  const member = description.interfaces!.find((entry) => entry.acquisitions?.length)!;
+  const acquisition = member.acquisitions![0]!;
+  const selection = {
+    session_id: "expired-before-reload",
+    instrument_id: "drive-source",
+    command_id: "recovered-original",
+    title: "",
+    note: "",
+    line_id: "",
+    line_label: "",
+    series_id: "",
+  };
+  vi.mocked(listPendingMeasurements).mockResolvedValue({
+    items: [
+      {
+        selection,
+        description,
+        receipt_validation: "verified" as const,
+        collected_at: "2026-11-12T01:00:00Z",
+        raw_bytes: 1024,
+        intent: {
+          instrument_id: "drive-source",
+          command_id: selection.command_id,
+          interface_id: member.id,
+          acquisition_id: acquisition.id,
+          component_path: [],
+          result_ids: [],
+          retain_result: true,
+        },
+      },
+    ],
+  });
+  vi.mocked(readPendingMeasurementReceipt).mockResolvedValue({ status: "collected", problems: [] });
+  renderWorkspace("drive-source");
+  expect(await screen.findByTestId("recent-result-recovered-original")).toHaveTextContent("待保存");
+  expect(screen.getByText(/从后台恢复的原采集结果/)).toBeVisible();
+  expect(openInstrumentSession).not.toHaveBeenCalled();
+  expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "处理恢复的待保存结果" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
+  fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+  await waitFor(() => expect(discardDirectMeasurement).toHaveBeenCalledExactlyOnceWith(selection));
+  expect(screen.getByRole("heading", { name: "未保存结果：0" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+  expect(screen.queryByTestId("recent-result-recovered-original")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "重新核查后台待保存结果" }));
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledTimes(2));
+  expect(screen.queryByTestId("recent-result-recovered-original")).not.toBeInTheDocument();
+  expect(readPendingMeasurementReceipt).not.toHaveBeenCalled();
+});
+
+it("saves and discards recovered results with reused command IDs without aliasing sessions", async () => {
+  const description = instrument().description!;
+  const member = description.interfaces!.find((entry) => entry.acquisitions?.length)!;
+  const acquisition = member.acquisitions![0]!;
+  const items = ["old-a", "old-b"].map((session_id) => ({
+    selection: {
+      session_id,
+      instrument_id: "drive-source",
+      command_id: "reused-command",
+      title: session_id,
+      note: "",
+      line_id: "",
+      line_label: "",
+      series_id: "",
+    },
+    description,
+    receipt_validation: "verified" as const,
+    collected_at: "2026-11-12T01:00:00Z",
+    raw_bytes: 1024,
+    intent: {
+      instrument_id: "drive-source",
+      command_id: "reused-command",
+      interface_id: member.id,
+      acquisition_id: acquisition.id,
+      component_path: [],
+      result_ids: [],
+      retain_result: true,
+    },
+  }));
+  vi.mocked(listPendingMeasurements).mockResolvedValue({ items });
+  vi.mocked(readPendingMeasurementReceipt).mockResolvedValue({ status: "collected", problems: [] });
+  vi.mocked(saveDirectMeasurement).mockResolvedValue({ id: "saved-a" } as Awaited<
+    ReturnType<typeof saveDirectMeasurement>
+  >);
+  renderWorkspace("drive-source");
+  await waitFor(() =>
+    expect(screen.getAllByTestId("recent-result-reused-command")).toHaveLength(2),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "处理恢复的待保存结果" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "保存此结果" })[0]!);
+  await screen.findByRole("heading", { name: "未保存结果：1" });
+  expect(saveDirectMeasurement).toHaveBeenCalledExactlyOnceWith(items[0]!.selection);
+  fireEvent.click(screen.getByRole("checkbox", { name: /明确放弃这/ }));
+  fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
+  await screen.findByRole("heading", { name: "未保存结果：0" });
+  expect(discardDirectMeasurement).toHaveBeenCalledExactlyOnceWith(items[1]!.selection);
+  fireEvent.click(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" }));
+  expect(screen.getByTestId("recent-result-reused-command")).toHaveTextContent("old-a");
+  expect(screen.getByTestId("recent-result-reused-command")).toHaveTextContent("已保存");
+  expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
+});
+
+it("ignores a late pending listing after switching instrument identity without fetching originals", async () => {
+  type Page = Awaited<ReturnType<typeof listPendingMeasurements>>;
+  let finishOld!: (page: Page) => void;
+  let finishNew!: (page: Page) => void;
+  vi.mocked(listPendingMeasurements)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishNew = resolve;
+        }),
+    );
+  const recovered = vi.fn();
+  const { rerender } = renderHook(
+    ({ instrumentId }) => usePendingMeasurements(instrumentId, recovered),
+    {
+      initialProps: { instrumentId: "old-device" },
+    },
+  );
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledWith("old-device"));
+  rerender({ instrumentId: "new-device" });
+  await waitFor(() => expect(listPendingMeasurements).toHaveBeenCalledWith("new-device"));
+  const description = instrument().description!;
+  const member = description.interfaces!.find((entry) => entry.acquisitions?.length)!;
+  const makeItem = (instrument_id: string): Page["items"][number] => ({
+    selection: {
+      instrument_id,
+      session_id: "old-session",
+      command_id: "same-command",
+      title: "",
+      note: "",
+      line_id: "",
+      line_label: "",
+      series_id: "",
+    },
+    description,
+    receipt_validation: "verified" as const,
+    collected_at: "2026-11-12T01:00:00Z",
+    raw_bytes: 1024,
+    intent: {
+      instrument_id,
+      command_id: "same-command",
+      interface_id: member.id,
+      acquisition_id: member.acquisitions![0]!.id,
+      retain_result: true,
+    },
+  });
+  await act(async () => finishOld({ items: [makeItem("old-device")] }));
+  expect(recovered).not.toHaveBeenCalled();
+  await act(async () => finishNew({ items: [makeItem("new-device")] }));
+  expect(recovered).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      selection: expect.objectContaining({ instrument_id: "new-device" }),
+    }),
+  );
+  expect(readPendingMeasurementReceipt).not.toHaveBeenCalled();
+  expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
+});

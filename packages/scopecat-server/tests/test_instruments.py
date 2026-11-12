@@ -3731,11 +3731,11 @@ def test_direct_measurements_save_retry_and_restart_preserve_line_attempts(
             selections.append(selection)
             if index == 0:
 
-                def unavailable(_content: bytes) -> Never:
+                def unavailable(_source: Path) -> Never:
                     raise OSError("simulated storage failure")
 
                 with monkeypatch.context() as patch:
-                    patch.setattr(service.store.objects, "put", unavailable)
+                    patch.setattr(service.store.objects, "put_file", unavailable)
                     with pytest.raises(OSError, match="simulated storage failure"):
                         service.save(selection)
             response = transport.post(
@@ -4097,9 +4097,9 @@ def test_direct_save_is_fenced_when_cleanup_wins_before_commit(
                 ),
             )
         cleanup = DataCleanupService(service.store)
-        original_put = service.store.objects.put
+        original_put = service.store.objects.put_file
 
-        def delete_before_publication(content: bytes) -> StoredObject:
+        def delete_before_publication(content: Path) -> StoredObject:
             # Force the interleaving after save obtains its replay, before its
             # writer transaction. No threads or scheduler timing assumptions.
             transport.post(f"/api/v1/instrument-sessions/{session.session_id}/close")
@@ -4115,7 +4115,9 @@ def test_direct_save_is_fenced_when_cleanup_wins_before_commit(
             )
             return original_put(content)
 
-        monkeypatch.setattr(service.store.objects, "put", delete_before_publication)
+        monkeypatch.setattr(
+            service.store.objects, "put_file", delete_before_publication
+        )
         with pytest.raises(BackendConflict, match="cleared"):
             service.save(
                 DirectMeasurementSave(
@@ -4360,3 +4362,662 @@ def test_closed_recovery_does_not_erase_unknown_operation_evidence(
         assert recovered["state"] == "closed"
         assert recovered["active_operation_id"] is None
         assert recovered["has_unresolved_operations"] is True
+
+
+# Pending-result lifecycle regressions use tiny synthetic receipts only.
+def test_pending_results_survive_mixed_replay_eviction(tmp_path: Path) -> None:
+    from scopecat.daemon.hardware_receipt_wire import decode_collect_receipt
+
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    provider = _TrackingProvider(_VariantDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="pending-eviction",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        service = runtime.application.direct_measurements
+        a = _variant_collect_intent(command_id="a", result_ids=("monitored_voltage",))
+        b = a.model_copy(update={"command_id": "b"})
+        receipt_a = daemon.collect_instrument(session.session_id, "source-0", a)
+        daemon.collect_instrument(session.session_id, "source-0", b)
+        selection_a = DirectMeasurementSave(
+            session_id=session.session_id, instrument_id="source-0", command_id="a"
+        )
+        selection_b = selection_a.model_copy(update={"command_id": "b"})
+        saved_b = service.save(selection_b)
+        bytes_b = service.receipt(saved_b.id)
+        for index in range(256):
+            daemon.apply_instrument_state(
+                session.session_id,
+                "source-0",
+                _apply_command(value=4.0).model_copy(
+                    update={"command_id": f"later-{index}"}
+                ),
+            )
+        ledger = runtime.application.instruments._live_runtime(
+            session.session_id
+        ).ledgers["source-0"]
+        assert ledger.replay("a") is None
+        assert ledger.replay("b") is None
+        [driver] = provider.drivers
+        assert isinstance(driver, _VariantDriver)
+        reads = driver.read_count
+        assert daemon.collect_instrument(session.session_id, "source-0", a) == receipt_a
+        assert driver.read_count == reads
+        assert len(driver.collect_requests) == 2
+        saved_a = service.save(selection_a)
+        assert decode_collect_receipt(service.receipt(saved_a.id)) == receipt_a
+        assert service.save(selection_b) == saved_b
+        assert service.receipt(saved_b.id) == bytes_b
+        with pytest.raises(DaemonConflictError, match="no longer retained"):
+            daemon.collect_instrument(session.session_id, "source-0", a)
+        assert len(driver.collect_requests) == 2
+
+
+@pytest.mark.parametrize("end", ["close", "expire", "audit_failure"])
+def test_pending_results_outlive_session_without_device_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, end: str
+) -> None:
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    provider = _TrackingProvider(_VariantDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="retained-session",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        instruments = runtime.application.instruments
+        intent = _variant_collect_intent(
+            command_id="retained-result", result_ids=("monitored_voltage",)
+        )
+        if end == "audit_failure":
+
+            def fail_audit(*_args: object, **_kwargs: object) -> Never:
+                raise OSError("audit unavailable")
+
+            with monkeypatch.context() as patch:
+                patch.setattr(instruments, "_record_operation_finished", fail_audit)
+                with pytest.raises(DaemonConflictError, match="audit recording failed"):
+                    daemon.collect_instrument(opened.session_id, "source-0", intent)
+            instruments._cleanup_session_runtime(opened.session_id)
+        else:
+            daemon.collect_instrument(opened.session_id, "source-0", intent)
+            if end == "close":
+                daemon.close_instrument_session(opened.session_id)
+            else:
+                current = instruments._control.get_instrument_session(opened.session_id)
+                instruments.expire_leases(at=current.expires_at + timedelta(seconds=1))
+        assert opened.session_id not in instruments._sessions
+        [driver] = provider.drivers
+        assert isinstance(driver, _VariantDriver)
+        before = (
+            driver.read_count,
+            len(driver.collect_requests),
+            driver.disconnect_count,
+        )
+        service = runtime.application.direct_measurements
+        record = service.save(
+            DirectMeasurementSave(
+                session_id=opened.session_id,
+                instrument_id="source-0",
+                command_id=intent.command_id,
+            )
+        )
+        assert record.setup == opened.setup
+        assert before == (
+            driver.read_count,
+            len(driver.collect_requests),
+            driver.disconnect_count,
+        )
+        assert not instruments.pending_collections._items
+
+
+@pytest.mark.parametrize("global_limit", [False, True])
+def test_pending_capacity_is_reserved_before_io_and_released_only_on_disposition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, global_limit: bool
+) -> None:
+    import scopecat_server.instruments.pending_collections as pending
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    monkeypatch.setattr(pending, "PENDING_PER_INSTRUMENT", 2)
+    monkeypatch.setattr(pending, "PENDING_TOTAL", 2 if global_limit else 100)
+    provider = _TrackingProvider(_VariantDriver)
+    with (
+        _runtime(tmp_path, provider, config=_two_instrument_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        setup = runtime.application.setup.resolve("initial").ref
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="capacity",
+                actor="test",
+                instrument_ids=("source-0", "source-1"),
+                setup=setup,
+            )
+        )
+        intent = _variant_collect_intent(
+            command_id="one", result_ids=("monitored_voltage",)
+        )
+        for command_id in ("one", "two"):
+            daemon.collect_instrument(
+                opened.session_id,
+                "source-0",
+                intent.model_copy(update={"command_id": command_id}),
+            )
+        drivers = [cast("_VariantDriver", driver) for driver in provider.drivers]
+        reads = [driver.read_count for driver in drivers]
+        target = "source-1" if global_limit else "source-0"
+        third = intent.model_copy(
+            update={"command_id": "three", "instrument_id": target}
+        )
+        with pytest.raises(DaemonConflictError, match="capacity"):
+            daemon.collect_instrument(opened.session_id, target, third)
+        assert [driver.read_count for driver in drivers] == reads
+        if not global_limit:
+            other = third.model_copy(update={"instrument_id": "source-1"})
+            assert (
+                daemon.collect_instrument(opened.session_id, "source-1", other).status
+                == "collected"
+            )
+        # Session cleanup does not free pending slots, including for a newer session.
+        daemon.close_instrument_session(opened.session_id)
+        second = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="capacity-new-session",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=setup,
+            )
+        )
+        with pytest.raises(DaemonConflictError, match="capacity"):
+            daemon.collect_instrument(second.session_id, "source-0", intent)
+        identity = {
+            "session_id": opened.session_id,
+            "instrument_id": "source-0",
+            "command_id": "one",
+        }
+        discarded = transport.post("/api/v1/direct-measurements/discard", json=identity)
+        assert discarded.status_code == 200, discarded.text
+        assert discarded.json() == {"status": "discarded", "record_id": None}
+        assert (
+            transport.post("/api/v1/direct-measurements/discard", json=identity).json()
+            == discarded.json()
+        )
+        with pytest.raises(BackendConflict, match="explicitly discarded"):
+            runtime.application.direct_measurements.save(
+                DirectMeasurementSave(**identity)
+            )
+        assert (
+            daemon.collect_instrument(second.session_id, "source-0", intent).status
+            == "collected"
+        )
+
+
+def test_pending_save_discard_race_keeps_successful_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    with (
+        _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="race",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        daemon.collect_instrument(
+            opened.session_id,
+            "source-0",
+            _variant_collect_intent(
+                command_id="race", result_ids=("monitored_voltage",)
+            ),
+        )
+        selection = DirectMeasurementSave(
+            session_id=opened.session_id, instrument_id="source-0", command_id="race"
+        )
+        service = runtime.application.direct_measurements
+        original_put = service.store.objects.put_file
+        entered, release, discard_entered = Event(), Event(), Event()
+
+        def blocked_put(content: Path):
+            entered.set()
+            assert release.wait(10)
+            return original_put(content)
+
+        monkeypatch.setattr(service.store.objects, "put_file", blocked_put)
+
+        def discard():
+            discard_entered.set()
+            return service.discard(selection)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            saving = pool.submit(service.save, selection)
+            assert entered.wait(10)
+            discarding = pool.submit(discard)
+            assert discard_entered.wait(10)
+            assert (
+                runtime.application.instruments.retained_collection(
+                    opened.session_id, "source-0", "race"
+                )[2].receipt.status
+                == "collected"
+            )
+            release.set()
+            record = saving.result(timeout=10)
+            disposition = discarding.result(timeout=10)
+        assert disposition.status == "saved"
+        assert disposition.record_id == record.id
+        assert service.save(selection) == record
+        assert len(service.list().items) == 1
+        assert not runtime.application.instruments.pending_collections._items
+
+
+def test_pending_failed_discard_retains_and_discard_wins_later_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    with (
+        _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="failed-discard",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        daemon.collect_instrument(
+            opened.session_id,
+            "source-0",
+            _variant_collect_intent(
+                command_id="discard", result_ids=("monitored_voltage",)
+            ),
+        )
+        selection = DirectMeasurementSave(
+            session_id=opened.session_id, instrument_id="source-0", command_id="discard"
+        )
+        service = runtime.application.direct_measurements
+
+        def fail(*_args: object, **_kwargs: object) -> Never:
+            raise OSError("storage unavailable")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(service.control, "append_event_in_transaction", fail)
+            with pytest.raises(OSError, match="storage unavailable"):
+                service.discard(selection)
+        assert (
+            runtime.application.instruments.retained_collection(
+                opened.session_id, "source-0", "discard"
+            )[2].receipt.status
+            == "collected"
+        )
+        assert service.discard(selection).status == "discarded"
+        assert not runtime.application.instruments.pending_collections._items
+        with pytest.raises(BackendConflict, match="explicitly discarded"):
+            service.save(selection)
+        assert service.list().items == []
+    with _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as reopened:
+        assert (
+            reopened.application.direct_measurements.discard(selection).status
+            == "discarded"
+        )
+
+
+def test_pending_discovery_and_receipt_need_no_control_session(tmp_path: Path) -> None:
+    from scopecat.daemon.hardware_receipt_wire import decode_collect_receipt
+
+    provider = _TrackingProvider(_VariantDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="discover",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        intent = _variant_collect_intent(
+            command_id="orphan", result_ids=("monitored_voltage",)
+        )
+        original = daemon.collect_instrument(opened.session_id, "source-0", intent)
+        daemon.close_instrument_session(opened.session_id)
+        [driver] = provider.drivers
+        assert isinstance(driver, _VariantDriver)
+        reads = driver.read_count
+        page = transport.get(
+            "/api/v1/direct-measurements/pending", params={"instrument_id": "source-0"}
+        )
+        assert page.status_code == 200, page.text
+        [item] = page.json()["items"]
+        identity = {
+            name: item["selection"][name]
+            for name in ("session_id", "instrument_id", "command_id")
+        }
+        assert identity == {
+            "session_id": opened.session_id,
+            "instrument_id": "source-0",
+            "command_id": "orphan",
+        }
+        assert item["intent"] == intent.model_dump()
+        stored = transport.post(
+            "/api/v1/direct-measurements/pending/receipt", json=identity
+        )
+        assert stored.status_code == 200, stored.text
+        assert decode_collect_receipt(stored.content) == original
+        assert transport.get(
+            "/api/v1/direct-measurements/pending", params={"instrument_id": "source-1"}
+        ).json() == {"items": []}
+        saved = transport.post("/api/v1/direct-measurements", json=item["selection"])
+        assert saved.status_code == 200, saved.text
+        assert transport.get(
+            "/api/v1/direct-measurements/pending", params={"instrument_id": "source-0"}
+        ).json() == {"items": []}
+        assert driver.read_count == reads
+        assert len(driver.collect_requests) == 1
+
+
+def test_python_owned_collects_do_not_consume_ui_pending_capacity(
+    tmp_path: Path,
+) -> None:
+    provider = _TrackingProvider()
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        with lab.instruments.open(
+            _raw_instrument("source-0"),
+            setup=runtime.application.setup.resolve("initial").ref,
+        ) as handle:
+            for _ in range(25):
+                receipt = handle._collect(
+                    _SAMPLE_SIGNAL, _SAMPLE_SIGNAL.result("signal")
+                )
+                assert receipt.status == "collected"
+        assert len(provider.drivers[0].collect_requests) == 25
+        assert runtime.application.direct_measurements.pending("source-0").items == []
+
+
+def test_backend_restart_reports_missing_unsaved_result_without_claiming_discard(
+    tmp_path: Path,
+) -> None:
+    from scopecat_server.errors import BackendNotFound
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+
+    with (
+        _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="restart-pending",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        daemon.collect_instrument(
+            opened.session_id,
+            "source-0",
+            _variant_collect_intent(
+                command_id="volatile", result_ids=("monitored_voltage",)
+            ),
+        )
+        identity = DirectMeasurementSave(
+            session_id=opened.session_id,
+            instrument_id="source-0",
+            command_id="volatile",
+        )
+    assert not runtime.application.instruments.pending_collections._items
+    with _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as reopened:
+        service = reopened.application.direct_measurements
+        assert service.pending("source-0").items == []
+        assert service.discard(identity).status == "not_retained"
+        with pytest.raises(BackendNotFound, match="no longer retained"):
+            service.save(identity)
+        assert service.list().items == []
+
+
+def test_pending_capacity_counts_inflight_and_rolls_back_failed_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    import scopecat_server.instruments.pending_collections as pending
+
+    monkeypatch.setattr(pending, "PENDING_TOTAL", 1)
+    registry = pending.PendingCollections()
+    entered, release = Event(), Event()
+
+    def reserve_then_fail() -> None:
+        with registry.reserve(("session-a", "device-a", "operation-a")):
+            entered.set()
+            assert release.wait(10)
+            raise OSError("synthetic collection failed")
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        reserved = pool.submit(reserve_then_fail)
+        assert entered.wait(10)
+        with (
+            pytest.raises(BackendConflict, match="capacity"),
+            registry.reserve(("session-b", "device-b", "operation-b")),
+        ):
+            pytest.fail("capacity must reject before entering device work")
+        release.set()
+        with pytest.raises(OSError, match="synthetic collection failed"):
+            reserved.result(timeout=10)
+    assert not registry._items
+    with registry.reserve(("session-b", "device-b", "operation-b")):
+        pass
+    assert not registry._items
+
+
+def test_pending_discard_does_not_call_an_inflight_result_missing(
+    tmp_path: Path,
+) -> None:
+    from scopecat_server.services.direct_measurements import DirectMeasurementIdentity
+
+    with _runtime(tmp_path, _TrackingProvider()) as runtime:
+        identity = DirectMeasurementIdentity(
+            session_id="inflight-session",
+            instrument_id="source-0",
+            command_id="inflight-command",
+        )
+        registry = runtime.application.instruments.pending_collections
+        key = (identity.session_id, identity.instrument_id, identity.command_id)
+        with registry.reserve(key):
+            with pytest.raises(BackendConflict, match="still in progress"):
+                runtime.application.direct_measurements.discard(identity)
+            assert key in registry._items
+        assert (
+            runtime.application.direct_measurements.discard(identity).status
+            == "not_retained"
+        )
+
+
+def test_streamed_save_failure_retains_original_and_retry_maps_saved_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server.instruments.retained_receipt import RawCollectReceipt
+    from scopecat_server.services.direct_measurements import DirectMeasurementSave
+    from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "platform-data"))
+    with (
+        _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        opened = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="raw-storage",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        intent = _variant_collect_intent(
+            command_id="raw", result_ids=("monitored_voltage",)
+        )
+        daemon.collect_instrument(opened.session_id, "source-0", intent)
+        service = runtime.application.direct_measurements
+        identity = DirectMeasurementSave(
+            session_id=opened.session_id, instrument_id="source-0", command_id="raw"
+        )
+        pending = service.pending_one(identity)
+        assert pending is not None and pending.raw_bytes > 0
+
+        def no_flatten(self: RawCollectReceipt) -> bytes:
+            raise AssertionError("save/preview must not flatten originals")
+
+        def fail_write(self: ImmutableObjectStore, source: Path) -> None:
+            raise OSError("injected disk failure")
+
+        monkeypatch.setattr(RawCollectReceipt, "to_bytes", no_flatten)
+        with monkeypatch.context() as failed:
+            failed.setattr(ImmutableObjectStore, "put_file", fail_write)
+            with pytest.raises(OSError, match="injected disk failure"):
+                service.save(identity)
+        assert service.pending_one(identity) is not None
+        with service.pending_raw_receipt(identity) as raw:
+            assert raw.status == "collected"
+            assert raw.size_bytes == pending.raw_bytes
+        record = service.save(identity)
+        assert service.pending_one(identity) is None
+        with service.raw_receipt(record.id) as saved:
+            assert saved.status == "collected"
+            assert saved.size_bytes == pending.raw_bytes
+        assert service.save(identity).id == record.id
+
+
+@pytest.mark.parametrize("failure", ["invalid_dtype", "contract_budget"])
+def test_received_diagnostic_original_is_owned_before_domain_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    import json
+
+    from scopecat.sdk.attachments import AttachmentBundle
+    from scopecat.sdk.instruments.commands import CollectReceipt
+
+    from scopecat_server.instruments import retained_receipt as retained
+    from scopecat_server.instruments.retained_receipt import RawCollectReceipt
+    from scopecat_server.instruments.worker_wire import split_collect_receipt
+
+    if failure == "contract_budget":
+        monkeypatch.setattr(retained, "_CONTRACT_VIEW_BYTES", 1)
+    else:
+
+        def malformed(
+            cls: type[RawCollectReceipt],
+            receipt: CollectReceipt,
+            *,
+            defer_view: bool = False,
+        ) -> RawCollectReceipt:
+            frames = split_collect_receipt(receipt)
+            header = json.loads(frames.header)
+            inline = header["receipt"]["readback"]["values"]
+            next(iter(inline.values()))["dtype"] = "not_a_dtype"
+            return cls.from_worker_frames(
+                json.dumps(header).encode(), frames.attachments, defer_view=defer_view
+            )
+
+        monkeypatch.setattr(RawCollectReceipt, "from_receipt", classmethod(malformed))
+    with (
+        _runtime(tmp_path, _TrackingProvider(_VariantDriver)) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="diagnostic-original",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        intent = _variant_collect_intent(
+            command_id="diagnostic", result_ids=("monitored_voltage",)
+        )
+        response = transport.post(
+            f"/api/v1/instrument-sessions/{session.session_id}/instruments/source-0/collect-review",
+            json=intent.model_dump(mode="json"),
+        )
+        assert response.status_code == 409, response.text
+        assert "retained" in response.text
+        [pending] = transport.get(
+            "/api/v1/direct-measurements/pending", params={"instrument_id": "source-0"}
+        ).json()["items"]
+        expected = "invalid" if failure == "invalid_dtype" else "unverified"
+        assert pending["receipt_validation"] == expected
+        assert pending["validation_code"]
+        assert (
+            runtime.application.instruments.session_recovery(
+                session.session_id
+            ).active_operation_id
+            is None
+        )
+        identity = {
+            key: pending["selection"][key]
+            for key in ("session_id", "instrument_id", "command_id")
+        }
+        original = transport.post(
+            "/api/v1/direct-measurements/pending/receipt", json=identity
+        )
+        assert original.status_code == 200, original.text
+        bundle = AttachmentBundle.from_bytes(
+            original.content, retained.RAW_RECEIPT_LIMITS
+        )
+        assert json.loads(bundle.header)["status"] == "collected"
+        assert (
+            transport.post(
+                "/api/v1/direct-measurements/pending/preview", json=identity
+            ).status_code
+            == 409
+        )
+        saved = transport.post("/api/v1/direct-measurements", json=pending["selection"])
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["receipt_validation"] == expected
+        record_id = saved.json()["id"]
+        downloaded = transport.get(f"/api/v1/direct-measurements/{record_id}/receipt")
+        assert downloaded.status_code == 200, downloaded.text
+        assert downloaded.content == original.content
+        assert (
+            transport.post(
+                f"/api/v1/direct-measurements/{record_id}/preview", json={}
+            ).status_code
+            == 409
+        )

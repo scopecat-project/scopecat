@@ -931,6 +931,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/direct-measurements/{record_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Direct Measurement Preview */
+        post: operations["direct_measurement_preview_api_v1_direct_measurements__record_id__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct-measurements/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Direct Measurement */
+        post: operations["discard_direct_measurement_api_v1_direct_measurements_discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct-measurements/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending Direct Measurements */
+        get: operations["pending_direct_measurements_api_v1_direct_measurements_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/direct-measurements/pending/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pending Direct Measurement Preview */
+        post: operations["pending_direct_measurement_preview_api_v1_direct_measurements_pending_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/events": {
         parameters: {
             query?: never;
@@ -1301,6 +1369,23 @@ export interface paths {
         put?: never;
         /** Collect Instrument */
         post: operations["collect_instrument_api_v1_instrument_sessions__session_id__instruments__instrument_id__collect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instrument-sessions/{session_id}/instruments/{instrument_id}/collect-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Collect Instrument Review */
+        post: operations["collect_instrument_review_api_v1_instrument_sessions__session_id__instruments__instrument_id__collect_review_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1950,6 +2035,41 @@ export interface paths {
         /** Get Parameter Revision */
         get: operations["get_parameter_revision_api_v1_parameters_revisions__revision_id__get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-result-capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Pending Result Capacity */
+        get: operations["read_pending_result_capacity_api_v1_pending_result_capacity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-result-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Pending Result Settings */
+        get: operations["read_pending_result_settings_api_v1_pending_result_settings_get"];
+        /** Save Pending Result Settings */
+        put: operations["save_pending_result_settings_api_v1_pending_result_settings_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5035,6 +5155,17 @@ export interface components {
              */
             status: "collected" | "not_collected" | "unknown";
         };
+        /** CollectReviewReceipt */
+        CollectReviewReceipt: {
+            pending: components["schemas"]["PendingDirectMeasurement"] | null;
+            /** Problems */
+            problems: components["schemas"]["Problem-Output"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "collected" | "not_collected" | "unknown";
+        };
         /** CommandChannelBinding */
         CommandChannelBinding: {
             channel_id: components["schemas"]["_NonEmptyId"];
@@ -6600,12 +6731,41 @@ export interface components {
             /** Receipt Digest */
             receipt_digest: string;
             /**
+             * Receipt Validation
+             * @default verified
+             * @enum {string}
+             */
+            receipt_validation: "verified" | "unverified" | "invalid";
+            /**
              * Saved At
              * Format: date-time
              */
             saved_at: string;
             selection: components["schemas"]["DirectMeasurementSave"];
             setup: components["schemas"]["SetupRevisionRef"];
+            /** Validation Code */
+            validation_code?: string | null;
+            /** Validation Reason */
+            validation_reason?: string | null;
+        };
+        /** DirectMeasurementDiscardReceipt */
+        DirectMeasurementDiscardReceipt: {
+            /** Record Id */
+            record_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "discarded" | "saved" | "not_retained";
+        };
+        /** DirectMeasurementIdentity */
+        DirectMeasurementIdentity: {
+            /** Command Id */
+            command_id: string;
+            /** Instrument Id */
+            instrument_id: string;
+            /** Session Id */
+            session_id: string;
         };
         /** DirectMeasurementNote */
         DirectMeasurementNote: {
@@ -6642,6 +6802,85 @@ export interface components {
             items: components["schemas"]["DirectMeasurement"][];
             /** Next Cursor */
             next_cursor?: number | null;
+        };
+        /** DirectMeasurementPreview */
+        DirectMeasurementPreview: {
+            /** Fields */
+            fields: components["schemas"]["DirectMeasurementPreviewField"][];
+            /** Fields Truncated */
+            fields_truncated: boolean;
+            metadata: components["schemas"]["pydantic__types__JsonValue"];
+            /** Metadata Truncated */
+            metadata_truncated: boolean;
+            /**
+             * Method
+             * @default exact_slice
+             * @constant
+             */
+            method: "exact_slice";
+            /** Problems */
+            problems: components["schemas"]["pydantic__types__JsonValue"][];
+            /** Problems Truncated */
+            problems_truncated: boolean;
+            /** Raw Bytes */
+            raw_bytes: number;
+            /** Status */
+            status: string;
+        };
+        /** DirectMeasurementPreviewField */
+        DirectMeasurementPreviewField: {
+            /** Complete */
+            complete: boolean;
+            /** Dtype */
+            dtype: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "array" | "scalar" | "unavailable";
+            metadata: components["schemas"]["pydantic__types__JsonValue"];
+            /** Metadata Truncated */
+            metadata_truncated: boolean;
+            /** Next Start */
+            next_start: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Request Id */
+            request_id: string;
+            /** Returned Count */
+            returned_count: number;
+            /** Shape */
+            shape: (number | null)[];
+            /** Start */
+            start: number;
+            /** Total Count */
+            total_count: number | null;
+            /** Truncated Indices */
+            truncated_indices: number[];
+            /** Unit */
+            unit: string | null;
+            /**
+             * Unit Truncated
+             * @default false
+             */
+            unit_truncated: boolean;
+            /** Values */
+            values: components["schemas"]["pydantic__types__JsonValue"][];
+        };
+        /** DirectMeasurementPreviewRequest */
+        DirectMeasurementPreviewRequest: {
+            /**
+             * Limit
+             * @default 512
+             */
+            limit: number;
+            /** Request Ids */
+            request_ids?: string[] | null;
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
         };
         /** DirectMeasurementSave */
         DirectMeasurementSave: {
@@ -7976,6 +8215,11 @@ export interface components {
             interface_id: components["schemas"]["InterfaceId"];
             /** Result Ids */
             result_ids?: components["schemas"]["_NonEmptyId"][];
+            /**
+             * Retain Result
+             * @default true
+             */
+            retain_result: boolean;
         };
         InterfaceId: string;
         /**
@@ -10498,6 +10742,87 @@ export interface components {
             /** Payload Id */
             payload_id: string;
         };
+        /** PendingDirectMeasurement */
+        PendingDirectMeasurement: {
+            /**
+             * Collected At
+             * Format: date-time
+             */
+            collected_at: string;
+            description: components["schemas"]["InstrumentDescription"];
+            intent: components["schemas"]["InteractiveCollectIntent"];
+            /** Raw Bytes */
+            raw_bytes: number;
+            /**
+             * Receipt Validation
+             * @default verified
+             * @enum {string}
+             */
+            receipt_validation: "verified" | "unverified" | "invalid";
+            selection: components["schemas"]["DirectMeasurementSave"];
+            /** Validation Code */
+            validation_code?: string | null;
+            /** Validation Reason */
+            validation_reason?: string | null;
+        };
+        /** PendingDirectMeasurementPage */
+        PendingDirectMeasurementPage: {
+            /** Items */
+            items: components["schemas"]["PendingDirectMeasurement"][];
+        };
+        /** PendingMeasurementPreviewRequest */
+        PendingMeasurementPreviewRequest: {
+            /** Command Id */
+            command_id: string;
+            /** Instrument Id */
+            instrument_id: string;
+            /**
+             * Limit
+             * @default 512
+             */
+            limit: number;
+            /** Request Ids */
+            request_ids?: string[] | null;
+            /** Session Id */
+            session_id: string;
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
+        };
+        /**
+         * PendingResultCapacity
+         * @description Application payload charges, not an operating-system RSS measurement.
+         */
+        PendingResultCapacity: {
+            /** Disk Bytes */
+            disk_bytes: number;
+            /** Disk Limit Bytes */
+            disk_limit_bytes: number;
+            /** Memory Bytes */
+            memory_bytes: number;
+            /** Memory Limit Bytes */
+            memory_limit_bytes: number;
+            /** Storage Degraded */
+            storage_degraded: boolean;
+            /** Work Bytes */
+            work_bytes: number;
+            /** Work Limit Bytes */
+            work_limit_bytes: number;
+        };
+        /** PendingResultSettings */
+        PendingResultSettings: {
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+            /** @default memory_only */
+            storage_policy: components["schemas"]["PendingResultStoragePolicy"];
+        };
+        /** @enum {string} */
+        PendingResultStoragePolicy: "memory_only" | "allow_temporary_disk";
         PersistableScalarWire: components["schemas"]["_PersistableScalarModel"];
         PersistableValueType: components["schemas"]["_PersistableValueTypeWire"];
         /** PhysicalLine */
@@ -15931,6 +16256,138 @@ export interface operations {
             };
         };
     };
+    direct_measurement_preview_api_v1_direct_measurements__record_id__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectMeasurementPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectMeasurementPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_direct_measurement_api_v1_direct_measurements_discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectMeasurementIdentity"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectMeasurementDiscardReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pending_direct_measurements_api_v1_direct_measurements_pending_get: {
+        parameters: {
+            query: {
+                instrument_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingDirectMeasurementPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pending_direct_measurement_preview_api_v1_direct_measurements_pending_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingMeasurementPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectMeasurementPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_events_api_v1_events_get: {
         parameters: {
             query?: {
@@ -16686,6 +17143,42 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.scopecat.hardware-receipt.v2": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    collect_instrument_review_api_v1_instrument_sessions__session_id__instruments__instrument_id__collect_review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instrument_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractiveCollectIntent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectReviewReceipt"];
                 };
             };
             /** @description Validation Error */
@@ -18038,6 +18531,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_pending_result_capacity_api_v1_pending_result_capacity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingResultCapacity"];
+                };
+            };
+        };
+    };
+    read_pending_result_settings_api_v1_pending_result_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingResultSettings"];
+                };
+            };
+        };
+    };
+    save_pending_result_settings_api_v1_pending_result_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingResultSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingResultSettings"];
                 };
             };
             /** @description Validation Error */

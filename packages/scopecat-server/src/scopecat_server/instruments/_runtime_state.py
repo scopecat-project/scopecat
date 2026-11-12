@@ -6,6 +6,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from threading import RLock
+from typing import Literal
 
 from scopecat.daemon.wire import (
     InstrumentConfiguredDefaultsApplyCommand,
@@ -33,12 +34,16 @@ from scopecat.sdk.instruments.execution import (
 from scopecat.sdk.payloads import PayloadCodecCatalog
 
 from .actors import OwnedInstrument
+from .retained_receipt import RawCollectReceipt
 
 INTERACTIVE_REPLAY_LIMIT = 256
 
 
 @dataclass(slots=True)
 class InstrumentOperationLedger:
+    # Identity-only guard survives receipt eviction, then leaves with this live
+    # session. Never evict these IDs and accidentally repeat an acquisition.
+    started_collections: set[str] = field(default_factory=set)
     _operations: OrderedDict[str, InstrumentOperationReplay] = field(
         default_factory=OrderedDict
     )
@@ -73,9 +78,20 @@ class InvokeReplay:
 class CollectReceiptReplay:
     intent: InteractiveCollectIntent
     command: CollectCommand
-    receipt: CollectReceipt
+    receipt: CollectReceipt | RawCollectReceipt
     collected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     observed_before_collection: InstrumentStateSnapshot | None = None
+
+    receipt_validation: Literal["verified", "unverified", "invalid"] = "verified"
+    validation_reason: str | None = None
+    validation_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CollectRetainedReplay:
+    """Small ledger marker; the receipt belongs to the pending-result store."""
+
+    intent: InteractiveCollectIntent
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +117,7 @@ type InstrumentOperationReplay = (
     ApplyReplay
     | InvokeReplay
     | CollectReceiptReplay
+    | CollectRetainedReplay
     | CollectRejectionReplay
     | CollectFailureReplay
     | ConfiguredDefaultsReplay

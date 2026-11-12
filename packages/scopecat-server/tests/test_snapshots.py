@@ -14,6 +14,11 @@ from scopecat.project import Project, load_project
 from typer.testing import CliRunner
 
 from scopecat_server.cli import app
+from scopecat_server.services.pending_result_settings import (
+    PENDING_RESULT_SETTINGS_FILE,
+    PendingResultSettings,
+    PendingResultSettingsService,
+)
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.snapshots import (
     SnapshotError,
@@ -61,6 +66,29 @@ def _bytes(root: Path) -> dict[str, bytes]:
         for path in root.rglob("*")
         if path.is_file()
     }
+
+
+def test_snapshot_retains_storage_policy_but_not_unsaved_temporary_results(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path / "source")
+    data_root = project.root / ".scopecat"
+    saved = PendingResultSettingsService(data_root).save(
+        PendingResultSettings(storage_policy="allow_temporary_disk")
+    )
+    spool = data_root / "pending-results" / "synthetic-process"
+    spool.mkdir(parents=True)
+    (spool / "unsaved.receipt").write_bytes(b"synthetic unsaved original")
+    snapshot = tmp_path / "snapshot"
+    restored = tmp_path / "restored"
+    create_snapshot(project, snapshot)
+    manifest = verify_snapshot(snapshot)
+    assert f".scopecat/{PENDING_RESULT_SETTINGS_FILE}" in manifest.files
+    assert not any("pending-results" in name for name in manifest.files)
+    restore_snapshot(snapshot, restored)
+    assert PendingResultSettingsService(restored / ".scopecat").read() == saved
+    assert not (restored / ".scopecat" / "pending-results").exists()
+    assert (spool / "unsaved.receipt").read_bytes() == b"synthetic unsaved original"
 
 
 def test_cli_roundtrip_retains_source_objects_and_versions_without_runtime_records(

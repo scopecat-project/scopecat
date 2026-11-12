@@ -8,8 +8,14 @@ import logging
 import subprocess
 import sys
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
-from contextlib import asynccontextmanager, nullcontext, suppress
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
+from contextlib import (
+    AbstractContextManager,
+    ExitStack,
+    asynccontextmanager,
+    nullcontext,
+    suppress,
+)
 from datetime import datetime
 from functools import cache
 from pathlib import Path, PurePosixPath
@@ -117,7 +123,6 @@ from scopecat.daemon.exit import ExitReport
 from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
     HardwareReceiptWireError,
-    encode_collect_receipt,
     encode_run_hardware_receipt,
 )
 from scopecat.daemon.measurement_context import (
@@ -438,6 +443,7 @@ from scopecat_server.instruments.finish import (
     InstrumentFinishRejected,
     InstrumentFinishRejectionResponse,
 )
+from scopecat_server.instruments.retained_receipt import RawCollectReceipt
 from scopecat_server.launch_recovery import (
     LaunchAttemptPage,
     LaunchAttemptRecord,
@@ -464,14 +470,28 @@ from scopecat_server.retained_request import (
 )
 from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.direct_measurement_views import (
+    DirectMeasurementPreview,
+    DirectMeasurementPreviewRequest,
+    PendingMeasurementPreviewRequest,
+    preview_receipt,
+)
 from scopecat_server.services.direct_measurements import (
+    CollectReviewReceipt,
     DirectMeasurement,
+    DirectMeasurementDiscardReceipt,
+    DirectMeasurementIdentity,
     DirectMeasurementNoteCommand,
     DirectMeasurementPage,
     DirectMeasurementSave,
+    PendingDirectMeasurementPage,
 )
 from scopecat_server.services.manual_lines import ManualLineScanPage, ManualLineScanView
 from scopecat_server.services.operator_settings import OperatorSettings
+from scopecat_server.services.pending_result_settings import (
+    PendingResultCapacity,
+    PendingResultSettings,
+)
 from scopecat_server.services.project_workers import (
     ProcedureDispatchError,
     ProjectProcedureWorkers,
@@ -2248,20 +2268,81 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         instrument_id: str,
         intent: InteractiveCollectIntent,
     ) -> Response:
-        return Response(
-            content=encode_collect_receipt(
-                application.instruments.collect(
-                    session_id,
-                    instrument_id,
-                    intent,
-                )
-            ),
-            media_type=HARDWARE_RECEIPT_MEDIA_TYPE,
+        return _raw_receipt_response(
+            application.instruments.collect_original(session_id, instrument_id, intent)
         )
+
+    @app.post(
+        f"{_API_PREFIX}/instrument-sessions/{{session_id}}/instruments/"
+        "{instrument_id}/collect-review"
+    )
+    def collect_instrument_review(
+        session_id: str,
+        instrument_id: str,
+        intent: InteractiveCollectIntent,
+    ) -> CollectReviewReceipt:
+        if not intent.retain_result:
+            raise HTTPException(
+                status_code=422, detail="Review collections must retain their original"
+            )
+        with application.instruments.collect_original(
+            session_id, instrument_id, intent
+        ) as raw:
+            selection = DirectMeasurementIdentity(
+                session_id=session_id,
+                instrument_id=instrument_id,
+                command_id=intent.command_id,
+            )
+            return CollectReviewReceipt(
+                status=raw.status,
+                problems=list(raw.problems),
+                pending=(
+                    application.direct_measurements.pending_one(selection)
+                    if raw.status == "collected"
+                    else None
+                ),
+            )
 
     @app.post(f"{_API_PREFIX}/direct-measurements")
     def save_direct_measurement(command: DirectMeasurementSave) -> DirectMeasurement:
         return application.direct_measurements.save(command)
+
+    @app.get(f"{_API_PREFIX}/direct-measurements/pending")
+    def pending_direct_measurements(instrument_id: str) -> PendingDirectMeasurementPage:
+        return application.direct_measurements.pending(instrument_id)
+
+    @app.post(
+        f"{_API_PREFIX}/direct-measurements/pending/receipt", response_class=Response
+    )
+    def pending_direct_measurement_receipt(
+        command: DirectMeasurementIdentity,
+    ) -> Response:
+        return _raw_receipt_response(
+            application.direct_measurements.pending_raw_receipt(command)
+        )
+
+    @app.post(f"{_API_PREFIX}/direct-measurements/discard")
+    def discard_direct_measurement(
+        command: DirectMeasurementIdentity,
+    ) -> DirectMeasurementDiscardReceipt:
+        return application.direct_measurements.discard(command)
+
+    @app.post(f"{_API_PREFIX}/direct-measurements/pending/preview")
+    def pending_direct_measurement_preview(
+        command: PendingMeasurementPreviewRequest,
+    ) -> DirectMeasurementPreview:
+        selection = DirectMeasurementIdentity(
+            session_id=command.session_id,
+            instrument_id=command.instrument_id,
+            command_id=command.command_id,
+        )
+        try:
+            with application.direct_measurements.pending_raw_receipt(
+                selection, require_verified=True
+            ) as raw:
+                return preview_receipt(raw, command)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.get(f"{_API_PREFIX}/direct-measurements")
     def list_direct_measurements(before: int | None = None) -> DirectMeasurementPage:
@@ -2279,10 +2360,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.get(f"{_API_PREFIX}/direct-measurements/{{record_id}}/receipt")
     def direct_measurement_receipt(record_id: str) -> Response:
-        return Response(
-            content=application.direct_measurements.receipt(record_id),
-            media_type=HARDWARE_RECEIPT_MEDIA_TYPE,
+        return _raw_receipt_response(
+            application.direct_measurements.raw_receipt(record_id)
         )
+
+    @app.post(f"{_API_PREFIX}/direct-measurements/{{record_id}}/preview")
+    def direct_measurement_preview(
+        record_id: str, command: DirectMeasurementPreviewRequest
+    ) -> DirectMeasurementPreview:
+        try:
+            with application.direct_measurements.raw_receipt(
+                record_id, require_verified=True
+            ) as raw:
+                return preview_receipt(raw, command)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.get(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/finish-plan")
     def instrument_finish_plan(session_id: str) -> InstrumentFinishPlan:
@@ -2766,6 +2858,22 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.put(f"{_API_PREFIX}/operator-settings")
     def save_operator_settings(command: OperatorSettings) -> OperatorSettings:
         return application.operator_settings.save(command)
+
+    @app.get(f"{_API_PREFIX}/pending-result-settings")
+    def read_pending_result_settings() -> PendingResultSettings:
+        return application.pending_result_settings.read()
+
+    @app.get(f"{_API_PREFIX}/pending-result-capacity")
+    def read_pending_result_capacity() -> PendingResultCapacity:
+        return PendingResultCapacity.model_validate(
+            application.instruments.pending_collections.capacity()
+        )
+
+    @app.put(f"{_API_PREFIX}/pending-result-settings")
+    def save_pending_result_settings(
+        command: PendingResultSettings,
+    ) -> PendingResultSettings:
+        return application.pending_result_settings.save(command)
 
     @app.get(f"{_API_PREFIX}/decision-drafts")
     def decision_draft_history(
@@ -3578,6 +3686,57 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             name="gui",
         )
     return app
+
+
+class _PinnedReceiptResponse(StreamingResponse):
+    """Close the pin even when HTTP fails before the first body iteration."""
+
+    def __init__(
+        self, content: Iterator[bytes], *, owner: ExitStack, size: int
+    ) -> None:
+        super().__init__(
+            content,
+            media_type=HARDWARE_RECEIPT_MEDIA_TYPE,
+            headers={"content-length": str(size)},
+        )
+        self._owner = owner
+
+    @override
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._owner.close()
+
+
+def _raw_receipt_response(
+    original: AbstractContextManager[RawCollectReceipt],
+) -> StreamingResponse:
+    """Pin before committing HTTP status; never flatten a complete original.
+
+    A stream owns only its bounded outgoing chunk. Cleanup can run on the
+    streaming thread, and the context's pin protects concurrent disposition.
+    """
+    owner = ExitStack()
+    raw: RawCollectReceipt | None = owner.enter_context(original)
+    size = raw.size_bytes
+
+    def chunks() -> Iterator[bytes]:
+        nonlocal raw
+        try:
+            assert raw is not None
+            for segment in raw.segments():
+                for offset in range(0, len(segment), 64 * 1024):
+                    yield bytes(segment[offset : offset + 64 * 1024])
+        finally:
+            raw = None
+            owner.close()
+
+    try:
+        return _PinnedReceiptResponse(chunks(), owner=owner, size=size)
+    except BaseException:
+        owner.close()
+        raise
 
 
 def _install_error_mapping(app: FastAPI) -> None:

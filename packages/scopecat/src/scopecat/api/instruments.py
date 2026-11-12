@@ -515,6 +515,8 @@ class InstrumentSessionHandle:
             component_path=list(acquisition.component_path),
             acquisition_id=acquisition.acquisition_id,
             result_ids=[result.result_id for result in results],
+            # Python owns the returned data; it does not use the device UI queue.
+            retain_result=False,
         )
         return self._client.collect_instrument(
             session.session_id,

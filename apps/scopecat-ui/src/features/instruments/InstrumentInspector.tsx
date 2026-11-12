@@ -1,3 +1,5 @@
+import { measurementKey, sameMeasurement } from "./measurement-identity";
+import { usePendingMeasurements } from "./use-pending-measurements";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, CircleOff, LoaderCircle, RotateCcw } from "lucide-react";
@@ -220,28 +222,75 @@ function InstrumentInspectorContent({
     );
   };
   const [pendingMeasurements, setPendingMeasurements] = useState<PendingMeasurement[]>([]);
+  const collectionSelections = useRef<Record<string, MeasurementSave>>({});
+  const pendingRecovery = usePendingMeasurements(instrumentId, (recovered) => {
+    const local = collectionSelections.current[recovered.selection.command_id];
+    const result = {
+      ...recovered,
+      selection: local && sameMeasurement(local, recovered.selection) ? local : recovered.selection,
+    };
+    setRecentMeasurements((items) => [...items, result]);
+    setPendingMeasurements((items) => [
+      ...items,
+      {
+        selection: result.selection,
+        acquisition: result.target.acquisition,
+        receipt_validation: result.receipt_validation,
+        validation_reason: result.validation_reason,
+        validation_code: result.validation_code,
+      },
+    ]);
+    setCurrentMeasurement((current) => current ?? result);
+  });
+  const rememberLocalResult = (id: string, original?: MeasurementSave) => {
+    if (original) {
+      pendingRecovery.remember(original);
+      return;
+    }
+    const selection =
+      pendingMeasurements.find((item) => item.selection.command_id === id)?.selection ??
+      recentMeasurements.find((item) => item.selection.command_id === id)?.selection;
+    if (selection) pendingRecovery.remember(selection);
+  };
   const [seriesId] = useState(() => createInstrumentCommandId("series"));
-  const markMeasurementSaved = (commandId: string, recordId?: string) => {
-    setPendingMeasurements((items) =>
-      items.filter((item) => item.selection.command_id !== commandId),
-    );
+  const removeLocalMeasurement = (id: string, original?: MeasurementSave) => {
+    rememberLocalResult(id, original);
+    const matches = (selection: MeasurementSave) =>
+      original ? sameMeasurement(selection, original) : selection.command_id === id;
+    setPendingMeasurements((items) => items.filter((item) => !matches(item.selection)));
+    setRecentMeasurements((items) => items.filter((item) => !matches(item.selection)));
+    setCurrentMeasurement((item) => (item && matches(item.selection) ? undefined : item));
+  };
+  const markMeasurementSaved = (
+    commandId: string,
+    recordId?: string,
+    original?: MeasurementSave,
+  ) => {
+    rememberLocalResult(commandId, original);
+    const matches = (selection: MeasurementSave) =>
+      original ? sameMeasurement(selection, original) : selection.command_id === commandId;
+    setPendingMeasurements((items) => items.filter((item) => !matches(item.selection)));
     setCurrentMeasurement((item) =>
-      item?.selection.command_id === commandId ? { ...item, savedRecordId: recordId } : item,
+      item && matches(item.selection) ? { ...item, savedRecordId: recordId } : item,
     );
     setRecentMeasurements((items) => {
       const updated = items.map((item) =>
-        item.selection.command_id === commandId ? { ...item, savedRecordId: recordId } : item,
+        matches(item.selection) ? { ...item, savedRecordId: recordId } : item,
       );
       const saved = updated.filter((item) => item.savedRecordId);
-      const keep = new Set(saved.slice(-20).map((item) => item.selection.command_id));
-      if (currentMeasurement?.selection.command_id === commandId && !keep.has(commandId)) {
-        keep.delete(keep.values().next().value ?? "");
-        keep.add(commandId);
+      const keep = new Set(saved.slice(-20).map((item) => measurementKey(item.selection)));
+      if (currentMeasurement && matches(currentMeasurement.selection)) {
+        const key = measurementKey(currentMeasurement.selection);
+        if (!keep.has(key)) {
+          keep.delete(keep.values().next().value ?? "");
+          keep.add(key);
+        }
       }
-      return updated.filter((item) => !item.savedRecordId || keep.has(item.selection.command_id));
+      return updated.filter(
+        (item) => !item.savedRecordId || keep.has(measurementKey(item.selection)),
+      );
     });
   };
-  const collectionSelections = useRef<Record<string, MeasurementSave>>({});
   const applyCommandIdRef = useRef<string | undefined>(undefined);
   const configuredDefaultsOperationIdRef = useRef<string | undefined>(undefined);
   const collectCommandIdsRef = useRef<Record<string, string>>({});
@@ -367,18 +416,44 @@ function InstrumentInspectorContent({
     onSuccess: (receipt, { target, commandId }) => {
       const selection = collectionSelections.current[commandId];
       if (receipt.status === "collected" && selection) {
+        pendingRecovery.remember(selection);
         setOutputTouched(true);
-        const result = { target, receipt, selection, receivedAt: new Date().toISOString() };
+        const originalTarget = receipt.pending
+          ? acquisitionTargets(receipt.pending.description).find(
+              (item) =>
+                item.interfaceId === receipt.pending!.intent.interface_id &&
+                item.acquisition.id === receipt.pending!.intent.acquisition_id &&
+                JSON.stringify(item.componentPath) ===
+                  JSON.stringify(receipt.pending!.intent.component_path ?? []),
+            )
+          : undefined;
+        const result = {
+          receipt_validation: receipt.pending?.receipt_validation,
+          validation_reason: receipt.pending?.validation_reason,
+          validation_code: receipt.pending?.validation_code,
+          target: originalTarget ?? target,
+          selection,
+          receivedAt: receipt.pending?.collected_at ?? new Date().toISOString(),
+        };
         setCurrentMeasurement(result);
         setRecentMeasurements((current) =>
-          current.some((item) => item.selection.command_id === commandId)
+          current.some((item) => sameMeasurement(item.selection, selection))
             ? current
             : [...current, result],
         );
         setPendingMeasurements((current) =>
-          current.some((item) => item.selection.command_id === commandId)
+          current.some((item) => sameMeasurement(item.selection, selection))
             ? current
-            : [...current, { selection, acquisition: target.acquisition, receipt }],
+            : [
+                ...current,
+                {
+                  selection,
+                  acquisition: result.target.acquisition,
+                  receipt_validation: result.receipt_validation,
+                  validation_reason: result.validation_reason,
+                  validation_code: result.validation_code,
+                },
+              ],
         );
       }
       if (receipt.status !== "collected")
@@ -386,7 +461,10 @@ function InstrumentInspectorContent({
       delete collectionSelections.current[commandId];
       const key = acquisitionKey(target);
       delete collectCommandIdsRef.current[key];
-      setCollectResults((current) => ({ ...current, [key]: receipt }));
+      setCollectResults((current) => ({
+        ...current,
+        [key]: { status: receipt.status, problems: receipt.problems },
+      }));
       if (receipt.status === "unknown") {
         onSessionLost("收集结果未知。后台服务已隔离此会话，需操作者核对。");
       }
@@ -394,6 +472,7 @@ function InstrumentInspectorContent({
     },
     onError: () => {
       markPreviousResult("最近一次采集返回未确认，当前仍是上次成功结果");
+      void pendingRecovery.recover();
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     },
   });
@@ -578,7 +657,9 @@ function InstrumentInspectorContent({
     Object.values(invokeResults).some((receipt) => receipt.status !== "invoked");
   useEffect(() => {
     onCloseProblem?.(
-      !!closeError ||
+      pendingRecovery.busy ||
+        !!pendingRecovery.error ||
+        !!closeError ||
         failedReceipt ||
         pendingMeasurements.length > 0 ||
         outputTouched ||
@@ -586,6 +667,8 @@ function InstrumentInspectorContent({
         finishFixed,
     );
   }, [
+    pendingRecovery.busy,
+    pendingRecovery.error,
     closeError,
     failedReceipt,
     onCloseProblem,
@@ -688,7 +771,7 @@ function InstrumentInspectorContent({
           <p className="text-xs">
             近期结果、{pendingMeasurements.length} 条未保存结果和 {stagedCount}{" "}
             项未发送设置仍属于原会话。
-            可选择原结果尝试保存，不会重新采集。后台若已释放回执，首次保存可能失败；已保存记录可按原身份核查。
+            只要后台服务仍在，原结果仍可保存或明确放弃，不会重新采集；后台重启后不保证恢复。已保存记录可按原身份核查。
             当前设备输出与未确认操作不会因会话中断而变成已停止或已取消。
           </p>
           <button
@@ -715,7 +798,7 @@ function InstrumentInspectorContent({
                 ? " 仍有未决动作，不能把关闭窗口视为动作已取消。"
                 : " 后台未登记未决动作；这不证明物理输出已停止。"}
               {!recovery.data.runtime_retained &&
-                " 后台不再保留该会话的未保存回执，首次保存可能不可用。"}
+                " 原控制运行状态已释放；这不代表成功采集的待保存结果已被放弃。"}
             </p>
           )}
           <button
@@ -742,7 +825,7 @@ function InstrumentInspectorContent({
             <div className="grid gap-2 border-t border-line pt-2">
               <p className="text-xs">
                 请先核对设备和未确认操作。处理隔离沿用后台的隔离解除流程，可能清理原会话资源；不会补采或证明输出已停止。
-                请先尝试保存。若后台回执已释放，处理隔离也不能找回它；本页曲线和未保存标记仍保留，之后仍须明确处置。
+                已成功采集的结果在后台服务运行期间独立保留；处理隔离不会自动保存或放弃它们，之后仍须明确处置。
               </p>
               <label className="text-xs">
                 <input
@@ -751,7 +834,7 @@ function InstrumentInspectorContent({
                   disabled={resolveMutation.isPending || finishRecovery.state?.phase === "pending"}
                   onChange={(event) => setIsolationReviewed(event.target.checked)}
                 />{" "}
-                已核查设备，理解处理隔离可能释放原会话的后台回执
+                已核查设备，理解处理隔离不会确认未决动作或自动保存结果
               </label>
               <button
                 type="button"
@@ -792,17 +875,40 @@ function InstrumentInspectorContent({
         </div>
       )}
 
-      {finishChoiceOpen && retainedSession && (
+      <section className="grid gap-2 text-xs" aria-label="后台待保存结果">
+        <button
+          type="button"
+          className={secondaryButton}
+          disabled={pendingRecovery.busy}
+          onClick={() => void pendingRecovery.recover()}
+        >
+          {pendingRecovery.busy ? "正在核查后台待保存结果…" : "重新核查后台待保存结果"}
+        </button>
+        {pendingRecovery.error && <p role="alert">{pendingRecovery.error}</p>}
+        {!retainedSession && pendingMeasurements.length > 0 && (
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => setShowFinishChoice(true)}
+          >
+            处理恢复的待保存结果
+          </button>
+        )}
+      </section>
+      {finishChoiceOpen && (
         <InstrumentExitDialog
-          sessionId={retainedSession.session_id}
+          sessionId={
+            retainedSession?.session_id ?? pendingMeasurements[0]?.selection.session_id ?? ""
+          }
           finishRecovery={finishRecovery}
           sessionUnavailable={!session}
           recoveryCloseAllowed={recoveryCloseAllowed}
           recoveryUnresolved={recovery.data?.has_unresolved_operations ?? true}
           closeWaiting={exitRequest !== dismissedExitRequest}
           reviewRequest={exitRequest}
+          pendingCheckBlocked={pendingRecovery.busy || !!pendingRecovery.error}
+          onRetryPendingCheck={() => void pendingRecovery.recover()}
           onRecoveryFinished={() => {
-            setPendingMeasurements([]);
             setOutputTouched(false);
             dismissFinishChoice();
             onRecoveryFinished?.();
@@ -813,19 +919,20 @@ function InstrumentInspectorContent({
           onSaveAttempt={(attempt) =>
             setPendingMeasurements((items) =>
               items.map((item) =>
-                item.selection.command_id === attempt.selection.command_id
+                sameMeasurement(item.selection, attempt.selection)
                   ? { ...item, saveAttempted: true }
                   : item,
               ),
             )
           }
           onSaved={markMeasurementSaved}
+          onDiscarded={removeLocalMeasurement}
+          onForgotten={removeLocalMeasurement}
           onCancel={() => {
             dismissFinishChoice();
             onExitCancelled?.();
           }}
           onFinished={() => {
-            setPendingMeasurements([]);
             setOutputTouched(false);
             dismissFinishChoice();
             if (recoverySession) onRecoveryFinished?.();
@@ -864,15 +971,15 @@ function InstrumentInspectorContent({
           onSaveAttempt={(selection) => {
             setRecentMeasurements((items) =>
               items.map((item) =>
-                item.selection.command_id === selection.command_id ? { ...item, selection } : item,
+                sameMeasurement(item.selection, selection) ? { ...item, selection } : item,
               ),
             );
             setCurrentMeasurement((item) =>
-              item?.selection.command_id === selection.command_id ? { ...item, selection } : item,
+              item && sameMeasurement(item.selection, selection) ? { ...item, selection } : item,
             );
             setPendingMeasurements((items) =>
               items.map((item) =>
-                item.selection.command_id === selection.command_id
+                sameMeasurement(item.selection, selection)
                   ? { ...item, selection, saveAttempted: true }
                   : item,
               ),

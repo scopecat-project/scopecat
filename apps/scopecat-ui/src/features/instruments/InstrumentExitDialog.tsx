@@ -1,8 +1,11 @@
+import { ReceiptValidationNotice } from "./ReceiptValidation";
+import { measurementKey } from "./measurement-identity";
+import type { MeasurementSave } from "./direct-measurement-api";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PendingMeasurement } from "./DirectMeasurements";
-import { saveDirectMeasurement } from "./direct-measurement-api";
+import { discardDirectMeasurement, saveDirectMeasurement } from "./direct-measurement-api";
 import { InstrumentFinishChoice } from "./InstrumentFinishChoice";
 import {
   useInstrumentFinishRecovery,
@@ -25,6 +28,8 @@ export function InstrumentExitDialog({
   stagedCount,
   problem,
   onSaved,
+  onDiscarded,
+  onForgotten,
   onSaveAttempt,
   onCancel,
   onFinished,
@@ -35,12 +40,16 @@ export function InstrumentExitDialog({
   onRecoveryFinished,
   closeWaiting = false,
   reviewRequest = 0,
+  pendingCheckBlocked = false,
+  onRetryPendingCheck,
 }: {
   sessionId: string;
   pending: PendingMeasurement[];
   stagedCount: number;
   problem?: string;
-  onSaved: (commandId: string, recordId?: string) => void;
+  onSaved: (commandId: string, recordId?: string, selection?: MeasurementSave) => void;
+  onDiscarded?: (commandId: string, selection?: MeasurementSave) => void;
+  onForgotten?: (commandId: string, selection?: MeasurementSave) => void;
   onSaveAttempt?: (item: PendingMeasurement) => void;
   onCancel: () => void;
   onFinished: () => void;
@@ -51,8 +60,14 @@ export function InstrumentExitDialog({
   onRecoveryFinished?: () => void;
   closeWaiting?: boolean;
   reviewRequest?: number;
+  pendingCheckBlocked?: boolean;
+  onRetryPendingCheck?: () => void;
 }) {
   const cache = useQueryClient();
+  const [disposed, setDisposed] = useState<Set<string>>(new Set());
+  pending = pending.filter((item) => !disposed.has(measurementKey(item.selection)));
+  const [notRetained, setNotRetained] = useState<Set<string>>(new Set());
+  const attempts = useRef<Record<string, number>>({});
   const saving = useRef(false);
   const savingItem = useRef<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -86,7 +101,10 @@ export function InstrumentExitDialog({
   const cancelWaiting = () => {
     const id = savingItem.current;
     if (saving.current && id) {
-      setErrors((current) => ({ ...current, [id]: "已停止等待；原保存请求可能仍在处理" }));
+      setErrors((current) => ({
+        ...current,
+        [id]: "已停止等待；原保存请求可能仍在处理；已提交的放弃请求也不会撤销",
+      }));
     }
     batch.current += 1;
     saving.current = false;
@@ -101,22 +119,42 @@ export function InstrumentExitDialog({
     cancelWaiting();
     onCancel();
   };
-  const save = async (items: PendingMeasurement[]) => {
+  const save = async (items: PendingMeasurement[], discarding = false) => {
     if (saving.current) return;
     const sequence = ++batch.current;
     saving.current = true;
     setBusy(true);
     for (const item of items) {
       if (batch.current !== sequence) break;
-      const id = item.selection.command_id;
+      const id = measurementKey(item.selection);
+      const attempt = (attempts.current[id] ?? 0) + 1;
+      attempts.current[id] = attempt;
+      setNotRetained((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
       try {
-        onSaveAttempt?.(item);
+        if (!discarding) onSaveAttempt?.(item);
         savingItem.current = id;
-        const request = saveDirectMeasurement(item.selection);
+        const request = discarding
+          ? discardDirectMeasurement(item.selection)
+          : saveDirectMeasurement(item.selection).then((record) => ({
+              status: "saved" as const,
+              record_id: record.id,
+            }));
         // Even after timeout/dismissal a saved receipt must update its original result.
         void request.then(
           (record) => {
-            onSaved(id, record.id);
+            if (record.status === "not_retained") {
+              if (attempts.current[id] === attempt)
+                setNotRetained((current) => new Set(current).add(id));
+              return;
+            }
+            if (record.status === "saved")
+              onSaved(item.selection.command_id, record.record_id ?? undefined, item.selection);
+            else onDiscarded?.(item.selection.command_id, item.selection);
+            setDisposed((current) => new Set(current).add(id));
             setErrors((current) => {
               const next = { ...current };
               delete next[id];
@@ -143,7 +181,7 @@ export function InstrumentExitDialog({
       setBusy(false);
     }
   };
-  const blocked = busy || (pending.length > 0 && !discard);
+  const blocked = busy || pendingCheckBlocked || pending.length > 0;
   return (
     <Dialog.Root
       open
@@ -162,8 +200,18 @@ export function InstrumentExitDialog({
           >
             <Dialog.Title className={dialogTitle}>结束控制前的待办</Dialog.Title>
             <Dialog.Description className="text-xs">
-              保存测量、确认输出处置，再释放控制。取消会保留未保存结果和当前线路。
+              保存测量、确认输出处置，再释放控制。取消不会放弃尚未提交处置的结果，也不会改变当前线路。
             </Dialog.Description>
+            {pendingCheckBlocked && (
+              <div className="grid gap-2">
+                <p role="status">
+                  后台待保存结果尚未核查完成，暂不能结束控制或关闭窗口；本页已有结果仍保留。
+                </p>
+                <button type="button" className={secondaryButton} onClick={onRetryPendingCheck}>
+                  重新核查待保存结果
+                </button>
+              </div>
+            )}
             {problem && <p role="alert">待核查：{problem}</p>}
             {stagedCount > 0 && (
               <p className="text-xs">
@@ -174,18 +222,19 @@ export function InstrumentExitDialog({
               <h3 className="text-sm font-semibold">未保存结果：{pending.length}</h3>
               {pending.length > 0 && (
                 <p className="text-xs">
-                  会话结束后首次保存可能不可用；已保存的记录仍可按原身份核查。保存不会重新采集，部分失败时只重试仍未确认保存的项目。
+                  只要后台服务仍在，控制会话结束后仍可保存或明确放弃结果；后台重启后不保证恢复。保存不会重新采集，部分失败时只重试仍未确认保存的项目。
                 </p>
               )}
               {pending.map((item) => (
                 <div
-                  key={item.selection.command_id}
+                  key={measurementKey(item.selection)}
                   className="flex flex-wrap items-center gap-2 border-b border-line pb-2 text-xs"
                 >
                   <span>
                     {item.selection.line_label || "未标注测量对象"} ·{" "}
                     {item.acquisition.label ?? item.acquisition.id} · {item.selection.note}
                   </span>
+                  <ReceiptValidationNotice value={item} />
                   <button
                     type="button"
                     className={secondaryButton}
@@ -194,10 +243,30 @@ export function InstrumentExitDialog({
                   >
                     保存此结果
                   </button>
-                  {errors[item.selection.command_id] && (
+                  {notRetained.has(measurementKey(item.selection)) && (
+                    <div className="grid gap-2">
+                      <p role="status">
+                        后台已核查，但找不到此结果的待保存回执、已保存记录或放弃记录。后台重启后的结果恢复不受支持。
+                        本页仍保留该结果；移除本页待办不会保存结果，也不代表后台已成功放弃结果。
+                      </p>
+                      <button
+                        type="button"
+                        className={secondaryButton}
+                        disabled={busy || finishPending || !onForgotten}
+                        onClick={() => {
+                          const id = measurementKey(item.selection);
+                          onForgotten?.(item.selection.command_id, item.selection);
+                          setDisposed((current) => new Set(current).add(id));
+                        }}
+                      >
+                        仅从本页移除此无法恢复的结果
+                      </button>
+                    </div>
+                  )}
+                  {errors[measurementKey(item.selection)] && (
                     <p role="alert">
-                      保存尚未确认：{errors[item.selection.command_id]}
-                      。原结果和归属仍保留；重试只核查或保存同一结果，不会重新采集。
+                      保存或放弃尚未确认：{errors[measurementKey(item.selection)]}
+                      。原结果和归属仍保留；重试只处置同一结果，不会重新采集。
                     </p>
                   )}
                 </div>
@@ -210,7 +279,7 @@ export function InstrumentExitDialog({
                     disabled={busy || discard || finishPending}
                     onClick={() => void save(pending)}
                   >
-                    {busy ? "正在保存…" : "保存全部未保存结果"}
+                    {busy ? "正在处置…" : "保存全部未保存结果"}
                   </button>
                   <label className="text-xs">
                     <input
@@ -221,8 +290,18 @@ export function InstrumentExitDialog({
                         setDiscardReview(event.target.checked ? reviewRequest : undefined)
                       }
                     />{" "}
-                    明确放弃这 {pending.length} 条未保存结果（仅在结束控制后生效）
+                    明确放弃这 {pending.length} 条未保存结果（需另行提交确认）
                   </label>
+                  {discard && (
+                    <button
+                      type="button"
+                      className={secondaryButton}
+                      disabled={busy || finishPending}
+                      onClick={() => void save(pending, true)}
+                    >
+                      确认放弃所选结果
+                    </button>
+                  )}
                 </>
               )}
             </section>
