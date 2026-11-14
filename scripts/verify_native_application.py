@@ -189,6 +189,9 @@ def verify(
     native_windows: bool = False,
 ) -> None:
     """Retain reports only; never rename or mutate the caller's package."""
+    from scripts.app_build.trial_package import refuse_automatic_verification
+
+    refuse_automatic_verification(app)
     app = app.resolve()
     home = home.resolve()
     if home.is_relative_to(app):

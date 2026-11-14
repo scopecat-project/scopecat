@@ -75,3 +75,22 @@ it("never certifies a late flush after release or a changed participant set", as
   detach();
   detachNew();
 });
+
+it("ends a cancelled close wait even if its save never responds, retaining owned input", async () => {
+  let saved = false;
+  const detach = retainLaunchCloseParticipant(
+    {},
+    {
+      freeze() {},
+      flush: () => new Promise(() => {}),
+      saved: () => saved,
+    },
+  );
+  const result = prepareLaunchClose("unresponsive-save");
+  releaseLaunchClose("unresponsive-save");
+  await expect(result).resolves.toBe("unknown");
+  expect(launchCloseBlocked()).toBe(false);
+  // Only the test teardown marks this retained input saved, not cancellation.
+  saved = true;
+  detach();
+});

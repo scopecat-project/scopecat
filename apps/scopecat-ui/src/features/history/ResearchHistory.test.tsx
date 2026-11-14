@@ -238,3 +238,28 @@ it("filters this course by recorded ownership and removes the filter explicitly"
   );
   window.history.replaceState(null, "", "/");
 });
+
+it("opens saved direct measurements as their own Data destination", async () => {
+  window.history.replaceState({}, "", "/?data=direct-measurements#history");
+  const requests: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      requests.push(path);
+      if (path === "/api/v1/direct-measurements") return Response.json({ items: [] });
+      throw new Error(`Unexpected request: ${path}`);
+    }),
+  );
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ResearchHistory projectId="space-a" daemonUnavailable={false} onOpenRun={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole("button", { name: "直接测量" })).toHaveAttribute("aria-pressed", "true");
+  expect(await screen.findByText("还没有保存的直接测量。")).toBeVisible();
+  expect(requests).toEqual(["/api/v1/direct-measurements"]);
+  window.history.replaceState({}, "", "/");
+});

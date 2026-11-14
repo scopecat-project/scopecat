@@ -2,6 +2,7 @@ import {
   retainLaunchCloseParticipant,
   launchCloseBlocked,
   resetLaunchCloseWindowForTests,
+  type LaunchCloseParticipant,
 } from "./launch-close-barrier";
 import type { MethodResponse } from "openapi-fetch";
 import { normalizeSelection, reviewedForRequest } from "./scientific-selection";
@@ -391,11 +392,11 @@ export function useLaunchRecovery(
       return;
     queueInput(current, encoded);
   }, [encoded, target, epoch]);
-  const closeParticipant = useRef<{
-    freeze: () => void;
-    flush: () => Promise<"saved" | "blocked" | "unknown">;
-    saved: () => boolean;
-  }>({ freeze: () => {}, flush: async () => "unknown", saved: () => false });
+  const closeParticipant = useRef<LaunchCloseParticipant>({
+    freeze: () => {},
+    flush: async () => "unknown",
+    saved: () => false,
+  });
   function currentInput() {
     if (!mounted.current && !session.current) return undefined;
     const latest = liveInput.current.close
@@ -457,6 +458,36 @@ export function useLaunchRecovery(
       return allSaved() ? "saved" : "unknown";
     },
     saved: allSaved,
+    sources() {
+      const targets = new Set(
+        [...unfinished.values()]
+          .filter(
+            (item) =>
+              !item.ready ||
+              item.pending ||
+              item.failed ||
+              item.conflict ||
+              item.hydrating ||
+              item.confirmed !== item.queued,
+          )
+          .map((item) => item.target),
+      );
+      const input = currentInput();
+      if (
+        input &&
+        (session.current?.target !== input.target || session.current.confirmed !== input.encoded)
+      )
+        targets.add(input.target);
+      return [...targets].map((source) => {
+        const [workspace, experiment, draftId] = JSON.parse(source) as [string, string, string];
+        return {
+          workspace,
+          experiment,
+          draft: draftId,
+          canReturn: mounted.current && input?.target === source,
+        };
+      });
+    },
   };
   useLayoutEffect(() => {
     closeParticipant.current = participant;
@@ -467,6 +498,7 @@ export function useLaunchRecovery(
         freeze: () => closeParticipant.current.freeze(),
         flush: () => closeParticipant.current.flush(),
         saved: () => closeParticipant.current.saved(),
+        sources: () => closeParticipant.current.sources?.() ?? [],
       }),
     [unfinished],
   );

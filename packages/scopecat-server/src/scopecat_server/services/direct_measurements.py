@@ -35,6 +35,7 @@ class DirectMeasurementSave(BaseModel):
     session_id: str = Field(min_length=1, max_length=200)
     instrument_id: str = Field(min_length=1, max_length=200)
     command_id: str = Field(min_length=1, max_length=200)
+    title: str = Field(default="", max_length=500)
     series_id: str = Field(default="", max_length=200)
     line_id: str = Field(default="", max_length=200)
     line_label: str = Field(default="", max_length=500)

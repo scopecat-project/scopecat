@@ -25,6 +25,7 @@ import { createInstrumentCommandId } from "./instrument-api";
 import { secondaryButton } from "../../ui/styles";
 
 export interface PendingMeasurement {
+  saveAttempted?: boolean;
   selection: MeasurementSave;
   acquisition: InstrumentAcquisition;
   receipt: InstrumentCollectReceipt;
@@ -212,7 +213,15 @@ export function DirectMeasurements({
   );
 }
 
-function SavedCurve({ record }: { record: SavedMeasurement }) {
+export function SavedCurve({
+  record,
+  readOnly = false,
+  hideHeading = false,
+}: {
+  record: SavedMeasurement;
+  readOnly?: boolean;
+  hideHeading?: boolean;
+}) {
   const cache = useQueryClient();
   const detail = useQuery({
     queryKey: ["direct-measurement-detail", record.id],
@@ -247,9 +256,14 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
   const acquisition = recordedAcquisition(record);
   return (
     <section className="min-w-0 border-t border-line pt-2">
-      <h4>
-        {record.selection.line_label || "未标注测量对象"} · {record.selection.note}
-      </h4>
+      {hideHeading ? (
+        record.selection.note && <p className="text-sm">{record.selection.note}</p>
+      ) : (
+        <h4>
+          {record.selection.title || record.selection.line_label || "未命名测量"} ·{" "}
+          {record.selection.note}
+        </h4>
+      )}
       <p className="text-xs [overflow-wrap:anywhere]">
         {record.id} · {new Date(record.collected_at).toLocaleString()}
       </p>
@@ -260,37 +274,41 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
             {entry.note}
           </p>
         ))}
-        <label>
-          追加备注{" "}
-          <input
-            value={note}
-            disabled={annotate.isPending}
-            onChange={(event) => {
-              noteOperation.current = undefined;
-              setNote(event.target.value);
-            }}
-          />
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={anomalous}
-            disabled={annotate.isPending}
-            onChange={(event) => {
-              noteOperation.current = undefined;
-              setAnomalous(event.target.checked);
-            }}
-          />
-          标记异常
-        </label>
-        <button
-          type="button"
-          className={secondaryButton}
-          disabled={annotate.isPending}
-          onClick={() => annotate.mutate()}
-        >
-          追加标记（不修改原结果）
-        </button>
+        {!readOnly && (
+          <>
+            <label>
+              追加备注{" "}
+              <input
+                value={note}
+                disabled={annotate.isPending}
+                onChange={(event) => {
+                  noteOperation.current = undefined;
+                  setNote(event.target.value);
+                }}
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={anomalous}
+                disabled={annotate.isPending}
+                onChange={(event) => {
+                  noteOperation.current = undefined;
+                  setAnomalous(event.target.checked);
+                }}
+              />
+              标记异常
+            </label>
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={annotate.isPending}
+              onClick={() => annotate.mutate()}
+            >
+              追加标记（不修改原结果）
+            </button>
+          </>
+        )}
         {annotate.error && <p role="alert">{annotate.error.message}</p>}
       </div>
       {receipt.error && <p role="alert">{receipt.error.message}</p>}
@@ -314,7 +332,7 @@ function SavedCurve({ record }: { record: SavedMeasurement }) {
   );
 }
 
-function recordedAcquisition(record: SavedMeasurement): InstrumentAcquisition | undefined {
+export function recordedAcquisition(record: SavedMeasurement): InstrumentAcquisition | undefined {
   const { interface_id, component_path = [], acquisition_id } = record.intent;
   const contract = record.description.interfaces?.find((item) => item.id === interface_id);
   if (!contract) return undefined;

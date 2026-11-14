@@ -458,7 +458,7 @@ The device window can retain a successful Collect receipt with **保存此结果
 Saving copies the already returned result; retrying a failed save does not issue
 another acquisition. Save before ending the control session: unsaved receipts
 are volatile and are not recoverable after the session is released or the daemon
-restarts. Saved receipts appear in **直接测量记录** after reopening. Their arrays,
+restarts. Saved receipts appear in **数据 → 直接测量** after reopening. Their arrays,
 coordinates, units, complex values, device description and acquisition selection
 are retained without rewriting an experiment run.
 
@@ -488,29 +488,30 @@ outside its safe integer range; such values are labeled approximate, and the
 JSON diagnostic is not an exact integer representation either. Technical receipt
 and source evidence remain in a separate disclosure.
 
-For manual line measurements, enter a line label and confirm the actual wiring
-before collecting. **开始下一条线路…** keeps the current label and note while you
-enter the next label. Cancel leaves them unchanged. Explicitly switching creates
-a new line identity, clears the next attempt's note and requires fresh wiring
-confirmation, while leaving device settings alone. Repeating a collection on the same line creates another attempt;
-each attempt retains the line label and note selected when collection began.
-Editing the current label cannot reassign an older attempt. History groups by
-stable device, series and line IDs, not labels. Search is explicitly limited to
-the currently loaded page; selected records survive searching and paging.
-Select up to four saved entries for comparison. Compatible curves share axes but
-keep their own returned coordinates; incompatible entries retain separate views.
-The known network-sweep and existing-network-trace interfaces may be overlaid
-when their exact result contracts and units agree. Other interfaces require the
-same acquisition contract. Source and recorded-condition differences remain
-visible. Overlay does not prove physical equivalence and performs no subtraction,
-interpolation or resampling. **继续此线路** reuses
-a saved line identity and requires a new wiring confirmation; it does not restore
-old settings or trigger an acquisition. Notes can record a suspected anomaly
-before collection. Saved records also accept append-only anomaly notes; these
-do not rewrite the original receipt, attribution or earlier annotations.
+The acquisition panel is optional. Collect without entering a title, line or
+note, then use **近期结果** to select an earlier receipt. **保存所选结果** opens a
+dialog for that selected result's title, optional measurement object and note.
+New collections do not change the dialog's target. Cancel preserves the result;
+saving marks it retained without removing it from the recent list. Hiding the
+panel preserves its selection and returns device controls to the primary area.
+
+A save retry retains the original payload even when the response was lost. Use
+**重试保存** to confirm that operation before editing its attribution; the stable
+result identity prevents duplicate records. Saved titles are independent of
+measurement-object labels. Older records without titles remain readable.
+
+**查看已保存结果** opens a read-only result window while keeping the control
+window in place. On desktop, opening the same record focuses its existing result
+window; different records can remain open side by side. Browser mode uses a new
+tab. Browse and search history in the main window's **数据 → 直接测量** page.
+The existing device-history disclosure remains available during
+this transition. The first journey does not add cross-device observations,
+unsaved-result recovery or a new retention policy: the existing control-session
+lifetime and limit of 20 unsaved receipts still apply.
 
 Window close and **释放控制** use the same **结束控制前的待办** dialog when
-results or output choices remain. Save individual results or all pending results
+results or output choices remain. When closing a window, completing the choices
+continues that close. Save individual results or all pending results
 there; a partial save failure retains the failed items for retry without another
 acquisition. Alternatively select explicit discard, then choose the existing
 output disposition. Cancel retains unsaved results even after selecting discard.

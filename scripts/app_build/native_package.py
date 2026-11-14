@@ -19,6 +19,11 @@ from scripts.app_build.author_resources import build as build_author_resources
 from scripts.app_build.author_resources import native_author_inputs
 from scripts.app_build.release_identity import ReleaseIdentity
 from scripts.app_build.runtime_install import install_runtime
+from scripts.app_build.trial_package import (
+    TrialBuild,
+    install_policy,
+    refuse_automatic_verification,
+)
 
 from scopecat_app import author_resources
 from scopecat_app.bundle import MANIFEST, resolve_delivery, verify_bundle
@@ -49,9 +54,11 @@ def _write_macos_console(python_home: Path) -> None:
     console.chmod(0o755)
 
 
-def build(source: Path, destination: Path) -> Path:
+def build(source: Path, destination: Path, *, trial: TrialBuild | None = None) -> Path:
     if sys.platform not in ("darwin", "win32"):
         raise ValueError("原生应用需要在 macOS 或 Windows 上构建")
+    if trial is not None:
+        trial.validate()
     source = resolve_delivery(source)
     source_document = verify_bundle(source)
     identity = native_identity(source)
@@ -103,6 +110,8 @@ def build(source: Path, destination: Path) -> Path:
         payload = build_author_resources(inputs, resources / "payload", python=python)
         if sys.platform == "darwin":
             _write_macos_console(python_home)
+        digest = install_policy(resources, trial) if trial is not None else None
+        main_call = f"main(expected_trial_digest={digest!r})" if digest else "main()"
         _ = (resources / "bootstrap.py").write_text(
             "import sys\nfrom pathlib import Path\n"
             "root = Path(__file__).resolve().parent\n"
@@ -110,7 +119,7 @@ def build(source: Path, destination: Path) -> Path:
             "else root.parent / 'Scopecat.exe'\n"
             "sys.argv[1:1] = ['--payload', str(root / 'payload'), "
             "'--entry', str(entry)]\n"
-            "from scopecat_app.native_bootstrap import main\nmain()\n",
+            "from scopecat_app.native_bootstrap import main\n" + main_call + "\n",
             encoding="utf-8",
         )
         if sys.platform == "darwin":
@@ -135,6 +144,7 @@ def build(source: Path, destination: Path) -> Path:
                 [
                     "/usr/bin/clang",
                     "-fobjc-arc",
+                    *(["-DSCOPECAT_TRIAL=1"] if trial is not None else []),
                     "-framework",
                     "Cocoa",
                     str(Path(__file__).with_name("native_launcher.m")),
@@ -147,8 +157,15 @@ def build(source: Path, destination: Path) -> Path:
             with (app / "Contents/Info.plist").open("wb") as stream:
                 plistlib.dump(
                     {
-                        "CFBundleIdentifier": "org.scopecat.desktop",
-                        "CFBundleName": "Scopecat",
+                        "CFBundleIdentifier": f"org.scopecat.trial.{trial.identity}"
+                        if trial
+                        else "org.scopecat.desktop",
+                        "CFBundleName": f"Scopecat Trial {trial.identity}"
+                        if trial
+                        else "Scopecat",
+                        "CFBundleDisplayName": f"Scopecat Trial {trial.identity}"
+                        if trial
+                        else "Scopecat",
                         "CFBundleExecutable": "Scopecat",
                         "CFBundleIconFile": "Scopecat.icns",
                         "CFBundlePackageType": "APPL",
@@ -180,6 +197,14 @@ def build(source: Path, destination: Path) -> Path:
                     "/utf-8",
                     "/O2",
                     "/MT",
+                    *(
+                        [
+                            "/DSCOPECAT_TRIAL=1",
+                            f'/DSCOPECAT_APP_ID=L"org.scopecat.trial.{trial.identity}"',
+                        ]
+                        if trial
+                        else []
+                    ),
                     str(Path(__file__).with_name("native_launcher.c")),
                     str(compiled_resource),
                     f"/Fe:{app / 'Scopecat.exe'}",
@@ -202,6 +227,7 @@ def build(source: Path, destination: Path) -> Path:
 def package(app: Path, destination: Path) -> Path:
     """Wrap a completed app for native installation; never launch it."""
     app = app.resolve()
+    refuse_automatic_verification(app)
     destination = destination.absolute()
     if destination.exists():
         raise FileExistsError(destination)
@@ -275,6 +301,9 @@ class Arguments(Protocol):
     source: Path
     destination: Path
     installer: Path | None
+    trial_home: Path | None
+    trial_locator: Path | None
+    trial_id: str | None
 
 
 def main() -> None:
@@ -284,8 +313,27 @@ def main() -> None:
     parser.add_argument(
         "--installer", type=Path, help="Also create a DMG or Windows Setup"
     )
+    parser.add_argument("--trial-home", type=Path)
+    parser.add_argument("--trial-locator", type=Path)
+    parser.add_argument("--trial-id")
     args = cast("Arguments", cast("object", parser.parse_args()))
-    app = build(args.source, args.destination)
+    trial = None
+    if any(
+        value is not None
+        for value in (args.trial_home, args.trial_locator, args.trial_id)
+    ):
+        if (
+            args.trial_home is None
+            or args.trial_locator is None
+            or args.trial_id is None
+            or args.installer is not None
+        ):
+            parser.error(
+                "Trial builds require home, locator and ID; "
+                "installers are not supported"
+            )
+        trial = TrialBuild(args.trial_home, args.trial_locator, args.trial_id)
+    app = build(args.source, args.destination, trial=trial)
     print(app)
     if args.installer:
         print(package(app, args.installer))

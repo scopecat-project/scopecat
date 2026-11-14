@@ -115,8 +115,9 @@ def test_console_forwards_arguments_identity_and_exit_code(
     assert str(python / "bin/python3") in missing.stderr
 
 
+@pytest.mark.parametrize("trial_mode", [False, True])
 def test_build_replaces_console_before_signing_and_rename(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, trial_mode: bool
 ):
     import tarfile
 
@@ -137,6 +138,10 @@ def test_build_replaces_console_before_signing_and_rename(
     (runtime / "lib").mkdir()
     (runtime / "bin/python3").write_text("runtime")
     (runtime / "lib/libpython3.14.dylib").write_text("library")
+    if trial_mode:
+        core = runtime / "lib/python3.14/site-packages/scopecat"
+        core.mkdir(parents=True)
+        (core / "__init__.py").write_text("")
     with tarfile.open(source / "toolchain/python.tar", "w") as archive:
         archive.add(runtime / "bin", arcname="bin")
         archive.add(runtime / "lib", arcname="lib")
@@ -203,13 +208,56 @@ def test_build_replaces_console_before_signing_and_rename(
         assert entry.read_text().startswith("#!/bin/sh\n")
         assert ".native-build-" not in entry.read_text()
         assert entry.stat().st_mode & 0o111 == 0o111
+        if trial_mode:
+            from scripts.app_build.trial_package import inspect
+
+            receipt = inspect(app)
+            assert receipt["id"] == "qa-build"
+            assert receipt["home"] == str(tmp_path / "trial-home")
         signed.append(app)
 
     monkeypatch.setattr(native_package, "_run", run)
     monkeypatch.setattr(runtime_install.subprocess, "run", run)
     monkeypatch.setattr(macos_signing, "sign", sign)
     destination = tmp_path / "Final 中文 Scopecat.app"
-    assert native_package.build(source, destination) == destination
+    from scripts.app_build.trial_package import TrialBuild
+
+    trial = (
+        TrialBuild(tmp_path / "trial-home", tmp_path / "trial-home/locator", "qa-build")
+        if trial_mode
+        else None
+    )
+    assert native_package.build(source, destination, trial=trial) == destination
+    assert not (tmp_path / "trial-home").exists()
     assert len(signed) == 1 and not signed[0].exists()
     assert not installed[0].exists()
     assert (destination / "Contents/Resources/python/bin/scopecat").is_file()
+
+
+@pytest.mark.parametrize(
+    ("filename", "comparison", "result"),
+    [
+        ("native_launcher.m", '!strcmp(argv[i], "--trial-window-probe")', "YES"),
+        ("native_launcher.c", '!wcscmp(argv[i], L"--trial-window-probe")', "TRUE"),
+    ],
+)
+def test_trial_probe_launcher_suppresses_only_modal(
+    filename: str, comparison: str, result: str
+):
+    """Both platform launchers keep nonzero failures, without a trial probe modal."""
+    from scripts.app_build import native_package
+
+    source = Path(native_package.__file__).with_name(filename).read_text()
+    guard = (
+        "#ifdef SCOPECAT_TRIAL\n"
+        "        // Explicit one-shot verification must return failures "
+        "without a modal.\n"
+        f"        if ({comparison}) check = {result};\n"
+        "#endif"
+    )
+    assert guard in source
+    # Release compilation excludes the sole probe-specific behavior; ordinary
+    # trial launches never set this flag. Python still validates the probe mode.
+    assert "--trial-window-probe" not in source.replace(guard, "")
+    assert "if (result && !check)" in source
+    assert "return result;" in source or "return (int)result;" in source

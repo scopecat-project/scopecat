@@ -555,6 +555,7 @@ def test_development_windows_reload_same_ui_origin_after_proxy_changes():
     session.connected("http://127.0.0.1:9000")
     windows = DesktopWindows(session, Mock())
     first, second = Mock(), Mock()
+    first.saved_measurement_id = second.saved_measurement_id = None
     first.window.get_current_url.return_value = session.ui_url + "/?run=A#runs"
     second.window.get_current_url.return_value = session.ui_url + "/?run=B#runs"
     windows._views = [first, second]
@@ -602,6 +603,9 @@ def close_fixture() -> tuple[Mock, DesktopSession, DesktopWindows, list[DesktopV
         api.close_reply = lambda request, status, view=view: windows._reply(
             view, request, status
         )
+        api.close_review_status = windows._review_status
+        api.focus_close_review = windows._show_close_blocker
+        api.cancel_close_review = windows._cancel_close_review
         views.append(view)
     windows._views = views
     return runtime, session, windows, views
@@ -723,7 +727,7 @@ def test_deferred_device_exit_confirms_once_but_rechecks_fresh_saved_input():
         view.api.wait_for_idle(True)
         session.poll_exit()
     assert view.close_status == initial
-    mock_window(view).create_confirmation_dialog.assert_called_once()
+    mock_window(view).create_confirmation_dialog.assert_not_called()
     runtime.stop_if_idle.assert_called_once()
     runtime.set_exit_wait.assert_called_once_with(True)
 
@@ -744,7 +748,7 @@ def test_deferred_device_exit_confirms_once_but_rechecks_fresh_saved_input():
     session.poll_exit()
     assert session.closing.is_set()
     assert len(set(requests)) == 2
-    mock_window(view).create_confirmation_dialog.assert_called_once()
+    mock_window(view).create_confirmation_dialog.assert_not_called()
     runtime.stop.assert_not_called()
 
 
@@ -775,7 +779,7 @@ def test_blocked_deferred_device_exit_never_repeats_dialogs_or_saving(
     for _ in range(3):
         session.poll_exit()
     assert mock_window(view).run_js.call_count == calls
-    mock_window(view).create_confirmation_dialog.assert_called_once()
+    mock_window(view).create_confirmation_dialog.assert_not_called()
     runtime.stop_if_idle.assert_called_once()
     runtime.stop.assert_not_called()
     assert not session.closing.is_set()
@@ -793,7 +797,7 @@ def test_blocked_deferred_device_exit_never_repeats_dialogs_or_saving(
     runtime.stop_if_idle.return_value = True
     assert view.api.request_exit() is None
     assert session.closing.is_set()
-    assert mock_window(view).create_confirmation_dialog.call_count == 2
+    mock_window(view).create_confirmation_dialog.assert_not_called()
 
 
 def test_deferred_exit_does_not_invent_device_close_consent():
@@ -820,21 +824,23 @@ def test_deferred_exit_can_finish_when_backend_is_already_stopped():
     runtime.stop_if_idle.assert_called_once()
 
 
-def test_quit_in_progress_cannot_start_a_second_native_confirmation():
+def test_quit_in_progress_cannot_start_a_second_preflight():
     runtime, session, _windows, views = close_fixture()
     views[0].device_id = "device-a"
-    for view in views:
-        acknowledge(view)
+    acknowledge(views[1])
 
-    def confirm(_title: str, _message: str) -> bool:
-        with pytest.raises(ValueError, match="另一项操作"):
-            session.request_exit()
-        return False
+    def review(script: str):
+        if "scopecat:close-preflight" in script:
+            with pytest.raises(ValueError, match="另一项操作"):
+                session.request_exit()
+            request = views[0].close_request
+            assert request is not None
+            views[0].api.complete_close_preflight(request, "blocked")
 
-    mock_window(views[0]).create_confirmation_dialog.side_effect = confirm
-    with pytest.raises(ValueError, match="cancelled"):
+    mock_window(views[0]).run_js.side_effect = review
+    with pytest.raises(ValueError, match="confirmed"):
         session.request_exit()
-    mock_window(views[0]).create_confirmation_dialog.assert_called_once()
+    mock_window(views[0]).create_confirmation_dialog.assert_not_called()
     runtime.stop_if_idle.assert_not_called()
     assert not session._waiting.is_set()
 
@@ -872,7 +878,7 @@ def test_development_controller_does_not_retry_a_blocked_device_exit(tmp_path: P
     commands.put("q")
     control_session(session, tmp_path, commands, Mock())
     assert checks == 2
-    mock_window(views[0]).create_confirmation_dialog.assert_called_once()
+    mock_window(views[0]).create_confirmation_dialog.assert_not_called()
     assert not session._waiting.is_set()
     assert runtime.set_exit_wait.call_args_list == [call(True), call(False)]
     runtime.stop_if_idle.assert_called_once()
@@ -967,7 +973,7 @@ def test_deferred_device_confirmation_does_not_survive_reload_or_cancel(
         session.wait_for_idle(True)
     with pytest.raises(ValueError, match="设备窗口已改变"):
         session.poll_exit()
-    mock_window(view).create_confirmation_dialog.assert_called_once()
+    mock_window(view).create_confirmation_dialog.assert_not_called()
     runtime.stop_if_idle.assert_called_once()
     assert not session.closing.is_set()
     assert not session._waiting.is_set()
@@ -1354,22 +1360,16 @@ def test_device_window_identity_deduplicates_loading_navigation_and_two_devices(
     assert len(windows._views) == 3
 
 
-@pytest.mark.parametrize(
-    "answer,status",
-    [(False, "saved"), (True, "blocked"), (True, "unknown"), (True, "saved")],
-)
-def test_last_device_window_only_hides_after_confirmed_release(
-    answer: bool, status: str
-):
+@pytest.mark.parametrize("status", ["blocked", "unknown", "saved"])
+def test_last_device_window_only_hides_after_confirmed_release(status: str):
     _runtime, _session, windows, views = close_fixture()
     view = views[0]
     windows._views = [view]
     view.device_id = "device-a"
-    mock_window(view).create_confirmation_dialog.return_value = answer
     acknowledge(view, status)
     with patch.object(windows, "_hide_or_retain") as hide:
         windows._close_view(view)
-        assert hide.call_count == (1 if answer and status == "saved" else 0)
+        assert hide.call_count == (1 if status == "saved" else 0)
     mock_window(view).destroy.assert_not_called()
     assert view.close_request is None
     assert not view.close_authorized
@@ -1473,3 +1473,258 @@ def test_activation_selects_existing_main_without_resuming_device_or_run(
     shown.reset_mock()
     windows.activate()
     shown.assert_not_called()
+
+
+@pytest.mark.parametrize("result", ["saved", "blocked", "unknown"])
+def test_native_review_waits_for_choice_then_continues_same_close(result: str):
+    _runtime, _session, windows, views = close_fixture()
+    view = views[0]
+    view.device_id = "device-a"
+    choosing = threading.Event()
+    release = threading.Event()
+
+    def dispatch(script: str):
+        if "scopecat:close-preflight" in script:
+            request = view.close_request
+            assert request is not None
+            view.api.complete_close_preflight(request, "pending")
+            choosing.set()
+
+            def reply():
+                assert release.wait(2)
+                view.api.complete_close_preflight(request, result)
+
+            threading.Thread(target=reply).start()
+
+    mock_window(view).run_js.side_effect = dispatch
+    worker = threading.Thread(target=windows._close_view, args=(view,))
+    worker.start()
+    try:
+        assert choosing.wait(2)
+        worker.join(windows.preflight_timeout * 3)
+        assert worker.is_alive(), "Human review must not expire after bridge timeout"
+        mock_window(view).destroy.assert_not_called()
+        mock_window(view).create_confirmation_dialog.assert_not_called()
+    finally:
+        release.set()
+        worker.join(2)
+    assert not worker.is_alive()
+    assert mock_window(view).destroy.call_count == int(result == "saved")
+    assert not view.close_in_progress
+
+
+def test_repeated_native_x_during_review_has_one_intent(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from webview.event import Event
+
+    def create(_title: str, **_kwargs: object):
+        window = Mock()
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    session = DesktopSession(Mock(), threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    windows = DesktopWindows(session, Mock())
+    windows.create()
+    view = windows.create(device_id="device-a")
+    choosing = threading.Event()
+
+    def dispatch(script: str):
+        if "scopecat:close-preflight" in script:
+            assert view.close_request is not None
+            view.api.complete_close_preflight(view.close_request, "pending")
+            choosing.set()
+
+    mock_window(view).run_js.side_effect = dispatch
+    for _ in range(3):
+        mock_window(view).events.closing.set()
+    assert choosing.wait(2)
+    request = view.close_request
+    assert request is not None
+    assert (
+        sum(
+            "close-preflight" in item.args[0]
+            for item in mock_window(view).run_js.call_args_list
+        )
+        == 1
+    )
+    reply = threading.Thread(
+        target=view.api.complete_close_preflight, args=(request, "blocked")
+    )
+    reply.start()
+    reply.join(2)
+    # Join the worker through the preflight lock without blocking its bridge reply.
+    with windows._preflight_lock:
+        pass
+    mock_window(view).destroy.assert_not_called()
+
+
+@pytest.mark.parametrize("result", ["blocked", "unknown"])
+def test_other_view_cancels_pending_review_without_waiting_for_first(result: str):
+    _runtime, session, windows, views = close_fixture()
+    for view in views:
+
+        def dispatch(script: str, view: DesktopView = view):
+            if "scopecat:close-preflight" in script:
+                assert view.close_request is not None
+                view.api.complete_close_preflight(
+                    view.close_request, "pending" if view is views[0] else result
+                )
+
+        mock_window(view).run_js.side_effect = dispatch
+    with pytest.raises(ValueError, match="confirmed"):
+        session.request_exit()
+    assert not windows._preflight_lock.locked()
+    assert not session.closing.is_set()
+    for view in views:
+        assert view.close_request is None
+        assert any(
+            "close-release" in item.args[0]
+            for item in mock_window(view).run_js.call_args_list
+        )
+        mock_window(view).destroy.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["view", "request", "stop", "deferred"])
+def test_user_cancel_releases_entire_close_without_error(operation: str):
+    runtime, session, windows, views = close_fixture()
+    for view in views:
+        acknowledge(view, "cancelled" if view is views[0] else "saved")
+    if operation == "view":
+        windows._close_view(views[0])
+    elif operation == "request":
+        assert views[0].api.request_exit() == "cancelled"
+    elif operation == "stop":
+        assert views[0].api.exit(False) == "cancelled"
+    else:
+        runtime.exit_report.return_value = ExitReport(draining=True)
+        session.wait_for_idle(True)
+        session.poll_exit()
+        assert not session.exit_status()["error"]
+        assert not session._waiting.is_set()
+    assert not windows._preflight_lock.locked()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    for view in views[:1] if operation == "view" else views:
+        assert view.close_request is None
+        mock_window(view).destroy.assert_not_called()
+        messages = [
+            item.args[0]
+            for item in mock_window(view).run_js.call_args_list
+            if "close-release" in item.args[0]
+        ]
+        assert len(messages) == 1
+        assert '"message": ""' in messages[0]
+
+
+@pytest.mark.parametrize("failure", ["blocked", "unknown"])
+@pytest.mark.parametrize("cancel_first", [True, False])
+def test_user_cancel_never_hides_another_views_failed_close(
+    failure: str, cancel_first: bool
+):
+    runtime, session, windows, views = close_fixture()
+    for index, view in enumerate(views):
+        acknowledge(view, "cancelled" if (index == 0) == cancel_first else failure)
+    with pytest.raises(ValueError, match="Input is not confirmed saved"):
+        views[0].api.request_exit()
+    assert not windows._preflight_lock.locked()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    for view in views:
+        assert view.close_request is None
+        mock_window(view).destroy.assert_not_called()
+        messages = [
+            item.args[0]
+            for item in mock_window(view).run_js.call_args_list
+            if "close-release" in item.args[0]
+        ]
+        assert len(messages) == 1
+        assert "Input is not confirmed saved" in messages[0]
+
+
+def test_hidden_pending_window_can_be_located_and_cancelled_from_saved_view(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    runtime, session, windows, views = close_fixture()
+    views[1].device_id = "scope-a"
+    shown = Mock()
+    monkeypatch.setattr("scopecat_app.desktop.show_window", shown)
+    pending = threading.Event()
+    acknowledge(views[0])
+
+    def dispatch(script: str):
+        if "scopecat:close-preflight" in script:
+            request = views[1].close_request
+            assert request is not None
+            views[1].api.complete_close_preflight(request, "pending")
+            pending.set()
+
+    mock_window(views[1]).run_js.side_effect = dispatch
+    outcomes: list[object] = []
+    worker = threading.Thread(
+        target=lambda: outcomes.append(views[0].api.request_exit())
+    )
+    worker.start()
+    try:
+        assert pending.wait(2)
+        worker.join(windows.preflight_timeout * 3)
+        assert worker.is_alive(), "Responsive reviews do not expire by elapsed time"
+        request = views[0].close_request
+        assert request is not None
+        review = views[0].api.close_preflight_status()
+        assert review == {
+            "requestId": request,
+            "windows": [
+                {
+                    "windowId": views[1].review_id,
+                    "label": "Device: scope-a",
+                    "status": "pending",
+                }
+            ],
+        }
+        shown.assert_called_once_with(views[1].window)
+        views[0].api.show_close_blocker(request, views[1].review_id)
+        assert shown.call_count == 2
+        with pytest.raises(ValueError, match="no longer active"):
+            views[0].api.show_close_blocker("old", views[1].review_id)
+        assert not views[0].api.cancel_close_preflight("old")
+        assert views[0].api.cancel_close_preflight(request)
+    finally:
+        if views[0].close_request is not None:
+            views[0].api.cancel_close_preflight(views[0].close_request)
+        worker.join(2)
+    assert not worker.is_alive()
+    assert outcomes == ["cancelled"]
+    assert views[0].api.close_preflight_status() is None
+    assert not session.closing.is_set()
+    assert not windows._preflight_lock.locked()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    for view in views:
+        assert view.close_request is None
+        mock_window(view).destroy.assert_not_called()
+    # A submitted operation can later succeed; it cannot revive the cancelled quit.
+    views[1].api.complete_close_preflight(request, "saved")
+    assert not session.closing.is_set()
+    runtime.stop_if_idle.assert_not_called()
+
+
+def test_close_cancellation_is_not_available_after_preflight_hands_off_shutdown():
+    _runtime, _session, windows, views = close_fixture()
+    for view in views:
+        acknowledge(view)
+    with windows.preflight():
+        request = views[0].close_request
+        assert request is not None
+        assert views[0].api.close_preflight_status() is None
+        assert not views[0].api.cancel_close_preflight(request)
+        windows._validate_certificate()
+    assert not views[0].api.cancel_close_preflight(request)
