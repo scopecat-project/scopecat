@@ -20,7 +20,9 @@ from scopecat.execution.effects.compute import (
 from scopecat.kernel.problems import Problem
 from scopecat.measurements.results import (
     MeasurementArray,
+    MeasurementArrayAvailability,
     MeasurementDType,
+    MeasurementPartitionedArray,
     MeasurementScalar,
 )
 from scopecat.planning.local_compute import bind_compute_operations
@@ -696,3 +698,26 @@ def test_table_does_not_bypass_explicit_scalar_contract(
             TypeError, match=r"compute 'consume' input 'x' expects Scalar.*got Table"
         ):
             bind_compute_inputs("consume", consume, {"x": rows})
+
+
+@pytest.mark.parametrize("partitioned", [False, True])
+def test_native_array_compute_never_discards_unavailable_leaf_masks(
+    partitioned: bool,
+) -> None:
+    def consume(x: MHzArray) -> float:
+        pytest.fail("incomplete input must not enter the native kernel")
+
+    logical = _array_program(consume, "MHz", "measured")
+    [compute] = logical.measurement_computes
+    incomplete = MeasurementArray.create(
+        values=(5.0, 0.0),
+        unit="MHz",
+        availability=MeasurementArrayAvailability.create(valid=(True, False)),
+    )
+    source = (
+        MeasurementPartitionedArray.create(partitions=(incomplete,), axis=0, unit="MHz")
+        if partitioned
+        else incomplete
+    )
+    with pytest.raises(ValueError, match="fully available"):
+        compute.kernel({"x": source})

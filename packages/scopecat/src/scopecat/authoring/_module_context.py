@@ -253,6 +253,17 @@ def _native_measurement_value(
     value: MeasurementValue, *, as_quantity: bool = False
 ) -> object:
     if isinstance(value, MeasurementArray | MeasurementPartitionedArray):
+        # Native NumPy kernels cannot see leaf availability. Never turn missing
+        # values into apparently valid samples by dropping their mask.
+        arrays = (
+            value.partitions
+            if isinstance(value, MeasurementPartitionedArray)
+            else (value,)
+        )
+        if any(array.availability is not None for array in arrays):
+            raise ValueError(
+                "native compute requires fully available measurement arrays"
+            )
         return value.values
     if isinstance(value, MeasurementScalar):
         if as_quantity:
