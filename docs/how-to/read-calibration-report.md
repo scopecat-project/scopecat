@@ -175,7 +175,38 @@ dependencies = CalibrationDependencies(
 包含全部参数依赖，而不只是一次运行观察到的读取。某个 domain 缺失表示未知，显式空元组则声称独立，必须给出 basis。
 代码或外部假设改变时，修改 qualification 和 scope policy version。框架只检查声明相等，不证明科学假设为真。
 
-支持的比较限于完整 parameter 粒度。table 依赖包含全部行列，也能发现旧查询本会选中的新增内容。
+`parameters` 仍按完整 parameter 比较，table 包含全部行列。
+如果已审查的完整依赖确实只限于某些行，可在相应 domain 的 `rows` 声明受限等值选择：
+
+```python
+from scopecat.records.calibration_dependencies import TableRowDependency
+from scopecat.records.parameter import ScalarParameterValue
+
+selected_resonators = DependencyCoverage(
+    parameters=(),
+    rows=(
+        TableRowDependency(
+            parameter="resonator",
+            equals=(ScalarParameterValue(id="group", value="readout-a"),),
+        ),
+    ),
+    basis="Reviewed synthetic model uses complete readout-a rows only; "
+    "no other rows or external inputs contribute.",
+)
+```
+
+这个例子只构造一个 domain 的声明，不自动补齐 execution、analysis 或 physical。
+仍须分别审查三者，把同一完整契约保留在检查和 requirement 中。任一 domain 的
+整表声明仍覆盖整个表，不能被另一 domain 的行选择缩小。
+
+`equals` 是按列类型校验的等值条件，多个条件必须同时满足，采用 parameter query 的
+标量比较语义（包括 quantity 单位和 entity identity），不执行任意表达式。
+每次比较都在两个保存版本上重新选择完整行，保留选中行顺序；新增匹配行、成员移入／移出、
+选中行值或顺序变化都会使证据需要重查。空选择也会重新查询，不能漏掉后来的首个匹配行。
+修改不匹配行本身不会使完整行依赖失效。无效列、类型或不完整表内容不能被误作空选择，返回 unknown。
+报告的 `row_comparisons` 保留选择条件、前后匹配行数及成员变化／行值变化原因，Notebook 和工作台也展示这些说明。
+
+这不支持单元格投影、任意 Python 查询或自动推导依赖范围。
 完整 catalog schema、subject、target mapping、setup／topology 和软件 scenario 仍要求精确一致。
 base／point／segment read 观察保留在各自原始记录，不升级成完整覆盖证明；未经限定的任意 Python 或外部状态必须保持未知。
 candidate 不支持跨 revision 比较。
