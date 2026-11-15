@@ -92,30 +92,6 @@ export function MeasurementWorkbench({
 }) {
   const host = useRef<HTMLElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
-  const actions = useRef<HTMLDivElement>(null);
-  const hasCurrent = !!current;
-  useEffect(() => {
-    if (!layoutManaged || !hasCurrent) return;
-    const strip = actions.current;
-    const pane = host.current?.closest<HTMLElement>(".device-pane-scroll");
-    if (!strip || !pane) return;
-    const previousPadding = pane.style.scrollPaddingTop;
-    const measure = () => {
-      const height = strip.getBoundingClientRect().height;
-      // Hidden panes report zero; keep the last visible inset until shown again.
-      if (height > 0) pane.style.scrollPaddingTop = `${height + 8}px`;
-    };
-    measure();
-    const observer =
-      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
-    observer?.observe(strip);
-    if (!observer) window.addEventListener("resize", measure);
-    return () => {
-      observer?.disconnect();
-      if (!observer) window.removeEventListener("resize", measure);
-      pane.style.scrollPaddingTop = previousPadding;
-    };
-  }, [layoutManaged, hasCurrent]);
   const cache = useQueryClient();
   const [displayStore] = useState<MeasurementDisplayStore>(() => new Map());
   const [target, setTarget] = useState<CurrentMeasurementResult>();
@@ -208,7 +184,11 @@ export function MeasurementWorkbench({
       aria-label="交互采集"
       className={classes(
         "min-w-0",
-        collapsed ? "justify-self-start" : "rounded-md border border-line bg-panel-soft p-3",
+        layoutManaged
+          ? "device-result-workbench"
+          : collapsed
+            ? "justify-self-start"
+            : "rounded-md border border-line bg-panel-soft p-3",
       )}
     >
       {!layoutManaged && (
@@ -226,7 +206,7 @@ export function MeasurementWorkbench({
           )}
         </div>
       )}
-      <div hidden={collapsed}>
+      <div hidden={collapsed} className={layoutManaged ? "device-result-body" : undefined}>
         {!layoutManaged && (
           <MeasurementAcquisitionActions
             description={description}
@@ -238,17 +218,14 @@ export function MeasurementWorkbench({
             onCollect={onCollect}
           />
         )}
-        <div className="grid min-w-0 gap-3">
+        <div className={layoutManaged ? "device-result-content" : "grid min-w-0 gap-3"}>
           {current && (
             <div
-              ref={actions}
               role="group"
               aria-label="所选结果操作"
               className={classes(
                 "flex flex-wrap items-center gap-2",
-                // This shares the full result/list containing block, so it stays
-                // available even after scrolling past the current preview.
-                layoutManaged && "sticky top-0 z-10 bg-panel-soft py-2",
+                layoutManaged && "device-result-toolbar",
               )}
             >
               {canSave && (
@@ -288,6 +265,9 @@ export function MeasurementWorkbench({
                       .map((item, index) => (
                         <option
                           key={measurementKey(item.selection)}
+                          data-testid={
+                            layoutManaged ? `recent-result-${item.selection.command_id}` : undefined
+                          }
                           value={measurementKey(item.selection)}
                         >
                           {recent.length - index}.{" "}
@@ -315,60 +295,65 @@ export function MeasurementWorkbench({
               )}
             </div>
           )}
-          <div className="min-w-0">
+          <div className={layoutManaged ? "device-result-current" : "min-w-0"}>
             {current ? (
               <CurrentMeasurement
                 result={current}
                 staged={staged}
                 sessionId={sessionId}
                 displayStore={displayStore}
+                workspace={layoutManaged}
               />
             ) : (
               <p className="py-16 text-center text-sm text-text-dim">采集后在这里查看曲线</p>
             )}
           </div>
-          <aside aria-label="近期结果" className="min-w-0">
-            <h4 className="mb-2 text-xs font-semibold">近期结果 · {recent.length}</h4>
-            <div className="grid gap-2">
-              {recent
-                .map((_, index) => recent[recent.length - index - 1]!)
-                .map((item, index) => (
-                  <button
-                    key={measurementKey(item.selection)}
-                    data-testid={`recent-result-${item.selection.command_id}`}
-                    aria-pressed={!!current && sameMeasurement(current.selection, item.selection)}
-                    title={
-                      item.selection.title ||
-                      item.target.acquisition.label ||
-                      item.target.acquisition.id
-                    }
-                    onClick={() => onSelect(item)}
-                    className={classes(
-                      secondaryButton,
-                      "h-auto w-full min-w-0 flex-col items-start whitespace-normal text-left",
-                      !!current &&
-                        sameMeasurement(current.selection, item.selection) &&
-                        "border-blue",
-                    )}
-                  >
-                    <strong className="line-clamp-2 break-words">
-                      {recent.length - index}.{" "}
-                      {item.selection.title ||
+          {(!layoutManaged || !current) && (
+            <aside aria-label="近期结果" className="min-w-0">
+              <h4 className="mb-2 text-xs font-semibold">近期结果 · {recent.length}</h4>
+              <div className="grid gap-2">
+                {recent
+                  .map((_, index) => recent[recent.length - index - 1]!)
+                  .map((item, index) => (
+                    <button
+                      key={measurementKey(item.selection)}
+                      data-testid={`recent-result-${item.selection.command_id}`}
+                      aria-pressed={!!current && sameMeasurement(current.selection, item.selection)}
+                      title={
+                        item.selection.title ||
                         item.target.acquisition.label ||
-                        item.target.acquisition.id}
-                    </strong>
-                    <span className="text-xs">
-                      {new Date(item.receivedAt).toLocaleTimeString()} ·{" "}
-                      {item.savedRecordId
-                        ? "已保存"
-                        : pending.some((entry) => sameMeasurement(entry.selection, item.selection))
-                          ? "待保存"
-                          : "未保存"}
-                    </span>
-                  </button>
-                ))}
-            </div>
-          </aside>
+                        item.target.acquisition.id
+                      }
+                      onClick={() => onSelect(item)}
+                      className={classes(
+                        secondaryButton,
+                        "h-auto w-full min-w-0 flex-col items-start whitespace-normal text-left",
+                        !!current &&
+                          sameMeasurement(current.selection, item.selection) &&
+                          "border-blue",
+                      )}
+                    >
+                      <strong className="line-clamp-2 break-words">
+                        {recent.length - index}.{" "}
+                        {item.selection.title ||
+                          item.target.acquisition.label ||
+                          item.target.acquisition.id}
+                      </strong>
+                      <span className="text-xs">
+                        {new Date(item.receivedAt).toLocaleTimeString()} ·{" "}
+                        {item.savedRecordId
+                          ? "已保存"
+                          : pending.some((entry) =>
+                                sameMeasurement(entry.selection, item.selection),
+                              )
+                            ? "待保存"
+                            : "未保存"}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </aside>
+          )}
         </div>
       </div>
       <Dialog.Root

@@ -1184,12 +1184,18 @@ export function InstrumentHeading({
   const Heading = primary ? "h1" : "h2";
   return (
     <header
-      className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-line pb-3.5"
+      className={classes(
+        "flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-line pb-3.5",
+        primary && "device-window-heading",
+      )}
       aria-live="polite"
     >
       <div className="min-w-0 flex-1 basis-60">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-          <Heading className="m-0 min-w-0 text-[1.1rem] font-[650] tracking-[-0.025em] [overflow-wrap:anywhere]">
+          <Heading
+            title={displayLabel ?? description?.label ?? instrument.instrument_id}
+            className="m-0 min-w-0 text-[1.1rem] font-[650] tracking-[-0.025em] [overflow-wrap:anywhere]"
+          >
             {displayLabel ?? description?.label ?? instrument.instrument_id}
           </Heading>
           {releaseUnconfirmed ? (

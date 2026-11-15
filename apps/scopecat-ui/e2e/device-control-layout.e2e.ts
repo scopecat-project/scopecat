@@ -64,11 +64,13 @@ async function expectFittedCurve(chart: Locator) {
       ).getBBox();
       return {
         plot: { width: plot.width, height: plot.height },
-        caption: element.previousElementSibling!.textContent,
+        caption: (element.previousElementSibling ?? element.parentElement?.previousElementSibling)
+          ?.textContent,
         xTicks: [...svg.querySelectorAll('text[text-anchor="middle"]')]
           .map((label) => label.textContent ?? "")
           .filter((text) => /^-?[\d,.]+(?:e[+-]?\d+)?$/.test(text)),
         width: bounds.width,
+        height: bounds.height,
         containerWidth: element.clientWidth,
         left: bounds.left,
         right: bounds.right,
@@ -110,7 +112,7 @@ async function expectFittedCurve(chart: Locator) {
       expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
       expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
       expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
-      expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
+      expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(layout.height + 1);
     }
     // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
     for (const [index, label] of layout.labels.entries()) {
@@ -235,8 +237,8 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       expect(
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
-      // Scroll the independent pane, not the outer window. Positioned chart
-      // descriptions must remain contained even when the curve is below the fold.
+      // The result workspace and chart are bounded by the available window;
+      // interacting with the canvas must not introduce a document scroll region.
       await expect
         .poll(() => page.evaluate<number>("document.documentElement.scrollHeight"))
         .toBeLessThanOrEqual(900);
@@ -282,7 +284,9 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await apply.click();
     await expect(apply).toBeHidden();
     await sweep.click();
-    await expect(page.getByTestId(/^recent-result-/)).toHaveCount(2);
+    await expect(
+      page.getByRole("combobox", { name: "选择近期结果", exact: true }).locator("option"),
+    ).toHaveCount(2);
     await expectFittedCurve(curve);
     const closeTicks = await curve.locator('svg text[text-anchor="middle"]').allTextContents();
     const closeValues = closeTicks
@@ -451,7 +455,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await resultScroll.evaluate((element) => {
       element.scrollTop = 120;
     });
-    await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(120);
+    await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
     await page.getByRole("button", { name: "连接配置", exact: true }).click();
     await expect(page.getByRole("region", { name: "设备连接配置", exact: true })).toBeVisible();
     await expect(resultScroll).toBeVisible();
@@ -463,14 +467,9 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await expect.poll(() => controlScroll.evaluate((element) => element.scrollTop)).toBe(150);
     await page.getByRole("button", { name: "收起结果", exact: true }).click();
     await page.getByRole("button", { name: "展开结果", exact: true }).click();
-    await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(120);
-    // The saved pane offset must not scroll frequent actions out of reach. This
-    // includes the bottom of the full recent list, beyond the current preview.
-    await resultScroll.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    const savedOffset = await resultScroll.evaluate((element) => element.scrollTop);
-    expect(savedOffset).toBeGreaterThan(120);
+    await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
+    // Results have a stable canvas, not a second scrollable document.
+    // Repeated pane/viewport switches preserve reachable actions and chart controls.
     for (const width of [1280, 390, 1280]) {
       await page.setViewportSize({ width, height: 600 });
       await showResults(page);
@@ -478,36 +477,42 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       await expect(
         actions.getByRole("button", { name: "保存所选结果", exact: true }),
       ).toBeInViewport();
-      await expect(
-        actions.getByRole("combobox", { name: "选择近期结果", exact: true }),
-      ).toBeInViewport();
       const selector = actions.getByRole("combobox", { name: "选择近期结果", exact: true });
+      await expect(selector).toBeInViewport();
       await selector.focus();
       await expect(selector).toBeFocused();
       const representation = current.getByRole("combobox", { name: "复数表示" });
-      // The actual measured sticky height, including wrapped narrow rows, is
-      // reserved for keyboard/programmatic scroll targets rather than hiding focus.
-      await expect
-        .poll(async () => {
-          const inset = await resultScroll.evaluate((element) =>
-            parseFloat(
-              element.ownerDocument.defaultView!.getComputedStyle(element).scrollPaddingTop,
-            ),
-          );
-          return inset >= (await actions.boundingBox())!.height;
-        })
-        .toBe(true);
-      await representation.evaluate((element) => element.scrollIntoView({ block: "start" }));
       await representation.focus();
       await expect(representation).toBeFocused();
-      await expect(async () => {
-        const bar = (await actions.boundingBox())!;
-        const field = (await representation.boundingBox())!;
-        expect(field.y).toBeGreaterThanOrEqual(bar.y + bar.height);
-      }).toPass();
+      await expect(representation).toBeInViewport();
+      await expect(curve).toBeInViewport();
+      await expectFittedCurve(curve);
+      await testInfo.attach(`plot-${width}-600`, {
+        body: JSON.stringify(
+          await curve
+            .locator("svg clipPath path")
+            .first()
+            .evaluate((element) => ({
+              width: (element as unknown as { getBBox(): { width: number } }).getBBox().width,
+              height: (element as unknown as { getBBox(): { height: number } }).getBBox().height,
+            })),
+        ),
+        contentType: "application/json",
+      });
+      await page.screenshot({
+        path: `../../.test-results/result-workspace-${width}-600.png`,
+        fullPage: true,
+      });
       await resultScroll.evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });
+      expect(await resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
+      const beforeWheel = await page.evaluate<number>("window.scrollY");
+      await curve.hover();
+      await page.mouse.wheel(0, -240);
+      await page.mouse.wheel(0, 240);
+      await expect.poll(() => page.evaluate<number>("window.scrollY")).toBe(beforeWheel);
+      expect(await resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
     }
     await page.getByRole("button", { name: "收起结果", exact: true }).click();
     await page.getByRole("button", { name: "展开结果", exact: true }).click();
@@ -655,8 +660,9 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       storage_policy: "allow_temporary_disk",
     });
     const previousResults = await page
-      .getByTestId(/^recent-result-/)
-      .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-testid")));
+      .getByRole("combobox", { name: "选择近期结果", exact: true, includeHidden: true })
+      .locator("option")
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute("value")));
     expect(previousResults).toHaveLength(2);
     await page.setViewportSize({ width: 390, height: 900 });
     await showControls(page);
@@ -675,19 +681,24 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     expect(summary.pending?.receipt_validation).toBe("verified");
     expect(summary.pending?.intent.acquisition_id).toBe("read_trace");
     const selection = summary.pending!.selection;
-    expect(previousResults).not.toContain(`recent-result-${selection.command_id}`);
-    await showResults(page);
-    await expect(page.getByTestId(/^recent-result-/)).toHaveCount(3);
-    await expect(page.getByTestId(`recent-result-${selection.command_id}`)).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    expect(previousResults).not.toContain(
+      JSON.stringify([selection.session_id, selection.instrument_id, selection.command_id]),
     );
+    await showResults(page);
+    await expect(
+      page.getByRole("combobox", { name: "选择近期结果", exact: true }).locator("option"),
+    ).toHaveCount(3);
     await expect(page.getByRole("combobox", { name: "选择近期结果", exact: true })).toHaveValue(
       JSON.stringify([selection.session_id, selection.instrument_id, selection.command_id]),
     );
+    await current.getByRole("button", { name: "结果详情", exact: true }).click();
+    const resultDetails = page.getByRole("dialog", { name: "结果详情", exact: true });
     await expect(
-      current.getByText("scopecat.existing_network_trace/v1 / 设备 / read_trace"),
+      resultDetails.getByText("scopecat.existing_network_trace/v1 / 设备 / read_trace"),
     ).toBeVisible();
+    await resultDetails.getByRole("button", { name: "关闭详情", exact: true }).click();
+    await expect(resultDetails).toBeHidden();
+    await expect(current.getByRole("button", { name: "结果详情", exact: true })).toBeFocused();
     await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
     await expectFittedCurve(curve);
     for (const width of [1280, 390]) {
@@ -699,6 +710,83 @@ test("control inputs and headings stay readable and bounded curves resize at eve
         contentType: "image/png",
       });
     }
+    // The result canvas owns the remaining height: expanding the window must
+    // increase actual plotted geometry, not merely add empty space below a 260px chart.
+    await page.setViewportSize({ width: 1200, height: 750 });
+    await showResults(page);
+    await page.getByRole("button", { name: "收起控制", exact: true }).click();
+    await expectFittedCurve(curve);
+    const shortPlot = (await curve.boundingBox())!;
+    await testInfo.attach("short-plot-geometry", {
+      body: JSON.stringify(shortPlot),
+      contentType: "application/json",
+    });
+    await page.screenshot({
+      path: "../../.test-results/result-workspace-only-1200.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1200, height: 995 });
+    await expect
+      .poll(async () => (await curve.boundingBox())!.height)
+      .toBeGreaterThan(shortPlot.height + 180);
+    await expectFittedCurve(curve);
+    await testInfo.attach("tall-plot-geometry", {
+      body: JSON.stringify(await curve.boundingBox()),
+      contentType: "application/json",
+    });
+    await page.screenshot({
+      path: "../../.test-results/result-workspace-only-1200-995.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 2048, height: 995 });
+    await page.screenshot({
+      path: "../../.test-results/result-workspace-only-2048.png",
+      fullPage: true,
+    });
+    for (const size of [
+      { width: 1200, height: 750 },
+      { width: 390, height: 750 },
+    ]) {
+      await page.setViewportSize(size);
+      await showResults(page);
+      await expectFittedCurve(curve);
+      await expect
+        .poll(() => page.evaluate<number>("document.documentElement.scrollHeight"))
+        .toBeLessThanOrEqual(size.height);
+      await expect(
+        page.getByRole("button", { name: "保存所选结果", exact: true }),
+      ).toBeInViewport();
+      const curveTicks = () => curve.locator("svg text").allTextContents();
+      const beforeDetailsTicks = await curveTicks();
+      const detailButton = current.getByRole("button", { name: "数据详情", exact: true });
+      await detailButton.click();
+      const dataDetails = current.getByRole("region", { name: "数据详情", exact: true });
+      await expect(dataDetails).toBeVisible();
+      await expect(curve).toBeHidden();
+      await dataDetails.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      await expect.poll(() => page.evaluate<number>("window.scrollY")).toBe(0);
+      await current.getByRole("button", { name: "关闭数据详情", exact: true }).click();
+      await expect(curve).toBeVisible();
+      await expectFittedCurve(curve);
+      await expect.poll(curveTicks).toEqual(beforeDetailsTicks);
+      await page.screenshot({
+        path: `../../.test-results/result-workspace-only-${size.width}.png`,
+        fullPage: true,
+      });
+    }
+    // The one selector still navigates independent original identities.
+    const recentSelector = page.getByRole("combobox", { name: "选择近期结果", exact: true });
+    const selectedIdentity = await recentSelector.inputValue();
+    await recentSelector.selectOption(previousResults[0]);
+    await expect(recentSelector).toHaveValue(previousResults[0]);
+    await expect(
+      page.getByRole("status", { name: "", exact: true }).filter({ hasText: /^已保存$/ }),
+    ).toBeVisible();
+    await recentSelector.selectOption(selectedIdentity);
+    await expect(recentSelector).toHaveValue(selectedIdentity);
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
     await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
     await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(saveDialog).toBeHidden();

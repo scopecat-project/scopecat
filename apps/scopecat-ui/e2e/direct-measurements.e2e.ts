@@ -73,7 +73,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await page.getByRole("spinbutton", { name: /Sweep points/ }).fill("1025");
     const applyInitial = page.getByRole("button", { name: "应用暂存修改", exact: true });
     await applyInitial.click();
-    await expect(applyInitial).toBeDisabled();
+    await expect(applyInitial).toBeHidden();
     // Collection starts without per-result metadata. Use only the virtual driver.
     const sweep = page.getByTitle("scopecat.network_sweep/v1 / ", { exact: true });
     let collections = 0;
@@ -221,8 +221,10 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await expect(recent).toHaveCount(2);
     await expect(current.getByText(/^s_parameter · 完整 1–3 \/ 3/)).toBeVisible();
     expect(original).not.toContain("1–3 / 3");
-    await page.getByTestId(firstId!).click();
-    await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+    await page
+      .getByRole("combobox", { name: "选择近期结果", exact: true })
+      .selectOption((await page.getByTestId(firstId!).getAttribute("value")) ?? "");
+    await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
     for (const width of [1920, 1280]) {
       await page.setViewportSize({ width, height: 1080 });
       await expect(layout).toHaveAttribute("data-compact", "false");
@@ -259,7 +261,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
       await expand.click();
       await expect(layout).toHaveAttribute("data-collection-collapsed", "false");
       await expect(recent).toHaveCount(2);
-      await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
       await expect(page.getByTestId(firstId!)).toContainText("待保存");
       await expect(current.getByText(/^s_parameter · (?:完整|局部)/)).toHaveText(original!);
       await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeEnabled();
@@ -284,7 +286,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
       await page.keyboard.press("End");
       await expect(current.getByText(/^s_parameter · 局部 513–1024/)).toBeVisible();
       await expect(current.getByRole("combobox", { name: "复数表示" })).toHaveValue("phase");
-      await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
       await current.getByRole("button", { name: "上一页数据" }).click();
       await expect(current.getByText(/^s_parameter · (?:完整|局部)/)).toHaveText(original!);
       await current.getByRole("combobox", { name: "复数表示" }).selectOption("magnitude");
@@ -311,7 +313,9 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await page.reload();
     await expect(recent).toHaveCount(2);
     await revealResults();
-    await page.getByTestId(firstId!).click();
+    await page
+      .getByRole("combobox", { name: "选择近期结果", exact: true })
+      .selectOption((await page.getByTestId(firstId!).getAttribute("value")) ?? "");
     await expect(current.getByText(/^s_parameter · (?:完整|局部)/)).toHaveText(original!);
     await expect(current.getByText(/从后台恢复的原采集结果/)).toBeVisible();
     expect(collections).toBe(2);
@@ -411,7 +415,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
       resultPage.getByRole("textbox", { name: "搜索已加载记录", exact: true }),
     ).toHaveCount(0);
     await expect(page).toHaveURL(controlUrl);
-    await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
     await resultPage.reload();
     await expect(
       savedResult.getByRole("heading", { name: "First retained VNA trace", level: 1 }),

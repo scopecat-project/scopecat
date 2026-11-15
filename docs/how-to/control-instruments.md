@@ -484,8 +484,11 @@ that matching result names describe the same physical trace.
 The curve view matches each observable to its declared returned coordinate and
 offers magnitude, phase in radians, real and imaginary representations. Missing
 or mismatched coordinates are reported rather than replaced with guessed sweep
-settings. Invalid samples remain gaps. Expand **结果数据（数值与可用性）**
-to read bounded numeric windows, including complex components. Preview windows
+settings. Invalid samples remain gaps. Open **数据详情** in the device result workspace (or expand
+**结果数据（数值与可用性）** in other previews) to read bounded numeric windows,
+including complex components. The device workspace shows one measured field at a
+time; when several are available, select the field explicitly. Raw-value and curve
+windows are retained independently, and returning from details restores the curve. Preview windows
 are exact contiguous C-order slices, not a downsampled overview of the whole
 result. The view states the original shape, window range and total length;
 omitted regions may contain features not visible in the current window.
@@ -497,19 +500,20 @@ and source evidence remain in a separate disclosure.
 
 The device workbench starts with a centered control area. Acquisition actions stay
 with the controls; collecting does not force the results area open. Use **展开结果**
-to review the curve and the recent-result list below it. The compact **近期结果**
-selector stays beside the save actions above the preview; both remain visible while
-the results area scrolls, so selecting an original
-does not require scrolling past a long preview. It shares the same selection as
-the full list below; switching results retains their preview window, complex
-representation and unsent save metadata. **收起控制** makes more
+to review a bounded, chart-first result workspace. The compact **近期结果**
+selector stays beside the save actions above the preview. The chart fills the
+remaining space rather than scrolling with a result page; numeric details scroll
+within their own view. Switching results retains their curve and raw-value windows,
+complex representation and unsent save metadata. Technical receipt/download
+information is available through **结果详情**, without consuming chart height. **收起控制** makes more
 room for results, and **收起结果** returns to control-only work. Each area can be
 shown independently, with a visible way to return to the other area.
 
 When both areas are shown, drag their divider to change the proportions. The
 separator also supports Left/Right, Shift+Left/Right for larger steps, and Home/End
 for its bounds. Double-click restores its initial split. Hiding and reopening an
-area preserves the split within the current workbench. Each area scrolls separately.
+area preserves the split within the current workbench. Controls scroll independently;
+the result canvas stays fixed while its data-details view scrolls separately.
 When the container is too narrow for two usable areas, **控制 / 结果** switches
 between the same mounted views rather than rebuilding their controls.
 

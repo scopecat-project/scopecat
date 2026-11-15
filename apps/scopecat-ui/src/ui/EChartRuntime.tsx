@@ -37,7 +37,7 @@ export function EChartRuntime({
   interactionKey?: string;
   interactionStore?: ChartInteractionStore;
   resetRange?: number;
-  height: number;
+  height: number | "fill";
   option: EChartsCoreOption;
   onPoint?: (point: { seriesId: string; dataIndex: number }) => void;
 }) {
@@ -52,7 +52,7 @@ export function EChartRuntime({
     if (!element) return;
 
     const chart = init(element, undefined, {
-      height: element.clientHeight || heightRef.current,
+      height: element.clientHeight || (heightRef.current === "fill" ? 1 : heightRef.current),
       renderer: "svg",
       width: element.clientWidth || 640,
     });
@@ -60,7 +60,7 @@ export function EChartRuntime({
 
     const resize = () => {
       chart.resize({
-        height: element.clientHeight || heightRef.current,
+        height: element.clientHeight || (heightRef.current === "fill" ? 1 : heightRef.current),
         width: element.clientWidth || 640,
       });
     };
@@ -168,10 +168,16 @@ export function EChartRuntime({
   useEffect(() => {
     heightRef.current = height;
     chartRef.current?.resize({
-      height: elementRef.current?.clientHeight || height,
+      height: elementRef.current?.clientHeight || (height === "fill" ? 1 : height),
       width: elementRef.current?.clientWidth || 640,
     });
   }, [height]);
 
-  return <div aria-hidden="true" ref={elementRef} style={{ height, width: "100%" }} />;
+  return (
+    <div
+      aria-hidden="true"
+      ref={elementRef}
+      style={{ height: height === "fill" ? "100%" : height, width: "100%" }}
+    />
+  );
 }

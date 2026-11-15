@@ -25,7 +25,7 @@ export function EChart({
   resetRange?: number;
   ariaLabel: string;
   description?: string;
-  height: number;
+  height: number | "fill";
   option: EChartsCoreOption;
   pointCount: number;
   seriesLabels: string[];
@@ -36,8 +36,21 @@ export function EChart({
 
   return (
     <>
-      <div aria-describedby={descriptionId} aria-label={ariaLabel} role="img">
-        <Suspense fallback={<div aria-hidden="true" style={{ height }} />}>
+      <div
+        aria-describedby={descriptionId}
+        aria-label={ariaLabel}
+        role="img"
+        style={
+          height === "fill"
+            ? { height: "100%", minHeight: 0, position: "relative", overflow: "hidden" }
+            : undefined
+        }
+      >
+        <Suspense
+          fallback={
+            <div aria-hidden="true" style={{ height: height === "fill" ? "100%" : height }} />
+          }
+        >
           <EChartRuntime
             height={height}
             option={option}

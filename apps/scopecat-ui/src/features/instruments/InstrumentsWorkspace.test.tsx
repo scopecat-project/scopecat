@@ -350,10 +350,12 @@ describe("instrument workspace", () => {
       const originalId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]![3];
       fireEvent.click(screen.getByRole("button", { name: "Sample" }));
       await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2));
-      fireEvent.click(original);
+      fireEvent.change(screen.getByRole("combobox", { name: "选择近期结果" }), {
+        target: { value: (original as HTMLOptionElement).value },
+      });
       fireEvent.click(screen.getByRole("button", { name: "收起控制" }));
       fireEvent.click(screen.getByRole("button", { name: "展开控制" }));
-      expect(original).toHaveAttribute("aria-pressed", "true");
+      expect((original as HTMLOptionElement).selected).toBe(true);
       fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
       const dialog = await screen.findByRole("dialog", { name: "保存测量" });
       const title = within(dialog).getByRole("textbox", { name: "标题" });
@@ -382,7 +384,7 @@ describe("instrument workspace", () => {
           note: "Keep metadata",
         }),
       );
-      expect(original).toHaveAttribute("aria-pressed", "true");
+      expect((original as HTMLOptionElement).selected).toBe(true);
       expect(original).toHaveTextContent("已保存");
       expect(property).toHaveValue(6000000000);
       expect(argument).toHaveValue("keep argument");
@@ -1628,7 +1630,9 @@ describe("instrument workspace", () => {
     const first = screen.getByTestId(/^recent-result-/);
     fireEvent.click(screen.getByRole("button", { name: "Sample" }));
     await waitFor(() => expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2));
-    fireEvent.click(first);
+    fireEvent.change(screen.getByRole("combobox", { name: "选择近期结果" }), {
+      target: { value: (first as HTMLOptionElement).value },
+    });
     const layout = screen.getByTestId("instrument-workbench-layout");
     expect(layout).toHaveAttribute("data-collection-collapsed", "false");
     fireEvent.click(screen.getByRole("button", { name: "收起结果" }));
@@ -1639,7 +1643,7 @@ describe("instrument workspace", () => {
     expect(screen.queryByRole("region", { name: "当前测量结果" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
     expect(layout).toHaveAttribute("data-collection-collapsed", "false");
-    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect((first as HTMLOptionElement).selected).toBe(true);
     expect(screen.getByRole("region", { name: "当前测量结果" })).toBeVisible();
     expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(2);
     expect(saveDirectMeasurement).not.toHaveBeenCalled();
@@ -1907,7 +1911,9 @@ describe("instrument workspace", () => {
     expect(screen.getAllByTestId(/^recent-result-/)).toHaveLength(21);
     const pending = screen.getByTestId(`recent-result-${pendingId}`);
     expect(pending).toHaveTextContent("待保存");
-    fireEvent.click(pending);
+    fireEvent.change(screen.getByRole("combobox", { name: "选择近期结果" }), {
+      target: { value: (pending as HTMLOptionElement).value },
+    });
     expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
     expect(saveDirectMeasurement).toHaveBeenCalledTimes(21);
   });
@@ -1944,7 +1950,11 @@ describe("instrument workspace", () => {
     );
     fireEvent.click(within(dialog).getByRole("button", { name: "继续控制" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    fireEvent.click(screen.getByTestId(`recent-result-${commandId}`));
+    fireEvent.change(screen.getByRole("combobox", { name: "选择近期结果" }), {
+      target: {
+        value: screen.getByTestId(`recent-result-${commandId}`).getAttribute("value"),
+      },
+    });
     expect(screen.getByRole("link", { name: "查看已保存结果" })).toHaveAttribute(
       "href",
       "/?saved-measurement=saved-through-exit",
@@ -1986,6 +1996,7 @@ describe("instrument workspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Sample" }));
     expect(await screen.findByRole("region", { name: "当前测量结果" })).toBeVisible();
 
+    fireEvent.click(screen.getByRole("button", { name: "数据详情" }));
     await waitFor(() =>
       expect(
         within(screen.getByRole("combobox", { name: "精确结果字段" })).getAllByRole("option"),
@@ -1993,6 +2004,7 @@ describe("instrument workspace", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("2 项结果不可用");
     expect(screen.getByRole("status")).toHaveTextContent(/原因：\s*无效、缺失/);
+    fireEvent.click(screen.getByRole("button", { name: "关闭数据详情" }));
     expect(screen.getByRole("img", { name: /局部曲线/i })).toBeVisible();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

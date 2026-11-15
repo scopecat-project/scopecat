@@ -204,3 +204,156 @@
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
 }
+
+/* Results are a bounded workspace, not another scrollable document. */
+.device-results-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  scrollbar-gutter: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+.device-result-workbench,
+.device-result-body,
+.device-result-content,
+.device-result-current,
+.device-current-measurement {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.device-result-toolbar {
+  flex: none;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-line);
+}
+.device-result-summary {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.device-result-summary > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-result-summary button {
+  flex: none;
+  padding: 3px 6px;
+  min-height: 28px;
+  font-size: 12px;
+}
+.device-result-notices {
+  flex: none;
+  max-height: 28%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-inline: 10px;
+}
+.device-result-notices:empty {
+  display: none;
+}
+.device-result-toolbar > label {
+  flex-basis: 8rem;
+}
+.device-result-toolbar button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.device-result-toolbar select {
+  padding-block: 4px;
+}
+
+/* Names identify the surface without consuming the result canvas. */
+.device-window-heading {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+.device-window-heading > div {
+  flex-basis: 0;
+}
+.device-window-heading > div > div {
+  flex-wrap: nowrap;
+}
+.device-window-heading h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-window-heading h1 + * {
+  flex: none;
+}
+.device-window-heading p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+.device-window-heading > button {
+  flex: none;
+}
+@media (max-width: 880px), (max-height: 750px) {
+  .device-control-window .device-inspector {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    gap: 8px;
+  }
+  .device-control-window .device-session-toolbar {
+    gap: 4px 12px;
+    padding-bottom: 4px;
+  }
+  .device-control-window .device-session-panel {
+    gap: 4px 8px;
+  }
+  .device-control-window .device-session-panel > div:first-child {
+    width: auto;
+    flex-basis: auto;
+  }
+  .device-control-window .device-session-panel button {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  .device-control-window .device-pending-actions button {
+    min-height: 24px;
+    padding-block: 2px;
+  }
+  .device-control-window .device-pane-switch {
+    gap: 4px;
+  }
+}
+@media (max-width: 460px) {
+  .device-control-window .device-session-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .device-control-window .device-session-panel {
+    display: contents;
+  }
+  .device-control-window .device-session-panel > div:first-child {
+    grid-column: 1 / -1;
+  }
+  .device-control-window .device-session-panel > div:nth-child(2) {
+    width: auto;
+    justify-content: start;
+  }
+  .device-control-window .device-session-panel > div:nth-child(2) > button {
+    flex: none;
+  }
+  .device-control-window .device-pending-actions {
+    align-self: start;
+  }
+}
