@@ -3825,7 +3825,7 @@ describe("connection rejection and retained session recovery", () => {
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: "确认放弃所选结果" }));
       });
-      const finish = screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" });
+      const finish = screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" });
       await waitFor(() => expect(finish).toBeEnabled());
       fireEvent.click(finish);
       await screen.findByText(/configured finish response lost/);

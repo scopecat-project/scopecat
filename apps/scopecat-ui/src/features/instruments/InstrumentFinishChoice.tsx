@@ -49,9 +49,7 @@ export function InstrumentFinishChoice({
       className="grid gap-2 rounded border border-line p-3"
     >
       <h3>结束直接控制</h3>
-      <p>
-        本次已执行设备动作。保持当前只释放控制权，不额外发送输出命令，也不恢复进入前状态。物理连接的后续释放或应用退出仍遵循驱动的独立生命周期。
-      </p>
+      <p>请选择结束后的设备状态；不会默认关闭输出或恢复进入前状态。</p>
       <button
         type="button"
         className={secondaryButton}
@@ -68,30 +66,34 @@ export function InstrumentFinishChoice({
           ? "核查原收尾结果（保持当前状态）"
           : "保持当前状态并结束"}
       </button>
-      <p>关闭 / 归零按该会话固定的设备收尾配置执行，影响范围如下；动作回执不是模拟量读回证明。</p>
-      {plan.data?.actions.map((action) => (
-        <div key={action.instrument_id} className="text-xs">
-          <strong>{action.instrument_id}</strong>
-          {action.states.map((setting, index) => (
-            <p key={index}>
-              {JSON.stringify(setting.target)} → {JSON.stringify(setting.value)}
-            </p>
-          ))}
-          {action.operations.map((operation, index) => (
-            <p key={index}>
-              {operation.interface_id} / {operation.component_path?.join("/") || "设备"} /{" "}
-              {operation.operation_id} {JSON.stringify(operation.arguments)}
-            </p>
-          ))}
-        </div>
-      ))}
+      <p className="text-xs">
+        保持当前只释放控制权，不额外发送输出命令。应用退出仍遵循驱动的独立生命周期。
+      </p>
+      <details className="text-xs">
+        <summary className="cursor-pointer">查看已配置的关闭 / 归零动作</summary>
+        <p>仅执行本会话固定配置；动作回执不是模拟量读回证明。</p>
+        {plan.data?.actions.map((action) => (
+          <div key={action.instrument_id} className="text-xs">
+            <strong>{action.instrument_id}</strong>
+            {action.states.map((setting, index) => (
+              <p key={index}>
+                {JSON.stringify(setting.target)} → {JSON.stringify(setting.value)}
+              </p>
+            ))}
+            {action.operations.map((operation, index) => (
+              <p key={index}>
+                {operation.interface_id} / {operation.component_path?.join("/") || "设备"} /{" "}
+                {operation.operation_id} {JSON.stringify(operation.arguments)}
+              </p>
+            ))}
+          </div>
+        ))}
+      </details>
       {!plan.isPending &&
         !plan.data?.configured_finish_available &&
         !fixed &&
         !sessionUnavailable && (
-          <p>
-            没有完整的已配置收尾动作，不能自动猜测关闭或归零。请取消后使用已声明的设备控制明确处理。
-          </p>
+          <p>未配置完整的关闭 / 归零动作。需要关闭输出时，请返回设备控制手动处理。</p>
         )}
       <button
         type="button"
@@ -107,7 +109,7 @@ export function InstrumentFinishChoice({
       >
         {state?.phase === "unknown" && fixed?.mode === "configured_finish"
           ? "核查原收尾结果（关闭 / 归零配置）"
-          : "执行上述关闭 / 归零配置并结束"}
+          : "执行已配置的关闭 / 归零动作并结束"}
       </button>
       {busy && <p role="status">正在等待收尾回执；取消等待不会撤销已提交的动作。</p>}
       {state?.phase === "rejected" && (

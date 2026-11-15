@@ -120,7 +120,7 @@ it("allows cancelling exit intent but retains the uncertain finish identity", as
   fireEvent.click(screen.getByRole("button", { name: "保持当前状态并结束" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("unknown response");
   expect(screen.getByRole("button", { name: "返回工作台（保留待核查状态）" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   expect(onCancel).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "核查原收尾结果（保持当前状态）" }));
