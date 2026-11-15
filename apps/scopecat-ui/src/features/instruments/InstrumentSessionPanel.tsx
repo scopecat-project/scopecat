@@ -24,6 +24,7 @@ export function InstrumentSessionPanel({
   recoveryBlocked = false,
   refreshPending,
   stateAvailable,
+  hideStateActions = false,
   configuredDefaultsVisible,
   configuredDefaultsPending,
   configuredDefaultsDisabled,
@@ -47,6 +48,7 @@ export function InstrumentSessionPanel({
   recoveryBlocked?: boolean;
   refreshPending: boolean;
   stateAvailable: boolean;
+  hideStateActions?: boolean;
   configuredDefaultsVisible: boolean;
   configuredDefaultsPending: boolean;
   configuredDefaultsDisabled: boolean;
@@ -62,19 +64,28 @@ export function InstrumentSessionPanel({
   if (connected && session) {
     return (
       <div className={sessionPanel}>
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[680px]:w-full max-[680px]:basis-full">
-          <span className="text-accent" aria-hidden="true">
-            <Cable size={16} />
+        {hideStateActions && !releaseUnconfirmed ? (
+          <span
+            className="text-xs text-text-dim"
+            title={`打开时间 ${formatRelative(session.opened_at)}`}
+          >
+            交互会话已连接
           </span>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <strong className="text-xs text-text-soft">
-              {releaseUnconfirmed ? "控制释放结果待确认" : "交互会话已连接"}
-            </strong>
-            <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
-              打开时间 {formatRelative(session.opened_at)}
-            </small>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[680px]:w-full max-[680px]:basis-full">
+            <span className="text-accent" aria-hidden="true">
+              <Cable size={16} />
+            </span>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <strong className="text-xs text-text-soft">
+                {releaseUnconfirmed ? "控制释放结果待确认" : "交互会话已连接"}
+              </strong>
+              <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
+                打开时间 {formatRelative(session.opened_at)}
+              </small>
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex flex-wrap justify-end gap-[7px] max-[460px]:w-full max-[460px]:[&>button]:flex-1">
           {configuredDefaultsVisible && (
             <button
@@ -92,28 +103,30 @@ export function InstrumentSessionPanel({
               应用已配置默认值
             </button>
           )}
-          <button
-            type="button"
-            className={secondaryButton}
-            onClick={onRefresh}
-            disabled={
-              interactionPending ||
-              recoveryBlocked ||
-              closePending ||
-              releaseUnconfirmed ||
-              !stateAvailable
-            }
-            title={
-              !stateAvailable
-                ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"
-                : interactionPending
-                  ? "请等待当前仪器交互完成"
-                  : undefined
-            }
-          >
-            <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
-            刷新状态
-          </button>
+          {!hideStateActions && (
+            <button
+              type="button"
+              className={secondaryButton}
+              onClick={onRefresh}
+              disabled={
+                interactionPending ||
+                recoveryBlocked ||
+                closePending ||
+                releaseUnconfirmed ||
+                !stateAvailable
+              }
+              title={
+                !stateAvailable
+                  ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"
+                  : interactionPending
+                    ? "请等待当前仪器交互完成"
+                    : undefined
+              }
+            >
+              <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
+              刷新状态
+            </button>
+          )}
           <button
             type="button"
             className={secondaryButton}

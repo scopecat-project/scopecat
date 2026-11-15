@@ -32,6 +32,7 @@ export function InstrumentExitDialog({
   onForgotten,
   onSaveAttempt,
   onCancel,
+  onCloseWaitCancelled,
   onFinished,
   finishRecovery,
   sessionUnavailable = false,
@@ -52,6 +53,7 @@ export function InstrumentExitDialog({
   onForgotten?: (commandId: string, selection?: MeasurementSave) => void;
   onSaveAttempt?: (item: PendingMeasurement) => void;
   onCancel: () => void;
+  onCloseWaitCancelled?: (keepReview: boolean) => void;
   onFinished: () => void;
   finishRecovery?: InstrumentFinishRecovery;
   sessionUnavailable?: boolean;
@@ -112,8 +114,13 @@ export function InstrumentExitDialog({
     recovery.cancelWaiting();
   };
   useEffect(() => {
-    window.addEventListener("scopecat:device-close-cancelled", cancelWaiting);
-    return () => window.removeEventListener("scopecat:device-close-cancelled", cancelWaiting);
+    const cancelled = (event: Event) => {
+      const keepReview = !!savingItem.current || finishStarted;
+      cancelWaiting();
+      if ((event as CustomEvent).detail?.userCancelled === true) onCloseWaitCancelled?.(keepReview);
+    };
+    window.addEventListener("scopecat:device-close-cancelled", cancelled);
+    return () => window.removeEventListener("scopecat:device-close-cancelled", cancelled);
   });
   const cancel = () => {
     cancelWaiting();

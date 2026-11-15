@@ -198,7 +198,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       },
     );
     await page.getByRole("button", { name: "连接", exact: true }).click();
-    await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await expect(page.getByText("已连接", { exact: true })).toBeVisible();
     await page.screenshot({
       path: "../../.test-results/layout-c-control-1280.png",
       fullPage: true,
@@ -448,6 +448,9 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await page.screenshot({ path: "../../.test-results/layout-c-wide-short.png", fullPage: true });
     const controlScroll = page.getByRole("region", { name: "设备控制内容", exact: true });
     const resultScroll = page.getByRole("region", { name: "采集结果工作区", exact: true });
+    // The flat parameter sheet is shorter; use real expanded provenance content
+    // to exercise a meaningful scroll position instead of assuming old card heights.
+    await controlScroll.getByText("参数说明与观测", { exact: true }).first().click();
     await controlScroll.evaluate((element) => {
       element.scrollTop = 150;
     });
@@ -462,7 +465,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await page.getByRole("button", { name: "Python 示例", exact: true }).click();
     await page
       .getByRole("navigation", { name: "控制工作区页面" })
-      .getByRole("button", { name: "控制", exact: true })
+      .getByRole("button", { name: "参数", exact: true })
       .click();
     await expect.poll(() => controlScroll.evaluate((element) => element.scrollTop)).toBe(150);
     await page.getByRole("button", { name: "收起结果", exact: true }).click();

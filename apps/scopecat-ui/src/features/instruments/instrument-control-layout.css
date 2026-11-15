@@ -3,7 +3,7 @@
   flex-direction: column;
   min-width: 0;
   height: var(--device-workspace-height, max(20rem, calc(100dvh - 18rem)));
-  gap: 10px;
+  gap: 0;
 }
 .device-pane-switch,
 .device-view-switch {
@@ -37,15 +37,59 @@
   min-width: 0;
   min-height: 0;
   width: 100%;
-  max-width: 48rem;
+  max-width: none;
   justify-self: center;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--color-panel);
 }
 .device-view-switch {
-  padding: 10px 12px;
+  padding: 0;
+  border: 0;
+}
+/* A-style workspace: a task rail beside parameters, independently visible results. */
+.device-task-heading {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex: none;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-line);
+}
+.device-control-layout:not([data-compact="true"]) .device-control-pane {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+.device-control-layout:not([data-compact="true"]) .device-view-switch {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 6px;
+  border-right: 1px solid var(--color-line);
+  gap: 6px;
+}
+.device-control-layout:not([data-compact="true"]) .device-view-switch button {
+  white-space: normal;
+  padding-inline: 3px;
+}
+.device-control-layout:not([data-compact="true"]) .device-control-pane > .device-pane-scroll {
+  grid-column: 2;
+  grid-row: 1;
+}
+.device-control-layout:not([data-compact="true"]) .device-parameter-actions {
+  grid-column: 2;
+  grid-row: 2;
+  max-height: min(10rem, 25dvh);
+}
+.device-control-layout:not([data-compact="true"]) .device-acquisition-actions {
+  grid-column: 2;
+  grid-row: 3;
+  max-height: min(10rem, 25dvh);
+}
+.device-control-layout[data-compact="true"] .device-view-switch {
+  padding: 8px 12px;
   border-bottom: 1px solid var(--color-line);
 }
 .device-pane-scroll {
@@ -55,14 +99,14 @@
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 12px;
+  padding: 6px 24px;
   flex: 1;
 }
 .device-acquisition-actions {
   flex: none;
   max-height: 40%;
   overflow: auto;
-  padding: 10px 12px;
+  padding: 12px 24px;
   border-top: 1px solid var(--color-line);
   background: var(--color-panel-soft);
 }
@@ -103,7 +147,9 @@
 /* The device window is a working surface: reserve emphasis for state/actions,
    and keep connection help and recovery utilities subordinate to parameters. */
 .device-control-window {
-  --color-bg: #f7f8fa;
+  --color-bg: #ffffff;
+  --color-accent: #42638c;
+  --color-accent-soft: #edf2f8;
   --color-bg-raised: #fafbfc;
   --color-panel-soft: #f8f9fb;
   --color-panel-strong: #eef1f5;
@@ -124,7 +170,7 @@
   border-bottom: 1px solid var(--color-line);
 }
 .device-session-panel {
-  flex: 1 1 28rem;
+  flex: 1 1 12rem;
 }
 .device-session-toolbar details p {
   max-width: 44rem;
@@ -151,14 +197,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 4px 12px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--color-line);
-}
-.device-pane-heading .device-view-switch {
-  padding: 0;
-  border: 0;
 }
 .device-pane-switch button,
 .device-view-switch button {
@@ -179,30 +221,52 @@
   background: var(--color-panel-strong);
   color: var(--color-text);
 }
-.device-control-pane {
-  max-width: 58rem;
-}
 .device-interface-card > header {
   padding-block: 8px;
 }
 .device-interface-card h4 {
   font-weight: 600;
 }
-.device-acquisition-actions {
-  background: var(--color-panel);
-}
 .device-acquisition-actions button {
   font-weight: 500;
-}
-.device-pane-heading[data-control-only="true"] {
-  width: 100%;
-  max-width: 58rem;
-  align-self: center;
-}
-.device-pane-heading {
+  font-size: 12px;
+  min-height: 32px;
   background: var(--color-panel);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  color: var(--color-text-soft);
+  border: 1px solid var(--color-line-strong);
+}
+.device-acquisition-actions button:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+}
+/* Actions belong to the parameter workspace, never inside its scrolling form. */
+.device-parameter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 10px 24px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-panel);
+  max-height: 30%;
+  overflow: auto;
+}
+.device-parameter-actions:empty {
+  display: none;
+}
+.device-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.device-draft-actions > div {
+  flex: 1 1 12rem;
+}
+.device-parameter-actions button {
+  min-height: 30px;
+  font-size: 12px;
 }
 
 /* Results are a bounded workspace, not another scrollable document. */
@@ -212,8 +276,7 @@
   overflow: hidden;
   padding: 0;
   scrollbar-gutter: auto;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border-left: 1px solid var(--color-line);
   background: var(--color-panel);
 }
 .device-result-workbench,
@@ -337,23 +400,18 @@
 }
 @media (max-width: 460px) {
   .device-control-window .device-session-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 6px;
   }
   .device-control-window .device-session-panel {
-    display: contents;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
   }
-  .device-control-window .device-session-panel > div:first-child {
-    grid-column: 1 / -1;
-  }
-  .device-control-window .device-session-panel > div:nth-child(2) {
+  .device-control-window .device-session-panel > div {
     width: auto;
-    justify-content: start;
+    flex-basis: auto;
   }
-  .device-control-window .device-session-panel > div:nth-child(2) > button {
-    flex: none;
-  }
-  .device-control-window .device-pending-actions {
-    align-self: start;
+  .device-control-window .device-pending-actions button {
+    font-size: 11px;
   }
 }

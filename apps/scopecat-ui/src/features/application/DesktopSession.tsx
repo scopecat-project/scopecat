@@ -278,8 +278,8 @@ export function DesktopSession() {
       }
       closeInProgress.current = active.size > 0;
       releaseLaunchClose(detail.requestId);
-      releaseDeviceClose(detail.requestId);
       const cancelled = cancelledRequests.current.delete(detail.requestId);
+      releaseDeviceClose(detail.requestId, cancelled);
       setCloseNotice(
         "message" in detail && typeof detail.message === "string" && detail.message
           ? detail.message

@@ -12,7 +12,7 @@ import "./instrument-control-layout.css";
 
 type ControlView = "control" | "configuration" | "code";
 const views = [
-  ["control", "控制"],
+  ["control", "参数"],
   ["configuration", "连接配置"],
   ["code", "Python 示例"],
 ] as const;
@@ -23,6 +23,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 export function InstrumentControlLayout({
   controls,
   acquisition,
+  parameterActions,
   results,
   configuration,
   code,
@@ -31,6 +32,7 @@ export function InstrumentControlLayout({
 }: {
   controls: ReactNode;
   acquisition: ReactNode;
+  parameterActions?: ReactNode;
   results: ReactNode;
   configuration?: ReactNode;
   code: ReactNode;
@@ -51,7 +53,7 @@ export function InstrumentControlLayout({
   const [compact, setCompact] = useState(false);
   const [compactPane, setCompactPane] = useState<"control" | "results">("control");
   const [controlVisible, setControlVisible] = useState(true);
-  const [resultsVisible, setResultsVisible] = useState(false);
+  const [resultsVisible, setResultsVisible] = useState(true);
   const [view, setView] = useState<ControlView>("control");
   const [split, setSplit] = useState(defaultSplit);
   const [dragging, setDragging] = useState(false);
@@ -208,27 +210,7 @@ export function InstrumentControlLayout({
       data-control-collapsed={!showControl}
       data-collection-collapsed={!showResults}
     >
-      <div className="device-pane-heading" data-control-only={showControl && !showResults}>
-        <nav
-          hidden={!showControl}
-          className="device-view-switch"
-          aria-label="控制工作区页面"
-          onFocusCapture={() => {
-            lastFocusedPane.current = "control";
-          }}
-        >
-          {views.map(([value, label]) => (
-            <button
-              key={value}
-              className={secondaryButton}
-              aria-pressed={view === value}
-              aria-controls={`${id}-${value}`}
-              onClick={() => setView(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+      <div className="device-task-heading" data-control-only={showControl && !showResults}>
         {paneSwitch}
       </div>
       <div
@@ -250,6 +232,26 @@ export function InstrumentControlLayout({
             lastFocusedPane.current = "control";
           }}
         >
+          <nav
+            hidden={!showControl}
+            className="device-view-switch"
+            aria-label="控制工作区页面"
+            onFocusCapture={() => {
+              lastFocusedPane.current = "control";
+            }}
+          >
+            {views.map(([value, label]) => (
+              <button
+                key={value}
+                className={secondaryButton}
+                aria-pressed={view === value}
+                aria-controls={`${id}-${value}`}
+                onClick={() => setView(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
           <MountedScrollPane
             id={`${id}-control`}
             visible={showControl && view === "control"}
@@ -275,6 +277,11 @@ export function InstrumentControlLayout({
           >
             {code}
           </MountedScrollPane>
+          {parameterActions && (
+            <div className="device-parameter-actions" hidden={view !== "control"}>
+              {parameterActions}
+            </div>
+          )}
           {hasResults && <div className="device-acquisition-actions">{acquisition}</div>}
         </section>
         <div

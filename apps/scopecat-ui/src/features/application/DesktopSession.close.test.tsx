@@ -169,7 +169,11 @@ it.each(["window", "application"])(
 );
 
 it("keeps the close fence after a failed cancellation and accepts the instrument dialog event", async () => {
-  const unregister = registerDeviceClose(() => new Promise(() => {}));
+  let signal!: AbortSignal;
+  const unregister = registerDeviceClose((next) => {
+    signal = next;
+    return new Promise(() => {});
+  });
   const cancel = vi
     .fn()
     .mockRejectedValueOnce(new Error("bridge disconnected"))
@@ -185,12 +189,14 @@ it("keeps the close fence after a failed cancellation and accepts the instrument
   fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
   expect(await screen.findByText(/取消关闭等待未确认/)).toBeInTheDocument();
   expect(launchCloseBlocked()).toBe(true);
+  expect(signal.aborted).toBe(false);
   act(() => {
     window.dispatchEvent(new Event("scopecat:cancel-close-wait"));
   });
   await waitFor(() => expect(cancel.mock.calls).toEqual([["modal"], ["modal"]]));
   act(() => send("scopecat:close-release", "modal"));
   expect(launchCloseBlocked()).toBe(false);
+  expect(signal.reason).toEqual({ userCancelled: true });
   unregister();
 });
 

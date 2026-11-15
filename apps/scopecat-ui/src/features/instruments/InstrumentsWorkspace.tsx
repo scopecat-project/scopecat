@@ -424,7 +424,11 @@ export function InstrumentsWorkspace({
       setClosingWindow(true);
       setWindowError(undefined);
       const thaw = () => {
-        window.dispatchEvent(new Event("scopecat:device-close-cancelled"));
+        window.dispatchEvent(
+          new CustomEvent("scopecat:device-close-cancelled", {
+            detail: { userCancelled: signal.reason?.userCancelled === true },
+          }),
+        );
         setClosingWindow(false);
       };
       signal.addEventListener("abort", thaw, { once: true });

@@ -73,7 +73,7 @@ function StatefulContent({ name }: { name: string }) {
   );
 }
 function show(hasResults = true) {
-  return render(
+  const rendered = render(
     <InstrumentControlLayout
       hasResults={hasResults}
       pendingCount={2}
@@ -84,6 +84,9 @@ function show(hasResults = true) {
       results={<StatefulContent name="结果选项" />}
     />,
   );
+  // Most regression cases start from the user-selected control-only arrangement.
+  if (hasResults) fireEvent.click(screen.getByRole("button", { name: "收起结果" }));
+  return rendered;
 }
 function resize(value: number) {
   act(() => {
@@ -93,7 +96,7 @@ function resize(value: number) {
   });
 }
 
-it("starts control-first and retains mounted views, acquisition and result inputs across independent collapse", () => {
+it("retains mounted views from a user-selected control-only arrangement, acquisition and result inputs across independent collapse", () => {
   show();
   const draft = screen.getByRole("textbox", { name: "控制草稿" });
   const result = screen.getByRole("textbox", { name: "结果选项", hidden: true });
@@ -106,7 +109,7 @@ it("starts control-first and retains mounted views, acquisition and result input
   fireEvent.click(screen.getByRole("button", { name: "Python 示例" }));
   fireEvent.click(
     within(screen.getByRole("navigation", { name: "控制工作区页面" })).getByRole("button", {
-      name: "控制",
+      name: "参数",
     }),
   );
   expect(screen.getByRole("textbox", { name: "控制草稿" })).toBe(draft);
@@ -169,7 +172,7 @@ it("retains independent scroll offsets while hidden views cannot replace them", 
   fireEvent.click(screen.getByRole("button", { name: "Python 示例" }));
   controls.scrollTop = 0;
   fireEvent.scroll(controls);
-  fireEvent.click(screen.getByRole("button", { name: "控制" }));
+  fireEvent.click(screen.getByRole("button", { name: "参数" }));
   expect(controls.scrollTop).toBe(135);
 });
 
@@ -225,6 +228,11 @@ it("does not reserve result controls for a device without acquisitions or retain
   expect(screen.queryByRole("group", { name: "显示区域" })).not.toBeInTheDocument();
   expect(screen.queryByRole("separator")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "采集一次" })).not.toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "控制草稿" })).toBeVisible();
+  resize(390);
+  expect(screen.queryByRole("group", { name: "显示区域" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "采集结果工作区" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("separator")).not.toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "控制草稿" })).toBeVisible();
 });
 
@@ -338,4 +346,42 @@ it("keeps the control page active when its navigation was focused before narrowi
   resize(560);
   expect(screen.getByRole("textbox", { name: "配置草稿" })).toBeVisible();
   expect(screen.getByRole("textbox", { name: "结果选项", hidden: true })).not.toBeVisible();
+});
+
+it("keeps parameter actions outside the scrolling form and hides them on other tasks", () => {
+  render(
+    <InstrumentControlLayout
+      hasResults
+      pendingCount={0}
+      controls={<input aria-label="参数" />}
+      parameterActions={<button>写入设备</button>}
+      acquisition={<button>采集</button>}
+      results={<div>曲线</div>}
+      code={<pre>example</pre>}
+    />,
+  );
+  const form = screen.getByRole("region", { name: "设备控制内容" });
+  const write = screen.getByRole("button", { name: "写入设备" });
+  expect(form).not.toContainElement(write);
+  expect(screen.getByRole("region", { name: "控制工作区" })).toContainElement(write);
+  expect(screen.getByRole("navigation", { name: "控制工作区页面" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Python 示例" }));
+  expect(write).not.toBeVisible();
+  expect(screen.getByRole("button", { name: "采集" })).toBeVisible();
+});
+
+it("opens capable devices with both workspaces and no data requirement", () => {
+  render(
+    <InstrumentControlLayout
+      controls={<div>参数内容</div>}
+      acquisition={<button>采集</button>}
+      results={<div>尚无结果</div>}
+      code={<div>代码</div>}
+      hasResults
+      pendingCount={0}
+    />,
+  );
+  expect(screen.getByText("尚无结果")).toBeVisible();
+  expect(screen.getByText("参数内容")).toBeVisible();
+  expect(screen.getByRole("separator")).toBeVisible();
 });

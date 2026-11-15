@@ -58,7 +58,7 @@ test("application quit leaves virtual-device pending results reachable in the sa
     const devices = await (await page.request.get(`${url}/api/v1/devices`)).json();
     await page.goto(`${url}/?device-control=${encodeURIComponent(devices.items[0].device.id)}`);
     await page.getByRole("button", { name: "连接", exact: true }).click();
-    await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await expect(page.getByText("已连接", { exact: true })).toBeVisible();
     // A modest 1025-point virtual trace exceeds one preview page without
     // allocating a large load. Saved originals must retain all points.
     await page.getByRole("spinbutton", { name: /Sweep points/ }).fill("1025");

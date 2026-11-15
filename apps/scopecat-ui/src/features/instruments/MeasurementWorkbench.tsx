@@ -482,13 +482,7 @@ export function MeasurementAcquisitionActions({
                 ? "采集中…"
                 : (item.acquisition.label ?? item.acquisition.id)}
             </button>
-            <details className="mt-1 text-xs text-text-dim">
-              <summary>{item.acquisition.label ?? item.acquisition.id} 说明</summary>
-              {item.acquisition.description && <p>{item.acquisition.description}</p>}
-              <p>
-                {item.acquisition.results.map((result) => result.label ?? result.id).join(" · ")}
-              </p>
-            </details>
+
             {collectResults[acquisitionKey(item)]?.status &&
               collectResults[acquisitionKey(item)]?.status !== "collected" && (
                 <p role="status" className="text-xs text-yellow">
@@ -498,6 +492,16 @@ export function MeasurementAcquisitionActions({
           </div>
         ))}
       </div>
+      <details className="mt-1 text-xs text-text-dim">
+        <summary>采集说明</summary>
+        {targets.map((item) => (
+          <div key={acquisitionKey(item)} className="mt-2">
+            <strong>{item.acquisition.label ?? item.acquisition.id}</strong>
+            {item.acquisition.description && <p>{item.acquisition.description}</p>}
+            <p>{item.acquisition.results.map((result) => result.label ?? result.id).join(" · ")}</p>
+          </div>
+        ))}
+      </details>
       {pendingCount >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
     </section>
   );

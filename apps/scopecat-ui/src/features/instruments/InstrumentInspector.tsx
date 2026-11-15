@@ -210,9 +210,10 @@ function InstrumentInspectorContent({
     setDismissedExitRequest(exitRequest);
   };
   useEffect(() => {
-    const cancel = () => {
+    const cancel = (event: Event) => {
       finishRecovery.cancelWaiting();
-      if (finishChoiceOpen) setShowFinishChoice(true);
+      if (finishChoiceOpen && !(event as CustomEvent).detail?.userCancelled)
+        setShowFinishChoice(true);
       setDismissedExitRequest(exitRequest);
     };
     window.addEventListener("scopecat:device-close-cancelled", cancel);
@@ -713,6 +714,7 @@ function InstrumentInspectorContent({
           interactionPending={interactionPending}
           recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
           refreshPending={readMutation.isPending}
+          hideStateActions
           stateAvailable={declaredTargets.size > 0}
           configuredDefaultsVisible={hasConfiguredDefaults}
           configuredDefaultsPending={configuredDefaultsMutation.isPending}
@@ -943,6 +945,7 @@ function InstrumentInspectorContent({
           onSaved={markMeasurementSaved}
           onDiscarded={removeLocalMeasurement}
           onForgotten={removeLocalMeasurement}
+          onCloseWaitCancelled={setShowFinishChoice}
           onCancel={() => {
             dismissFinishChoice();
             onExitCancelled?.();
@@ -967,6 +970,71 @@ function InstrumentInspectorContent({
               <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
             )}
           </div>
+        }
+        parameterActions={
+          <>
+            {connected && (
+              <button
+                type="button"
+                className={secondaryButton}
+                onClick={refreshState}
+                disabled={
+                  interactionPending ||
+                  finishFixed ||
+                  (!!recoverySession && pendingMeasurements.length > 0) ||
+                  closePending ||
+                  releaseUnconfirmed ||
+                  declaredTargets.size === 0
+                }
+              >
+                刷新状态
+              </button>
+            )}
+            {connected && stagedCount > 0 && (
+              <div className="device-draft-actions">
+                <div className="grid gap-0.5 max-[460px]:col-span-full">
+                  <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
+                  <small className="text-xs text-text-dim">
+                    尚未写入设备；刷新状态会丢弃这些暂存修改。
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={resetStaged}
+                  disabled={applyMutation.isPending}
+                >
+                  <RotateCcw size={14} />
+                  重置
+                </button>
+                <button
+                  type="button"
+                  className={primaryButton}
+                  onClick={applyStaged}
+                  disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
+                  title={
+                    interactionDisabled
+                      ? "请等待当前仪器交互完成"
+                      : invalidDraft
+                        ? "应用前请修正无效的暂存值"
+                        : undefined
+                  }
+                >
+                  {applyMutation.isPending ? (
+                    <LoaderCircle className="animate-spin" size={14} />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  应用暂存修改
+                </button>
+              </div>
+            )}
+            {applyResult && (
+              <p className={classes(receiptStyle, receiptTone(applyResult))}>
+                应用回执： {instrumentReceiptLabel(applyResult)}
+              </p>
+            )}
+          </>
         }
         acquisition={
           <MeasurementAcquisitionActions
@@ -1024,36 +1092,13 @@ function InstrumentInspectorContent({
         controls={
           description ? (
             <div data-testid="instrument-control-panel" className="grid min-w-0 gap-3">
-              <details className="text-xs leading-normal text-text-dim">
-                <summary>操作说明</summary>
-                <p>
-                  Invoke 调用 operation；Collect 调用
-                  acquisition，可能发起新采集，也可能读取既有结果。 请以各项契约说明为准；Collect
-                  不会自动替你准备 payload 或调用另一个 operation。
-                  查看能力或展开帮助不会连接设备或发送设备命令。
-                </p>
-                <p>
-                  {connected
-                    ? interactionDisabled
-                      ? "当前交互尚未结束，请等待完成后继续。"
-                      : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
-                    : instrument.availability === "active"
-                      ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
-                      : instrument.availability === "quarantined"
-                        ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
-                        : instrument.availability === "unavailable"
-                          ? "设备不可用。请先处理上方驱动或连接配置问题。"
-                          : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
-                </p>
-                <AuthorWorkflowLinks />
-              </details>
-
               {(description.interfaces ?? []).length > 0 ||
               (description.device_schemas ?? []).length > 0 ? (
                 <div className="grid min-w-0 items-start gap-2.5">
                   {(description.interfaces ?? []).flatMap((instrumentInterface) =>
                     interfaceMountPaths(description, instrumentInterface.id).map((mountPath) => (
                       <InterfaceCard
+                        presentation="workbench"
                         key={`${instrumentInterface.id}:${mountPath.join("/")}`}
                         description={description}
                         instrumentInterface={instrumentInterface}
@@ -1086,6 +1131,7 @@ function InstrumentInspectorContent({
                   )}
                   {(description.device_schemas ?? []).map((deviceState) => (
                     <DeviceStateCard
+                      presentation="workbench"
                       key={deviceState.id}
                       deviceState={deviceState}
                       connected={connected}
@@ -1103,51 +1149,29 @@ function InstrumentInspectorContent({
                   detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
                 />
               )}
-
-              {connected && stagedCount > 0 && (
-                <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
-                  <div className="grid gap-0.5 max-[460px]:col-span-full">
-                    <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
-                    <small className="text-xs text-text-dim">
-                      数值仅保留在本地，直到一次性应用全部暂存修改。
-                    </small>
-                  </div>
-                  <button
-                    type="button"
-                    className={secondaryButton}
-                    onClick={resetStaged}
-                    disabled={applyMutation.isPending}
-                  >
-                    <RotateCcw size={14} />
-                    重置
-                  </button>
-                  <button
-                    type="button"
-                    className={primaryButton}
-                    onClick={applyStaged}
-                    disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
-                    title={
-                      interactionDisabled
-                        ? "请等待当前仪器交互完成"
-                        : invalidDraft
-                          ? "应用前请修正无效的暂存值"
-                          : undefined
-                    }
-                  >
-                    {applyMutation.isPending ? (
-                      <LoaderCircle className="animate-spin" size={14} />
-                    ) : (
-                      <Check size={14} />
-                    )}
-                    应用暂存修改
-                  </button>
-                </div>
-              )}
-              {applyResult && (
-                <p className={classes(receiptStyle, receiptTone(applyResult))}>
-                  应用回执： {instrumentReceiptLabel(applyResult)}
+              <details className="text-xs leading-normal text-text-dim">
+                <summary>操作说明</summary>
+                <p>
+                  Invoke 调用 operation；Collect 调用
+                  acquisition，可能发起新采集，也可能读取既有结果。 请以各项契约说明为准；Collect
+                  不会自动替你准备 payload 或调用另一个 operation。
+                  查看能力或展开帮助不会连接设备或发送设备命令。
                 </p>
-              )}
+                <p>
+                  {connected
+                    ? interactionDisabled
+                      ? "当前交互尚未结束，请等待完成后继续。"
+                      : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
+                    : instrument.availability === "active"
+                      ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
+                      : instrument.availability === "quarantined"
+                        ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
+                        : instrument.availability === "unavailable"
+                          ? "设备不可用。请先处理上方驱动或连接配置问题。"
+                          : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
+                </p>
+                <AuthorWorkflowLinks />
+              </details>
             </div>
           ) : (
             <InspectorEmpty

@@ -184,6 +184,7 @@ it("native cancel waiting keeps the dialog and does not let late finish close it
   const onFinished = vi.fn();
   const onCancel = vi.fn();
   const nativeCancel = vi.fn();
+  const acknowledged = vi.fn();
   window.addEventListener("scopecat:cancel-close-wait", nativeCancel);
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -195,6 +196,7 @@ it("native cancel waiting keeps the dialog and does not let late finish close it
         onSaved={vi.fn()}
         onFinished={onFinished}
         onCancel={onCancel}
+        onCloseWaitCancelled={acknowledged}
       />
     </QueryClientProvider>,
   );
@@ -202,6 +204,13 @@ it("native cancel waiting keeps the dialog and does not let late finish close it
   await waitFor(() => expect(finishInstrumentSession).toHaveBeenCalledOnce());
   fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
   expect(nativeCancel).toHaveBeenCalledOnce();
+  expect(acknowledged).not.toHaveBeenCalled();
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent("scopecat:device-close-cancelled", { detail: { userCancelled: true } }),
+    );
+  });
+  expect(acknowledged).toHaveBeenCalledWith(true);
   expect(onCancel).not.toHaveBeenCalled();
   expect(screen.getByRole("dialog")).toBeVisible();
   await act(async () => {
@@ -732,4 +741,71 @@ it("keeps invalid originals saveable but explicitly warns in the departure dialo
   expect(screen.getByText(/保存不表示它是合格科学数据/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "保存此结果" }));
   await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));
+});
+
+it("dismisses unsubmitted review only after native cancellation acknowledgement", () => {
+  const cancelled = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <InstrumentExitDialog
+        sessionId="session"
+        pending={pending}
+        stagedCount={1}
+        closeWaiting
+        onSaved={vi.fn()}
+        onFinished={vi.fn()}
+        onCancel={vi.fn()}
+        onCloseWaitCancelled={cancelled}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
+  expect(cancelled).not.toHaveBeenCalled();
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent("scopecat:device-close-cancelled", { detail: { userCancelled: true } }),
+    );
+  });
+  expect(cancelled).toHaveBeenCalledWith(false);
+  expect(saveDirectMeasurement).not.toHaveBeenCalled();
+  expect(discardDirectMeasurement).not.toHaveBeenCalled();
+  expect(finishInstrumentSession).not.toHaveBeenCalled();
+});
+
+it("retains submitted save review and late receipts after native cancellation", async () => {
+  let resolve!: (value: SavedMeasurement) => void;
+  vi.mocked(saveDirectMeasurement).mockReturnValueOnce(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  const saved = vi.fn();
+  const cancelled = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <InstrumentExitDialog
+        sessionId="session"
+        pending={pending}
+        stagedCount={0}
+        closeWaiting
+        onSaved={saved}
+        onFinished={vi.fn()}
+        onCancel={vi.fn()}
+        onCloseWaitCancelled={cancelled}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存全部未保存结果" }));
+  fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent("scopecat:device-close-cancelled", { detail: { userCancelled: true } }),
+    );
+  });
+  expect(cancelled).toHaveBeenCalledWith(true);
+  await act(async () =>
+    resolve({ id: "saved-one", selection: pending[0]!.selection } as SavedMeasurement),
+  );
+  expect(saved).toHaveBeenCalledWith("one", "saved-one", pending[0]!.selection);
+  expect(saveDirectMeasurement).toHaveBeenCalledOnce();
 });

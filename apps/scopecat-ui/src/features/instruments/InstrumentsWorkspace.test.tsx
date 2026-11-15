@@ -340,7 +340,7 @@ describe("instrument workspace", () => {
       await act(async () => finishCollect({ status: "collected", problems: [], pending: null }));
       expect(await screen.findByText("1 条待保存")).toBeVisible();
       expect(layout).toHaveAttribute("data-collection-collapsed", "true");
-      fireEvent.click(screen.getByRole("button", { name: "控制" }));
+      fireEvent.click(screen.getByRole("button", { name: "参数" }));
       expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toBe(property);
       expect(property).toHaveValue(6000000000);
       expect(screen.getByRole("textbox", { name: /Profile name/ })).toBe(argument);
@@ -1444,7 +1444,7 @@ describe("instrument workspace", () => {
         items: [view],
       });
       renderWorkspace();
-      fireEvent.click(await screen.findByText("Sample 说明"));
+      fireEvent.click(await screen.findByText("采集说明"));
       const explicitDescription = screen.queryByText(description ?? "发起一次新采集并返回结果。");
       expect(explicitDescription !== null).toBe(description !== undefined);
       expect(screen.getByRole("button", { name: "Sample" })).toBeDisabled();
@@ -1669,6 +1669,28 @@ describe("instrument workspace", () => {
     expect(applyInstrumentState).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Sample" })).toBeEnabled();
     expect(screen.getByRole("region", { name: "当前测量结果" })).toBeVisible();
+  });
+
+  it("returns to control in one step after the native host acknowledges user cancellation", async () => {
+    renderWorkspace("drive-source");
+    fireEvent.click(await screen.findByRole("button", { name: "连接" }));
+    await screen.findByRole("button", { name: "释放控制" });
+    fireEvent.click(screen.getByRole("button", { name: "Sample" }));
+    await screen.findByRole("button", { name: "保存所选结果" });
+    let outcome!: Promise<string>;
+    act(() => {
+      outcome = prepareDeviceClose("native-user-cancel");
+    });
+    expect(await screen.findByRole("dialog", { name: "结束控制前的待办" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
+    expect(screen.getByRole("dialog", { name: "结束控制前的待办" })).toBeVisible();
+    act(() => releaseDeviceClose("native-user-cancel", true));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Sample" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "保存所选结果" })).toBeVisible();
+    expect(saveDirectMeasurement).not.toHaveBeenCalled();
+    expect(finishInstrumentSession).not.toHaveBeenCalled();
+    expect(await outcome).toBe("unknown");
   });
 
   it("opens the same in-viewport exit checklist on native close and cancellation preserves pending results", async () => {
@@ -2214,7 +2236,7 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
 
-    fireEvent.click(await screen.findByText("Monitor 说明"));
+    fireEvent.click(await screen.findByText("采集说明"));
     expect(screen.getByText(/Current sample/)).toBeVisible();
     expect(screen.getByText(/Voltage sample/)).toBeVisible();
     expect(screen.queryByText("Enable RF output before collecting.")).not.toBeInTheDocument();
@@ -2609,6 +2631,8 @@ async function connectInstrument({ revealResults = true } = {}) {
   await screen.findByText("交互会话已连接");
   const reveal = screen.queryByRole("button", { name: "展开结果" });
   if (revealResults && reveal) fireEvent.click(reveal);
+  const collapse = screen.queryByRole("button", { name: "收起结果" });
+  if (!revealResults && collapse) fireEvent.click(collapse);
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "重新核查后台待保存结果" })).toBeEnabled(),
   );
@@ -4003,7 +4027,7 @@ it("recovers and explicitly discards an old pending result while disconnected wi
   vi.mocked(readPendingMeasurementReceipt).mockResolvedValue({ status: "collected", problems: [] });
   renderWorkspace("drive-source");
   expect(await screen.findByTestId("recent-result-recovered-original")).toHaveTextContent("待保存");
-  fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
+  expect(screen.getByRole("region", { name: "采集结果工作区" })).toBeVisible();
   expect(screen.getByText(/从后台恢复的原采集结果/)).toBeVisible();
   expect(openInstrumentSession).not.toHaveBeenCalled();
   expect(collectInstrumentAcquisition).not.toHaveBeenCalled();

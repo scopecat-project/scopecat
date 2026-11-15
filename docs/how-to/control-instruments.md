@@ -498,9 +498,13 @@ decimal strings; unsafe integers are not silently rounded into curves. Saving
 always uses the full original, never the displayed preview. Technical receipt
 and source evidence remain in a separate disclosure.
 
-The device workbench starts with a centered control area. Acquisition actions stay
-with the controls; collecting does not force the results area open. Use **展开结果**
-to review a bounded, chart-first result workspace. The compact **近期结果**
+On wide windows, devices with acquisition capabilities start with controls and
+results side by side. An empty results area is distinct from a device without
+acquisition capabilities: the latter reserves no results column unless it has a
+retained result to review. Parameter fields adapt to the available width rather
+than remaining in a fixed-width centered form. Acquisition and read/apply actions
+stay outside the scrolling parameter sheet. Collecting does not reopen a results
+area that you have explicitly hidden; use **展开结果** to return to it. The compact **近期结果**
 selector stays beside the save actions above the preview. The chart fills the
 remaining space rather than scrolling with a result page; numeric details scroll
 within their own view. Switching results retains their curve and raw-value windows,
@@ -517,7 +521,10 @@ the result canvas stays fixed while its data-details view scrolls separately.
 When the container is too narrow for two usable areas, **控制 / 结果** switches
 between the same mounted views rather than rebuilding their controls.
 
-**连接配置** and **Python 示例** remain explicit control-area views. Viewing them
+**参数**, **连接配置** and **Python 示例** remain explicit control-area views.
+Parameter descriptions and previous observations are available together without
+repeating them beside every input. Staged values remain visibly marked as not yet
+written, and write-only/read-only and non-hardware observation sources stay clear. Viewing them
 does not release the session or perform a device action. Connection editing keeps
 its existing ownership restrictions: release control before editing in device
 management. Switching views, hiding an area or resizing preserves staged input,
