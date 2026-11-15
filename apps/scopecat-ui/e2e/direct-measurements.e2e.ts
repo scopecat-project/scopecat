@@ -66,7 +66,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await editor.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(editor).toBeHidden();
     await page.getByRole("button", { name: "操作", exact: true }).click();
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     // A modest 1025-point virtual trace exceeds one preview page without
     // allocating a large load. Saved originals must retain all points.
@@ -424,7 +424,9 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
 
     // Historical browsing remains in the main application, separate from the
     // single-result browser tab. The original control session is already closed.
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     await page.getByRole("button", { name: /Data$/ }).click();
     await page.getByRole("button", { name: "直接测量", exact: true }).click();
     const history = page.getByRole("region", { name: "直接测量数据", exact: true });

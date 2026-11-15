@@ -197,7 +197,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
         await route.fulfill({ response, json: summary });
       },
     );
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("已连接", { exact: true })).toBeVisible();
     await page.screenshot({
       path: "../../.test-results/layout-c-control-1280.png",
@@ -211,7 +211,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       .locator("..")
       .locator("..");
     await expect(header.getByText("已连接", { exact: true })).toBeVisible();
-    await expect(header.getByRole("button", { name: "刷新占用" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "刷新占用" })).toHaveCount(0);
     const sweep = page.getByTitle("scopecat.network_sweep/v1 / ", { exact: true });
     const read = page.getByTitle("scopecat.existing_network_trace/v1 / ", { exact: true });
     await sweep.click();
@@ -799,7 +799,9 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     expect(resultHref).toBeTruthy();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     // Session teardown/rebuild changes the workbench's top and parent height.
     // Wait beyond the closing render to catch deferred ResizeObserver errors.
     const settledLayout = await page.evaluate<{

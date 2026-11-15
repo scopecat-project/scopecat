@@ -529,7 +529,15 @@ does not release the session or perform a device action. Connection editing keep
 its existing ownership restrictions: release control before editing in device
 management. Switching views, hiding an area or resizing preserves staged input,
 operation arguments, selected result, curve representation and save-dialog target.
-These layout choices do not add automatic refresh or a generic stop command.
+These layout choices do not add automatic hardware refresh or a generic stop command.
+
+For a device with a declared lifecycle capture plan, **连接并读取** acquires the
+manual session and returns its initial captured state. It does not apply configured
+defaults or promise every member is readable. **读取设备状态** explicitly repeats
+that capture within the owned session; ordinary connection/driver errors remain
+visible. A device without a capture plan retains the **连接** action. Ownership
+status updates through the existing periodic queries; a manual retry is shown on
+query failure rather than as a routine occupancy-refresh button.
 
 The results area is optional. Collect without entering a title, line or
 note, then use **近期结果** to select an earlier receipt. **保存所选结果** opens a

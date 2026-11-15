@@ -27,6 +27,7 @@ it("offers selected registered identity and mount without device/network command
   );
   const guide = screen.getByRole("region", { name: "在 Python 中使用此设备" });
   expect(guide.querySelector("details, summary")).toBeNull();
+  expect(screen.queryByText(/查看或复制/)).not.toBeInTheDocument();
   const code = screen.getByRole("textbox", { name: "即时调试 Python channels/2" });
   fireEvent.focus(code);
   expect(code).toHaveValue(networkSweepExamples('device-"one"', ["channels", "2"]).live);
@@ -46,5 +47,5 @@ it("does not guess a client for an unknown interface version", () => {
     />,
   );
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  expect(screen.getByText(/尚无经过验证/)).toBeInTheDocument();
+  expect(screen.getByText(/暂无内置 Python 示例/)).toBeInTheDocument();
 });

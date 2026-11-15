@@ -40,6 +40,7 @@ import {
   inlineError,
   InspectorEmpty,
   instrumentStateTargets,
+  hasInstrumentCaptureState,
   interfaceMountPaths,
   InterfaceCard,
   mutationError,
@@ -311,6 +312,7 @@ function InstrumentInspectorContent({
     mutationFn: () => readInstrumentState(requireSession(session), instrumentId),
     onSuccess: (value) => setReadState({ source: synchronizedState, value }),
   });
+  const captureStateAvailable = hasInstrumentCaptureState(description);
   const declaredTargets = useMemo(() => instrumentStateTargets(description), [description]);
   const declaredDrafts = useMemo(
     () => filterDrafts(drafts, declaredTargets),
@@ -715,7 +717,7 @@ function InstrumentInspectorContent({
           recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
           refreshPending={readMutation.isPending}
           hideStateActions
-          stateAvailable={declaredTargets.size > 0}
+          stateAvailable={captureStateAvailable}
           configuredDefaultsVisible={hasConfiguredDefaults}
           configuredDefaultsPending={configuredDefaultsMutation.isPending}
           configuredDefaultsDisabled={configuredDefaultsDisabled}
@@ -743,21 +745,16 @@ function InstrumentInspectorContent({
           onResolve={() => resolveMutation.mutate()}
         />
 
-        {!connected && (
-          <details className="device-observation-details text-xs text-text-dim">
-            <summary>
-              只读观察 ·{" "}
-              {sharedObservation.error
-                ? "读取失败，状态未知"
-                : !sharedObservation.data?.observations?.length
-                  ? "暂无观测，状态未知"
-                  : "已有观测，可能过期"}
-            </summary>
-            <p>
-              仅显示后台已有观测，不获取控制权或查询硬件。各值附来源和观察时间，可能已过期；当前物理状态未确认。
-            </p>
-          </details>
+        {!connected && sharedObservation.error && (
+          <p role="alert" className="text-xs text-red">
+            上次观测读取失败：{mutationError(sharedObservation.error)}
+          </p>
         )}
+        {!connected &&
+          !sharedObservation.error &&
+          !!sharedObservation.data?.observations?.length && (
+            <span className="text-xs text-text-dim">上次观测</span>
+          )}
         <section className="device-pending-actions text-xs" aria-label="后台待保存结果">
           <button
             type="button"
@@ -964,7 +961,7 @@ function InstrumentInspectorContent({
         configuration={configuration}
         code={
           <div className="grid gap-3 text-xs">
-            <p>查看或复制代码不会连接设备或中断当前手动会话。执行 Python 前请先释放控制。</p>
+            {connected && <p>执行前请先释放当前手动控制。</p>}
             <AuthorWorkflowLinks />
             {registeredDeviceId && description && (
               <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
@@ -984,10 +981,10 @@ function InstrumentInspectorContent({
                   (!!recoverySession && pendingMeasurements.length > 0) ||
                   closePending ||
                   releaseUnconfirmed ||
-                  declaredTargets.size === 0
+                  !captureStateAvailable
                 }
               >
-                刷新状态
+                读取设备状态
               </button>
             )}
             {connected && stagedCount > 0 && (
@@ -995,7 +992,7 @@ function InstrumentInspectorContent({
                 <div className="grid gap-0.5 max-[460px]:col-span-full">
                   <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
                   <small className="text-xs text-text-dim">
-                    尚未写入设备；刷新状态会丢弃这些暂存修改。
+                    尚未写入设备；重新读取会丢弃这些暂存修改。
                   </small>
                 </div>
                 <button
@@ -1149,29 +1146,6 @@ function InstrumentInspectorContent({
                   detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
                 />
               )}
-              <details className="text-xs leading-normal text-text-dim">
-                <summary>操作说明</summary>
-                <p>
-                  Invoke 调用 operation；Collect 调用
-                  acquisition，可能发起新采集，也可能读取既有结果。 请以各项契约说明为准；Collect
-                  不会自动替你准备 payload 或调用另一个 operation。
-                  查看能力或展开帮助不会连接设备或发送设备命令。
-                </p>
-                <p>
-                  {connected
-                    ? interactionDisabled
-                      ? "当前交互尚未结束，请等待完成后继续。"
-                      : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
-                    : instrument.availability === "active"
-                      ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
-                      : instrument.availability === "quarantined"
-                        ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
-                        : instrument.availability === "unavailable"
-                          ? "设备不可用。请先处理上方驱动或连接配置问题。"
-                          : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
-                </p>
-                <AuthorWorkflowLinks />
-              </details>
             </div>
           ) : (
             <InspectorEmpty

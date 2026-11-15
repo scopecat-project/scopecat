@@ -52,12 +52,12 @@ test("a fresh standard application discovers simulation and combines public sour
     await editor.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(editor).toBeHidden();
     await page.getByRole("button", { name: "操作", exact: true }).click();
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     const frequency = page.getByRole("spinbutton", { name: /CW frequency/ });
     await frequency.fill("5100000000");
     await page.getByRole("button", { name: "应用暂存修改", exact: true }).click();
-    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await page.getByRole("button", { name: "读取设备状态", exact: true }).click();
     await expect(frequency).toHaveValue("5100000000");
     await testInfo.attach("simulated-rf-readback", {
       body: await page.screenshot({ fullPage: true }),
@@ -68,7 +68,9 @@ test("a fresh standard application discovers simulation and combines public sour
     await expect(finish.getByRole("heading", { name: "未保存结果：0", exact: true })).toBeVisible();
     await finish.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
     await expect(finish).toBeHidden();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     await page.getByText("驱动来源与可用驱动", { exact: true }).click();
     await page.getByRole("button", { name: "添加内置公共驱动", exact: true }).click();
     await expect(page.getByText("内置公共驱动", { exact: true })).toBeVisible({ timeout: 30_000 });
@@ -83,17 +85,21 @@ test("a fresh standard application discovers simulation and combines public sour
     url = command("start").trim().split("\n").at(-1)!;
     started = true;
     await page.goto(`${url}/#instruments`);
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     await page.getByText("驱动来源与可用驱动", { exact: true }).click();
     await expect(page.getByText("内置模拟设备（无硬件）", { exact: true })).toBeVisible();
     await expect(page.getByText("内置公共驱动", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "连接", exact: true }).click();
-    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
+    await page.getByRole("button", { name: "读取设备状态", exact: true }).click();
     await expect(frequency).toHaveValue("5000000000");
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     // This session only read state, so ending it needs no output-disposition choice.
     await expect(finish).toBeHidden();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
   } finally {
     if (started) command("stop");
     await rm(home, { recursive: true, force: true });

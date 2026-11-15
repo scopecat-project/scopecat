@@ -739,14 +739,12 @@ export function InstrumentsWorkspace({
               session={session}
               displayLabel={selectedDevice?.device.label}
               releaseUnconfirmed={releaseUnconfirmed}
-              actions={<Controls.Button onClick={refresh}>刷新占用</Controls.Button>}
             />
           ) : (
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
               <h1 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">
                 {selectedDevice?.device.label ?? "设备控制"}
               </h1>
-              <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
             </header>
           )}
         </div>
@@ -757,9 +755,17 @@ export function InstrumentsWorkspace({
         {windowError && <p role="alert">{windowError}</p>}
         {connectionRecovery}
         {(devicesQuery.error || accessQuery.error || instrumentsQuery.error) && (
-          <p role="alert">
-            {errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}
-          </p>
+          <div role="alert" className="flex flex-wrap items-center gap-2">
+            <p>{errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}</p>
+            <Controls.Button
+              onClick={() => {
+                refresh();
+                void accessQuery.refetch();
+              }}
+            >
+              重试状态查询
+            </Controls.Button>
+          </div>
         )}
         {selected?.owner_kind === "run" &&
           selected.owner_id &&

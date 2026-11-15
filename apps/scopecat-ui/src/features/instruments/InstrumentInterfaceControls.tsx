@@ -1019,6 +1019,34 @@ export function receiptTone(status: string): string {
   return ["applied", "unchanged", "invoked"].includes(status) ? positiveReceipt : warningReceipt;
 }
 
+/** Whether the backend lifecycle capture plan includes any state member.
+ * Mirrors capture_state_members: resolve physical mounts and implementation overrides,
+ * rather than treating every declared/editable property as an initial read target.
+ */
+export function hasInstrumentCaptureState(description: InstrumentDescription | undefined): boolean {
+  if (!description) return false;
+  const captures = (interfaceId: string, path: string[], member: InterfaceMember): boolean =>
+    (member.properties ?? []).some(
+      (property) =>
+        resolveInterfaceProperty(
+          description,
+          interfaceStateTarget(interfaceId, path, property.id),
+          property,
+        ).capture,
+    ) ||
+    (member.components ?? []).some((child) => captures(interfaceId, [...path, child.id], child));
+  return (
+    (description.interfaces ?? []).some((instrumentInterface) =>
+      interfaceMountPaths(description, instrumentInterface.id).some((path) =>
+        captures(instrumentInterface.id, path, instrumentInterface),
+      ),
+    ) ||
+    (description.device_schemas ?? []).some((schema) =>
+      (schema.members ?? []).some((member) => member.property.capture),
+    )
+  );
+}
+
 export function instrumentStateTargets(
   description: InstrumentDescription | undefined,
 ): Map<string, InstrumentStateTarget> {

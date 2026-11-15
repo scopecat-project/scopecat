@@ -55,16 +55,11 @@ export function DevicePythonGuide({
   const mounts = supported ? interfaceMountPaths(description, networkSweep) : [];
   return (
     <section aria-label="在 Python 中使用此设备" className="grid gap-2 text-xs leading-normal">
-      <p>查看或复制以下文本不会连接设备、发出命令或提交实验。</p>
       <p>
-        登记 ID：<code>{deviceId}</code>。先结束手动会话并等待运行清理，再显式运行 Python。
+        登记 ID：<code>{deviceId}</code>
       </p>
       {mounts.length === 0 ? (
-        <p>
-          此能力尚无经过验证的内置 Python
-          示例。请查驱动包的类型化客户端文档和版本；不要从接口名称猜测 import，也不必连接设备来发现
-          API。
-        </p>
+        <p>此能力暂无内置 Python 示例，请参阅驱动的客户端文档。</p>
       ) : (
         mounts.map((mountPath) => {
           const examples = networkSweepExamples(deviceId, mountPath);

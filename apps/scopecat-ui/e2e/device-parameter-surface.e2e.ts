@@ -49,7 +49,7 @@ test("parameter sheet keeps narrow two-column controls and fixed actions usable"
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(controlUrl);
 
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("已连接", { exact: true })).toBeVisible();
     const workbench = page.getByTestId("instrument-workbench-layout");
     await expect(workbench).toHaveAttribute("data-control-collapsed", "false");
@@ -61,7 +61,7 @@ test("parameter sheet keeps narrow two-column controls and fixed actions usable"
       path: testInfo.outputPath("default-capable-empty-split.png"),
       fullPage: true,
     });
-    await expect(page.getByRole("button", { name: "刷新状态", exact: true })).toBeInViewport({
+    await expect(page.getByRole("button", { name: "读取设备状态", exact: true })).toBeInViewport({
       ratio: 1,
     });
     await expect(page.getByRole("button", { name: "Acquire sweep", exact: true })).toBeInViewport({

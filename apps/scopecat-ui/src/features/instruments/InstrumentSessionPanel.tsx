@@ -124,7 +124,7 @@ export function InstrumentSessionPanel({
               }
             >
               <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
-              刷新状态
+              读取设备状态
             </button>
           )}
           <button
@@ -228,12 +228,6 @@ export function InstrumentSessionPanel({
     <div className={sessionPanel}>
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <strong className="text-xs font-medium text-text-soft">未连接</strong>
-        <details className="text-xs text-text-dim">
-          <summary>连接说明</summary>
-          <p>
-            准备交互时再连接。连接后可读取或调整仪器，完成后释放控制，让实验可以使用它。选中设备不会连接。
-          </p>
-        </details>
       </div>
       <button
         type="button"
@@ -243,7 +237,7 @@ export function InstrumentSessionPanel({
         title={connectDisabled ? "请先核查原会话与保存待办，不能用新会话覆盖原结果。" : undefined}
       >
         {connectPending ? <LoaderCircle className="animate-spin" size={14} /> : <Cable size={14} />}
-        连接
+        {stateAvailable ? "连接并读取" : "连接"}
       </button>
     </div>
   );
