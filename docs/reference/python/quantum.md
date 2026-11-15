@@ -40,3 +40,13 @@ does not itself establish which sample object produced a resonance.
       show_bases: false
       show_root_full_path: false
       show_signature_annotations: true
+
+
+## Point-local IQ statistics
+
+Use [shot statistics and retention](../../how-to/compute-and-read.md#shot-statistics-and-retention)
+for the complete-array contract and explicit raw/stats/both example.
+
+::: scopecat_quantum.measurement_computes.IqShotStatistics
+
+::: scopecat_quantum.measurement_computes.iq_shot_statistics
