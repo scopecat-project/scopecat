@@ -73,7 +73,7 @@ export function InstrumentControlLayout({
         setDragging(false);
         setCompact(nextCompact);
       }
-      const height = Math.max(320, window.innerHeight - bounds.top - 20);
+      const height = Math.max(320, window.innerHeight - bounds.top - 32);
       element.style.setProperty("--device-workspace-height", `${height}px`);
     };
     measure();
@@ -152,6 +152,53 @@ export function InstrumentControlLayout({
     }
   };
 
+  const paneSwitch = hasResults && (
+    <div className="device-pane-switch" role="group" aria-label="显示区域">
+      {compact ? (
+        <>
+          <button
+            className={secondaryButton}
+            data-pane="control"
+            aria-pressed={showControl}
+            onClick={() => show("control")}
+          >
+            控制
+          </button>
+          <button
+            className={secondaryButton}
+            data-pane="results"
+            aria-pressed={showResults}
+            onClick={() => show("results")}
+          >
+            结果
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className={secondaryButton}
+            data-pane="control"
+            aria-expanded={showControl}
+            aria-controls={`${id}-controls`}
+            onClick={() => (showControl ? hide("control") : show("control"))}
+          >
+            {showControl ? "收起控制" : "展开控制"}
+          </button>
+          <button
+            className={secondaryButton}
+            data-pane="results"
+            aria-expanded={showResults}
+            aria-controls={`${id}-results`}
+            onClick={() => (showResults ? hide("results") : show("results"))}
+          >
+            {showResults ? "收起结果" : "展开结果"}
+          </button>
+        </>
+      )}
+      {pendingCount > 0 && <span className="text-xs text-text-dim">{pendingCount} 条待保存</span>}
+    </div>
+  );
+
   return (
     <div
       ref={root}
@@ -161,54 +208,29 @@ export function InstrumentControlLayout({
       data-control-collapsed={!showControl}
       data-collection-collapsed={!showResults}
     >
-      {hasResults && (
-        <div className="device-pane-switch" role="group" aria-label="显示区域">
-          {compact ? (
-            <>
-              <button
-                className={secondaryButton}
-                data-pane="control"
-                aria-pressed={showControl}
-                onClick={() => show("control")}
-              >
-                控制
-              </button>
-              <button
-                className={secondaryButton}
-                data-pane="results"
-                aria-pressed={showResults}
-                onClick={() => show("results")}
-              >
-                结果
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className={secondaryButton}
-                data-pane="control"
-                aria-expanded={showControl}
-                aria-controls={`${id}-controls`}
-                onClick={() => (showControl ? hide("control") : show("control"))}
-              >
-                {showControl ? "收起控制" : "展开控制"}
-              </button>
-              <button
-                className={secondaryButton}
-                data-pane="results"
-                aria-expanded={showResults}
-                aria-controls={`${id}-results`}
-                onClick={() => (showResults ? hide("results") : show("results"))}
-              >
-                {showResults ? "收起结果" : "展开结果"}
-              </button>
-            </>
-          )}
-          {pendingCount > 0 && (
-            <span className="text-xs text-text-dim">{pendingCount} 条待保存</span>
-          )}
-        </div>
-      )}
+      <div className="device-pane-heading" data-control-only={showControl && !showResults}>
+        <nav
+          hidden={!showControl}
+          className="device-view-switch"
+          aria-label="控制工作区页面"
+          onFocusCapture={() => {
+            lastFocusedPane.current = "control";
+          }}
+        >
+          {views.map(([value, label]) => (
+            <button
+              key={value}
+              className={secondaryButton}
+              aria-pressed={view === value}
+              aria-controls={`${id}-${value}`}
+              onClick={() => setView(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        {paneSwitch}
+      </div>
       <div
         className="device-pane-grid"
         data-both={both}
@@ -228,19 +250,6 @@ export function InstrumentControlLayout({
             lastFocusedPane.current = "control";
           }}
         >
-          <nav className="device-view-switch" aria-label="控制工作区页面">
-            {views.map(([value, label]) => (
-              <button
-                key={value}
-                className={secondaryButton}
-                aria-pressed={view === value}
-                aria-controls={`${id}-${value}`}
-                onClick={() => setView(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
           <MountedScrollPane
             id={`${id}-control`}
             visible={showControl && view === "control"}

@@ -13,7 +13,7 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { ApiError } from "../../api-client";
-import { classes, eyebrow, primaryButton, secondaryButton } from "../../ui/styles";
+import { classes, primaryButton, secondaryButton } from "../../ui/styles";
 import type { InstrumentPropertyDraft } from "./InstrumentPropertyInput";
 import {
   applyInstrumentConfiguredDefaults,
@@ -687,7 +687,7 @@ function InstrumentInspectorContent({
   return (
     <section
       className={classes(
-        "relative grid min-w-0 content-start gap-3.5 p-5 max-[680px]:px-[13px] max-[680px]:py-4",
+        "device-inspector relative grid min-w-0 content-start gap-3 p-4 max-[680px]:px-3",
         !hideHeading && "max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line",
       )}
       aria-live="polite"
@@ -701,55 +701,84 @@ function InstrumentInspectorContent({
         />
       )}
 
-      <InstrumentSessionPanel
-        instrument={instrument}
-        session={session}
-        connected={connected}
-        releaseUnconfirmed={releaseUnconfirmed}
-        connectPending={connectPending}
-        connectDisabled={!!recoverySession}
-        closePending={closePending}
-        interactionPending={interactionPending}
-        recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
-        refreshPending={readMutation.isPending}
-        stateAvailable={declaredTargets.size > 0}
-        configuredDefaultsVisible={hasConfiguredDefaults}
-        configuredDefaultsPending={configuredDefaultsMutation.isPending}
-        configuredDefaultsDisabled={configuredDefaultsDisabled}
-        configuredDefaultsDisabledReason={configuredDefaultsDisabledReason}
-        resolvePending={resolveMutation.isPending}
-        onConnect={onConnect}
-        onClose={() => {
-          if (
-            finishFixed ||
-            pendingMeasurements.length > 0 ||
-            outputTouched ||
-            stagedCount > 0 ||
-            applyMutation.error ||
-            configuredDefaultsMutation.error ||
-            collectMutation.error ||
-            invokeMutation.error ||
-            failedReceipt
-          )
-            setShowFinishChoice(true);
-          else onClose();
-        }}
-        onDisconnectOwner={onDisconnectOwner}
-        onRefresh={refreshState}
-        onApplyConfiguredDefaults={applyConfiguredDefaults}
-        onResolve={() => resolveMutation.mutate()}
-      />
+      <div className="device-session-toolbar">
+        <InstrumentSessionPanel
+          instrument={instrument}
+          session={session}
+          connected={connected}
+          releaseUnconfirmed={releaseUnconfirmed}
+          connectPending={connectPending}
+          connectDisabled={!!recoverySession}
+          closePending={closePending}
+          interactionPending={interactionPending}
+          recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
+          refreshPending={readMutation.isPending}
+          stateAvailable={declaredTargets.size > 0}
+          configuredDefaultsVisible={hasConfiguredDefaults}
+          configuredDefaultsPending={configuredDefaultsMutation.isPending}
+          configuredDefaultsDisabled={configuredDefaultsDisabled}
+          configuredDefaultsDisabledReason={configuredDefaultsDisabledReason}
+          resolvePending={resolveMutation.isPending}
+          onConnect={onConnect}
+          onClose={() => {
+            if (
+              finishFixed ||
+              pendingMeasurements.length > 0 ||
+              outputTouched ||
+              stagedCount > 0 ||
+              applyMutation.error ||
+              configuredDefaultsMutation.error ||
+              collectMutation.error ||
+              invokeMutation.error ||
+              failedReceipt
+            )
+              setShowFinishChoice(true);
+            else onClose();
+          }}
+          onDisconnectOwner={onDisconnectOwner}
+          onRefresh={refreshState}
+          onApplyConfiguredDefaults={applyConfiguredDefaults}
+          onResolve={() => resolveMutation.mutate()}
+        />
 
-      {!connected && (
-        <p className="text-xs text-text-dim">
-          只读观察：仅显示后台已有观测，不获取控制权或查询硬件。各值附来源和观察时间，可能已过期；当前物理状态未确认。
-          {sharedObservation.error
-            ? " 读取后台观测失败，状态未知。"
-            : !sharedObservation.data?.observations?.length
-              ? " 暂无可用观测，状态未知。"
-              : ""}
-        </p>
-      )}
+        {!connected && (
+          <details className="device-observation-details text-xs text-text-dim">
+            <summary>
+              只读观察 ·{" "}
+              {sharedObservation.error
+                ? "读取失败，状态未知"
+                : !sharedObservation.data?.observations?.length
+                  ? "暂无观测，状态未知"
+                  : "已有观测，可能过期"}
+            </summary>
+            <p>
+              仅显示后台已有观测，不获取控制权或查询硬件。各值附来源和观察时间，可能已过期；当前物理状态未确认。
+            </p>
+          </details>
+        )}
+        <section className="device-pending-actions text-xs" aria-label="后台待保存结果">
+          <button
+            type="button"
+            className={classes(secondaryButton, "device-quiet-action")}
+            disabled={pendingRecovery.busy}
+            aria-label="重新核查后台待保存结果"
+            onClick={() => void pendingRecovery.recover()}
+          >
+            {pendingRecovery.busy ? "核查中…" : "核查待保存结果"}
+          </button>
+          {pendingRecovery.error && <p role="alert">{pendingRecovery.error}</p>}
+          {!retainedSession && pendingMeasurements.length > 0 && (
+            <button
+              type="button"
+              className={classes(secondaryButton, "device-quiet-action")}
+              aria-label="处理恢复的待保存结果"
+              onClick={() => setShowFinishChoice(true)}
+            >
+              处理待保存结果
+            </button>
+          )}
+        </section>
+      </div>
       {interactionError && (
         <div className={inlineError} role="alert">
           <AlertTriangle size={15} />
@@ -881,26 +910,6 @@ function InstrumentInspectorContent({
         </div>
       )}
 
-      <section className="grid gap-2 text-xs" aria-label="后台待保存结果">
-        <button
-          type="button"
-          className={secondaryButton}
-          disabled={pendingRecovery.busy}
-          onClick={() => void pendingRecovery.recover()}
-        >
-          {pendingRecovery.busy ? "正在核查后台待保存结果…" : "重新核查后台待保存结果"}
-        </button>
-        {pendingRecovery.error && <p role="alert">{pendingRecovery.error}</p>}
-        {!retainedSession && pendingMeasurements.length > 0 && (
-          <button
-            type="button"
-            className={secondaryButton}
-            onClick={() => setShowFinishChoice(true)}
-          >
-            处理恢复的待保存结果
-          </button>
-        )}
-      </section>
       {finishChoiceOpen && (
         <InstrumentExitDialog
           sessionId={
@@ -1015,18 +1024,8 @@ function InstrumentInspectorContent({
         controls={
           description ? (
             <div data-testid="instrument-control-panel" className="grid min-w-0 gap-3">
-              <div
-                className="mt-[3px] flex items-end justify-between max-[460px]:flex-col max-[460px]:items-start"
-                data-testid="interface-heading"
-              >
-                <div>
-                  <span className={eyebrow}>设备控制</span>
-                  <h3 className="m-0 text-[0.9rem] font-[650]">接口</h3>
-                </div>
-              </div>
-
               <details className="text-xs leading-normal text-text-dim">
-                <summary>接口说明与 Python</summary>
+                <summary>操作说明</summary>
                 <p>
                   Invoke 调用 operation；Collect 调用
                   acquisition，可能发起新采集，也可能读取既有结果。 请以各项契约说明为准；Collect

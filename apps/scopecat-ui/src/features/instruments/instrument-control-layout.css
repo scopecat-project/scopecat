@@ -49,6 +49,7 @@
   border-bottom: 1px solid var(--color-line);
 }
 .device-pane-scroll {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -97,4 +98,109 @@
 
 .device-pane-grid[data-both="true"] .device-control-pane {
   max-width: none;
+}
+
+/* The device window is a working surface: reserve emphasis for state/actions,
+   and keep connection help and recovery utilities subordinate to parameters. */
+.device-control-window {
+  --color-bg: #f7f8fa;
+  --color-bg-raised: #fafbfc;
+  --color-panel-soft: #f8f9fb;
+  --color-panel-strong: #eef1f5;
+  --color-line: #e0e4e9;
+  --color-line-strong: #cbd2da;
+  --color-text: #28313d;
+  --color-text-soft: #465363;
+  --color-text-dim: #687584;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.device-session-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-line);
+}
+.device-session-panel {
+  flex: 1 1 28rem;
+}
+.device-session-toolbar details p {
+  max-width: 44rem;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.device-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.device-pending-actions [role="alert"] {
+  flex-basis: 100%;
+}
+.device-inspector .device-quiet-action {
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  padding-inline: 4px;
+}
+.device-pane-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-line);
+}
+.device-pane-heading .device-view-switch {
+  padding: 0;
+  border: 0;
+}
+.device-pane-switch button,
+.device-view-switch button {
+  min-height: 32px;
+  padding-inline: 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+}
+.device-pane-switch button:hover,
+.device-view-switch button:hover {
+  background: var(--color-panel-strong);
+}
+.device-pane-switch [aria-pressed="true"],
+.device-view-switch [aria-pressed="true"] {
+  border-color: var(--color-line);
+  background: var(--color-panel-strong);
+  color: var(--color-text);
+}
+.device-control-pane {
+  max-width: 58rem;
+}
+.device-interface-card > header {
+  padding-block: 8px;
+}
+.device-interface-card h4 {
+  font-weight: 600;
+}
+.device-acquisition-actions {
+  background: var(--color-panel);
+}
+.device-acquisition-actions button {
+  font-weight: 500;
+}
+.device-pane-heading[data-control-only="true"] {
+  width: 100%;
+  max-width: 58rem;
+  align-self: center;
+}
+.device-pane-heading {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
 }

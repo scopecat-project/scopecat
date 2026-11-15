@@ -87,7 +87,7 @@ export function InterfaceCard({
     return null;
   return (
     <article
-      className="@container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel-soft"
+      className="device-interface-card @container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel"
       data-testid={`interface-card-${instrumentInterface.id}-${mountPath.join("-") || "root"}`}
     >
       <header className="flex items-start justify-between gap-3.5 border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3 @max-[460px]/controls:flex-col">
@@ -96,9 +96,10 @@ export function InterfaceCard({
             {instrumentInterface.label ?? interfaceFallbackLabel(instrumentInterface.id)}
           </h4>
           {instrumentInterface.description && (
-            <p className="mt-1.5 mb-0 max-w-[760px] text-xs leading-[1.45] text-text-dim">
-              {instrumentInterface.description}
-            </p>
+            <details className="mt-1 text-xs text-text-dim">
+              <summary>接口说明</summary>
+              <p>{instrumentInterface.description}</p>
+            </details>
           )}
           {mountPath.length > 0 && (
             <code className="mt-1.5 block text-xs text-text-dim">{mountPath.join(" / ")}</code>
@@ -149,7 +150,7 @@ export function DeviceStateCard({
 }) {
   return (
     <article
-      className="@container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel-soft"
+      className="device-interface-card @container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel"
       data-testid={`device-state-card-${deviceState.id}`}
     >
       <header className="border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3">

@@ -235,6 +235,11 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       expect(
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
+      // Scroll the independent pane, not the outer window. Positioned chart
+      // descriptions must remain contained even when the curve is below the fold.
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollHeight))
+        .toBeLessThanOrEqual(900);
     }
     // Native regression: around 893px, a 59/41 split leaves a roughly 300px results pane.
     // Contained SVG labels alone used to pass while the actual plot shrank to about 57px.
@@ -275,7 +280,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       .fill("5001000000");
     const apply = page.getByRole("button", { name: "应用暂存修改", exact: true });
     await apply.click();
-    await expect(apply).toBeDisabled();
+    await expect(apply).toBeHidden();
     await sweep.click();
     await expect(page.getByTestId(/^recent-result-/)).toHaveCount(2);
     await expectFittedCurve(curve);

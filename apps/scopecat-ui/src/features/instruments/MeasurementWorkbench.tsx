@@ -484,7 +484,7 @@ export function MeasurementAcquisitionActions({
   if (!targets.length) return null;
   return (
     <section aria-label="采集操作">
-      <div className="my-3 flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
         {targets.map((item) => (
           <div key={acquisitionKey(item)}>
             <button
@@ -495,7 +495,7 @@ export function MeasurementAcquisitionActions({
             >
               {collectingTarget && acquisitionKey(collectingTarget) === acquisitionKey(item)
                 ? "采集中…"
-                : `${item.acquisition.label ?? item.acquisition.id} Collect`}
+                : (item.acquisition.label ?? item.acquisition.id)}
             </button>
             <details className="mt-1 text-xs text-text-dim">
               <summary>{item.acquisition.label ?? item.acquisition.id} 说明</summary>

@@ -315,3 +315,27 @@ it("retains its last usable measurement while hidden and measures again when rev
   resize(1200);
   expect(layout).toHaveAttribute("data-compact", "false");
 });
+
+it("keeps one visible pane switch and keyboard focus when controls collapse", () => {
+  show();
+  const button = screen.getByRole("button", { name: "收起控制" });
+  button.focus();
+  fireEvent.click(button);
+  expect(screen.getByRole("button", { name: "展开控制" })).toBe(button);
+  expect(button).toHaveFocus();
+  expect(button).toBeVisible();
+  expect(screen.getAllByRole("group", { name: "显示区域", hidden: true })).toHaveLength(1);
+  expect(screen.getByRole("region", { name: "采集结果工作区" })).not.toContainElement(button);
+});
+
+it("keeps the control page active when its navigation was focused before narrowing", () => {
+  show();
+  fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
+  act(() => screen.getByRole("textbox", { name: "结果选项" }).focus());
+  const configuration = screen.getByRole("button", { name: "连接配置" });
+  act(() => configuration.focus());
+  fireEvent.click(configuration);
+  resize(560);
+  expect(screen.getByRole("textbox", { name: "配置草稿" })).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "结果选项", hidden: true })).not.toBeVisible();
+});
