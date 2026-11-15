@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from scopecat.api.calibration_report import CalibrationReportView
 from scopecat.automation.calibration import (
     CapabilityAvailability,
+    CheckAssessment,
     CheckEvidence,
     CheckSelection,
     assess_calibration_check,
@@ -23,10 +24,15 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
-from scopecat.records.calibration_dependencies import DependencyComparison
+from scopecat.records.calibration_dependencies import (
+    DependencyComparison,
+    RowDependencyComparison,
+    TableRowDependency,
+)
 from scopecat.records.calibration_policy import CalibrationRequirement
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.measurement_context import MeasurementContext
+from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.parameter_update import DeleteParameterRows
 from scopecat.records.run import (
@@ -132,6 +138,31 @@ def test_notebook_report_escapes_lab_text_and_preserves_typed_data(
         ),
         selection=CheckSelection("unknown", "incomplete_history"),
         availability=CapabilityAvailability("blocked", ("<readout>",)),
+        assessments=(
+            CheckAssessment(
+                "synthetic",
+                "recheck",
+                ("dependency_inputs_changed",),
+                DependencyComparison(
+                    status="changed",
+                    reasons=("dependency_values_changed",),
+                    row_comparisons=(
+                        RowDependencyComparison(
+                            selector=TableRowDependency(
+                                parameter="<drive>",
+                                equals=(
+                                    ScalarParameterValue(id="group", value="<read>"),
+                                ),
+                            ),
+                            status="changed",
+                            reason="selection_membership_changed",
+                            before_count=1,
+                            after_count=2,
+                        ),
+                    ),
+                ),
+            ),
+        ),
         scanned=2,
         unresolved_procedures=("<execution>",),
         incomplete_reasons=("unresolved_checks",),
@@ -141,6 +172,9 @@ def test_notebook_report_escapes_lab_text_and_preserves_typed_data(
     assert "<script>" not in rendered and "&lt;script&gt;" in rendered
     assert "&lt;readout&gt;" in rendered and "&lt;execution&gt;" in rendered
     assert "unknown" in rendered and "blocked" in rendered
+    assert "selection_membership_changed" in rendered
+    assert "&lt;drive&gt;" in rendered and "&lt;read&gt;" in rendered
+    assert "members 1 -&gt; 2" in rendered
     assert START.isoformat() in rendered
     assert view.items[0].selection.status == "unknown"
     assert view.context == context
