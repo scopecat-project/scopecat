@@ -54,8 +54,7 @@ export function DevicePythonGuide({
   const supported = description.interfaces?.some((item) => item.id === networkSweep);
   const mounts = supported ? interfaceMountPaths(description, networkSweep) : [];
   return (
-    <details className="rounded-md border border-line p-3 text-xs leading-normal">
-      <summary className="cursor-pointer font-semibold">在 Python 中使用此设备</summary>
+    <section aria-label="在 Python 中使用此设备" className="grid gap-2 text-xs leading-normal">
       <p>查看或复制以下文本不会连接设备、发出命令或提交实验。</p>
       <p>
         登记 ID：<code>{deviceId}</code>。先结束手动会话并等待运行清理，再显式运行 Python。
@@ -111,7 +110,7 @@ export function DevicePythonGuide({
       <a className="text-accent underline" href={guide} target="_blank" rel="noreferrer">
         模拟 VNA 完整旅程：setup、修改参数、准备、运行与重开
       </a>
-    </details>
+    </section>
   );
 }
 

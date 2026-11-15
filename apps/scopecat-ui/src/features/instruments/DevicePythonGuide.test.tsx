@@ -25,10 +25,12 @@ it("offers selected registered identity and mount without device/network command
       }}
     />,
   );
-  fireEvent.click(screen.getByText("在 Python 中使用此设备"));
+  const guide = screen.getByRole("region", { name: "在 Python 中使用此设备" });
+  expect(guide.querySelector("details, summary")).toBeNull();
   const code = screen.getByRole("textbox", { name: "即时调试 Python channels/2" });
   fireEvent.focus(code);
   expect(code).toHaveValue(networkSweepExamples('device-"one"', ["channels", "2"]).live);
+  expect(code).toBeVisible();
   expect(code).toHaveAttribute("readonly");
   expect(screen.getByRole("textbox", { name: "实验声明 Python channels/2" })).toHaveValue(
     networkSweepExamples('device-"one"', ["channels", "2"]).experiment,
