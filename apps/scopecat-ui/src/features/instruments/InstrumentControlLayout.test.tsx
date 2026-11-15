@@ -197,6 +197,8 @@ it("cancels a pointer drag and releases its capture when the divider disappears"
   fireEvent.pointerDown(divider, { pointerId: 2, button: 0 });
   fireEvent.pointerMove(divider, { pointerId: 2, clientX: 720 });
   const moved = divider.getAttribute("aria-valuenow");
+  expect(moved).toBe("60");
+  expect(divider.parentElement!.style.getPropertyValue("--device-divider-position")).toBe("60%");
   fireEvent.pointerDown(divider, { pointerId: 9, button: 0 });
   fireEvent.pointerMove(divider, { pointerId: 9, clientX: 900 });
   fireEvent.pointerUp(divider, { pointerId: 9 });
@@ -272,7 +274,7 @@ it("measures synchronously at mount and coalesces observer notifications into on
   show();
   const layout = screen.getByTestId("instrument-workbench-layout");
   expect(layout.style.getPropertyValue("--device-workspace-height")).toBe(
-    `${Math.max(320, window.innerHeight - 160 - 32)}px`,
+    `${Math.max(320, window.innerHeight - 160)}px`,
   );
   expect(requestAnimationFrame).not.toHaveBeenCalled();
   const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");

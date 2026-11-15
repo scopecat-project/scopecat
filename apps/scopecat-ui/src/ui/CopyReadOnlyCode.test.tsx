@@ -3,11 +3,15 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { readOnlyCode, type ReadOnlyCopyTarget } from "../lib/read-only-code";
+import { showReceipt } from "./Receipts";
 import { CopyReadOnlyCode, CopyRunReference } from "./CopyReadOnlyCode";
+
+vi.mock("./Receipts", () => ({ showReceipt: vi.fn(() => vi.fn()) }));
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.mocked(showReceipt).mockClear();
 });
 const first: ReadOnlyCopyTarget = { kind: "run", runId: "run-a", publicationId: "analysis-fit-r1" };
 function clipboard(writeText?: (code: string) => Promise<void>) {
@@ -32,9 +36,11 @@ it("writes only on click and reports success only after the write resolves", asy
   fireEvent.click(screen.getByRole("button"));
   expect(write).toHaveBeenCalledWith(readOnlyCode(first));
   expect(screen.queryByText("只读代码已复制。")).toBeNull();
+  expect(showReceipt).not.toHaveBeenCalled();
   expect(screen.getByRole("button")).toBeDisabled();
   await act(async () => complete());
-  expect(screen.getByRole("status")).toHaveTextContent("只读代码已复制。");
+  expect(showReceipt).toHaveBeenCalledExactlyOnceWith("只读代码已复制。");
+  expect(screen.queryByRole("status")).toBeNull();
 });
 
 it.each(["missing", "denied", "error", "sync error"])(
@@ -62,6 +68,7 @@ it.each(["missing", "denied", "error", "sync error"])(
     expect((field as HTMLTextAreaElement).selectionStart).toBe(0);
     expect((field as HTMLTextAreaElement).selectionEnd).toBe(readOnlyCode(first).length);
     expect(screen.queryByText("只读代码已复制。")).toBeNull();
+    expect(showReceipt).not.toHaveBeenCalled();
   },
 );
 
@@ -85,6 +92,7 @@ it.each([true, false])(
       rerender(<CopyReadOnlyCode target={target} />);
       await act(async () => complete());
       expect(screen.queryByRole("status")).toBeNull();
+      expect(showReceipt).not.toHaveBeenCalled();
       expect(screen.getByRole("button")).toBeEnabled();
     }
   },
@@ -120,7 +128,8 @@ it("copies a scoped human reference and offers the same text without clipboard a
   );
   fireEvent.click(screen.getByRole("button", { name: "复制 run 引用" }));
   expect(write).toHaveBeenCalledWith("Cooldown #1 (collection a; run run-a)");
-  await screen.findByText("run 引用已复制。");
+  await act(async () => {});
+  expect(showReceipt).toHaveBeenCalledExactlyOnceWith("run 引用已复制。");
   clipboard();
   view.rerender(<CopyRunReference runId="run-b" address={{ collection_id: "b", number: 1 }} />);
   expect(screen.queryByText("run 引用已复制。")).toBeNull();
@@ -128,4 +137,17 @@ it("copies a scoped human reference and offers the same text without clipboard a
   expect(await screen.findByLabelText("run 引用")).toHaveValue(
     "Collection #1 (collection b; run run-b)",
   );
+});
+
+it("keeps compact copy feedback out of layout and dismisses it on identity change", async () => {
+  const dismiss = vi.fn();
+  vi.mocked(showReceipt).mockReturnValueOnce(dismiss);
+  clipboard(async () => {});
+  const { rerender } = render(<CopyReadOnlyCode target={first} compact />);
+  fireEvent.click(screen.getByRole("button"));
+  await act(async () => {});
+  expect(showReceipt).toHaveBeenCalledExactlyOnceWith("只读代码已复制。");
+  expect(screen.queryByText(/First run the connection cell/)).toBeNull();
+  rerender(<CopyReadOnlyCode target={{ ...first, runId: "new" }} compact />);
+  expect(dismiss).toHaveBeenCalledOnce();
 });

@@ -1,3 +1,4 @@
+import { showReceipt } from "./Receipts";
 import * as Controls from "./Controls";
 import { useEffect, useRef, useState } from "react";
 import { readOnlyCode, type ReadOnlyCopyTarget } from "../lib/read-only-code";
@@ -38,21 +39,27 @@ function CopyCode({
   kind?: "code" | "reference";
 }) {
   const reference = kind === "reference";
-  const [status, setStatus] = useState<"idle" | "copying" | "copied" | "manual">("idle");
+  const [status, setStatus] = useState<"idle" | "copying" | "manual">("idle");
   const mounted = useRef(true);
+  const dismissReceipt = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      dismissReceipt.current?.();
     };
   }, []);
 
   async function copy() {
+    dismissReceipt.current?.();
     setStatus("copying");
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(code);
-      if (mounted.current) setStatus("copied");
+      if (mounted.current) {
+        setStatus("idle");
+        dismissReceipt.current = showReceipt(reference ? "run 引用已复制。" : "只读代码已复制。");
+      }
     } catch {
       if (mounted.current) setStatus("manual");
     }
@@ -73,15 +80,10 @@ function CopyCode({
       >
         {status === "copying" ? "正在复制…" : reference ? "复制 run 引用" : "复制只读代码"}
       </button>
-      {!reference && (!compact || status !== "idle") && (
+      {!reference && (!compact || status === "manual") && (
         <p className="m-0 text-text-dim">
           First run the connection cell for this data space. Paste into a separate cell and run only
           that cell, not Run All. Custom typed/group objects are not reconstructed.
-        </p>
-      )}
-      {status === "copied" && (
-        <p className="m-0 text-text-soft" role="status">
-          {reference ? "run 引用已复制。" : "只读代码已复制。"}
         </p>
       )}
       {status === "manual" && (

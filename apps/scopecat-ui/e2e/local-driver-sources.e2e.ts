@@ -54,11 +54,11 @@ test("a fresh standard application discovers simulation and combines public sour
     await page.getByRole("button", { name: "操作", exact: true }).click();
     await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
-    const frequency = page.getByRole("spinbutton", { name: /CW frequency/ });
-    await frequency.fill("5100000000");
+    const frequency = page.getByRole("textbox", { name: /CW frequency/ });
+    await frequency.fill("5.1");
     await page.getByRole("button", { name: "应用暂存修改", exact: true }).click();
     await page.getByRole("button", { name: "读取设备状态", exact: true }).click();
-    await expect(frequency).toHaveValue("5100000000");
+    await expect(frequency).toHaveValue("5.1");
     await testInfo.attach("simulated-rf-readback", {
       body: await page.screenshot({ fullPage: true }),
       contentType: "image/png",
@@ -93,7 +93,7 @@ test("a fresh standard application discovers simulation and combines public sour
     await expect(page.getByText("内置公共驱动", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await page.getByRole("button", { name: "读取设备状态", exact: true }).click();
-    await expect(frequency).toHaveValue("5000000000");
+    await expect(frequency).toHaveValue("5");
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     // This session only read state, so ending it needs no output-disposition choice.
     await expect(finish).toBeHidden();

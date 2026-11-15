@@ -91,7 +91,9 @@ async function expectFittedCurve(chart: Locator) {
     expect(Math.abs(layout.width - layout.containerWidth)).toBeLessThanOrEqual(1);
     expect(layout.width).toBeGreaterThan(200);
     expect(layout.left).toBeGreaterThanOrEqual(0);
-    expect(layout.right).toBeLessThanOrEqual(layout.viewport);
+    // ECharts rounds its SVG width to whole pixels inside fractional grid tracks.
+    // Allow the same one-pixel raster rounding as the container/label checks below.
+    expect(layout.right).toBeLessThanOrEqual(layout.viewport + 1);
     expect(layout.overflow).toBeLessThanOrEqual(1);
     expect(layout.caption).toContain("横轴 frequency (Hz)");
     expect(layout.caption).toContain("纵轴 s_parameter");
@@ -304,14 +306,11 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await originalSave.getByRole("button", { name: "保存", exact: true }).click();
     await expect(originalSave).toBeHidden();
     // A 1 MHz span around 5 GHz must not round distinct narrow ticks to "5.00e+9".
-    await page
-      .getByTestId("interface-property-start_frequency")
-      .getByRole("spinbutton")
-      .fill("5000000000");
+    await page.getByTestId("interface-property-start_frequency").getByRole("textbox").fill("5 GHz");
     await page
       .getByTestId("interface-property-stop_frequency")
-      .getByRole("spinbutton")
-      .fill("5001000000");
+      .getByRole("textbox")
+      .fill("5.001 GHz");
     const apply = page.getByRole("button", { name: "应用暂存修改", exact: true });
     await apply.click();
     await expect(apply).toBeHidden();
@@ -335,7 +334,8 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
     const narrowSave = page.getByRole("dialog", { name: "保存测量", exact: true });
     await narrowSave.getByRole("textbox", { name: "标题", exact: true }).fill("Narrow plot draft");
-    await page.setViewportSize({ width: 760, height: 600 });
+    // Edge-to-edge workbench now uses the full viewport; cross below its 760px threshold.
+    await page.setViewportSize({ width: 740, height: 600 });
     await expect(page.getByTestId("instrument-workbench-layout")).toHaveAttribute(
       "data-compact",
       "true",
@@ -345,7 +345,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       "Narrow plot draft",
     );
     await page.screenshot({
-      path: "../../.test-results/layout-c-chart-save-760.png",
+      path: "../../.test-results/layout-c-chart-save-740.png",
       fullPage: true,
     });
     await narrowSave.getByRole("button", { name: "取消", exact: true }).click();
@@ -365,13 +365,13 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     for (const id of ["start_frequency", "stop_frequency"]) {
       const row = page.getByTestId(`interface-property-${id}`);
       const label = row.getByTestId("property-label");
-      const input = row.getByRole("spinbutton");
+      const input = row.getByRole("textbox");
       await expect(label).toBeVisible();
       await expect(input).toBeVisible();
       await expect(async () => {
         const geometry = await row.evaluate((element) => {
           const labelNode = element.querySelector('[data-testid="property-label"]')!;
-          const inputNode = element.querySelector('input[type="number"]')!;
+          const inputNode = element.querySelector('input[type="text"]')!;
           // This helper must travel with the browser-evaluated callback.
           // oxlint-disable-next-line unicorn/consistent-function-scoping
           const rect = (node: {
@@ -415,11 +415,11 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     }
     const startInput = await page
       .getByTestId("interface-property-start_frequency")
-      .getByRole("spinbutton")
+      .getByRole("textbox")
       .boundingBox();
     const stopInput = await page
       .getByTestId("interface-property-stop_frequency")
-      .getByRole("spinbutton")
+      .getByRole("textbox")
       .boundingBox();
     expect(startInput).not.toBeNull();
     expect(stopInput).not.toBeNull();
@@ -453,7 +453,9 @@ test("control inputs and headings stay readable and bounded curves resize at eve
         await expectFittedCurve(curve);
         const pane = await controlsPane.boundingBox();
         const handle = await divider.boundingBox();
-        expect(Math.abs(pane!.x + pane!.width - handle!.x)).toBeLessThanOrEqual(2);
+        expect(
+          Math.abs(pane!.x + pane!.width - (handle!.x + handle!.width / 2)),
+        ).toBeLessThanOrEqual(2);
       }
       await divider.dblclick();
       await expect(divider).toHaveAttribute("aria-valuenow", "48");
@@ -555,7 +557,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await resultScroll.evaluate((element) => {
       element.scrollTop = 120;
     });
-    const draft = page.getByTestId("interface-property-start_frequency").getByRole("spinbutton");
+    const draft = page.getByTestId("interface-property-start_frequency").getByRole("textbox");
     const draftedValue = String(Number(await draft.inputValue()) + 1);
     await draft.fill(draftedValue);
     await current.getByRole("combobox", { name: "复数表示" }).selectOption("phase");

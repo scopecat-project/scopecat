@@ -1,3 +1,4 @@
+import { formatInstrumentQuantity } from "./instrument-quantity";
 import "./instrument-parameter-surface.css";
 import * as Controls from "../../ui/Controls";
 import { useState } from "react";
@@ -722,7 +723,7 @@ function AcquisitionControl({
 
 function formatObservationValue(value: InstrumentStateObservation["value"]): string {
   if (typeof value === "object" && value !== null && "value" in value && "unit" in value)
-    return `${value.value} ${value.unit}`;
+    return formatInstrumentQuantity(value.value, value.unit);
   if (typeof value === "boolean") return value ? "开启" : "关闭";
   if (typeof value === "object") return JSON.stringify(value);
   return typeof value === "string" ? value || "（空字符串）" : String(value);

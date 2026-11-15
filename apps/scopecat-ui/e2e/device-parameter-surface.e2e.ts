@@ -70,6 +70,36 @@ test("parameter sheet keeps narrow two-column controls and fixed actions usable"
     await expect(
       page.getByRole("button", { name: "Read existing trace (no trigger)", exact: true }),
     ).toBeInViewport({ ratio: 1 });
+    // One full-window surface: the toolbar, rail and pane boundaries meet.
+    await expect(async () => {
+      const geometry = await workbench.evaluate((element) => {
+        const rect = (selector: string) => element.querySelector(selector)!.getBoundingClientRect();
+        const workspace = element.getBoundingClientRect();
+        const toolbar = element
+          .closest(".device-inspector")!
+          .querySelector(".device-window-toolbar")!
+          .getBoundingClientRect();
+        const controls = rect(".device-control-pane");
+        const results = rect(".device-results-pane");
+        const divider = rect(".device-pane-divider");
+        return {
+          left: workspace.left,
+          right: workspace.right,
+          bottom: workspace.bottom,
+          topGap: workspace.top - toolbar.bottom,
+          paneGap: results.left - controls.right,
+          dividerCenter: divider.left + divider.width / 2 - results.left,
+          viewportWidth: element.ownerDocument.defaultView!.innerWidth,
+          viewportHeight: element.ownerDocument.defaultView!.innerHeight,
+        };
+      });
+      expect(geometry.left).toBe(0);
+      expect(geometry.right).toBe(geometry.viewportWidth);
+      expect(geometry.bottom).toBe(geometry.viewportHeight);
+      expect(Math.abs(geometry.topGap)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.paneGap)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.dividerCenter)).toBeLessThanOrEqual(1);
+    }).toPass();
     await page.getByRole("button", { name: "收起结果", exact: true }).click();
     for (const [width, height] of [
       [1920, 1080],

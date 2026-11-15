@@ -280,12 +280,12 @@ export function DesktopSession() {
       releaseLaunchClose(detail.requestId);
       const cancelled = cancelledRequests.current.delete(detail.requestId);
       releaseDeviceClose(detail.requestId, cancelled);
+      // Cancellation releases only the close intent. Submitted operations keep
+      // their own pending/unknown/failed state in the device or draft owner.
       setCloseNotice(
         "message" in detail && typeof detail.message === "string" && detail.message
           ? detail.message
-          : cancelled
-            ? "已取消本次关闭等待。已提交的保存或设备操作没有撤销，仍需核查结果。"
-            : undefined,
+          : undefined,
       );
     };
     window.addEventListener("scopecat:close-preflight", preflight);

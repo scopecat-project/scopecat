@@ -77,7 +77,7 @@ export function InstrumentControlLayout({
         setDragging(false);
         setCompact(nextCompact);
       }
-      const height = Math.max(320, window.innerHeight - bounds.top - 32);
+      const height = Math.max(320, window.innerHeight - bounds.top);
       element.style.setProperty("--device-workspace-height", `${height}px`);
     };
     measure();
@@ -121,8 +121,8 @@ export function InstrumentControlLayout({
   const showControl = !hasResults || (compact ? compactPane === "control" : controlVisible);
   const showResults = hasResults && (compact ? compactPane === "results" : resultsVisible);
   const both = showControl && showResults;
-  const min = !compact && width > 12 ? Math.max(30, (320 / (width - 12)) * 100) : 30;
-  const max = !compact && width > 12 ? Math.min(70, 100 - (300 / (width - 12)) * 100) : 70;
+  const min = !compact && width > 0 ? Math.max(30, (320 / width) * 100) : 30;
+  const max = !compact && width > 0 ? Math.min(70, 100 - (300 / width) * 100) : 70;
   const effectiveSplit = clamp(split, Math.min(min, max), max);
 
   useEffect(() => {
@@ -245,6 +245,7 @@ export function InstrumentControlLayout({
         style={
           {
             "--device-control-split": `${effectiveSplit}fr`,
+            "--device-divider-position": `${effectiveSplit}%`,
             "--device-result-split": `${100 - effectiveSplit}fr`,
           } as CSSProperties
         }
@@ -314,10 +315,8 @@ export function InstrumentControlLayout({
           onPointerMove={(event) => {
             if (pointer.current !== event.pointerId) return;
             const bounds = paneGrid.current?.getBoundingClientRect();
-            if (bounds && bounds.width > 12)
-              setSplit(
-                clamp(((event.clientX - bounds.left - 6) / (bounds.width - 12)) * 100, min, max),
-              );
+            if (bounds && bounds.width > 0)
+              setSplit(clamp(((event.clientX - bounds.left) / bounds.width) * 100, min, max));
           }}
           onPointerUp={(event) => {
             if (pointer.current !== event.pointerId) return;

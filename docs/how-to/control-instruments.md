@@ -536,6 +536,22 @@ management. Switching views, hiding an area or resizing preserves staged input,
 operation arguments, selected result, curve representation and save-dialog target.
 These layout choices do not add automatic hardware refresh or a generic stop command.
 
+Quantity controls choose a readable engineering unit from the first observation
+(for example, `5.1 GHz` rather than `5100000000 Hz`) and keep that selected unit
+while observations change. Use the unit selector or enter a supported suffix such
+as `5100 MHz`. Changing the display unit alone does not stage or write a value;
+editing still requires **应用暂存修改**. Bounds are checked in the property's
+canonical unit, and unchanged observations retain their original value. Unknown
+and logarithmic units are not automatically rescaled. Digit-by-digit immediate
+hardware adjustment is not part of this editor.
+
+The device window's toolbar and panes share continuous edges; the divider's drag
+hit area overlays the boundary instead of reserving a blank column. Cancelling
+an unsubmitted close returns to work without an operation warning. Actual pending,
+failed or uncertain operations remain with their owning controls; cancelling a
+wait does not undo a submitted device operation. Short copy-success receipts use
+transient notifications, not permanent space in the work surface.
+
 For a device with a declared lifecycle capture plan, **连接并读取** acquires the
 manual session and returns its initial captured state. It does not apply configured
 defaults or promise every member is readable. **读取设备状态** explicitly repeats

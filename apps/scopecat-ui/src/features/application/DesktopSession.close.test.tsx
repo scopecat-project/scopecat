@@ -161,7 +161,8 @@ it.each(["window", "application"])(
     expect(launchCloseBlocked()).toBe(true);
     act(() => send("scopecat:close-release", "hanging"));
     expect(launchCloseBlocked()).toBe(false);
-    expect(screen.getByText(/已提交的保存或设备操作没有撤销/)).toBeInTheDocument();
+    expect(screen.queryByText(/已提交的保存或设备操作没有撤销/)).toBeNull();
+    expect(screen.queryByText(/正在等待操作完成/)).toBeNull();
     await act(async () => finish("saved"));
     expect(acknowledge.mock.calls).toEqual([["hanging", "pending"]]);
     unregister();
@@ -359,4 +360,24 @@ it("keeps the real device review accessible during same-window application prefl
   expect(launchCloseBlocked()).toBe(false);
   detach();
   client.clear();
+});
+
+it("returns from an unsubmitted close without an operation warning", async () => {
+  const unregister = registerDeviceClose(() => new Promise(() => {}));
+  const cancel = vi.fn().mockResolvedValue(true);
+  vi.stubGlobal("pywebview", {
+    api: {
+      complete_close_preflight: vi.fn().mockResolvedValue(undefined),
+      cancel_close_preflight: cancel,
+    },
+  });
+  render(<DesktopSession />);
+  act(() => send("scopecat:close-preflight", "unsubmitted"));
+  fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
+  await waitFor(() => expect(cancel).toHaveBeenCalledExactlyOnceWith("unsubmitted"));
+  act(() => send("scopecat:close-release", "unsubmitted"));
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.queryByRole("button", { name: "取消本次关闭等待" })).toBeNull();
+  expect(launchCloseBlocked()).toBe(false);
+  unregister();
 });

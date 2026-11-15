@@ -327,9 +327,9 @@ describe("instrument workspace", () => {
       await connectInstrument({ revealResults: false });
       const layout = screen.getByTestId("instrument-workbench-layout");
       expect(layout).toHaveAttribute("data-collection-collapsed", "true");
-      const property = screen.getByRole("spinbutton", { name: /CW frequency/ });
+      const property = screen.getByRole("textbox", { name: /CW frequency/ });
       const argument = screen.getByRole("textbox", { name: /Profile name/ });
-      fireEvent.change(property, { target: { value: "6000000000" } });
+      fireEvent.change(property, { target: { value: "6" } });
       fireEvent.change(argument, { target: { value: "keep argument" } });
       fireEvent.click(screen.getByRole("button", { name: "Sample" }));
       await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledOnce());
@@ -341,8 +341,8 @@ describe("instrument workspace", () => {
       expect(await screen.findByText("1 条待保存")).toBeVisible();
       expect(layout).toHaveAttribute("data-collection-collapsed", "true");
       fireEvent.click(screen.getByRole("button", { name: "参数" }));
-      expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toBe(property);
-      expect(property).toHaveValue(6000000000);
+      expect(screen.getByRole("textbox", { name: /CW frequency/ })).toBe(property);
+      expect(property).toHaveValue("6");
       expect(screen.getByRole("textbox", { name: /Profile name/ })).toBe(argument);
       expect(argument).toHaveValue("keep argument");
       fireEvent.click(screen.getByRole("button", { name: "展开结果" }));
@@ -386,7 +386,7 @@ describe("instrument workspace", () => {
       );
       expect((original as HTMLOptionElement).selected).toBe(true);
       expect(original).toHaveTextContent("已保存");
-      expect(property).toHaveValue(6000000000);
+      expect(property).toHaveValue("6");
       expect(argument).toHaveValue("keep argument");
       expect(openInstrumentSession).toHaveBeenCalledOnce();
       expect(closeInstrumentSession).not.toHaveBeenCalled();
@@ -878,7 +878,7 @@ describe("instrument workspace", () => {
       ),
     );
     expect(readInstrumentState).not.toHaveBeenCalled();
-    expect(await screen.findByDisplayValue("5000000000")).toBeVisible();
+    expect(await screen.findByDisplayValue("5")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "读取设备状态" }));
     await waitFor(() =>
@@ -887,7 +887,7 @@ describe("instrument workspace", () => {
         "drive-source",
       ),
     );
-    expect(await screen.findByDisplayValue("6000000000")).toBeVisible();
+    expect(await screen.findByDisplayValue("6")).toBeVisible();
     expect(screen.queryByText("session-1")).not.toBeInTheDocument();
 
     rendered.unmount();
@@ -958,7 +958,7 @@ describe("instrument workspace", () => {
       ),
     );
     expect(await screen.findByText("已应用配置的默认值。")).toBeVisible();
-    expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toHaveValue(6_000_000_000);
+    expect(screen.getByRole("textbox", { name: /CW frequency/ })).toHaveValue("6");
   });
 
   it("clears stale operation results after applying configured defaults", async () => {
@@ -1013,12 +1013,12 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
+    const frequency = await screen.findByRole("textbox", { name: /CW frequency/ });
     const applyDefaults = screen.getByRole("button", {
       name: "应用已配置默认值",
     });
 
-    fireEvent.change(frequency, { target: { value: "6000000000" } });
+    fireEvent.change(frequency, { target: { value: "6" } });
     expect(applyDefaults).toBeDisabled();
     expect(applyDefaults).toHaveAttribute("title", "请先应用或重置暂存属性");
 
@@ -1071,7 +1071,7 @@ describe("instrument workspace", () => {
     expect(screen.getByRole("button", { name: "释放控制" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Sample" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "调用 Reset fault" })).toBeDisabled();
-    expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: /CW frequency/ })).toBeDisabled();
     expect(applyDefaults).toHaveAttribute("title", "请等待当前仪器交互完成");
 
     finishDefaults?.(configuredDefaultsReceipt("unchanged", instrumentState()));
@@ -1176,15 +1176,15 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    const frequency = await screen.findByRole("spinbutton", {
+    const frequency = await screen.findByRole("textbox", {
       name: /CW frequency/,
     });
-    const readOnly = screen.getByRole("spinbutton", {
+    const readOnly = screen.getByRole("textbox", {
       name: /Measured temperature/,
     });
     expect(readOnly).toBeDisabled();
 
-    fireEvent.change(frequency, { target: { value: "6000000000" } });
+    fireEvent.change(frequency, { target: { value: "6" } });
 
     expect(applyInstrumentState).not.toHaveBeenCalled();
     expect(screen.getByText("已暂存 1 项属性")).toBeVisible();
@@ -1229,14 +1229,14 @@ describe("instrument workspace", () => {
     await screen.findByText("DC source");
     expect(screen.getByRole("combobox", { name: /Source mode/ })).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: /DC output/ })).toBeDisabled();
-    expect(screen.getByRole("spinbutton", { name: /Voltage range/ })).toBeDisabled();
-    expect(screen.getByRole("spinbutton", { name: /Current range/ })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: /Voltage range/ })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: /Current range/ })).toBeDisabled();
 
     await connectInstrument();
     await waitFor(() =>
-      expect(screen.getByRole("spinbutton", { name: /Voltage range/ })).toHaveValue(5),
+      expect(screen.getByRole("textbox", { name: /Voltage range/ })).toHaveValue("5"),
     );
-    expect(screen.getByRole("spinbutton", { name: /Current range/ })).toHaveValue(0.1);
+    expect(screen.getByRole("textbox", { name: /Current range/ })).toHaveValue("100");
     expect(screen.getByRole("combobox", { name: /Source mode/ })).toHaveValue("voltage");
 
     const card = screen
@@ -1267,18 +1267,18 @@ describe("instrument workspace", () => {
 
     await screen.findByText("Model-specific state");
     await connectInstrument();
-    const frequencies = screen.getAllByRole("spinbutton", { name: /CW frequency/ });
+    const frequencies = screen.getAllByRole("textbox", { name: /CW frequency/ });
     expect(frequencies).toHaveLength(2);
-    expect(frequencies[0]).toHaveValue(5_000_000_000);
+    expect(frequencies[0]).toHaveValue("5");
     expect(frequencies[0]).toBeEnabled();
-    expect(frequencies[1]).toHaveValue(6_000_000_000);
+    expect(frequencies[1]).toHaveValue("6");
     expect(frequencies[1]).toBeDisabled();
     expect(screen.getByRole("textbox", { name: /Serial number/ })).toHaveValue("SN-42");
     expect(screen.getByRole("textbox", { name: /Serial number/ })).toBeDisabled();
 
-    fireEvent.change(frequencies[0]!, { target: { value: "5100000000" } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: /Internal LO offset/ }), {
-      target: { value: "2000000" },
+    fireEvent.change(frequencies[0]!, { target: { value: "5.1" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Internal LO offset/ }), {
+      target: { value: "2 MHz" },
     });
     fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
 
@@ -1333,8 +1333,8 @@ describe("instrument workspace", () => {
     fireEvent.change(await screen.findByRole("combobox", { name: /Source mode/ }), {
       target: { value: "current" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: /Current range/ }), {
-      target: { value: "0.2" },
+    fireEvent.change(screen.getByRole("textbox", { name: /Current range/ }), {
+      target: { value: "200" },
     });
 
     const apply = screen.getByRole("button", { name: "应用暂存修改" });
@@ -1386,12 +1386,12 @@ describe("instrument workspace", () => {
 
     await screen.findByText("DC source");
     await connectInstrument();
-    const voltageRange = await screen.findByRole("spinbutton", { name: /Voltage range/ });
+    const voltageRange = await screen.findByRole("textbox", { name: /Voltage range/ });
     fireEvent.change(voltageRange, {
       target: { value: "8" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: /Current range/ }), {
-      target: { value: "0.2" },
+    fireEvent.change(screen.getByRole("textbox", { name: /Current range/ }), {
+      target: { value: "200" },
     });
 
     const voltageEditor = voltageRange.closest('[data-testid^="interface-property-"]');
@@ -1402,8 +1402,8 @@ describe("instrument workspace", () => {
       }),
     );
 
-    expect(screen.getByRole("spinbutton", { name: /Voltage range/ })).toHaveValue(5);
-    expect(screen.getByRole("spinbutton", { name: /Current range/ })).toHaveValue(0.2);
+    expect(screen.getByRole("textbox", { name: /Voltage range/ })).toHaveValue("5");
+    expect(screen.getByRole("textbox", { name: /Current range/ })).toHaveValue("200");
     expect(screen.getByText("已暂存 1 项属性")).toBeVisible();
     expect(applyInstrumentState).not.toHaveBeenCalled();
   });
@@ -1564,7 +1564,7 @@ describe("instrument workspace", () => {
       expect.stringMatching(/^ui-invoke-/),
     );
     expect(await screen.findByText("Invoke 回执： 已调用")).toBeVisible();
-    expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toHaveValue(7_000_000_000);
+    expect(screen.getByRole("textbox", { name: /CW frequency/ })).toHaveValue("7");
     const commandId = vi.mocked(invokeInstrumentOperation).mock.calls[0]?.[4];
     expect(commandId).toBeDefined();
     expect(screen.queryByText(commandId!)).not.toBeInTheDocument();
@@ -1650,8 +1650,8 @@ describe("instrument workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read existing" }));
     await waitFor(() => expect(within(current).getByText(/Read existing ·/)).toBeVisible());
     await waitFor(() => expect(screen.getAllByRole("img", { name: /局部曲线/ })).toHaveLength(1));
-    fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
-      target: { value: "6000000000" },
+    fireEvent.change(screen.getByRole("textbox", { name: /CW frequency/ }), {
+      target: { value: "6" },
     });
     expect(within(current).getByText(/有未发送的设置草稿/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
@@ -1785,8 +1785,8 @@ describe("instrument workspace", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: /^连接(?:并读取)?$/ }));
       await vi.waitFor(() => expect(screen.getByText("已连接", { exact: true })).toBeVisible());
-      fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
-        target: { value: "6000000000" },
+      fireEvent.change(screen.getByRole("textbox", { name: /CW frequency/ }), {
+        target: { value: "6" },
       });
       let acknowledge!: () => void;
       const choosing = vi.fn(() =>
@@ -2160,8 +2160,8 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
-    fireEvent.change(frequency, { target: { value: "6000000000" } });
+    const frequency = await screen.findByRole("textbox", { name: /CW frequency/ });
+    fireEvent.change(frequency, { target: { value: "6" } });
 
     fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
     expect(await screen.findByText("Apply network failed.")).toBeVisible();
@@ -2199,13 +2199,13 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
+    const frequency = await screen.findByRole("textbox", { name: /CW frequency/ });
 
     fireEvent.click(screen.getByRole("button", { name: "Sample" }));
     expect(await screen.findByText("Collect request lost.")).toBeVisible();
     const staleCollectCommandId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]?.[3];
 
-    fireEvent.change(frequency, { target: { value: "6000000000" } });
+    fireEvent.change(frequency, { target: { value: "6" } });
     fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
     expect(await screen.findByText("应用回执： 已应用")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Sample" }));
@@ -3646,8 +3646,8 @@ describe("connection rejection and retained session recovery", () => {
         vi.mocked(finishInstrumentSession).mockRejectedValueOnce(new Error("finish response lost"));
       renderWorkspace("drive-source");
       await connectInstrument();
-      fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
-        target: { value: "6000000000" },
+      fireEvent.change(screen.getByRole("textbox", { name: /CW frequency/ }), {
+        target: { value: "6" },
       });
       fireEvent.click(screen.getByRole("button", { name: "释放控制" }));
       fireEvent.click(await screen.findByRole("button", { name: "保持当前状态并结束" }));
