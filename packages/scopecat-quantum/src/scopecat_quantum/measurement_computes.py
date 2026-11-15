@@ -20,7 +20,6 @@ from scopecat import (
     ProductBundle,
     ProductRef,
     QuantityType,
-    Result,
     ScalarType,
     constant,
 )
@@ -39,26 +38,10 @@ class IqShotStatistics(ProductBundle):
     count: Annotated[
         ProductRef[int],
         ScalarType(IntType(minimum=1)),
-        Result(
-            metadata={
-                "statistic": "count",
-                "reduction_axis": "shot",
-                "scope": "one-acquisition",
-                "nonfinite": "reject",
-            }
-        ),
     ]
     mean: Annotated[
         ProductRef[complex],
         ScalarType(ComplexType(unit="ratio")),
-        Result(
-            metadata={
-                "statistic": "arithmetic-mean",
-                "reduction_axis": "shot",
-                "scope": "one-acquisition",
-                "nonfinite": "reject",
-            }
-        ),
     ]
 
 

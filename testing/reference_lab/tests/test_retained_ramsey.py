@@ -54,10 +54,8 @@ def test_ramsey_retention_round_trips_across_clients(
                 assert data["stats/mean"].definition.dtype == "complex128"
                 assert data["stats/mean"].definition.unit == "ratio"
                 assert data["stats/mean"].definition.dims == ("point",)
-                assert (
-                    data["stats/mean"].definition.metadata["reduction_axis"] == "shot"
-                )
                 assert data["stats/count"].definition.dtype == "int64"
+                assert data["stats/count"].definition.dims == ("point",)
 
         for raw_record, stats_record, both_record in zip(
             datasets["raw"].records,
