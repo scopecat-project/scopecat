@@ -23,6 +23,53 @@ from scopecat_quantum.measurement_computes import IqShotStatistics, iq_shot_stat
 _SHOT_AXES = (ProductAxis("shot", None, kind="shot", unit="count"),)
 
 
+@pytest.mark.parametrize("ids", [(None, None), ("q0-stats", "q1-stats")])
+def test_iq_statistics_allocates_distinct_compute_outputs(
+    ids: tuple[str | None, str | None],
+) -> None:
+    @sc.module
+    def statistics(
+        context: sc.ModuleContext,
+    ) -> tuple[IqShotStatistics, IqShotStatistics]:
+        q0 = context._product("q0", dtype="complex128", unit="ratio", axes=_SHOT_AXES)
+        q1 = context._product("q1", dtype="complex128", unit="ratio", axes=_SHOT_AXES)
+        if ids[0] is None:
+            return iq_shot_statistics(context, q0), iq_shot_statistics(context, q1)
+        return (
+            iq_shot_statistics(context, q0, id=ids[0]),
+            iq_shot_statistics(context, q1, id=ids[1]),
+        )
+
+    expected_ids = (
+        ("iq_shot_statistics", "iq_shot_statistics.2") if ids[0] is None else ids
+    )
+    computes = statistics.definition.body.measurement_computes
+    assert len(computes) == 2
+    for compute, expected_id, source in zip(
+        computes, expected_ids, ("q0", "q1"), strict=True
+    ):
+        assert compute.input_bindings[0][1].qualified_name == source
+        assert tuple(
+            (role, product_id.qualified_name)
+            for role, product_id in compute.output_bindings
+        ) == (
+            ("count", f"{expected_id}/count"),
+            ("mean", f"{expected_id}/mean"),
+        )
+
+
+def test_iq_statistics_rejects_duplicate_explicit_ids() -> None:
+    def statistics(context: sc.ModuleContext) -> None:
+        source = context._product(
+            "source", dtype="complex128", unit="ratio", axes=_SHOT_AXES
+        )
+        iq_shot_statistics(context, source, id="stats")
+        iq_shot_statistics(context, source, id="stats")
+
+    with pytest.raises(ValueError, match="duplicate explicit effect id: stats"):
+        sc.module(statistics)
+
+
 def _compute(
     *,
     dtype: MeasurementDType = "complex128",

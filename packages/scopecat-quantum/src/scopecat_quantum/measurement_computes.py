@@ -95,7 +95,7 @@ def iq_shot_statistics(
     iq_shots: ProductRef,
     /,
     *,
-    id: str = "iq-shot-statistics",
+    id: str | None = None,
 ) -> IqShotStatistics:
     """Reduce one acquired complex128 ratio [shot/count] array at each point.
 
@@ -103,6 +103,8 @@ def iq_shot_statistics(
     every shot; it is not a state-discrimination count. The complex mean retains
     phase, rather than averaging magnitudes. Unavailable inputs use the ordinary
     compute propagation rule. This has no cross-chunk state or device feedback.
+    Omit ``id`` to allocate a unique compute ID in the current context; explicit
+    IDs must be unique within that context.
     """
     if iq_shots.value_spec.unit != "ratio":
         raise TypeError("IQ shot statistics require explicit ratio units")
