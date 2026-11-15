@@ -264,7 +264,7 @@ it("measures synchronously at mount and coalesces observer notifications into on
   show();
   const layout = screen.getByTestId("instrument-workbench-layout");
   expect(layout.style.getPropertyValue("--device-workspace-height")).toBe(
-    `${Math.max(320, window.innerHeight - 160 - 20)}px`,
+    `${Math.max(320, window.innerHeight - 160 - 32)}px`,
   );
   expect(requestAnimationFrame).not.toHaveBeenCalled();
   const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
