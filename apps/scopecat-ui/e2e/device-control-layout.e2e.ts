@@ -238,7 +238,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       // Scroll the independent pane, not the outer window. Positioned chart
       // descriptions must remain contained even when the curve is below the fold.
       await expect
-        .poll(() => page.evaluate(() => document.documentElement.scrollHeight))
+        .poll(() => page.evaluate<number>("document.documentElement.scrollHeight"))
         .toBeLessThanOrEqual(900);
     }
     // Native regression: around 893px, a 59/41 split leaves a roughly 300px results pane.
