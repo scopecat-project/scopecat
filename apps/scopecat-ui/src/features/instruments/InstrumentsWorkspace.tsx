@@ -677,7 +677,7 @@ export function InstrumentsWorkspace({
           revision ? { revision_id: revision.id, content_hash: revision.content_hash } : undefined
         }
         displayLabel={selectedDevice.device.label}
-        hideHeading={!!controlDeviceId}
+        primaryHeading={!!controlDeviceId}
         registeredDeviceId={selectedDevice.device.id}
         configuration={connectionDetails}
         session={session}
@@ -731,23 +731,27 @@ export function InstrumentsWorkspace({
   if (controlDeviceId)
     return (
       <section aria-label="设备控制" className="device-control-window min-w-0">
-        <div className="px-4 pt-3 max-[680px]:px-3">
-          {selected ? (
-            <InstrumentHeading
-              primary
-              instrument={selected}
-              session={session}
-              displayLabel={selectedDevice?.device.label}
-              releaseUnconfirmed={releaseUnconfirmed}
-            />
-          ) : (
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+        {!(
+          selected &&
+          selectedDevice &&
+          (selectedDevice.device.state === "available" || session || recoverySession)
+        ) && (
+          <div className="px-4 pt-3 max-[680px]:px-3">
+            {selected ? (
+              <InstrumentHeading
+                primary
+                instrument={selected}
+                session={session}
+                displayLabel={selectedDevice?.device.label}
+                releaseUnconfirmed={releaseUnconfirmed}
+              />
+            ) : (
               <h1 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">
                 {selectedDevice?.device.label ?? "设备控制"}
               </h1>
-            </header>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         {closingWindow && <p role="status">正在等待当前操作完成并释放控制…</p>}
         {!closingWindow && releasePending && (
           <p role="status">仍在等待释放回执，暂不能重试或操作设备。</p>

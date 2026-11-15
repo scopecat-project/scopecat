@@ -25,6 +25,7 @@ export function InstrumentSessionPanel({
   refreshPending,
   stateAvailable,
   hideStateActions = false,
+  inlineSummary = false,
   configuredDefaultsVisible,
   configuredDefaultsPending,
   configuredDefaultsDisabled,
@@ -49,6 +50,7 @@ export function InstrumentSessionPanel({
   refreshPending: boolean;
   stateAvailable: boolean;
   hideStateActions?: boolean;
+  inlineSummary?: boolean;
   configuredDefaultsVisible: boolean;
   configuredDefaultsPending: boolean;
   configuredDefaultsDisabled: boolean;
@@ -63,8 +65,8 @@ export function InstrumentSessionPanel({
 }) {
   if (connected && session) {
     return (
-      <div className={sessionPanel}>
-        {hideStateActions && !releaseUnconfirmed ? (
+      <div className={classes(sessionPanel, inlineSummary && "device-session-panel--inline")}>
+        {inlineSummary ? null : hideStateActions && !releaseUnconfirmed ? (
           <span
             className="text-xs text-text-dim"
             title={`打开时间 ${formatRelative(session.opened_at)}`}
@@ -225,10 +227,12 @@ export function InstrumentSessionPanel({
   }
 
   return (
-    <div className={sessionPanel}>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <strong className="text-xs font-medium text-text-soft">未连接</strong>
-      </div>
+    <div className={classes(sessionPanel, inlineSummary && "device-session-panel--inline")}>
+      {!inlineSummary && (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <strong className="text-xs font-medium text-text-soft">未连接</strong>
+        </div>
+      )}
       <button
         type="button"
         className={primaryButton}

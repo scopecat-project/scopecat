@@ -102,7 +102,7 @@ test("device control windows hand off sessions without sharing writable views", 
       ).toBeVisible();
       await expect(control.getByRole("button", { name: "添加设备", exact: true })).toHaveCount(0);
       await control.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
-      await expect(control.getByText("交互会话已连接", { exact: true })).toBeVisible();
+      await expect(control.getByText("已连接", { exact: true })).toBeVisible();
     }
     const control = controls[0];
     await capture(control, "02-connected-controller");
@@ -172,9 +172,9 @@ test("device control windows hand off sessions without sharing writable views", 
     ).toBeEnabled();
     await capture(control, "04-control-released");
     // Another device stays connected while the first is handed off.
-    await expect(controls[1].getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await expect(controls[1].getByText("已连接", { exact: true })).toBeVisible();
     await outsider.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
-    await expect(outsider.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await expect(outsider.getByText("已连接", { exact: true })).toBeVisible();
     await outsider.getByRole("button", { name: "释放控制", exact: true }).click();
     await controls[1].getByRole("button", { name: "释放控制", exact: true }).click();
     await expect(

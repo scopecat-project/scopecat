@@ -385,3 +385,45 @@ it("opens capable devices with both workspaces and no data requirement", () => {
   expect(screen.getByText("参数内容")).toBeVisible();
   expect(screen.getByRole("separator")).toBeVisible();
 });
+
+it("keeps one shared navigation surface and restores a control task directly from results", () => {
+  show();
+  resize(560);
+  const pages = screen.getByRole("navigation", { name: "控制工作区页面" });
+  const regions = screen.getByRole("group", { name: "显示区域" });
+  expect(pages.parentElement).toBe(regions.parentElement);
+  fireEvent.click(within(regions).getByRole("button", { name: "结果" }));
+  expect(pages).toBeVisible();
+  expect(screen.getByRole("button", { name: "参数" })).toHaveAttribute("aria-pressed", "false");
+  const code = screen.getByRole("button", { name: "Python 示例" });
+  code.focus();
+  fireEvent.click(code);
+  expect(code).toHaveFocus();
+  expect(code).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("textbox", { name: "代码选项" })).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "结果选项", hidden: true })).not.toBeVisible();
+  resize(1200);
+  expect(screen.getByRole("navigation", { name: "控制工作区页面" })).toBe(pages);
+  expect(code).toHaveFocus();
+});
+
+it("retains the wide task rail when controls are hidden and opens the chosen task", () => {
+  show();
+  fireEvent.click(screen.getByRole("button", { name: "收起控制" }));
+  const pages = screen.getByRole("navigation", { name: "控制工作区页面" });
+  expect(pages).toBeVisible();
+  fireEvent.click(within(pages).getByRole("button", { name: "连接配置" }));
+  expect(screen.getByRole("textbox", { name: "配置草稿" })).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "结果选项" })).toBeVisible();
+});
+
+it("uses the same task navigation without empty region controls for a source-only device", () => {
+  show(false);
+  resize(560);
+  expect(screen.queryByRole("group", { name: "显示区域" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Python 示例" }));
+  expect(screen.getByRole("textbox", { name: "代码选项" })).toBeVisible();
+  resize(1200);
+  expect(screen.getByRole("textbox", { name: "代码选项" })).toBeVisible();
+  expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+});

@@ -64,6 +64,7 @@ import {
 } from "./MeasurementWorkbench";
 import { InstrumentControlLayout } from "./InstrumentControlLayout";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
+import "./instrument-window-toolbar.css";
 import { useInstrumentFinishRecovery } from "./instrument-finish-recovery";
 import { getInstrumentSessionRecovery } from "./instrument-session-recovery";
 
@@ -74,6 +75,7 @@ interface InstrumentInspectorProps {
   setup?: InstrumentSession["setup"];
   displayLabel?: string;
   hideHeading?: boolean;
+  primaryHeading?: boolean;
   registeredDeviceId?: string;
   configuration?: React.ReactNode;
   releaseUnconfirmed?: boolean;
@@ -125,6 +127,7 @@ function InstrumentInspectorContent({
   setup,
   displayLabel,
   hideHeading = false,
+  primaryHeading = false,
   registeredDeviceId,
   configuration,
   releaseUnconfirmed = false,
@@ -690,12 +693,14 @@ function InstrumentInspectorContent({
   return (
     <section
       className={classes(
-        "device-inspector relative grid min-w-0 content-start gap-3 p-4 max-[680px]:px-3",
-        !hideHeading && "max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line",
+        "device-inspector relative grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 p-4 max-[680px]:px-3",
+        !hideHeading &&
+          !primaryHeading &&
+          "max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line",
       )}
       aria-live="polite"
     >
-      {!hideHeading && (
+      {!hideHeading && !primaryHeading && (
         <InstrumentHeading
           instrument={instrument}
           session={session}
@@ -704,7 +709,16 @@ function InstrumentInspectorContent({
         />
       )}
 
-      <div className="device-session-toolbar">
+      <div className={classes("device-session-toolbar", primaryHeading && "device-window-toolbar")}>
+        {primaryHeading && (
+          <InstrumentHeading
+            primary
+            instrument={instrument}
+            session={session}
+            displayLabel={displayLabel}
+            releaseUnconfirmed={releaseUnconfirmed}
+          />
+        )}
         <InstrumentSessionPanel
           instrument={instrument}
           session={session}
@@ -717,6 +731,7 @@ function InstrumentInspectorContent({
           recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
           refreshPending={readMutation.isPending}
           hideStateActions
+          inlineSummary={primaryHeading}
           stateAvailable={captureStateAvailable}
           configuredDefaultsVisible={hasConfiguredDefaults}
           configuredDefaultsPending={configuredDefaultsMutation.isPending}
@@ -1191,7 +1206,12 @@ export function InstrumentHeading({
       <div className="min-w-0 flex-1 basis-60">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
           <Heading
-            title={displayLabel ?? description?.label ?? instrument.instrument_id}
+            title={[
+              displayLabel ?? description?.label ?? instrument.instrument_id,
+              description?.description,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             className="m-0 min-w-0 text-[1.1rem] font-[650] tracking-[-0.025em] [overflow-wrap:anywhere]"
           >
             {displayLabel ?? description?.label ?? instrument.instrument_id}

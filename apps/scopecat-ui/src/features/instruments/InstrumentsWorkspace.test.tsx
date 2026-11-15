@@ -400,15 +400,23 @@ describe("instrument workspace", () => {
 
   it("shows one device heading with status and no routine occupancy-refresh action", async () => {
     renderWorkspace("drive-source");
-    await screen.findByText("Virtual microwave source");
+    await screen.findByRole("button", { name: "连接并读取" });
     const title = screen.getByRole("heading", { name: "Drive source", level: 1 });
     expect(screen.getAllByRole("heading", { name: "Drive source" })).toHaveLength(1);
     const header = title.closest("header")!;
     expect(within(header).getByText("可用", { exact: true })).toBeVisible();
+    expect(title).toHaveAttribute("title", "Drive source · Virtual microwave source");
     expect(within(header).getByText("Virtual microwave source")).toBeVisible();
+    const toolbar = title.closest<HTMLElement>(".device-window-toolbar")!;
+    expect(within(toolbar).getByRole("button", { name: "连接并读取" })).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(within(header).queryByRole("button", { name: "刷新占用" })).not.toBeInTheDocument();
     await connectInstrument();
-    expect(within(header).getByText("已连接", { exact: true })).toBeVisible();
+    const connectedTitle = screen.getByRole("heading", { name: "Drive source", level: 1 });
+    const connectedToolbar = connectedTitle.closest<HTMLElement>(".device-window-toolbar")!;
+    expect(within(connectedToolbar).getByText("已连接", { exact: true })).toBeVisible();
+    expect(within(connectedToolbar).getByRole("button", { name: "释放控制" })).toBeVisible();
+    expect(within(connectedToolbar).queryByText("交互会话已连接")).not.toBeInTheDocument();
     expect(screen.getAllByRole("heading", { name: "Drive source" })).toHaveLength(1);
     expect(screen.queryByRole("textbox", { name: "线路名称" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sample" }));
@@ -418,6 +426,40 @@ describe("instrument workspace", () => {
       expect(input).toHaveClass("border", "bg-panel", "min-h-9");
       expect(input.closest("label")).toHaveClass("grid", "gap-1.5");
     }
+  });
+
+  it("keeps a window heading when the requested device is unavailable", async () => {
+    renderWorkspace("missing-device");
+    expect(await screen.findByText("设备不存在或正在加载，请在设备管理中检查登记。")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "设备控制", level: 1 })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^连接(?:并读取)?$/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps another manual session read-only in the compact identity toolbar", async () => {
+    mockInventory({
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+      problems: [],
+      items: [
+        instrument({
+          availability: "active",
+          owner_kind: "instrument_session",
+          owner_id: "other-session",
+        }),
+      ],
+    });
+    vi.mocked(readSharedInstrumentObservation).mockResolvedValue(instrumentState(7_000_000_000));
+    renderWorkspace("drive-source");
+    expect(await screen.findByText("手动控制不可用")).toBeVisible();
+    const title = screen.getByRole("heading", { name: "Drive source", level: 1 });
+    const toolbar = title.closest<HTMLElement>(".device-window-toolbar")!;
+    expect(within(toolbar).getByRole("button", { name: "断开会话" })).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    await waitFor(() => expect(readSharedInstrumentObservation).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /^连接(?:并读取)?$/ })).not.toBeInTheDocument();
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+    expect(readInstrumentState).not.toHaveBeenCalled();
+    expect(applyInstrumentState).not.toHaveBeenCalled();
+    expect(closeInstrumentSession).not.toHaveBeenCalled();
   });
 
   it("a fixed control view preserves experiment ownership and links to its run", async () => {
@@ -473,7 +515,7 @@ describe("instrument workspace", () => {
       expect(await prepareDeviceClose("close-failed")).toBe("unknown");
     });
     expect(screen.getByText(/释放控制未确认/)).toBeVisible();
-    expect(screen.getByText("控制释放结果待确认")).toBeVisible();
+    expect(screen.getByText("释放待确认", { exact: true })).toBeVisible();
     expect(screen.getByRole("button", { name: "读取设备状态" })).toBeDisabled();
     act(() => releaseDeviceClose("close-failed"));
     expect(screen.getByRole("button", { name: "释放控制" })).toBeEnabled();
@@ -507,7 +549,7 @@ describe("instrument workspace", () => {
       });
       await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(1));
       act(() => releaseDeviceClose("host-timeout"));
-      expect(screen.getByText("控制释放结果待确认")).toBeVisible();
+      expect(screen.getByText("释放待确认", { exact: true })).toBeVisible();
       expect(screen.getByRole("button", { name: "读取设备状态" })).toBeDisabled();
       const release = screen.getByRole("button", { name: "释放控制" });
       expect(release).toBeDisabled();
@@ -534,7 +576,9 @@ describe("instrument workspace", () => {
           name: outcome === "success" ? /^连接(?:并读取)?$/ : "释放控制",
         }),
       ).toBeEnabled();
-      expect(screen.queryByText("控制释放结果待确认") !== null).toBe(outcome === "failure");
+      expect(screen.queryByText("释放待确认", { exact: true }) !== null).toBe(
+        outcome === "failure",
+      );
       expect(readInstrumentState).not.toHaveBeenCalled();
       expect(abortInstrumentSession).not.toHaveBeenCalled();
     },
@@ -1740,7 +1784,7 @@ describe("instrument workspace", () => {
         expect(screen.getByRole("button", { name: /^连接(?:并读取)?$/ })).toBeVisible(),
       );
       fireEvent.click(screen.getByRole("button", { name: /^连接(?:并读取)?$/ }));
-      await vi.waitFor(() => expect(screen.getByText("交互会话已连接")).toBeVisible());
+      await vi.waitFor(() => expect(screen.getByText("已连接", { exact: true })).toBeVisible());
       fireEvent.change(screen.getByRole("spinbutton", { name: /CW frequency/ }), {
         target: { value: "6000000000" },
       });
@@ -2634,7 +2678,7 @@ function renderWorkspace(controlDeviceId?: string) {
 
 async function connectInstrument({ revealResults = true } = {}) {
   fireEvent.click(await screen.findByRole("button", { name: /^连接(?:并读取)?$/ }));
-  await screen.findByText("交互会话已连接");
+  await screen.findByRole("button", { name: "释放控制" });
   const reveal = screen.queryByRole("button", { name: "展开结果" });
   if (revealResults && reveal) fireEvent.click(reveal);
   const collapse = screen.queryByRole("button", { name: "收起结果" });
@@ -3580,7 +3624,7 @@ describe("connection rejection and retained session recovery", () => {
     act(() => releaseDeviceClose("auto-unknown-open"));
     vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "other" });
     fireEvent.click(screen.getByRole("button", { name: "用原请求核查连接结果" }));
-    await screen.findByText("交互会话已连接");
+    await screen.findByRole("button", { name: "释放控制" });
     expect(vi.mocked(openInstrumentSession).mock.calls[2]).toEqual(
       vi.mocked(openInstrumentSession).mock.calls[0],
     );
@@ -3944,7 +3988,7 @@ describe("connection rejection and retained session recovery", () => {
     });
     vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "other" });
     fireEvent.click(await screen.findByRole("button", { name: "恢复原会话控制" }));
-    await screen.findByText("交互会话已连接");
+    await screen.findByRole("button", { name: "释放控制" });
     expect(renewInstrumentSession).toHaveBeenCalledExactlyOnceWith("session-1");
     expect(openInstrumentSession).toHaveBeenCalledTimes(1);
     expect(

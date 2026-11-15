@@ -17,6 +17,7 @@ const views = [
   ["code", "Python 示例"],
 ] as const;
 const defaultSplit = 48;
+const railWidth = 84;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** Presentation only: all stateful controls and result/save owners stay mounted. */
@@ -42,6 +43,7 @@ export function InstrumentControlLayout({
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const splitter = useRef<HTMLDivElement>(null);
+  const paneGrid = useRef<HTMLDivElement>(null);
   const pointer = useRef<number | undefined>(undefined);
   const compactMode = useRef(false);
   const pendingMeasureFrame = useRef<number | undefined>(undefined);
@@ -64,8 +66,8 @@ export function InstrumentControlLayout({
     const measure = () => {
       const bounds = element.getBoundingClientRect();
       if (bounds.width <= 0) return; // A hidden parent must not erase the last usable layout.
-      setWidth(bounds.width);
       const nextCompact = compactMode.current ? bounds.width < 800 : bounds.width < 760;
+      setWidth(Math.max(0, bounds.width - (nextCompact ? 0 : railWidth)));
       if (nextCompact !== compactMode.current) {
         const active = element.ownerDocument.activeElement;
         if (active instanceof HTMLElement && element.contains(active))
@@ -119,8 +121,8 @@ export function InstrumentControlLayout({
   const showControl = !hasResults || (compact ? compactPane === "control" : controlVisible);
   const showResults = hasResults && (compact ? compactPane === "results" : resultsVisible);
   const both = showControl && showResults;
-  const min = width >= 760 ? Math.max(30, (320 / (width - 12)) * 100) : 30;
-  const max = width >= 760 ? Math.min(70, 100 - (300 / (width - 12)) * 100) : 70;
+  const min = !compact && width > 12 ? Math.max(30, (320 / (width - 12)) * 100) : 30;
+  const max = !compact && width > 12 ? Math.min(70, 100 - (300 / (width - 12)) * 100) : 70;
   const effectiveSplit = clamp(split, Math.min(min, max), max);
 
   useEffect(() => {
@@ -206,14 +208,38 @@ export function InstrumentControlLayout({
       ref={root}
       className="device-control-layout"
       data-testid="instrument-workbench-layout"
+      style={{ "--device-navigation-width": `${railWidth}px` } as CSSProperties}
       data-compact={compact}
       data-control-collapsed={!showControl}
       data-collection-collapsed={!showResults}
     >
-      <div className="device-task-heading" data-control-only={showControl && !showResults}>
+      <div className="device-workspace-navigation" aria-label="设备工作区导航">
+        <nav
+          className="device-view-switch"
+          aria-label="控制工作区页面"
+          onFocusCapture={() => {
+            lastFocusedPane.current = "control";
+          }}
+        >
+          {views.map(([value, label]) => (
+            <button
+              key={value}
+              className={secondaryButton}
+              aria-pressed={showControl && view === value}
+              aria-controls={`${id}-${value}`}
+              onClick={() => {
+                setView(value);
+                show("control");
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
         {paneSwitch}
       </div>
       <div
+        ref={paneGrid}
         className="device-pane-grid"
         data-both={both}
         style={
@@ -232,26 +258,6 @@ export function InstrumentControlLayout({
             lastFocusedPane.current = "control";
           }}
         >
-          <nav
-            hidden={!showControl}
-            className="device-view-switch"
-            aria-label="控制工作区页面"
-            onFocusCapture={() => {
-              lastFocusedPane.current = "control";
-            }}
-          >
-            {views.map(([value, label]) => (
-              <button
-                key={value}
-                className={secondaryButton}
-                aria-pressed={view === value}
-                aria-controls={`${id}-${value}`}
-                onClick={() => setView(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
           <MountedScrollPane
             id={`${id}-control`}
             visible={showControl && view === "control"}
@@ -307,7 +313,7 @@ export function InstrumentControlLayout({
           }}
           onPointerMove={(event) => {
             if (pointer.current !== event.pointerId) return;
-            const bounds = root.current?.getBoundingClientRect();
+            const bounds = paneGrid.current?.getBoundingClientRect();
             if (bounds && bounds.width > 12)
               setSplit(
                 clamp(((event.clientX - bounds.left - 6) / (bounds.width - 12)) * 100, min, max),

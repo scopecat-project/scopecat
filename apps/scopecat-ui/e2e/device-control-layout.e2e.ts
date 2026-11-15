@@ -197,6 +197,14 @@ test("control inputs and headings stay readable and bounded curves resize at eve
         await route.fulfill({ response, json: summary });
       },
     );
+    const toolbar = page.locator(".device-window-toolbar");
+    await expect(toolbar.getByRole("heading", { level: 1 })).toHaveCount(1);
+    const titleBounds = await toolbar.getByRole("heading", { level: 1 }).boundingBox();
+    const connectBounds = await toolbar
+      .getByRole("button", { name: /^连接(?:并读取)?$/, exact: true })
+      .boundingBox();
+    expect(titleBounds!.y).toBeLessThan(connectBounds!.y + connectBounds!.height);
+    expect(titleBounds!.y + titleBounds!.height).toBeGreaterThan(connectBounds!.y);
     await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("已连接", { exact: true })).toBeVisible();
     await page.screenshot({
@@ -216,6 +224,24 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     const read = page.getByTitle("scopecat.existing_network_trace/v1 / ", { exact: true });
     await sweep.click();
     await showResults(page);
+    const navigation = page.locator(".device-workspace-navigation");
+    await testInfo.attach("compact-navigation-geometry", {
+      body: JSON.stringify(
+        await navigation.evaluate((element) => ({
+          bounds: element.getBoundingClientRect().toJSON(),
+          layout: element.parentElement!.getBoundingClientRect().toJSON(),
+          compact: element.parentElement!.getAttribute("data-compact"),
+          overflow: element.scrollWidth - element.clientWidth,
+          viewport: element.ownerDocument.defaultView!.innerWidth,
+        })),
+      ),
+      contentType: "application/json",
+    });
+    for (const button of await navigation.getByRole("button").all())
+      await expect(button).toBeInViewport({ ratio: 1 });
+    expect(
+      await navigation.evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(1);
     await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
     await expect(
       page.getByRole("combobox", { name: "选择近期结果", exact: true }),
@@ -229,6 +255,12 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     const curve = current.getByRole("img", {
       name: "s_parameter 局部曲线",
       includeHidden: true,
+    });
+    // Evidence must show the rendered curve, not the lazy-loading placeholder.
+    await expectFittedCurve(curve);
+    await page.screenshot({
+      path: testInfo.outputPath("compact-navigation-pending-390.png"),
+      fullPage: true,
     });
     for (const width of [390, 1280, 390, 760, 1280]) {
       await page.setViewportSize({ width, height: 900 });
@@ -303,7 +335,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
     await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
     const narrowSave = page.getByRole("dialog", { name: "保存测量", exact: true });
     await narrowSave.getByRole("textbox", { name: "标题", exact: true }).fill("Narrow plot draft");
-    await page.setViewportSize({ width: 800, height: 600 });
+    await page.setViewportSize({ width: 760, height: 600 });
     await expect(page.getByTestId("instrument-workbench-layout")).toHaveAttribute(
       "data-compact",
       "true",
@@ -313,7 +345,7 @@ test("control inputs and headings stay readable and bounded curves resize at eve
       "Narrow plot draft",
     );
     await page.screenshot({
-      path: "../../.test-results/layout-c-chart-save-800.png",
+      path: "../../.test-results/layout-c-chart-save-760.png",
       fullPage: true,
     });
     await narrowSave.getByRole("button", { name: "取消", exact: true }).click();

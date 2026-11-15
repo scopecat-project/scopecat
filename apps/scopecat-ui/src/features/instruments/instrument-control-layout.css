@@ -46,51 +46,63 @@
   padding: 0;
   border: 0;
 }
-/* A-style workspace: a task rail beside parameters, independently visible results. */
-.device-task-heading {
+/* One navigation surface: a persistent rail on wide windows, one band on narrow ones. */
+.device-workspace-navigation {
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
+  min-width: 0;
   flex: none;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--color-line);
+  gap: 8px;
 }
-.device-control-layout:not([data-compact="true"]) .device-control-pane {
+.device-control-layout:not([data-compact="true"]) {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-columns: var(--device-navigation-width) minmax(0, 1fr);
 }
-.device-control-layout:not([data-compact="true"]) .device-view-switch {
-  grid-column: 1;
-  grid-row: 1 / 4;
-  display: flex;
+.device-control-layout:not([data-compact="true"]) .device-workspace-navigation {
+  flex-direction: column;
+  border-right: 1px solid var(--color-line);
+  padding: 8px 6px;
+  overflow: auto;
+}
+.device-control-layout:not([data-compact="true"]) .device-view-switch,
+.device-control-layout:not([data-compact="true"]) .device-pane-switch {
   flex-direction: column;
   align-items: stretch;
-  padding: 12px 6px;
-  border-right: 1px solid var(--color-line);
   gap: 6px;
 }
-.device-control-layout:not([data-compact="true"]) .device-view-switch button {
-  white-space: normal;
-  padding-inline: 3px;
+.device-control-layout:not([data-compact="true"]) .device-pane-switch {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
 }
-.device-control-layout:not([data-compact="true"]) .device-control-pane > .device-pane-scroll {
-  grid-column: 2;
-  grid-row: 1;
+.device-control-layout:not([data-compact="true"]) .device-workspace-navigation button {
+  white-space: nowrap;
+  padding-inline: 1px;
 }
-.device-control-layout:not([data-compact="true"]) .device-parameter-actions {
-  grid-column: 2;
-  grid-row: 2;
-  max-height: min(10rem, 25dvh);
-}
-.device-control-layout:not([data-compact="true"]) .device-acquisition-actions {
-  grid-column: 2;
-  grid-row: 3;
-  max-height: min(10rem, 25dvh);
-}
-.device-control-layout[data-compact="true"] .device-view-switch {
-  padding: 8px 12px;
+.device-control-layout[data-compact="true"] .device-workspace-navigation {
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--color-line);
+  flex-wrap: wrap;
+}
+.device-control-layout[data-compact="true"] .device-view-switch,
+.device-control-layout[data-compact="true"] .device-pane-switch {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+.device-control-layout[data-compact="true"] .device-pane-switch {
+  border-left: 1px solid var(--color-line);
+  padding-left: 6px;
+  margin-left: auto;
+}
+.device-control-layout[data-compact="true"] .device-workspace-navigation button {
+  white-space: nowrap;
+  padding-inline: 6px;
+  font-size: 11px;
+}
+.device-control-layout[data-compact="true"] .device-pane-switch > span {
+  white-space: nowrap;
+  font-size: 10px;
 }
 .device-pane-scroll {
   position: relative;

@@ -498,6 +498,11 @@ decimal strings; unsafe integers are not silently rounded into curves. Saving
 always uses the full original, never the displayed preview. Technical receipt
 and source evidence remain in a separate disclosure.
 
+The dedicated device window uses one toolbar for device identity, availability and
+session actions, below the OS-owned title bar. Workspace navigation forms a persistent
+rail on wide windows and a compact, wrapping band on narrow windows; switching a
+control page can restore a hidden control area without discarding its state.
+
 On wide windows, devices with acquisition capabilities start with controls and
 results side by side. An empty results area is distinct from a device without
 acquisition capabilities: the latter reserves no results column unless it has a
