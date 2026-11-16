@@ -378,7 +378,7 @@ it("submits selected array members and invalidates the preview when membership c
     .mockResolvedValueOnce(Response.json(previewResult));
   vi.stubGlobal("fetch", fetcher);
   mount();
-  const select = (await screen.findByLabelText("Qubits")) as HTMLSelectElement;
+  const select = await screen.findByLabelText<HTMLSelectElement>("Qubits");
   select.options[0]!.selected = true;
   select.options[2]!.selected = true;
   fireEvent.change(select);

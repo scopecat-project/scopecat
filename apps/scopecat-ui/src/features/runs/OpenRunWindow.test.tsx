@@ -16,7 +16,7 @@ it("encodes only the exact run in a same-service browser link with no opener", (
       <OpenRunWindow runId={runId} />
     </QueryClientProvider>,
   );
-  const link = screen.getByRole("link") as HTMLAnchorElement;
+  const link = screen.getByRole<HTMLAnchorElement>("link");
   const target = new URL(link.href);
   expect(target.origin).toBe(window.location.origin);
   expect(target.pathname).toBe("/");
