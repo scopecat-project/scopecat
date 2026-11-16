@@ -58,6 +58,8 @@ from .backend import (
     InstrumentHandleInvalid,
     LocalInstrumentBackendEndpoint,
 )
+from .raw_header_spans import scan_worker_collect_header
+from .retained_receipt import RawCollectReceipt
 from .worker_output import (
     diagnostic_reference,
     record_exception,
@@ -70,9 +72,7 @@ from .worker_wire import (
     CollectFrames,
     InvokeFrames,
     WorkerWireError,
-    collect_attachment_sizes,
     invoke_attachment_sizes,
-    join_collect_receipt,
     join_invoke_request,
     split_collect_receipt,
     split_invoke_request,
@@ -243,11 +243,12 @@ class _StartupResponse(_WireModel):
 @dataclass(frozen=True, slots=True)
 class _ReceivedResponse:
     response: _RpcResponse
-    collect_receipt: CollectReceipt | None = None
+    collect_receipt: RawCollectReceipt | None = None
 
 
 @dataclass(slots=True)
 class _PendingResponse:
+    maximum_receipt_bytes: int | None = None
     event: Event = field(default_factory=Event)
     received: _ReceivedResponse | None = None
     error: InstrumentBackendError | None = None
@@ -501,10 +502,23 @@ class SubprocessInstrumentBackendEndpoint:
         handle: InstrumentHandle,
         request: BackendCollectRequest,
     ) -> CollectReceipt:
+        # Non-direct run consumers retain their existing expanded contract.
+        # Direct pending-result routes call collect_raw under shared admission.
+        raw = self.collect_raw(handle, request).with_view(legacy_full_view=True)
+        return raw.materialize(max_bytes=raw.materialization_bytes)
+
+    def collect_raw(
+        self,
+        handle: InstrumentHandle,
+        request: BackendCollectRequest,
+        *,
+        maximum_receipt_bytes: int | None = None,
+    ) -> RawCollectReceipt:
         received = self._rpc(
             "collect",
             handle=handle,
             body={"request": _model_to_body(request)},
+            maximum_receipt_bytes=maximum_receipt_bytes,
         )
         if received.collect_receipt is None:
             self._raise_invalid_response(
@@ -602,6 +616,7 @@ class SubprocessInstrumentBackendEndpoint:
         handle: InstrumentHandle | None = None,
         body: dict[str, JsonValue] | None = None,
         frames: InvokeFrames | None = None,
+        maximum_receipt_bytes: int | None = None,
     ) -> _ReceivedResponse:
         with self._state_lock:
             self._require_available()
@@ -615,7 +630,7 @@ class SubprocessInstrumentBackendEndpoint:
                 body=body,
                 attachment_count=0 if frames is None else len(frames.attachments),
             )
-            pending = _PendingResponse()
+            pending = _PendingResponse(maximum_receipt_bytes=maximum_receipt_bytes)
             self._pending[request.request_id] = pending
         try:
             with self._send_lock:
@@ -675,10 +690,19 @@ class SubprocessInstrumentBackendEndpoint:
         while True:
             try:
                 response = _recv_model(self._connection, _RpcResponse)
+                with self._state_lock:
+                    active = self._pending.get(response.request_id)
+                    receipt_limit = (
+                        None if active is None else active.maximum_receipt_bytes
+                    )
+                if response.frame_kind == "collect" and active is None:
+                    raise ValueError("unreserved worker receipt")
+                del active
                 collect_receipt = (
                     _receive_collect(
                         self._connection,
                         response.attachment_count,
+                        maximum_receipt_bytes=receipt_limit,
                     )
                     if response.frame_kind == "collect"
                     else None
@@ -699,7 +723,11 @@ class SubprocessInstrumentBackendEndpoint:
                     )
                     pending.event.set()
                     self._pending.pop(response.request_id, None)
-            if pending is None:
+            missing = pending is None
+            # The receiver immediately blocks for the next RPC. It must not
+            # keep the last payload or the delivered pending slot alive.
+            del pending, collect_receipt, response
+            if missing:
                 if closed:
                     continue
                 self._mark_unavailable()
@@ -1305,14 +1333,25 @@ def _receive_invoke(
 def _receive_collect(
     connection: _ByteConnection,
     attachment_count: int,
-) -> CollectReceipt:
+    *,
+    maximum_receipt_bytes: int | None = None,
+) -> RawCollectReceipt:
     header = connection.recv_bytes(DEFAULT_WIRE_LIMITS.max_header_bytes)
+    scanned = scan_worker_collect_header(header)
+    framed_bytes = (
+        len(scanned.canonical_header)
+        + sum(item.size_bytes for item in scanned.manifests)
+        + 20
+        + 8 * len(scanned.manifests)
+    )
+    if maximum_receipt_bytes is not None and framed_bytes > maximum_receipt_bytes:
+        raise ValueError("worker receipt exceeds its admitted byte envelope")
     attachments = _receive_attachments(
         connection,
         attachment_count=attachment_count,
-        declared_sizes=collect_attachment_sizes(header),
+        declared_sizes=tuple(item.size_bytes for item in scanned.manifests),
     )
-    return join_collect_receipt(header, attachments)
+    return RawCollectReceipt.from_worker_frames(header, attachments, defer_view=True)
 
 
 def _receive_attachments(
@@ -1325,7 +1364,9 @@ def _receive_attachments(
         raise WorkerWireError("worker frame count does not match its manifest")
     attachments: list[bytes] = []
     for declared_size in declared_sizes:
-        content = connection.recv_bytes(DEFAULT_WIRE_LIMITS.max_attachment_bytes)
+        content = connection.recv_bytes(
+            min(declared_size, DEFAULT_WIRE_LIMITS.max_attachment_bytes)
+        )
         if len(content) != declared_size:
             raise WorkerWireError("worker frame size does not match its manifest")
         attachments.append(content)

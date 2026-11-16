@@ -6,6 +6,10 @@
 #include <wchar.h>
 #include <stdlib.h>
 
+#ifndef SCOPECAT_APP_ID
+#define SCOPECAT_APP_ID L"org.scopecat.desktop"
+#endif
+
 typedef int (__cdecl *PythonMain)(int, wchar_t **);
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int show) {
@@ -13,8 +17,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return 1;
     BOOL check = FALSE;
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; i < argc; ++i) {
         if (!wcscmp(argv[i], L"--check-result")) check = TRUE;
+#ifdef SCOPECAT_TRIAL
+        // Explicit one-shot verification must return failures without a modal.
+        if (!wcscmp(argv[i], L"--trial-window-probe")) check = TRUE;
+#endif
+    }
     int result = 1;
     wchar_t module[32768];
     DWORD length = GetModuleFileNameW(NULL, module, 32768);
@@ -36,7 +45,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
         HMODULE runtime = LoadLibraryExW(library, NULL,
             LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
         PythonMain python_main = runtime ? (PythonMain)GetProcAddress(runtime, "Py_Main") : NULL;
-        if (python_main && SUCCEEDED(SetCurrentProcessExplicitAppUserModelID(L"org.scopecat.desktop"))) {
+        if (python_main && SUCCEEDED(SetCurrentProcessExplicitAppUserModelID(SCOPECAT_APP_ID))) {
             // The GUI remains in Scopecat.exe. argv[0] selects the ordinary bundled
             // interpreter for sys.executable and backend/author subprocesses.
             arguments[0] = python;
@@ -54,7 +63,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
     LocalFree(argv);
     if (result && !check)
         MessageBoxW(NULL,
+#ifdef SCOPECAT_TRIAL
+            L"试用构建拒绝启动。请检查包内固定 home、locator 与启动参数；不会回退正式数据目录。",
+#else
             L"请保留应用和数据。错误详情位于本地应用数据目录 Scopecat\\native-start.log。",
+#endif
             L"Scopecat 启动未完成", MB_OK | MB_ICONERROR);
     return (int)result;
 }

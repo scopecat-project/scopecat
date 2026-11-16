@@ -61,6 +61,7 @@ from .manual_previews import ManualPreviewService
 from .notebook_practice import NotebookPracticeService
 from .operator_settings import OperatorSettingsService
 from .parameter_drafts import ParameterDraftService
+from .pending_result_settings import PendingResultSettingsService
 from .point_plans import RunPointPlanService
 from .practice import PracticeService
 from .procedure_schedules import ProcedureScheduleService
@@ -99,6 +100,7 @@ class DaemonApplication:
         procedure_schedules: ProcedureScheduleService,
         point_plans: RunPointPlanService,
         samples: SampleService,
+        pending_result_settings: PendingResultSettingsService,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.binding = load_runtime_binding(self.project_root)
@@ -154,6 +156,7 @@ class DaemonApplication:
         self.automation = automation
         self.launch_recovery = LaunchRecoveryService(project_store.sqlite)
         self.operator_settings = OperatorSettingsService(self.binding.data_root)
+        self.pending_result_settings = pending_result_settings
         self.decision_drafts = DecisionDraftService(project_store.sqlite)
         self.parameter_drafts = ParameterDraftService(project_store.sqlite, config)
         self.data_cleanup = DataCleanupService(project_store)

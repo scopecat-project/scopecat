@@ -6,12 +6,14 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import tempfile
 import zipfile
 from importlib.metadata import version
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import psutil
 from filelock import FileLock
@@ -20,8 +22,97 @@ from scripts.app_build.author_materials import prepare as prepare_materials
 from scripts.app_build.author_resources import build as build_author_resources
 
 from scopecat_app.author_resources import verify_resources
-from scopecat_app.bundle import target_identity
+from scopecat_app.bundle import read_bundle, target_identity
 from scopecat_server.validation_process import terminate_validation_process_tree
+
+if TYPE_CHECKING:
+    from scopecat.trial_policy import TrialPolicy
+
+TRIAL_DEVELOPMENT = "SCOPECAT_TRIAL_DEVELOPMENT"
+
+
+def trial_development_policy(
+    *, source: Path | None = None, home: Path | None = None, entry: Path | None = None
+) -> TrialPolicy | None:
+    """Fixed Windows trial lifecycle testing, never an ordinary dev override.
+
+    The marked package owns Python, state and locator. Its sibling ``source``
+    checkout must match the packaged clean commit; the path is not an env input.
+    Keep node_modules outside the policy's alias-free application-data tree.
+    """
+    from scopecat.trial_policy import checked_path, current_policy, validate_environment
+
+    policy = current_policy()
+    marker = os.environ.get(TRIAL_DEVELOPMENT)
+    if policy is None:
+        if marker is not None:
+            raise ValueError("Trial development requires a marked package interpreter")
+        return None
+    if sys.platform != "win32":
+        raise ValueError("Trial development is supported only on Windows")
+    validate_environment(policy)
+    if marker != policy.identity:
+        raise ValueError("Trial development requires its exact mode marker")
+    python = checked_path(policy.resources / "python/python.exe")
+    if checked_path(Path(sys.executable)) != python:
+        raise ValueError("Trial development must use its packaged interpreter")
+    if home is not None and checked_path(home) != policy.state:
+        raise ValueError("Trial development home must exactly match its policy state")
+    if source is not None:
+        expected = checked_path(policy.home.parent / "source")
+        if (
+            checked_path(source) != expected
+            or checked_path(Path(__file__).absolute()).parents[2] != expected
+        ):
+            raise ValueError(
+                "Trial development requires its fixed sibling source checkout"
+            )
+        if entry is not None and not checked_path(entry).is_relative_to(
+            expected / "scripts"
+        ):
+            raise ValueError("Trial development script must belong to its fixed source")
+        commit = read_bundle(policy.resources / "payload")["sources"].get("public", "")
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            raise ValueError(
+                "Trial development requires a clean packaged source commit"
+            )
+        environment = dict(os.environ, GIT_OPTIONAL_LOCKS="0")
+        for name in (
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_INDEX_FILE",
+            "GIT_OBJECT_DIRECTORY",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        ):
+            environment.pop(name, None)
+
+        def git(*arguments: str) -> str:
+            return subprocess.check_output(  # noqa: S603 - read-only fixed checkout checks
+                ["git", "-c", "core.fsmonitor=false", *arguments],  # noqa: S607
+                cwd=source,
+                env=environment,
+                text=True,
+                timeout=30,
+            ).strip()
+
+        if (
+            checked_path(Path(git("rev-parse", "--show-toplevel"))) != expected
+            or git("rev-parse", "HEAD") != commit
+            or git("status", "--porcelain", "--untracked-files=normal")
+        ):
+            raise ValueError(
+                "Trial development source must match its clean packaged commit"
+            )
+    return policy
+
+
+def refuse_trial_resource_build() -> None:
+    """The test mode consumes prepared package resources, never builds replacements."""
+    from scopecat.trial_policy import current_policy
+
+    if current_policy() is not None or TRIAL_DEVELOPMENT in os.environ:
+        raise ValueError("Trial development only uses prepared package resources")
+
 
 DEVELOPMENT_INDEX = """<!doctype html><html lang="en"><meta charset="utf-8">
 <title>Opening Scopecat</title><p id="status">Opening Scopecat…</p>
@@ -48,8 +139,11 @@ DEVELOPMENT_INDEX = """<!doctype html><html lang="en"><meta charset="utf-8">
 
 
 def development_home(source: Path) -> Path:
+    policy = trial_development_policy(source=source)
     identity = os.path.normcase(str(source.resolve()))
     key = hashlib.sha256(os.fsencode(identity)).hexdigest()[:20]
+    if policy is not None:
+        return policy.home / "development" / key
     return user_data_path("Scopecat-Development", appauthor=False) / key
 
 
@@ -127,6 +221,7 @@ def resource_identity(source: Path) -> str:
 
 def prepare_resources(source: Path, cache: Path) -> Path:
     """Publish only verified complete payloads. Old identities remain untouched."""
+    refuse_trial_resource_build()
     cache.mkdir(parents=True, exist_ok=True)
     key = resource_identity(source)
     digest = source_identity(source)
@@ -187,6 +282,7 @@ def prepare_resources(source: Path, cache: Path) -> Path:
 
 def prepare_native_dependency(payload: Path, cache: Path) -> None:
     """Use the same verified wheel repair as packaging, without editing the venv."""
+    refuse_trial_resource_build()
     if sys.platform not in {"darwin", "win32"}:
         return
     wheels = cache / "native-wheels" / payload.name
@@ -229,6 +325,7 @@ def prepare_native_dependency(payload: Path, cache: Path) -> None:
 
 def prepare_resources_logged(source: Path, cache: Path, log: Path) -> Path:
     """Keep build output and isolate cancellable build tools from terminal signals."""
+    refuse_trial_resource_build()
     key = resource_identity(source)
     payload = cache / key
     if payload.exists():

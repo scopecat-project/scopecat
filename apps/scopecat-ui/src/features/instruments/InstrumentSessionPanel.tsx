@@ -18,10 +18,14 @@ export function InstrumentSessionPanel({
   connected,
   releaseUnconfirmed = false,
   connectPending,
+  connectDisabled = false,
   closePending,
   interactionPending,
+  recoveryBlocked = false,
   refreshPending,
   stateAvailable,
+  hideStateActions = false,
+  inlineSummary = false,
   configuredDefaultsVisible,
   configuredDefaultsPending,
   configuredDefaultsDisabled,
@@ -39,10 +43,14 @@ export function InstrumentSessionPanel({
   connected: boolean;
   releaseUnconfirmed?: boolean;
   connectPending: boolean;
+  connectDisabled?: boolean;
   closePending: boolean;
   interactionPending: boolean;
+  recoveryBlocked?: boolean;
   refreshPending: boolean;
   stateAvailable: boolean;
+  hideStateActions?: boolean;
+  inlineSummary?: boolean;
   configuredDefaultsVisible: boolean;
   configuredDefaultsPending: boolean;
   configuredDefaultsDisabled: boolean;
@@ -57,23 +65,29 @@ export function InstrumentSessionPanel({
 }) {
   if (connected && session) {
     return (
-      <div className={classes(sessionPanel, "border-[rgb(128_163_207_/_24%)] bg-accent-soft")}>
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[680px]:w-full max-[680px]:basis-full">
+      <div className={classes(sessionPanel, inlineSummary && "device-session-panel--inline")}>
+        {inlineSummary ? null : hideStateActions && !releaseUnconfirmed ? (
           <span
-            className="grid size-8 place-items-center rounded-sm bg-[rgb(128_163_207_/_10%)] text-accent"
-            aria-hidden="true"
+            className="text-xs text-text-dim"
+            title={`打开时间 ${formatRelative(session.opened_at)}`}
           >
-            <Cable size={16} />
+            交互会话已连接
           </span>
-          <div className="grid gap-1">
-            <strong className="text-xs text-text-soft">
-              {releaseUnconfirmed ? "控制释放结果待确认" : "交互会话已连接"}
-            </strong>
-            <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
-              打开时间 {formatRelative(session.opened_at)}
-            </small>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[680px]:w-full max-[680px]:basis-full">
+            <span className="text-accent" aria-hidden="true">
+              <Cable size={16} />
+            </span>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <strong className="text-xs text-text-soft">
+                {releaseUnconfirmed ? "控制释放结果待确认" : "交互会话已连接"}
+              </strong>
+              <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
+                打开时间 {formatRelative(session.opened_at)}
+              </small>
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex flex-wrap justify-end gap-[7px] max-[460px]:w-full max-[460px]:[&>button]:flex-1">
           {configuredDefaultsVisible && (
             <button
@@ -91,22 +105,30 @@ export function InstrumentSessionPanel({
               应用已配置默认值
             </button>
           )}
-          <button
-            type="button"
-            className={secondaryButton}
-            onClick={onRefresh}
-            disabled={interactionPending || closePending || releaseUnconfirmed || !stateAvailable}
-            title={
-              !stateAvailable
-                ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"
-                : interactionPending
-                  ? "请等待当前仪器交互完成"
-                  : undefined
-            }
-          >
-            <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
-            刷新状态
-          </button>
+          {!hideStateActions && (
+            <button
+              type="button"
+              className={secondaryButton}
+              onClick={onRefresh}
+              disabled={
+                interactionPending ||
+                recoveryBlocked ||
+                closePending ||
+                releaseUnconfirmed ||
+                !stateAvailable
+              }
+              title={
+                !stateAvailable
+                  ? "此驱动未声明可读状态；请通过设备前面板或驱动支持的操作核对。"
+                  : interactionPending
+                    ? "请等待当前仪器交互完成"
+                    : undefined
+              }
+            >
+              <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
+              读取设备状态
+            </button>
+          )}
           <button
             type="button"
             className={secondaryButton}
@@ -141,7 +163,7 @@ export function InstrumentSessionPanel({
           type="button"
           className={secondaryButton}
           onClick={onResolve}
-          disabled={!canResolve || resolvePending}
+          disabled={!canResolve || resolvePending || recoveryBlocked}
           title={canResolve ? "确认已隔离的交互会话并释放" : "请从所属运行流程处理此占用方"}
         >
           {resolvePending ? (
@@ -175,7 +197,7 @@ export function InstrumentSessionPanel({
             type="button"
             className={secondaryButton}
             onClick={onDisconnectOwner}
-            disabled={closePending}
+            disabled={closePending || recoveryBlocked}
             title="断开此后台服务持有的交互会话"
           >
             {closePending ? (
@@ -205,16 +227,21 @@ export function InstrumentSessionPanel({
   }
 
   return (
-    <div className={sessionPanel}>
-      <div className="grid min-w-0 flex-1 gap-1 max-[680px]:w-full max-[680px]:basis-full">
-        <strong className="text-xs text-text-soft">准备交互时再连接</strong>
-        <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
-          连接后可读取或调整仪器。完成后释放控制，让实验可以使用它。选中设备不会连接。
-        </small>
-      </div>
-      <button type="button" className={primaryButton} onClick={onConnect} disabled={connectPending}>
+    <div className={classes(sessionPanel, inlineSummary && "device-session-panel--inline")}>
+      {!inlineSummary && (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <strong className="text-xs font-medium text-text-soft">未连接</strong>
+        </div>
+      )}
+      <button
+        type="button"
+        className={primaryButton}
+        onClick={onConnect}
+        disabled={connectPending || connectDisabled}
+        title={connectDisabled ? "请先核查原会话与保存待办，不能用新会话覆盖原结果。" : undefined}
+      >
         {connectPending ? <LoaderCircle className="animate-spin" size={14} /> : <Cable size={14} />}
-        连接
+        {stateAvailable ? "连接并读取" : "连接"}
       </button>
     </div>
   );
@@ -225,8 +252,7 @@ function OwnerDescription({ instrument }: { instrument: InstrumentView }) {
   return <small className="mt-[7px] block text-xs text-text-dim">{ownerKind}</small>;
 }
 
-const sessionPanel =
-  "flex min-h-16 items-center gap-3.5 rounded-md border border-line bg-panel-soft px-[13px] py-[11px] max-[680px]:flex-wrap max-[680px]:items-stretch";
+const sessionPanel = "device-session-panel flex min-w-0 flex-wrap items-center gap-3";
 const attentionPanel =
   "flex min-h-16 items-start gap-3.5 rounded-md border border-[rgb(207_173_104_/_24%)] bg-yellow-soft px-[13px] py-[11px] text-yellow max-[680px]:flex-wrap max-[680px]:items-stretch";
 const attentionCopy = "mt-1 mb-0 text-xs leading-normal text-text-dim";

@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { convertControlNumber } from "../launch/control-quantity";
+import { engineeringUnit, quantityUnits } from "./instrument-quantity";
 import * as Controls from "../../ui/Controls";
 import type { InstrumentProperty, InstrumentStateValue } from "../../api-contract";
 
@@ -23,6 +26,19 @@ export function InstrumentPropertyInput({
   onChange: (draft: InstrumentPropertyDraft) => void;
 }) {
   const type = property.value_type;
+  if (type.type === "quantity") {
+    return (
+      <QuantityInput
+        key={`${property.id}:${type.unit}`}
+        property={property}
+        currentValue={currentValue}
+        draft={draft}
+        editable={editable}
+        ariaLabel={ariaLabel}
+        onChange={onChange}
+      />
+    );
+  }
   const value = draft?.raw ?? inputValue(currentValue, type.type);
   if (type.type === "bool") {
     return (
@@ -59,7 +75,7 @@ export function InstrumentPropertyInput({
       </Controls.Select>
     );
   }
-  if (type.type === "int" || type.type === "float" || type.type === "quantity") {
+  if (type.type === "int" || type.type === "float") {
     return (
       <span className="grid grid-cols-[minmax(0,1fr)_auto] items-stretch">
         <Controls.Input
@@ -82,24 +98,9 @@ export function InstrumentPropertyInput({
               (type.type !== "int" || Number.isInteger(number)) &&
               (type.minimum === null || type.minimum === undefined || number >= type.minimum) &&
               (type.maximum === null || type.maximum === undefined || number <= type.maximum);
-            const unit =
-              type.type === "quantity"
-                ? (type.unit ?? quantityValue(currentValue)?.unit)
-                : undefined;
-            const typed =
-              valid && type.type === "quantity" && unit
-                ? { value: number, unit }
-                : valid && type.type !== "quantity"
-                  ? number
-                  : undefined;
-            onChange({ raw, value: typed });
+            onChange({ raw, value: valid ? number : undefined });
           }}
         />
-        {type.type === "quantity" && (
-          <span className="grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-xs text-text-dim">
-            {type.unit ?? "需要单位"}
-          </span>
-        )}
       </span>
     );
   }
@@ -144,4 +145,94 @@ function quantityValue(
     return value;
   }
   return undefined;
+}
+
+/** Unit selection is presentation state: only editing the number creates a device draft. */
+function QuantityInput({
+  property,
+  currentValue,
+  draft,
+  editable,
+  ariaLabel,
+  onChange,
+}: Parameters<typeof InstrumentPropertyInput>[0]) {
+  const type = property.value_type;
+  if (type.type !== "quantity") throw new Error("Expected quantity property");
+  const current = quantityValue(currentValue);
+  const canonical = type.unit ?? current?.unit ?? "";
+  const [selection, setSelection] = useState<string | null>(() =>
+    current ? engineeringUnit(current.value, current.unit) : null,
+  );
+  // A property can mount before its first read. Adopt the first observation's scale once,
+  // then retain the user's reading scale across polling and edits.
+  if (selection === null && current) setSelection(engineeringUnit(current.value, current.unit));
+  const unit = selection ?? canonical;
+  const options = quantityUnits(canonical);
+  let original = "";
+  try {
+    if (current) original = convertControlNumber(String(current.value), current.unit, unit);
+  } catch {
+    /* incompatible observation */
+  }
+  let raw = draft ? String(draft.raw) : original;
+  if (draft?.unit && draft.unit !== unit) {
+    try {
+      raw = convertControlNumber(raw, draft.unit, unit);
+    } catch {
+      /* retain invalid input */
+    }
+  }
+  return (
+    <span className="grid grid-cols-[minmax(0,1fr)_auto] items-stretch">
+      <Controls.Input
+        className={`${propertyInput} rounded-r-none!`}
+        type="text"
+        inputMode="decimal"
+        value={raw}
+        placeholder={editable ? "输入数值" : "—"}
+        disabled={!editable}
+        aria-label={ariaLabel}
+        aria-invalid={draft !== undefined && draft.value === undefined}
+        onChange={(event) => {
+          const edited = event.target.value;
+          let value: InstrumentStateValue | undefined;
+          try {
+            let number = Number(convertControlNumber(edited, unit, canonical));
+            // Do not round-trip an unchanged observation through scaled floating-point arithmetic.
+            if (current && edited === original && current.unit === canonical)
+              number = current.value;
+            if (
+              canonical &&
+              Number.isFinite(number) &&
+              (type.minimum == null || number >= type.minimum) &&
+              (type.maximum == null || number <= type.maximum)
+            )
+              value = { value: number, unit: canonical };
+          } catch {
+            /* invalid drafts remain visible, but cannot be applied */
+          }
+          onChange({ raw: edited, unit, value });
+        }}
+      />
+      {options.length > 1 ? (
+        <Controls.Select
+          className="rounded-l-none! border-l-0!"
+          aria-label={`${ariaLabel ?? property.label ?? property.id} 单位`}
+          value={unit}
+          disabled={draft !== undefined && draft.value === undefined}
+          onChange={(event) => setSelection(event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </Controls.Select>
+      ) : (
+        <span className="grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-xs text-text-dim">
+          {canonical || "需要单位"}
+        </span>
+      )}
+    </span>
+  );
 }

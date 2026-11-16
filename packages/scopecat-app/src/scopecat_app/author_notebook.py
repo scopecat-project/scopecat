@@ -92,8 +92,18 @@ def launch_notebook(
 
 
 def main(argv: list[str] | None = None) -> None:
+    import sys
+
+    from scopecat.trial_policy import current_policy, validate_arguments
+
+    validate_arguments(sys.argv[1:] if argv is None else argv)
+
     configure_console()
-    parser = argparse.ArgumentParser(prog="scopecat notebook", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="scopecat notebook",
+        description=__doc__,
+        allow_abbrev=current_policy() is None,
+    )
     parser.add_argument(
         "workspace",
         type=Path,

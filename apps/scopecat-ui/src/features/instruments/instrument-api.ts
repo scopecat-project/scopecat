@@ -5,7 +5,6 @@ import type {
   DriverCatalog,
   InstrumentAcquisition,
   InstrumentApplyReceipt,
-  InstrumentCollectReceipt,
   InstrumentConfiguredDefaultsApplyReceipt,
   InstrumentDriverProbeCommand,
   InstrumentDriverProbeReceipt,
@@ -22,7 +21,6 @@ import type {
   InstrumentStateValue,
   InstrumentView,
 } from "../../api-contract";
-import { decodeCollectReceipt, HARDWARE_RECEIPT_MEDIA_TYPE } from "./hardware-receipt-wire";
 
 export type { InstrumentList } from "../../api-contract";
 
@@ -210,43 +208,24 @@ export async function collectInstrumentAcquisition(
   instrumentId: string,
   target: InstrumentAcquisitionTarget,
   commandId = createInstrumentCommandId("collect"),
-): Promise<InstrumentCollectReceipt> {
-  const url = new URL(
-    `/api/v1/instrument-sessions/${encodeURIComponent(session.session_id)}/instruments/${encodeURIComponent(instrumentId)}/collect`,
-    globalThis.location?.origin ?? "http://localhost",
-  );
-  let response: Response;
-  try {
-    response = await globalThis.fetch(url, {
-      method: "POST",
-      headers: {
-        Accept: HARDWARE_RECEIPT_MEDIA_TYPE,
-        "Content-Type": "application/json",
+) {
+  return apiData(
+    apiClient.POST(
+      "/api/v1/instrument-sessions/{session_id}/instruments/{instrument_id}/collect-review",
+      {
+        params: { path: { session_id: session.session_id, instrument_id: instrumentId } },
+        body: {
+          command_id: commandId,
+          instrument_id: instrumentId,
+          interface_id: target.interfaceId,
+          component_path: target.componentPath,
+          acquisition_id: target.acquisition.id,
+          result_ids: [],
+          retain_result: true,
+        },
       },
-      body: JSON.stringify({
-        command_id: commandId,
-        instrument_id: instrumentId,
-        interface_id: target.interfaceId,
-        component_path: target.componentPath,
-        acquisition_id: target.acquisition.id,
-        result_ids: [],
-      }),
-    });
-  } catch {
-    throw new ApiError("本地后台服务未响应。");
-  }
-  if (!response.ok) {
-    const detail = await responseDetail(response);
-    throw new ApiError(
-      detail ?? `The daemon returned ${response.status} ${response.statusText}.`,
-      response.status,
-    );
-  }
-  try {
-    return decodeCollectReceipt(await response.arrayBuffer());
-  } catch {
-    throw new ApiError("后台服务返回了无效硬件回执。");
-  }
+    ),
+  );
 }
 
 export async function invokeInstrumentOperation(
@@ -335,19 +314,6 @@ export function createInstrumentCommandId(prefix: string): string {
 
 export function retryTransientInstrumentMutation(failureCount: number, error: unknown): boolean {
   return failureCount < 1 && error instanceof ApiError && error.status === undefined;
-}
-
-async function responseDetail(response: Response): Promise<string | undefined> {
-  try {
-    const value: unknown = await response.json();
-    return isObject(value) && typeof value.detail === "string" ? value.detail : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 export function readSharedInstrumentObservation(

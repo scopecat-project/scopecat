@@ -182,15 +182,17 @@ test("connection test feedback follows the saved revision across editing and dae
     await expect(dialog.getByLabel("控制器地址 值 1")).toHaveValue("192.0.2.1");
     await dialog.getByRole("button", { name: "取消", exact: true }).click();
     await page.getByRole("button", { name: "操作", exact: true }).click();
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await page.getByRole("button", { name: "读取设备状态", exact: true }).click();
     await page.getByRole("button", { name: "连接与环境", exact: true }).click();
     await expect(page.getByRole("button", { name: "释放物理连接" })).toBeDisabled();
     await page.getByRole("button", { name: "操作", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "结束控制前的待办", exact: true })).toBeHidden();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     await page.getByRole("button", { name: "连接与环境", exact: true }).click();
     await page.getByRole("button", { name: "释放物理连接" }).click();
     await expect(page.getByText(/上次释放物理连接成功/)).toBeVisible();
@@ -225,12 +227,14 @@ test("connection test feedback follows the saved revision across editing and dae
     await page.reload();
     await expect(page.getByRole("button", { name: "释放物理连接" })).toBeEnabled();
     await page.getByRole("button", { name: "操作", exact: true }).click();
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await page.getByRole("button", { name: "读取设备状态", exact: true }).click();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "结束控制前的待办", exact: true })).toBeHidden();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     passed = true;
   } finally {
     await cleanDeviceFixture(fixture, root, passed, testInfo);

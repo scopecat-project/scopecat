@@ -94,7 +94,24 @@ const DecisionWorkspace = lazy(async () => {
   return { default: module.DecisionWorkspace };
 });
 
+const SavedMeasurementView = lazy(async () => {
+  const module = await import("./features/instruments/SavedMeasurementView");
+  return { default: module.SavedMeasurementView };
+});
+
 export default function App() {
+  const recordId = useLocationUrl().searchParams.get("saved-measurement");
+  if (recordId !== null)
+    return (
+      <main aria-label="已保存测量结果" className="min-h-screen min-w-0 bg-canvas p-3">
+        <DesktopSession />
+        <Suspense fallback={<p role="status">正在读取已保存结果…</p>}>
+          <SavedMeasurementView key={recordId} recordId={recordId} />
+        </Suspense>
+        <DesktopZoom />
+        <DesktopFind />
+      </main>
+    );
   const deviceId = new URL(window.location.href).searchParams.get("device-control");
   return deviceId ? <DeviceControlApp deviceId={deviceId} /> : <WorkspaceApp />;
 }
@@ -106,7 +123,7 @@ function DeviceControlApp({ deviceId }: { deviceId: string }) {
     refetchInterval: 5_000,
   });
   return (
-    <main className="min-h-screen bg-canvas p-3">
+    <main className="device-control-app min-h-screen min-w-0 bg-white">
       <DesktopSession />
       <Suspense fallback={<p>正在加载设备控制…</p>}>
         <InstrumentsWorkspace controlDeviceId={deviceId} daemonUnavailable={health.isError} />

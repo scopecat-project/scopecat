@@ -338,3 +338,32 @@ def test_windows_reentry_selects_source_cwd_before_loading_repository_module(
         str(home),
     ]
     assert launch.call_args.kwargs["cwd"] == source
+
+
+def test_interpreter_identity_probe_is_isolated_and_never_writes_bytecode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    identity: dict[str, object] = {
+        "python": str(tmp_path / "python"),
+        "prefix": str(tmp_path / "venv"),
+        "base_prefix": str(tmp_path / "base"),
+    }
+    probe = Mock(
+        return_value=SimpleNamespace(
+            returncode=0, stdout=json.dumps(list(identity.values())), stderr=""
+        )
+    )
+    monkeypatch.setattr(dev_host.subprocess, "run", probe)
+    executable = tmp_path / "host"
+    dev_host.check_interpreter(executable, identity)
+    assert probe.call_args.args[0] == [
+        str(executable),
+        "-I",
+        "-B",
+        "-c",
+        (
+            "import json,sys;"
+            "print(json.dumps([sys.executable,sys.prefix,sys.base_prefix]))"
+        ),
+    ]
+    assert probe.call_args.kwargs["env"] == dev_host.clean_environment()

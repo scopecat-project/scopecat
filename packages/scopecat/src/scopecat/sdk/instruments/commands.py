@@ -215,6 +215,7 @@ class InteractiveCollectIntent(BaseModel):
     component_path: list[_NonEmptyId] = Field(default_factory=list)
     acquisition_id: _NonEmptyId
     result_ids: list[_NonEmptyId] = Field(default_factory=list)
+    retain_result: bool = True
 
     @field_validator("result_ids")
     @classmethod

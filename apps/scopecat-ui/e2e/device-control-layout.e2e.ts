@@ -2,11 +2,51 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanDeviceFixture, startDeviceFixture } from "./device-fixture";
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api-schema";
 
 type DeviceView = components["schemas"]["DeviceView"];
+const longAxisLabel = "s_parameter · measured transmission (complex)";
 const deviceName = "Synthetic VNA " + "long-device-label-".repeat(5);
+
+async function showResults(page: Page) {
+  const layout = page.getByTestId("instrument-workbench-layout");
+  await expect
+    .poll(() =>
+      layout.evaluate((element) => {
+        const width = element.getBoundingClientRect().width;
+        const compact = element.getAttribute("data-compact") === "true";
+        return width < 760 ? compact : width >= 800 ? !compact : true;
+      }),
+    )
+    .toBe(true);
+  if ((await layout.getAttribute("data-compact")) === "true")
+    await page
+      .getByRole("group", { name: "显示区域" })
+      .getByRole("button", { name: "结果", exact: true })
+      .click();
+  else if ((await layout.getAttribute("data-collection-collapsed")) === "true")
+    await page.getByRole("button", { name: "展开结果", exact: true }).click();
+}
+async function showControls(page: Page) {
+  const layout = page.getByTestId("instrument-workbench-layout");
+  await expect
+    .poll(() =>
+      layout.evaluate((element) => {
+        const width = element.getBoundingClientRect().width;
+        const compact = element.getAttribute("data-compact") === "true";
+        return width < 760 ? compact : width >= 800 ? !compact : true;
+      }),
+    )
+    .toBe(true);
+  if ((await layout.getAttribute("data-compact")) === "true")
+    await page
+      .getByRole("group", { name: "显示区域" })
+      .getByRole("button", { name: "控制", exact: true })
+      .click();
+  else if ((await layout.getAttribute("data-control-collapsed")) === "true")
+    await page.getByRole("button", { name: "展开控制", exact: true }).click();
+}
 
 async function expectFittedCurve(chart: Locator) {
   await expect(chart.locator("svg")).toBeVisible();
@@ -16,8 +56,21 @@ async function expectFittedCurve(chart: Locator) {
     const layout = await chart.evaluate((element) => {
       const svg = element.querySelector("svg")!;
       const bounds = svg.getBoundingClientRect();
+      // The first clip belongs to the line series, not the dataZoom overview.
+      const plot = (
+        svg.querySelector("clipPath path") as unknown as {
+          getBBox(): { width: number; height: number };
+        }
+      ).getBBox();
       return {
+        plot: { width: plot.width, height: plot.height },
+        caption: (element.previousElementSibling ?? element.parentElement?.previousElementSibling)
+          ?.textContent,
+        xTicks: [...svg.querySelectorAll('text[text-anchor="middle"]')]
+          .map((label) => label.textContent ?? "")
+          .filter((text) => /^-?[\d,.]+(?:e[+-]?\d+)?$/.test(text)),
         width: bounds.width,
+        height: bounds.height,
         containerWidth: element.clientWidth,
         left: bounds.left,
         right: bounds.right,
@@ -38,15 +91,30 @@ async function expectFittedCurve(chart: Locator) {
     expect(Math.abs(layout.width - layout.containerWidth)).toBeLessThanOrEqual(1);
     expect(layout.width).toBeGreaterThan(200);
     expect(layout.left).toBeGreaterThanOrEqual(0);
-    expect(layout.right).toBeLessThanOrEqual(layout.viewport);
+    // ECharts rounds its SVG width to whole pixels inside fractional grid tracks.
+    // Allow the same one-pixel raster rounding as the container/label checks below.
+    expect(layout.right).toBeLessThanOrEqual(layout.viewport + 1);
     expect(layout.overflow).toBeLessThanOrEqual(1);
-    expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
-    expect(layout.labels.some((label) => label.text?.includes("s_parameter"))).toBe(true);
+    expect(layout.caption).toContain("横轴 frequency (Hz)");
+    expect(layout.caption).toContain("纵轴 s_parameter");
+    expect(layout.plot.width).toBeGreaterThanOrEqual(140);
+    expect(layout.plot.height).toBeGreaterThanOrEqual(100);
+    expect(new Set(layout.xTicks).size).toBeGreaterThanOrEqual(2);
+    if (layout.width <= 420) {
+      expect(layout.plot.width / layout.width).toBeGreaterThanOrEqual(0.5);
+      expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(false);
+      expect(layout.xTicks.some((tick) => tick.includes("e+"))).toBe(true);
+    } else {
+      expect(layout.labels.some((label) => label.text?.includes("frequency"))).toBe(true);
+      // Bounded previews keep scientific tick labels at every width; these are
+      // display-only and retain the exact values rather than restoring comma labels.
+      expect(layout.xTicks.some((tick) => tick.includes("e+"))).toBe(true);
+    }
     for (const label of layout.labels) {
       expect(label.left, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
       expect(label.right, JSON.stringify(label)).toBeLessThanOrEqual(layout.width + 1);
       expect(label.top, JSON.stringify(label)).toBeGreaterThanOrEqual(-1);
-      expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(261);
+      expect(label.bottom, JSON.stringify(label)).toBeLessThanOrEqual(layout.height + 1);
     }
     // Containment alone permits unreadable GHz tick labels to overlap in narrow panels.
     for (const [index, label] of layout.labels.entries()) {
@@ -59,10 +127,14 @@ async function expectFittedCurve(chart: Locator) {
   }).toPass({ timeout: 5_000, intervals: [100, 250, 500] });
 }
 
-test("control inputs and headings stay readable and complete curves resize at every entry", async ({
+test("control inputs and headings stay readable and bounded curves resize at every entry", async ({
   page,
 }, testInfo) => {
   test.setTimeout(120_000);
+  await page.addInitScript(`
+    window.controlLayoutErrors = [];
+    window.addEventListener("error", (event) => window.controlLayoutErrors.push(event.message));
+  `);
   const root = await mkdtemp(join(tmpdir(), "scopecat-curve-layout-"));
   const fixture = startDeviceFixture(
     "../../packages/scopecat-server/tests/fixtures/device_curve_daemon.py",
@@ -99,10 +171,49 @@ test("control inputs and headings stay readable and complete curves resize at ev
     const devices: DeviceView[] = (await (await page.request.get(`${url}/api/v1/devices`)).json())
       .items;
     const controlUrl = `${url}/?device-control=${encodeURIComponent(devices[0].device.id)}`;
-    await page.setViewportSize({ width: 390, height: 900 });
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(controlUrl);
-    await page.getByRole("button", { name: "连接", exact: true }).click();
-    await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    // Exercise a long display label without changing device data or backend save identity.
+    await page.route("**/api/v1/instrument-sessions", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      const response = await route.fetch();
+      const session: components["schemas"]["InstrumentSessionOpenReceipt"] = await response.json();
+      for (const description of session.descriptions)
+        for (const contract of description.interfaces ?? [])
+          for (const acquisition of contract.acquisitions ?? [])
+            for (const result of acquisition.results)
+              if (result.id === "s_parameter") result.label = longAxisLabel;
+      await route.fulfill({ response, json: session });
+    });
+    // The review summary now carries the authoritative acquisition contract.
+    // Modify only its presentation label, never retained bytes or save identity.
+    await page.route(
+      "**/api/v1/instrument-sessions/*/instruments/*/collect-review",
+      async (route) => {
+        const response = await route.fetch();
+        const summary: components["schemas"]["CollectReviewReceipt"] = await response.json();
+        for (const contract of summary.pending?.description.interfaces ?? [])
+          for (const acquisition of contract.acquisitions ?? [])
+            for (const result of acquisition.results)
+              if (result.id === "s_parameter") result.label = longAxisLabel;
+        await route.fulfill({ response, json: summary });
+      },
+    );
+    const toolbar = page.locator(".device-window-toolbar");
+    await expect(toolbar.getByRole("heading", { level: 1 })).toHaveCount(1);
+    const titleBounds = await toolbar.getByRole("heading", { level: 1 }).boundingBox();
+    const connectBounds = await toolbar
+      .getByRole("button", { name: /^连接(?:并读取)?$/, exact: true })
+      .boundingBox();
+    expect(titleBounds!.y).toBeLessThan(connectBounds!.y + connectBounds!.height);
+    expect(titleBounds!.y + titleBounds!.height).toBeGreaterThan(connectBounds!.y);
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
+    await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+    await page.screenshot({
+      path: "../../.test-results/layout-c-control-1280.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 900 });
     await expect(page.getByRole("heading", { name: deviceName, exact: true })).toHaveCount(1);
     const header = page
       .getByRole("heading", { name: deviceName, level: 1 })
@@ -110,41 +221,33 @@ test("control inputs and headings stay readable and complete curves resize at ev
       .locator("..")
       .locator("..");
     await expect(header.getByText("已连接", { exact: true })).toBeVisible();
-    await expect(header.getByRole("button", { name: "刷新占用" })).toBeVisible();
-    for (const name of ["线路名称", "测量备注"]) {
-      const input = page.getByRole("textbox", { name, exact: true });
-      await expect(input).toHaveValue("");
-      const appearance = await input.evaluate((element) => {
-        const css = element.ownerDocument.defaultView!.getComputedStyle(element);
-        const bounds = element.getBoundingClientRect();
-        return {
-          border: css.borderTopWidth,
-          background: css.backgroundColor,
-          height: bounds.height,
-          right: bounds.right,
-        };
-      });
-      expect(parseFloat(appearance.border)).toBeGreaterThanOrEqual(1);
-      expect(appearance.background).not.toBe("rgba(0, 0, 0, 0)");
-      expect(appearance.height).toBeGreaterThanOrEqual(36);
-      expect(appearance.right).toBeLessThanOrEqual(390);
-    }
-    const line = page.getByRole("textbox", { name: "线路名称", exact: true });
-    await line.focus();
-    await page.keyboard.press("Tab");
-    const note = page.getByRole("textbox", { name: "测量备注", exact: true });
-    await expect(note).toBeFocused();
-    expect(
-      await note.evaluate(
-        (element) => element.ownerDocument.defaultView!.getComputedStyle(element).outlineStyle,
+    await expect(header.getByRole("button", { name: "刷新占用" })).toHaveCount(0);
+    const sweep = page.getByTitle("scopecat.network_sweep/v1 / ", { exact: true });
+    const read = page.getByTitle("scopecat.existing_network_trace/v1 / ", { exact: true });
+    await sweep.click();
+    await showResults(page);
+    const navigation = page.locator(".device-workspace-navigation");
+    await testInfo.attach("compact-navigation-geometry", {
+      body: JSON.stringify(
+        await navigation.evaluate((element) => ({
+          bounds: element.getBoundingClientRect().toJSON(),
+          layout: element.parentElement!.getBoundingClientRect().toJSON(),
+          compact: element.parentElement!.getAttribute("data-compact"),
+          overflow: element.scrollWidth - element.clientWidth,
+          viewport: element.ownerDocument.defaultView!.innerWidth,
+        })),
       ),
-    ).not.toBe("none");
-    await line.fill("layout-line");
-    await page.getByRole("checkbox", { name: "已人工确认当前接线为 layout-line" }).check();
-    await note.fill("layout-only");
-    const sweep = page.getByTestId("interface-card-scopecat.network_sweep/v1-root");
-    const read = page.getByTestId("interface-card-scopecat.existing_network_trace/v1-root");
-    await sweep.getByRole("button", { name: "收集 Collect", exact: true }).click();
+      contentType: "application/json",
+    });
+    for (const button of await navigation.getByRole("button").all())
+      await expect(button).toBeInViewport({ ratio: 1 });
+    expect(
+      await navigation.evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(1);
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
+    await expect(
+      page.getByRole("combobox", { name: "选择近期结果", exact: true }),
+    ).toBeInViewport();
     // Keep the same region and curve locatable while deliberately hidden below.
     const current = page.getByRole("region", {
       name: "当前测量结果",
@@ -152,16 +255,339 @@ test("control inputs and headings stay readable and complete curves resize at ev
       includeHidden: true,
     });
     const curve = current.getByRole("img", {
-      name: "s_parameter 完整曲线",
+      name: "s_parameter 局部曲线",
       includeHidden: true,
+    });
+    // Evidence must show the rendered curve, not the lazy-loading placeholder.
+    await expectFittedCurve(curve);
+    await page.screenshot({
+      path: testInfo.outputPath("compact-navigation-pending-390.png"),
+      fullPage: true,
     });
     for (const width of [390, 1280, 390, 760, 1280]) {
       await page.setViewportSize({ width, height: 900 });
+      await showResults(page);
       await expectFittedCurve(curve);
       expect(
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
+      // The result workspace and chart are bounded by the available window;
+      // interacting with the canvas must not introduce a document scroll region.
+      await expect
+        .poll(() => page.evaluate<number>("document.documentElement.scrollHeight"))
+        .toBeLessThanOrEqual(900);
     }
+    // Native regression: around 893px, a 59/41 split leaves a roughly 300px results pane.
+    // Contained SVG labels alone used to pass while the actual plot shrank to about 57px.
+    await page.setViewportSize({ width: 893, height: 700 });
+    await showResults(page);
+    await showControls(page);
+    const narrowDivider = page.getByRole("separator", { name: "调整控制与结果区域大小" });
+    await narrowDivider.dblclick();
+    await narrowDivider.focus();
+    await page.keyboard.press("Shift+ArrowRight");
+    for (let step = 0; step < 3; step++) await page.keyboard.press("ArrowRight");
+    await expect(narrowDivider).toHaveAttribute("aria-valuenow", "59");
+    const narrowResults = page.getByRole("region", { name: "采集结果工作区", exact: true });
+    const narrowWidth = (await narrowResults.boundingBox())!.width;
+    expect(narrowWidth).toBeGreaterThanOrEqual(300);
+    expect(narrowWidth).toBeLessThanOrEqual(350);
+    await expect(current.getByText(/^纵轴 /)).toContainText(longAxisLabel);
+    for (const value of ["phase", "real", "imag", "magnitude"]) {
+      await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
+      await expectFittedCurve(curve);
+    }
+    await curve.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "../../.test-results/layout-c-chart-893.png", fullPage: true });
+    // Preserve this original result before adding the high-offset sample. The final
+    // session-close check must still require every pending result to be accounted for.
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    const originalSave = page.getByRole("dialog", { name: "保存测量", exact: true });
+    await originalSave.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(originalSave).toBeHidden();
+    // A 1 MHz span around 5 GHz must not round distinct narrow ticks to "5.00e+9".
+    await page.getByTestId("interface-property-start_frequency").getByRole("textbox").fill("5 GHz");
+    await page
+      .getByTestId("interface-property-stop_frequency")
+      .getByRole("textbox")
+      .fill("5.001 GHz");
+    const apply = page.getByRole("button", { name: "应用暂存修改", exact: true });
+    await apply.click();
+    await expect(apply).toBeHidden();
+    await sweep.click();
+    await expect(
+      page.getByRole("combobox", { name: "选择近期结果", exact: true }).locator("option"),
+    ).toHaveCount(2);
+    await expectFittedCurve(curve);
+    const closeTicks = await curve.locator('svg text[text-anchor="middle"]').allTextContents();
+    const closeValues = closeTicks
+      .filter((text) => /^-?[\d,.]+(?:e[+-]?\d+)?$/.test(text))
+      .map((text) => Number(text.replaceAll(",", "")));
+    expect(new Set(closeValues).size).toBeGreaterThanOrEqual(2);
+    expect(Math.min(...closeValues)).toBeGreaterThanOrEqual(5e9);
+    expect(Math.max(...closeValues)).toBeLessThanOrEqual(5.001e9);
+    await curve.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: "../../.test-results/layout-c-chart-offset-893.png",
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    const narrowSave = page.getByRole("dialog", { name: "保存测量", exact: true });
+    await narrowSave.getByRole("textbox", { name: "标题", exact: true }).fill("Narrow plot draft");
+    // Edge-to-edge workbench now uses the full viewport; cross below its 760px threshold.
+    await page.setViewportSize({ width: 740, height: 600 });
+    await expect(page.getByTestId("instrument-workbench-layout")).toHaveAttribute(
+      "data-compact",
+      "true",
+    );
+    await expect(narrowSave).toBeVisible();
+    await expect(narrowSave.getByRole("textbox", { name: "标题", exact: true })).toHaveValue(
+      "Narrow plot draft",
+    );
+    await page.screenshot({
+      path: "../../.test-results/layout-c-chart-save-740.png",
+      fullPage: true,
+    });
+    await narrowSave.getByRole("button", { name: "取消", exact: true }).click();
+    await showResults(page);
+    await narrowResults.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expectFittedCurve(curve);
+    await curve.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "../../.test-results/layout-c-chart-800.png", fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await showResults(page);
+    await narrowDivider.dblclick();
+    // A 1920px viewport still leaves only a narrow settings column. Fields
+    // must adapt to that container rather than using viewport-wide two columns.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    for (const id of ["start_frequency", "stop_frequency"]) {
+      const row = page.getByTestId(`interface-property-${id}`);
+      const label = row.getByTestId("property-label");
+      const input = row.getByRole("textbox");
+      await expect(label).toBeVisible();
+      await expect(input).toBeVisible();
+      await expect(async () => {
+        const geometry = await row.evaluate((element) => {
+          const labelNode = element.querySelector('[data-testid="property-label"]')!;
+          const inputNode = element.querySelector('input[type="text"]')!;
+          // This helper must travel with the browser-evaluated callback.
+          // oxlint-disable-next-line unicorn/consistent-function-scoping
+          const rect = (node: {
+            getBoundingClientRect(): { left: number; right: number; top: number; bottom: number };
+          }) => {
+            const bounds = node.getBoundingClientRect();
+            return {
+              left: bounds.left,
+              right: bounds.right,
+              top: bounds.top,
+              bottom: bounds.bottom,
+            };
+          };
+          return {
+            row: rect(element),
+            container: rect(element.parentElement),
+            card: rect(element.closest("article")),
+            label: rect(labelNode),
+            input: rect(inputNode),
+            labelWidth: labelNode.clientWidth,
+            labelContentWidth: labelNode.scrollWidth,
+          };
+        });
+        expect(geometry.labelContentWidth).toBeLessThanOrEqual(geometry.labelWidth + 1);
+        for (const bounds of [geometry.label, geometry.input]) {
+          for (const container of [geometry.row, geometry.container, geometry.card]) {
+            expect(bounds.left).toBeGreaterThanOrEqual(container.left - 1);
+            expect(bounds.right).toBeLessThanOrEqual(container.right + 1);
+            expect(bounds.top).toBeGreaterThanOrEqual(container.top - 1);
+            expect(bounds.bottom).toBeLessThanOrEqual(container.bottom + 1);
+          }
+        }
+        const overlapX =
+          Math.min(geometry.label.right, geometry.input.right) -
+          Math.max(geometry.label.left, geometry.input.left);
+        const overlapY =
+          Math.min(geometry.label.bottom, geometry.input.bottom) -
+          Math.max(geometry.label.top, geometry.input.top);
+        expect(overlapX > 1 && overlapY > 1).toBe(false);
+      }).toPass({ timeout: 5_000 });
+    }
+    const startInput = await page
+      .getByTestId("interface-property-start_frequency")
+      .getByRole("textbox")
+      .boundingBox();
+    const stopInput = await page
+      .getByTestId("interface-property-stop_frequency")
+      .getByRole("textbox")
+      .boundingBox();
+    expect(startInput).not.toBeNull();
+    expect(stopInput).not.toBeNull();
+    const inputsOverlapX =
+      Math.min(startInput!.x + startInput!.width, stopInput!.x + stopInput!.width) -
+      Math.max(startInput!.x, stopInput!.x);
+    const inputsOverlapY =
+      Math.min(startInput!.y + startInput!.height, stopInput!.y + stopInput!.height) -
+      Math.max(startInput!.y, stopInput!.y);
+    expect(inputsOverlapX > 1 && inputsOverlapY > 1).toBe(false);
+    await testInfo.attach("device-control-fields-1920", {
+      body: await page.screenshot({
+        path: "../../.test-results/layout-c-split-1920.png",
+        fullPage: true,
+      }),
+      contentType: "image/png",
+    });
+    // Actual pane geometry follows both keyboard and pointer resizing, including a very wide window.
+    const divider = page.getByRole("separator", { name: "调整控制与结果区域大小" });
+    const controlsPane = page.getByRole("region", { name: "控制工作区", exact: true });
+    for (const width of [1280, 2400]) {
+      await page.setViewportSize({ width, height: 900 });
+      await showResults(page);
+      await showControls(page);
+      for (const key of ["Home", "End"]) {
+        await divider.focus();
+        await page.keyboard.press(key);
+        const value = Number(await divider.getAttribute("aria-valuenow"));
+        expect(value).toBeGreaterThanOrEqual(Number(await divider.getAttribute("aria-valuemin")));
+        expect(value).toBeLessThanOrEqual(Number(await divider.getAttribute("aria-valuemax")));
+        await expectFittedCurve(curve);
+        const pane = await controlsPane.boundingBox();
+        const handle = await divider.boundingBox();
+        expect(
+          Math.abs(pane!.x + pane!.width - (handle!.x + handle!.width / 2)),
+        ).toBeLessThanOrEqual(2);
+      }
+      await divider.dblclick();
+      await expect(divider).toHaveAttribute("aria-valuenow", "48");
+      if (width === 2400)
+        await page.screenshot({
+          path: "../../.test-results/layout-c-split-2400.png",
+          fullPage: true,
+        });
+    }
+    const handle = (await divider.boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + 50);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + 130, handle.y + 50);
+    await page.mouse.up();
+    const rememberedSplit = await divider.getAttribute("aria-valuenow");
+    expect(Number(rememberedSplit)).toBeGreaterThan(48);
+    await page.getByRole("button", { name: "收起结果", exact: true }).click();
+    await page.getByRole("button", { name: "展开结果", exact: true }).click();
+    await expect(divider).toHaveAttribute("aria-valuenow", rememberedSplit!);
+
+    // Per-pane scroll, input drafts, curve representation and selected receipt survive view switches.
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await showResults(page);
+    await page.screenshot({ path: "../../.test-results/layout-c-wide-short.png", fullPage: true });
+    const controlScroll = page.getByRole("region", { name: "设备控制内容", exact: true });
+    const resultScroll = page.getByRole("region", { name: "采集结果工作区", exact: true });
+    // The flat parameter sheet is shorter; use real expanded provenance content
+    // to exercise a meaningful scroll position instead of assuming old card heights.
+    await controlScroll.getByText("参数说明与观测", { exact: true }).first().click();
+    await controlScroll.evaluate((element) => {
+      element.scrollTop = 150;
+    });
+    await expect.poll(() => controlScroll.evaluate((element) => element.scrollTop)).toBe(150);
+    await resultScroll.evaluate((element) => {
+      element.scrollTop = 120;
+    });
+    await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
+    await page.getByRole("button", { name: "连接配置", exact: true }).click();
+    await expect(page.getByRole("region", { name: "设备连接配置", exact: true })).toBeVisible();
+    await expect(resultScroll).toBeVisible();
+    await page.getByRole("button", { name: "Python 示例", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "控制工作区页面" })
+      .getByRole("button", { name: "参数", exact: true })
+      .click();
+    await expect.poll(() => controlScroll.evaluate((element) => element.scrollTop)).toBe(150);
+    await page.getByRole("button", { name: "收起结果", exact: true }).click();
+    await page.getByRole("button", { name: "展开结果", exact: true }).click();
+    await expect.poll(() => resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
+    // Results have a stable canvas, not a second scrollable document.
+    // Repeated pane/viewport switches preserve reachable actions and chart controls.
+    for (const width of [1280, 390, 1280]) {
+      await page.setViewportSize({ width, height: 600 });
+      await showResults(page);
+      const actions = page.getByRole("group", { name: "所选结果操作" });
+      await expect(
+        actions.getByRole("button", { name: "保存所选结果", exact: true }),
+      ).toBeInViewport();
+      const selector = actions.getByRole("combobox", { name: "选择近期结果", exact: true });
+      await expect(selector).toBeInViewport();
+      await selector.focus();
+      await expect(selector).toBeFocused();
+      const representation = current.getByRole("combobox", { name: "复数表示" });
+      await representation.focus();
+      await expect(representation).toBeFocused();
+      await expect(representation).toBeInViewport();
+      await expect(curve).toBeInViewport();
+      await expectFittedCurve(curve);
+      await testInfo.attach(`plot-${width}-600`, {
+        body: JSON.stringify(
+          await curve
+            .locator("svg clipPath path")
+            .first()
+            .evaluate((element) => ({
+              width: (element as unknown as { getBBox(): { width: number } }).getBBox().width,
+              height: (element as unknown as { getBBox(): { height: number } }).getBBox().height,
+            })),
+        ),
+        contentType: "application/json",
+      });
+      await page.screenshot({
+        path: `../../.test-results/result-workspace-${width}-600.png`,
+        fullPage: true,
+      });
+      await resultScroll.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      expect(await resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
+      const beforeWheel = await page.evaluate<number>("window.scrollY");
+      await curve.hover();
+      await page.mouse.wheel(0, -240);
+      await page.mouse.wheel(0, 240);
+      await expect.poll(() => page.evaluate<number>("window.scrollY")).toBe(beforeWheel);
+      expect(await resultScroll.evaluate((element) => element.scrollTop)).toBe(0);
+    }
+    await page.getByRole("button", { name: "收起结果", exact: true }).click();
+    await page.getByRole("button", { name: "展开结果", exact: true }).click();
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
+    await resultScroll.evaluate((element) => {
+      element.scrollTop = 120;
+    });
+    const draft = page.getByTestId("interface-property-start_frequency").getByRole("textbox");
+    const draftedValue = String(Number(await draft.inputValue()) + 1);
+    await draft.fill(draftedValue);
+    await current.getByRole("combobox", { name: "复数表示" }).selectOption("phase");
+    await draft.focus();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(draft).toBeVisible();
+    await expect(draft).toBeFocused();
+    await expect(draft).toHaveValue(draftedValue);
+    await page.screenshot({ path: "../../.test-results/layout-c-control-390.png", fullPage: true });
+    await showResults(page);
+    await expect(current.getByRole("combobox", { name: "复数表示" })).toHaveValue("phase");
+    await page.screenshot({ path: "../../.test-results/layout-c-results-390.png", fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await showResults(page);
+    await expect(divider).toHaveAttribute("aria-valuenow", rememberedSplit!);
+    await divider.focus();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(divider).toBeHidden();
+    await expect(
+      page
+        .getByRole("group", { name: "显示区域" })
+        .getByRole("button", { name: "结果", exact: true }),
+    ).toBeFocused();
+    await showControls(page);
+    await expect(draft).toHaveValue(draftedValue);
+    await page.getByRole("button", { name: "重置", exact: true }).click();
+    await showResults(page);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await showResults(page);
+
     // Resize the containing panel without changing the viewport, then hide/show it.
     await current.evaluate((element) => {
       element.style.width = "360px";
@@ -182,33 +608,257 @@ test("control inputs and headings stay readable and complete curves resize at ev
       await current.getByRole("combobox", { name: "复数表示" }).selectOption(value);
       for (const width of [390, 1280]) {
         await page.setViewportSize({ width, height: 900 });
+        await showResults(page);
         await expectFittedCurve(curve);
       }
     }
-    await page.getByRole("button", { name: "保存此结果", exact: true }).click();
-    await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
-    await read.getByRole("button", { name: "收集 Collect", exact: true }).click();
+    // A compact save dialog survives restoring a wide layout whose results are hidden.
+    await page.getByRole("button", { name: "收起结果", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await showResults(page);
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    const saveDialog = page.getByRole("dialog", { name: "保存测量", exact: true });
+    await saveDialog.getByRole("textbox", { name: "标题", exact: true }).fill("Resize draft");
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(saveDialog).toBeVisible();
+    await expect(saveDialog.getByRole("textbox", { name: "标题", exact: true })).toHaveValue(
+      "Resize draft",
+    );
+    await saveDialog.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(page.getByRole("button", { name: "展开结果", exact: true })).toBeFocused();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await showResults(page);
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    for (const name of ["标题", "线路名称", "备注"]) {
+      const input = saveDialog.getByRole("textbox", { name, exact: true });
+      // The bounded-result display/save store retains drafts after Cancel.
+      await expect(input).toHaveValue(name === "标题" ? "Resize draft" : "");
+      const appearance = await input.evaluate((element) => {
+        const css = element.ownerDocument.defaultView!.getComputedStyle(element);
+        const bounds = element.getBoundingClientRect();
+        return {
+          border: css.borderTopWidth,
+          background: css.backgroundColor,
+          height: bounds.height,
+          right: bounds.right,
+        };
+      });
+      expect(parseFloat(appearance.border)).toBeGreaterThanOrEqual(1);
+      expect(appearance.background).not.toBe("rgba(0, 0, 0, 0)");
+      expect(appearance.height).toBeGreaterThanOrEqual(36);
+      expect(appearance.right).toBeLessThanOrEqual(390);
+    }
+    const line = saveDialog.getByRole("textbox", { name: "线路名称", exact: true });
+    await line.focus();
+    await page.keyboard.press("Tab");
+    const note = saveDialog.getByRole("textbox", { name: "备注", exact: true });
+    await expect(note).toBeFocused();
+    expect(
+      await note.evaluate(
+        (element) => element.ownerDocument.defaultView!.getComputedStyle(element).outlineStyle,
+      ),
+    ).not.toBe("none");
+    await line.fill("layout-line");
+    await note.fill("layout-only");
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(saveDialog).toBeVisible();
+    await expect(note).toHaveValue("layout-only");
+    await expect(note).toBeFocused();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(saveDialog).toBeVisible();
+    await expect(line).toHaveValue("layout-line");
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(saveDialog).toBeVisible();
+    await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(saveDialog).toBeHidden();
+    await expect(page.getByRole("button", { name: "展开结果", exact: true })).toBeFocused();
+    // Both sweeps are now saved. Unknown-shape existing-trace reads reserve the
+    // full wire envelope, which intentionally cannot fit the memory-only default
+    // even in an empty store. Opt this isolated fixture into disk through the
+    // normal settings API, without changing budgets or the default policy.
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(`${url}/api/v1/pending-result-capacity`);
+        expect(response.ok()).toBe(true);
+        const capacity: components["schemas"]["PendingResultCapacity"] = await response.json();
+        return [capacity.memory_bytes, capacity.work_bytes, capacity.disk_bytes];
+      })
+      .toEqual([0, 0, 0]);
+    const settingsResponse = await page.request.get(`${url}/api/v1/pending-result-settings`);
+    expect(settingsResponse.ok()).toBe(true);
+    const settings: components["schemas"]["PendingResultSettings"] = await settingsResponse.json();
+    expect(settings.storage_policy).toBe("memory_only");
+    const diskSettings = await page.request.put(`${url}/api/v1/pending-result-settings`, {
+      data: { revision: settings.revision, storage_policy: "allow_temporary_disk" },
+    });
+    expect(diskSettings.ok()).toBe(true);
+    expect(await diskSettings.json()).toEqual({
+      revision: settings.revision + 1,
+      storage_policy: "allow_temporary_disk",
+    });
+    const previousResults = await page
+      .getByRole("combobox", { name: "选择近期结果", exact: true, includeHidden: true })
+      .locator("option")
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute("value")));
+    expect(previousResults).toHaveLength(2);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await showControls(page);
+    const readResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/collect-review") &&
+        response.request().postDataJSON().interface_id === "scopecat.existing_network_trace/v1",
+    );
+    await read.click();
+    const readReceipt = await readResponse;
+    expect(readReceipt.ok()).toBe(true);
+    const summary: components["schemas"]["CollectReviewReceipt"] = await readReceipt.json();
+    expect(summary.status).toBe("collected");
+    expect(summary.problems).toEqual([]);
+    expect(summary.pending?.receipt_validation).toBe("verified");
+    expect(summary.pending?.intent.acquisition_id).toBe("read_trace");
+    const selection = summary.pending!.selection;
+    expect(previousResults).not.toContain(
+      JSON.stringify([selection.session_id, selection.instrument_id, selection.command_id]),
+    );
+    await showResults(page);
+    await expect(
+      page.getByRole("combobox", { name: "选择近期结果", exact: true }).locator("option"),
+    ).toHaveCount(3);
+    await expect(page.getByRole("combobox", { name: "选择近期结果", exact: true })).toHaveValue(
+      JSON.stringify([selection.session_id, selection.instrument_id, selection.command_id]),
+    );
+    await current.getByRole("button", { name: "结果详情", exact: true }).click();
+    const resultDetails = page.getByRole("dialog", { name: "结果详情", exact: true });
+    await expect(
+      resultDetails.getByText("scopecat.existing_network_trace/v1 / 设备 / read_trace"),
+    ).toBeVisible();
+    await resultDetails.getByRole("button", { name: "关闭详情", exact: true }).click();
+    await expect(resultDetails).toBeHidden();
+    await expect(current.getByRole("button", { name: "结果详情", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
     await expectFittedCurve(curve);
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      await expectFittedCurve(curve);
+      await showResults(page);
       await expectFittedCurve(curve);
       await testInfo.attach(`device-layout-${width}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: "image/png",
       });
     }
-    await page.getByRole("button", { name: "保存此结果", exact: true }).click();
-    await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
+    // The result canvas owns the remaining height: expanding the window must
+    // increase actual plotted geometry, not merely add empty space below a 260px chart.
+    await page.setViewportSize({ width: 1200, height: 750 });
+    await showResults(page);
+    await page.getByRole("button", { name: "收起控制", exact: true }).click();
+    await expectFittedCurve(curve);
+    const shortPlot = (await curve.boundingBox())!;
+    await testInfo.attach("short-plot-geometry", {
+      body: JSON.stringify(shortPlot),
+      contentType: "application/json",
+    });
+    await page.screenshot({
+      path: "../../.test-results/result-workspace-only-1200.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1200, height: 995 });
+    await expect
+      .poll(async () => (await curve.boundingBox())!.height)
+      .toBeGreaterThan(shortPlot.height + 180);
+    await expectFittedCurve(curve);
+    await testInfo.attach("tall-plot-geometry", {
+      body: JSON.stringify(await curve.boundingBox()),
+      contentType: "application/json",
+    });
+    await page.screenshot({
+      path: "../../.test-results/result-workspace-only-1200-995.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 2048, height: 995 });
+    await page.screenshot({
+      path: "../../.test-results/result-workspace-only-2048.png",
+      fullPage: true,
+    });
+    for (const size of [
+      { width: 1200, height: 750 },
+      { width: 390, height: 750 },
+    ]) {
+      await page.setViewportSize(size);
+      await showResults(page);
+      await expectFittedCurve(curve);
+      await expect
+        .poll(() => page.evaluate<number>("document.documentElement.scrollHeight"))
+        .toBeLessThanOrEqual(size.height);
+      await expect(
+        page.getByRole("button", { name: "保存所选结果", exact: true }),
+      ).toBeInViewport();
+      const curveTicks = () => curve.locator("svg text").allTextContents();
+      const beforeDetailsTicks = await curveTicks();
+      const detailButton = current.getByRole("button", { name: "数据详情", exact: true });
+      await detailButton.click();
+      const dataDetails = current.getByRole("region", { name: "数据详情", exact: true });
+      await expect(dataDetails).toBeVisible();
+      await expect(curve).toBeHidden();
+      await dataDetails.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      await expect.poll(() => page.evaluate<number>("window.scrollY")).toBe(0);
+      await current.getByRole("button", { name: "关闭数据详情", exact: true }).click();
+      await expect(curve).toBeVisible();
+      await expectFittedCurve(curve);
+      await expect.poll(curveTicks).toEqual(beforeDetailsTicks);
+      await page.screenshot({
+        path: `../../.test-results/result-workspace-only-${size.width}.png`,
+        fullPage: true,
+      });
+    }
+    // The one selector still navigates independent original identities.
+    const recentSelector = page.getByRole("combobox", { name: "选择近期结果", exact: true });
+    const selectedIdentity = await recentSelector.inputValue();
+    await recentSelector.selectOption(previousResults[0]);
+    await expect(recentSelector).toHaveValue(previousResults[0]);
+    await expect(
+      page.getByRole("status", { name: "", exact: true }).filter({ hasText: /^已保存$/ }),
+    ).toBeVisible();
+    await recentSelector.selectOption(selectedIdentity);
+    await expect(recentSelector).toHaveValue(selectedIdentity);
+    await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeInViewport();
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(saveDialog).toBeHidden();
+    const resultHref = await page
+      .getByRole("link", { name: "查看已保存结果", exact: true })
+      .getAttribute("href");
+    expect(resultHref).toBeTruthy();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
-    await page.reload();
-    await page
-      .getByRole("checkbox", { name: /选择记录/ })
-      .first()
-      .check();
-    const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
+    // Session teardown/rebuild changes the workbench's top and parent height.
+    // Wait beyond the closing render to catch deferred ResizeObserver errors.
+    const settledLayout = await page.evaluate<{
+      errors: string[];
+      frames: string[];
+    }>(`(async () => {
+      for (let frame = 0; frame < 4; frame++)
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      const frames = [];
+      for (let frame = 0; frame < 4; frame++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const layout = document.querySelector('[data-testid="instrument-workbench-layout"]');
+        frames.push(JSON.stringify([layout, layout.parentElement].map((element) => {
+          const { width, height, top } = element.getBoundingClientRect();
+          return { width, height, top };
+        })));
+      }
+      return { errors: window.controlLayoutErrors, frames };
+    })()`);
+    expect(settledLayout.errors).toEqual([]);
+    expect(new Set(settledLayout.frames).size).toBe(1);
+    await page.goto(`${url}${resultHref}`);
+    const savedCurve = page.getByRole("img", { name: "s_parameter 局部曲线" });
     for (const width of [390, 1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expectFittedCurve(savedCurve);

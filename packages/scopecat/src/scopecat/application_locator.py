@@ -29,6 +29,11 @@ class AuthorLocation(BaseModel):
 
 def locator_home() -> Path:
     """Per-user persistent metadata; never an installation or source directory."""
+    from .trial_policy import current_policy, validate_environment
+
+    if (policy := current_policy()) is not None:
+        validate_environment(policy)
+        return policy.locator
     if override := os.environ.get("SCOPECAT_LOCATOR_HOME"):
         path = Path(override)
     elif sys.platform == "win32":

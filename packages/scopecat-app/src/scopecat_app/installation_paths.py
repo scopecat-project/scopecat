@@ -88,7 +88,12 @@ class Arguments(Protocol):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    from scopecat.trial_policy import current_policy, validate_arguments
+
+    validate_arguments(sys.argv[1:], native=True)
+    parser = argparse.ArgumentParser(
+        description=__doc__, allow_abbrev=current_policy() is None
+    )
     parser.add_argument("--home", type=Path, help="Isolated installation root")
     args = cast("Arguments", cast("object", parser.parse_args()))
     paths = (

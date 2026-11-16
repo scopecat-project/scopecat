@@ -114,6 +114,7 @@ def check_interpreter(executable: Path, identity: dict[str, object]) -> None:
         [
             str(executable),
             "-I",
+            "-B",
             "-c",
             (
                 "import json,sys;"

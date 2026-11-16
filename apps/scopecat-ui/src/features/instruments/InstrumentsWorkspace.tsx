@@ -1,10 +1,11 @@
 import { useDesktopAvailable } from "../application/DesktopSession";
 import { registerDeviceClose } from "./device-close";
-import { readOperatorSettings } from "../application/OperatorSettings";
+import { OperatorSettings, readOperatorSettings } from "../application/OperatorSettings";
 import * as Controls from "../../ui/Controls";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InstrumentSession } from "../../api-contract";
+import { ApiError } from "../../api-client";
 import { errorMessage } from "../../lib/presentation";
 import { connectionOptionFields } from "./connection-fields";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
@@ -32,12 +33,47 @@ import {
 } from "./instrument-api";
 
 type OpenAttempt = {
+  kind: "open";
   key: string;
   id: string;
   setup: InstrumentSession["setup"];
   operation: string;
   actor?: string;
+  submission: "not_submitted" | "unknown" | "rejected";
+  hadUnknownOutcome?: boolean;
 };
+
+class MissingConnectionActor extends Error {
+  constructor() {
+    super(
+      "当前连接需要操作署名。请在下方保存默认操作者，再点击连接；署名不是登录账号，不要求填写实名。",
+    );
+  }
+}
+
+function isOpenValidationRejection(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    error.status === 422 &&
+    Array.isArray(error.detail) &&
+    error.detail.length > 0 &&
+    error.detail.every(
+      (item: unknown) =>
+        !!item && typeof item === "object" && "loc" in item && Array.isArray(item.loc),
+    )
+  );
+}
+
+function rejectedOpenAttempt(variables: unknown) {
+  return (
+    !!variables &&
+    typeof variables === "object" &&
+    "kind" in variables &&
+    variables.kind === "open" &&
+    "submission" in variables &&
+    variables.submission !== "unknown"
+  );
+}
 
 type ConfigTarget = { kind: "add" } | { kind: "edit"; deviceId: string };
 export function InstrumentsWorkspace({
@@ -55,6 +91,9 @@ export function InstrumentsWorkspace({
   const [releasePending, setReleasePending] = useState(false);
   const releaseInFlight = useRef<Promise<void> | undefined>(undefined);
   const closeProblem = useRef(false);
+  const closeDecision = useRef<((status: "saved" | "blocked" | "cancelled") => void) | undefined>(
+    undefined,
+  );
   const [exitRequest, setExitRequest] = useState(0);
   const noteCloseProblem = useCallback((problem: boolean) => {
     closeProblem.current = problem;
@@ -63,7 +102,11 @@ export function InstrumentsWorkspace({
   const [selectedId, setSelectedId] = useState<string | undefined>(controlDeviceId);
   const [session, setSession] = useState<InstrumentSession>();
   const sessionRef = useRef<InstrumentSession | undefined>(undefined);
+  const [recoverySession, setRecoverySession] = useState<InstrumentSession>();
+  const recoverySessionRef = useRef<InstrumentSession | undefined>(undefined);
   const [sessionError, setSessionError] = useState<string>();
+  const [sessionErrorBlocksClose, setSessionErrorBlocksClose] = useState(false);
+  const [showOperatorSettings, setShowOperatorSettings] = useState(false);
   const [savedRevision, setSavedRevision] = useState<string>();
   const [configTarget, setConfigTarget] = useState<ConfigTarget>();
   const [search, setSearch] = useState("");
@@ -156,17 +199,36 @@ export function InstrumentsWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["instrument-drivers"] });
   };
   const loseSession = (message: string) => {
+    window.dispatchEvent(new Event("scopecat:device-close-cancelled"));
+    closeDecision.current?.("blocked");
+    recoverySessionRef.current = sessionRef.current ?? recoverySessionRef.current;
+    setRecoverySession(recoverySessionRef.current);
     sessionRef.current = undefined;
     setSession(undefined);
     closeProblem.current = true;
     setSessionError(message);
+    setSessionErrorBlocksClose(true);
+    setClosingWindow(false);
     refresh();
   };
   const connect = useMutation({
     mutationKey: ["device-control", selectedId],
     mutationFn: async (command: OpenAttempt) => {
       command.actor ??= (await readOperatorSettings()).operator;
-      return openInstrumentSession(command.id, command.actor, command.setup, command.operation);
+      if (!command.actor.trim()) throw new MissingConnectionActor();
+      command.submission = "unknown";
+      try {
+        return await openInstrumentSession(
+          command.id,
+          command.actor,
+          command.setup,
+          command.operation,
+        );
+      } catch (error) {
+        // A later automatic retry cannot make an earlier unacknowledged submission safe to replace.
+        if (!isOpenValidationRejection(error)) command.hadUnknownOutcome = true;
+        throw error;
+      }
     },
     retry: retryTransientInstrumentMutation,
     retryDelay: 250,
@@ -174,13 +236,31 @@ export function InstrumentsWorkspace({
       sessionRef.current = opened;
       setSession(opened);
       setSessionError(undefined);
+      setSessionErrorBlocksClose(false);
+      setShowOperatorSettings(false);
       setWindowError(undefined);
       setReleaseUnconfirmed(false);
       closeProblem.current = false;
       openAttempt.current = undefined;
       refresh();
     },
-    onError: (error) => setSessionError(errorMessage(error)),
+    onError: (error, command) => {
+      const rejected =
+        command.submission === "not_submitted" ||
+        (!command.hadUnknownOutcome && isOpenValidationRejection(error));
+      if (rejected) {
+        command.submission = "rejected";
+        if (openAttempt.current === command) openAttempt.current = undefined;
+      }
+      if (!rejected) command.hadUnknownOutcome = true;
+      setSessionErrorBlocksClose(!rejected);
+      setShowOperatorSettings(error instanceof MissingConnectionActor);
+      setSessionError(
+        rejected && isOpenValidationRejection(error)
+          ? "连接请求未被接纳，尚未取得控制权。请检查操作署名和连接设置后重试。"
+          : errorMessage(error),
+      );
+    },
   });
   const close = useMutation({
     mutationKey: ["device-control", selectedId],
@@ -193,13 +273,44 @@ export function InstrumentsWorkspace({
         sessionRef.current = undefined;
         setSession(undefined);
       }
+      if (recoverySessionRef.current?.session_id === id) {
+        recoverySessionRef.current = undefined;
+        setRecoverySession(undefined);
+      }
       setSessionError(undefined);
+      setSessionErrorBlocksClose(false);
       setWindowError(undefined);
       setReleaseUnconfirmed(false);
+      closeDecision.current?.("saved");
       if (selectAfter) selectDevice(selectAfter);
       refresh();
     },
-    onError: (error) => setSessionError(errorMessage(error)),
+    onError: (error) => {
+      setSessionError(errorMessage(error));
+      setSessionErrorBlocksClose(true);
+      closeDecision.current?.("blocked");
+    },
+  });
+  const restore = useMutation({
+    mutationKey: ["device-control", selectedId],
+    retry: false,
+    mutationFn: async () => {
+      const previous = recoverySessionRef.current;
+      if (!previous) throw new Error("没有可恢复的原会话。");
+      const renewed = await renewInstrumentSession(previous.session_id);
+      return { ...previous, ...renewed };
+    },
+    onSuccess: (restored) => {
+      if (recoverySessionRef.current?.session_id !== restored.session_id) return;
+      sessionRef.current = restored;
+      setSession(restored);
+      recoverySessionRef.current = undefined;
+      setRecoverySession(undefined);
+      setSessionError(undefined);
+      setSessionErrorBlocksClose(false);
+      refresh();
+    },
+    onError: (error) => setSessionError(`恢复原会话未确认：${errorMessage(error)}`),
   });
   const probe = useMutation({
     mutationFn: async (device: DeviceView) => {
@@ -309,10 +420,17 @@ export function InstrumentsWorkspace({
   }, [instrumentsQuery.dataUpdatedAt, session?.session_id]);
   useEffect(() => {
     if (!controlDeviceId) return;
-    return registerDeviceClose(async (signal) => {
+    return registerDeviceClose(async (signal, choosing) => {
       setClosingWindow(true);
       setWindowError(undefined);
-      const thaw = () => setClosingWindow(false);
+      const thaw = () => {
+        window.dispatchEvent(
+          new CustomEvent("scopecat:device-close-cancelled", {
+            detail: { userCancelled: signal.reason?.userCancelled === true },
+          }),
+        );
+        setClosingWindow(false);
+      };
       signal.addEventListener("abort", thaw, { once: true });
       const pending = queryClient
         .getMutationCache()
@@ -338,7 +456,7 @@ export function InstrumentsWorkspace({
         pending.some((mutation) => {
           const data: unknown = mutation.state.data;
           return (
-            mutation.state.status === "error" ||
+            (mutation.state.status === "error" && !rejectedOpenAttempt(mutation.state.variables)) ||
             (data !== null &&
               typeof data === "object" &&
               "status" in data &&
@@ -348,12 +466,37 @@ export function InstrumentsWorkspace({
           );
         })
       ) {
+        const reviewedSession = sessionRef.current ?? recoverySessionRef.current;
+        const reviewingLiveSession = !!sessionRef.current;
+        if (!reviewedSession) {
+          setClosingWindow(false);
+          setWindowError(
+            "连接结果尚未确认。请用原连接请求重试核查后再关闭；不会改写原署名或重新生成请求。",
+          );
+          return "blocked";
+        }
+        await choosing();
+        if (signal.aborted) return "unknown";
+        if (
+          (reviewingLiveSession ? sessionRef.current : recoverySessionRef.current)?.session_id !==
+          reviewedSession.session_id
+        )
+          return "blocked";
         setClosingWindow(false);
-        setExitRequest((current) => current + 1);
-        setWindowError(
-          "仍有未处理结果、未保存测量或结束控制选择，窗口已保留。请先核查结果、保存测量或明确结束控制，再关闭。",
-        );
-        return "blocked";
+        // Keep this native close intent alive while the existing review surface
+        // handles saving and the user's explicit output disposition.
+        const finished = await new Promise<"saved" | "blocked" | "cancelled">((resolve) => {
+          const settle = (value: "saved" | "blocked" | "cancelled") => {
+            signal.removeEventListener("abort", cancel);
+            closeDecision.current = undefined;
+            resolve(value);
+          };
+          const cancel = () => settle("blocked");
+          closeDecision.current = settle;
+          signal.addEventListener("abort", cancel, { once: true });
+          setExitRequest((current) => current + 1);
+        });
+        return signal.aborted ? "blocked" : finished;
       }
       const current = sessionRef.current;
       if (current || releaseInFlight.current) {
@@ -396,6 +539,8 @@ export function InstrumentsWorkspace({
     const protect = (event: BeforeUnloadEvent) => {
       if (
         sessionRef.current ||
+        recoverySessionRef.current ||
+        closeProblem.current ||
         queryClient.isMutating({ mutationKey: ["device-control", controlDeviceId] })
       ) {
         event.preventDefault();
@@ -412,20 +557,35 @@ export function InstrumentsWorkspace({
   }, [controlDeviceId, deviceLabel, desktop]);
   const connectCurrent = () => {
     if (releaseInFlight.current) return;
+    if (recoverySessionRef.current) {
+      setExitRequest((current) => current + 1);
+      return;
+    }
     releaseConnection.reset();
+    if (openAttempt.current?.submission === "unknown") {
+      connect.mutate(openAttempt.current);
+      return;
+    }
     if (!revision || !selectedId) return;
     const key = `${revision.id}:${selectedId}`;
     if (openAttempt.current?.key !== key)
       openAttempt.current = {
+        kind: "open",
         key,
         id: selectedId,
         setup: { revision_id: revision.id, content_hash: revision.content_hash },
         operation: createInstrumentCommandId("open"),
+        submission: "not_submitted",
       };
     connect.mutate(openAttempt.current);
   };
   const busy =
-    connect.isPending || close.isPending || probe.isPending || releaseConnection.isPending;
+    connect.isPending ||
+    close.isPending ||
+    probe.isPending ||
+    releaseConnection.isPending ||
+    !!recoverySession ||
+    (sessionErrorBlocksClose && !!openAttempt.current);
   const owned =
     selectedDevice?.availability === "active" ||
     selectedDevice?.availability === "quarantined" ||
@@ -434,6 +594,7 @@ export function InstrumentsWorkspace({
   const selectDevice = (id: string) => {
     setSelectedId(id);
     setSessionError(undefined);
+    setSessionErrorBlocksClose(false);
     probe.reset();
     retire.reset();
     releaseConnection.reset();
@@ -449,19 +610,80 @@ export function InstrumentsWorkspace({
     }
     void api.open_device_window(id).catch((error) => setWindowError(errorMessage(error)));
   };
+  const connectionDetails = selectedDevice ? (
+    <div className="grid gap-3 text-sm">
+      <p className="text-text-dim">
+        已保存的连接配置。查看不会连接或断开设备；编辑请先释放控制，再前往设备管理。
+      </p>
+      <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
+      <dl className="grid gap-2" aria-label="已保存连接设置">
+        {connectionOptionFields(
+          catalog.data?.drivers
+            .find((driver) => driver.driver_id === selectedDevice.revision.content.driver.driver_id)
+            ?.connections.find(
+              (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
+            )?.options_schema,
+        ).map((field) => {
+          const value = selectedDevice.revision.content.connection.options?.[field.id];
+          return (
+            <div key={field.id} className="min-w-0">
+              <dt className="font-semibold">{field.label}</dt>
+              <dd className="break-all">
+                {field.sensitive ? (
+                  value == null ? (
+                    "未设置"
+                  ) : (
+                    "已设置（已隐藏）"
+                  )
+                ) : value == null ? (
+                  (field.choiceLabels?.[""] ?? "未指定")
+                ) : field.stringMap && typeof value === "object" && !Array.isArray(value) ? (
+                  <ul>
+                    {Object.entries(value).map(([name, entry]) => (
+                      <li key={name}>
+                        {name}：{typeof entry === "string" ? entry : "复杂值"}
+                      </li>
+                    ))}
+                  </ul>
+                ) : typeof value === "string" ? (
+                  (field.choiceLabels?.[value] ?? value)
+                ) : typeof value === "boolean" ? (
+                  value ? (
+                    "是"
+                  ) : (
+                    "否"
+                  )
+                ) : typeof value === "number" ? (
+                  String(value)
+                ) : (
+                  "复杂设置（编辑时查看）"
+                )}
+              </dd>
+              {field.description && <dd className="text-sm text-text-dim">{field.description}</dd>}
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  ) : undefined;
   const inspector =
-    selected && selectedDevice?.device.state === "available" ? (
+    selected &&
+    selectedDevice &&
+    (selectedDevice.device.state === "available" || session || recoverySession) ? (
       <InstrumentInspector
-        key={`${revision?.id}:${selected.instrument_id}`}
+        key={`${(session ?? recoverySession)?.setup.revision_id ?? revision?.id}:${selected.instrument_id}`}
         instrument={selected}
         setup={
           revision ? { revision_id: revision.id, content_hash: revision.content_hash } : undefined
         }
         displayLabel={selectedDevice.device.label}
-        hideHeading={!!controlDeviceId}
+        primaryHeading={!!controlDeviceId}
         registeredDeviceId={selectedDevice.device.id}
+        configuration={connectionDetails}
         session={session}
+        recoverySession={recoverySession}
         sessionError={sessionError}
+        sessionErrorBlocksClose={sessionErrorBlocksClose}
         releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connect.isPending}
         closePending={close.isPending || releasePending}
@@ -471,9 +693,21 @@ export function InstrumentsWorkspace({
           session &&
           close.mutate({ id: session.session_id, abort: false })
         }
+        onRecoveryFinished={() => {
+          recoverySessionRef.current = undefined;
+          setRecoverySession(undefined);
+          setSessionError(undefined);
+          setSessionErrorBlocksClose(false);
+          setWindowError(undefined);
+          closeProblem.current = false;
+          closeDecision.current?.("saved");
+        }}
+        onRestoreSession={() => restore.mutate()}
+        restorePending={restore.isPending}
         onSessionLost={loseSession}
         onCloseProblem={noteCloseProblem}
         exitRequest={exitRequest}
+        onExitCancelled={() => closeDecision.current?.("cancelled")}
         onDisconnectOwner={() => {
           if (selected.owner_kind === "instrument_session" && selected.owner_id)
             close.mutate({ id: selected.owner_id, abort: true });
@@ -484,37 +718,58 @@ export function InstrumentsWorkspace({
     ) : instrumentsQuery.isFetching ? (
       <p>正在读取设备能力…</p>
     ) : null;
+  const connectionRecovery = (
+    <>
+      {showOperatorSettings && <OperatorSettings onSaved={() => setShowOperatorSettings(false)} />}
+      {!session && !recoverySession && sessionErrorBlocksClose && openAttempt.current && (
+        <Controls.Button disabled={connect.isPending} onClick={connectCurrent}>
+          用原请求核查连接结果
+        </Controls.Button>
+      )}
+    </>
+  );
   if (controlDeviceId)
     return (
-      <section aria-label="设备控制" className="mx-auto max-w-6xl">
-        <div className="p-5 pb-0 max-[680px]:px-[13px]">
-          {selected ? (
-            <InstrumentHeading
-              primary
-              instrument={selected}
-              session={session}
-              displayLabel={selectedDevice?.device.label}
-              releaseUnconfirmed={releaseUnconfirmed}
-              actions={<Controls.Button onClick={refresh}>刷新占用</Controls.Button>}
-            />
-          ) : (
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+      <section aria-label="设备控制" className="device-control-window min-w-0">
+        {!(
+          selected &&
+          selectedDevice &&
+          (selectedDevice.device.state === "available" || session || recoverySession)
+        ) && (
+          <div className="px-4 pt-3 max-[680px]:px-3">
+            {selected ? (
+              <InstrumentHeading
+                primary
+                instrument={selected}
+                session={session}
+                displayLabel={selectedDevice?.device.label}
+                releaseUnconfirmed={releaseUnconfirmed}
+              />
+            ) : (
               <h1 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">
                 {selectedDevice?.device.label ?? "设备控制"}
               </h1>
-              <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
-            </header>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         {closingWindow && <p role="status">正在等待当前操作完成并释放控制…</p>}
         {!closingWindow && releasePending && (
           <p role="status">仍在等待释放回执，暂不能重试或操作设备。</p>
         )}
         {windowError && <p role="alert">{windowError}</p>}
+        {connectionRecovery}
         {(devicesQuery.error || accessQuery.error || instrumentsQuery.error) && (
-          <p role="alert">
-            {errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}
-          </p>
+          <div role="alert" className="flex flex-wrap items-center gap-2">
+            <p>{errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}</p>
+            <Controls.Button
+              onClick={() => {
+                refresh();
+                void accessQuery.refetch();
+              }}
+            >
+              重试状态查询
+            </Controls.Button>
+          </div>
         )}
         {selected?.owner_kind === "run" &&
           selected.owner_id &&
@@ -649,7 +904,14 @@ export function InstrumentsWorkspace({
             }
             onSelect={(id) => {
               if (id === selectedId) return;
-              if (session && closeProblem.current && !close.isError) {
+              if (openAttempt.current?.submission === "unknown") {
+                setWindowError("请先用原请求核查连接结果，再切换设备。");
+                return;
+              }
+              if (
+                recoverySessionRef.current ||
+                (session && closeProblem.current && !close.isError)
+              ) {
                 setExitRequest((current) => current + 1);
                 setWindowError("请先在当前设备中保存记录并完成输出处置选择，再切换设备。");
                 return;
@@ -660,6 +922,7 @@ export function InstrumentsWorkspace({
             onControl={manageOnly ? openControlWindow : undefined}
           />
           {windowError && <p role="alert">{windowError}</p>}
+          {connectionRecovery}
         </section>
         <div className="grid content-start gap-3">
           {selectedDevice && (
@@ -791,62 +1054,7 @@ export function InstrumentsWorkspace({
               className="grid gap-3 rounded-lg border border-line bg-panel p-3"
               aria-label="连接与环境"
             >
-              <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
-              <dl className="grid gap-2" aria-label="已保存连接设置">
-                {connectionOptionFields(
-                  catalog.data?.drivers
-                    .find(
-                      (driver) =>
-                        driver.driver_id === selectedDevice.revision.content.driver.driver_id,
-                    )
-                    ?.connections.find(
-                      (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
-                    )?.options_schema,
-                ).map((field) => {
-                  const value = selectedDevice.revision.content.connection.options?.[field.id];
-                  return (
-                    <div key={field.id} className="min-w-0">
-                      <dt className="font-semibold">{field.label}</dt>
-                      <dd className="break-all">
-                        {field.sensitive ? (
-                          value == null ? (
-                            "未设置"
-                          ) : (
-                            "已设置（已隐藏）"
-                          )
-                        ) : value == null ? (
-                          (field.choiceLabels?.[""] ?? "未指定")
-                        ) : field.stringMap &&
-                          typeof value === "object" &&
-                          !Array.isArray(value) ? (
-                          <ul>
-                            {Object.entries(value).map(([name, entry]) => (
-                              <li key={name}>
-                                {name}：{typeof entry === "string" ? entry : "复杂值"}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : typeof value === "string" ? (
-                          (field.choiceLabels?.[value] ?? value)
-                        ) : typeof value === "boolean" ? (
-                          value ? (
-                            "是"
-                          ) : (
-                            "否"
-                          )
-                        ) : typeof value === "number" ? (
-                          String(value)
-                        ) : (
-                          "复杂设置（编辑时查看）"
-                        )}
-                      </dd>
-                      {field.description && (
-                        <dd className="text-sm text-text-dim">{field.description}</dd>
-                      )}
-                    </div>
-                  );
-                })}
-              </dl>
+              {connectionDetails}
               {selectedDevice.device.state !== "retired" && (
                 <>
                   <p>使用“编辑设备”修改连接与驱动环境。设备调试不需要样品或实验路由。</p>

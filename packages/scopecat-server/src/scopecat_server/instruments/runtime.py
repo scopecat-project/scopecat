@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Lock, RLock, Timer
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal, cast
@@ -28,6 +29,7 @@ from scopecat.daemon.wire import (
     InstrumentSessionLeaseReceipt,
     InstrumentSessionOpenCommand,
     InstrumentSessionOpenReceipt,
+    InstrumentSessionRecoveryReceipt,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
     RunInstrumentProvisionCommand,
@@ -131,6 +133,7 @@ from ._runtime_state import (
     CollectFailureReplay,
     CollectReceiptReplay,
     CollectRejectionReplay,
+    CollectRetainedReplay,
     ConfiguredDefaultsReplay,
     InstrumentOperationLedger,
     InvokeReplay,
@@ -180,6 +183,7 @@ from .commands import (
     execute_instrument_acquisition_prepare,
     execute_instrument_apply,
     execute_instrument_collect,
+    execute_instrument_collect_raw,
     execute_instrument_invoke,
     observe_instrument,
     observe_members,
@@ -190,8 +194,16 @@ from .finish import (
     InstrumentFinishAction,
     InstrumentFinishCommand,
     InstrumentFinishPlan,
+    InstrumentFinishRejected,
 )
 from .owner import InstrumentBackendOwner
+from .pending_collections import (
+    PendingCollections,
+    PendingResultSettingsProvider,
+    RetainedCollection,
+    collection_reservation_bytes,
+)
+from .retained_receipt import RawCollectReceipt
 
 if TYPE_CHECKING:
     from ..command_payloads import CommandPayloadScope, CommandPayloadService
@@ -212,6 +224,8 @@ class InstrumentRuntime:
         shutdown_grace_seconds: float,
         session_lease_ttl: timedelta,
         retain_measurements_before_fence: Callable[[str, str], None],
+        pending_settings: PendingResultSettingsProvider | None = None,
+        pending_spool_root: Path | None = None,
     ) -> None:
         if session_lease_ttl.total_seconds() <= 0:
             raise ValueError("instrument session lease TTL must be positive")
@@ -224,6 +238,9 @@ class InstrumentRuntime:
         self._shutdown_grace_seconds = shutdown_grace_seconds
         self._session_lease_ttl = session_lease_ttl
         self._retain_measurements_before_fence = retain_measurements_before_fence
+        self.pending_collections = PendingCollections(
+            settings=pending_settings, spool_root=pending_spool_root
+        )
         self._sessions: dict[str, SessionContext] = {}
         self._run_contexts: dict[str, RunContext] = {}
         self._sessions_lock = RLock()
@@ -3098,11 +3115,31 @@ class InstrumentRuntime:
             self._payloads.release(payload_scope)
 
     def collect(
-        self,
-        session_id: str,
-        instrument_id: str,
-        intent: InteractiveCollectIntent,
+        self, session_id: str, instrument_id: str, intent: InteractiveCollectIntent
     ) -> CollectReceipt:
+        """Explicit legacy model read; failure never removes the raw original."""
+        with (
+            self.collect_original(session_id, instrument_id, intent) as raw,
+            self.pending_collections.materialize(raw),
+        ):
+            return raw.materialize(max_bytes=self.pending_collections.work_limit)
+
+    @contextmanager
+    def collect_original(
+        self, session_id: str, instrument_id: str, intent: InteractiveCollectIntent
+    ) -> Generator[RawCollectReceipt]:
+        key = (session_id, instrument_id, intent.command_id)
+        with self.pending_collections.read_claim(key):
+            raw = self._collect_raw(session_id, instrument_id, intent)
+            try:
+                with self.pending_collections.working_bytes(1024 * 1024):
+                    yield raw
+            finally:
+                del raw
+
+    def _collect_raw(
+        self, session_id: str, instrument_id: str, intent: InteractiveCollectIntent
+    ) -> RawCollectReceipt:
         intent = intent.model_copy(deep=True)
         if intent.instrument_id != instrument_id:
             raise BackendConflict("interactive collect intent does not match its route")
@@ -3117,12 +3154,19 @@ class InstrumentRuntime:
                 instrument_id,
             )
             ledger = runtime.ledgers[instrument_id]
-            replay = ledger.replay(intent.command_id)
+            key = (session_id, instrument_id, intent.command_id)
+            retained = self.pending_collections.find(key)
+            replay = (
+                retained[2]
+                if retained is not None
+                else ledger.replay(intent.command_id)
+            )
             if replay is not None:
                 if not isinstance(
                     replay,
                     (
                         CollectReceiptReplay,
+                        CollectRetainedReplay,
                         CollectRejectionReplay,
                         CollectFailureReplay,
                     ),
@@ -3135,59 +3179,91 @@ class InstrumentRuntime:
                     raise BackendConflict(
                         "interactive command id has different collect content"
                     )
+                if isinstance(replay, CollectRetainedReplay):
+                    raise BackendConflict("collection was already saved or discarded")
                 if isinstance(replay, CollectFailureReplay):
                     raise BackendConflict(replay.message)
-                return replay.receipt
+                if (
+                    isinstance(replay, CollectReceiptReplay)
+                    and replay.receipt_validation != "verified"
+                ):
+                    raise BackendConflict(
+                        (replay.validation_reason or "Receipt contract is not verified")
+                        + "; the original result remains retained"
+                    )
+                return (
+                    replay.receipt
+                    if isinstance(replay.receipt, RawCollectReceipt)
+                    else RawCollectReceipt.from_receipt(replay.receipt)
+                )
 
-            # Replay precedes refresh so retries cannot be replanned from later state.
-            state = self._synchronize_session_instrument(
-                session,
-                runtime,
-                instrument,
-            )
-            resolution = resolve_interactive_collect(
-                intent=intent,
-                description=instrument.description,
-                state=state,
-            )
-            if isinstance(resolution, RejectedInteractiveCollect):
-                receipt = CollectReceipt(
-                    status="not_collected",
-                    problems=resolution.problems,
-                )
-                ledger.remember(
-                    intent.command_id,
-                    CollectRejectionReplay(
-                        intent=intent,
-                        receipt=receipt,
-                    ),
-                )
-                return receipt
-            command = resolution.command
-            return self._execute_interactive_collect(
-                runtime,
-                instrument,
-                intent=intent,
-                command=command,
-                on_started=lambda: self._record_operation_started(
-                    session,
-                    instrument_id=instrument_id,
-                    operation_id=intent.command_id,
-                    kind="collect",
-                ),
-                on_finished=lambda status: self._record_operation_finished(
-                    session,
-                    instrument_id=instrument_id,
-                    operation_id=intent.command_id,
-                    kind="collect",
-                    status=status,
-                ),
-                on_unknown=lambda reason: self._lose_runtime(
+            # Compact live-session identities outlast the bounded receipt cache.
+            # Closed/restarted sessions cannot recreate a live ownership runtime.
+            if intent.command_id in ledger.started_collections:
+                raise BackendConflict("collection retry receipt is no longer retained")
+            with self.pending_collections.reserve(key, visible=intent.retain_result):
+                # Replay precedes refresh; retries cannot use later device state.
+                state = self._synchronize_session_instrument(
                     session,
                     runtime,
-                    reason=reason,
-                ),
-            )
+                    instrument,
+                )
+                resolution = resolve_interactive_collect(
+                    intent=intent,
+                    description=instrument.description,
+                    state=state,
+                )
+                if isinstance(resolution, RejectedInteractiveCollect):
+                    receipt = CollectReceipt(
+                        status="not_collected",
+                        problems=resolution.problems,
+                    )
+                    ledger.remember(
+                        intent.command_id,
+                        CollectRejectionReplay(
+                            intent=intent,
+                            receipt=receipt,
+                        ),
+                    )
+                    return RawCollectReceipt.from_receipt(receipt)
+                command = resolution.command
+                self.pending_collections.prepare(
+                    key, collection_reservation_bytes(command)
+                )
+                return self._execute_interactive_collect(
+                    runtime,
+                    instrument,
+                    intent=intent,
+                    command=command,
+                    key=key,
+                    retain=lambda replay: self.pending_collections.retain(
+                        key,
+                        (
+                            session.model_copy(deep=True),
+                            instrument.description.model_copy(deep=True),
+                            replay,
+                        ),
+                        ready=False,
+                    ),
+                    on_started=lambda: self._record_operation_started(
+                        session,
+                        instrument_id=instrument_id,
+                        operation_id=intent.command_id,
+                        kind="collect",
+                    ),
+                    on_finished=lambda status: self._record_operation_finished(
+                        session,
+                        instrument_id=instrument_id,
+                        operation_id=intent.command_id,
+                        kind="collect",
+                        status=status,
+                    ),
+                    on_unknown=lambda reason: self._lose_runtime(
+                        session,
+                        runtime,
+                        reason=reason,
+                    ),
+                )
 
     def _execute_interactive_apply(
         self,
@@ -3311,20 +3387,23 @@ class InstrumentRuntime:
         *,
         intent: InteractiveCollectIntent,
         command: CollectCommand,
+        key: tuple[str, str, str],
+        retain: Callable[[CollectReceiptReplay], RawCollectReceipt],
         on_started: Callable[[], None],
         on_finished: Callable[[str], None],
         on_unknown: Callable[[str], None],
-    ) -> CollectReceipt:
+    ) -> RawCollectReceipt:
         command_id = intent.command_id
         ledger = runtime.ledgers[instrument.instrument_id]
         driver_request = lower_backend_collect_request(command)
         observed_before_collection = instrument.assumed_state
         on_started()
+        ledger.started_collections.add(command_id)
         try:
-            receipt = execute_instrument_collect(
+            receipt = execute_instrument_collect_raw(
                 instrument,
                 driver_request,
-                command=command,
+                maximum_receipt_bytes=collection_reservation_bytes(command),
             )
         except InstrumentCommandExecutionError as error:
             if error.reason != "instrument_collect_receipt_invalid":
@@ -3347,15 +3426,60 @@ class InstrumentRuntime:
                 ),
             )
             raise BackendConflict(message) from error
-        ledger.remember(
-            command_id,
-            CollectReceiptReplay(
-                intent=intent,
-                command=command,
-                receipt=receipt,
-                observed_before_collection=observed_before_collection,
-            ),
+        replay = CollectReceiptReplay(
+            intent=intent,
+            command=command,
+            receipt=receipt,
+            observed_before_collection=observed_before_collection,
+            receipt_validation="unverified",
         )
+        # Keep the original before any late audit failure. Python-owned retry
+        # entries are hidden and budget-evictable; UI pending originals are not.
+        receipt = retain(replay)
+        del replay
+        ledger.remember(command_id, CollectRetainedReplay(intent=intent))
+        try:
+            problems = receipt.validate_command(command)
+        except (ValueError, MemoryError) as error:
+            self.pending_collections.set_validation(
+                key,
+                "unverified",
+                "Contract verification could not complete",
+                "direct_result_contract_view_unavailable",
+            )
+            try:
+                on_finished("unverified_receipt")
+            except Exception as audit_error:
+                on_unknown("instrument_collect_audit_unknown")
+                raise BackendConflict(
+                    "Original retained but audit recording failed"
+                ) from audit_error
+            raise BackendConflict(
+                "Contract verification failed; original remains retained"
+            ) from error
+        if problems:
+            unverified = any(
+                item.code == "direct_result_contract_view_unavailable"
+                for item in problems
+            )
+            self.pending_collections.set_validation(
+                key,
+                "unverified" if unverified else "invalid",
+                "; ".join(item.message for item in problems)[:512],
+                problems[0].code,
+            )
+            try:
+                on_finished("unverified_receipt" if unverified else "invalid_receipt")
+            except Exception as error:
+                on_unknown("instrument_collect_audit_unknown")
+                raise BackendConflict(
+                    "original retained but audit recording failed"
+                ) from error
+            raise BackendConflict(
+                "; ".join(item.message for item in problems)
+                + "; the original result remains retained"
+            )
+        self.pending_collections.set_validation(key, "verified")
         try:
             on_finished(receipt.status)
         except Exception as error:
@@ -3372,25 +3496,57 @@ class InstrumentRuntime:
         session_id: str,
         instrument_id: str,
         command_id: str,
-    ) -> tuple[InstrumentSession, InstrumentDescription, CollectReceiptReplay]:
-        """Copy an existing successful receipt without device I/O or lease renewal."""
-        with self._sessions_lock:
-            context = self._sessions.get(session_id)
-        if context is None:
-            raise BackendNotFound("unsaved collection is no longer retained")
-        with context.runtime.lock:
-            instrument = context.runtime.instruments.get(instrument_id)
-            ledger = context.runtime.ledgers.get(instrument_id)
-            replay = None if ledger is None else ledger.replay(command_id)
-            if instrument is None or not isinstance(replay, CollectReceiptReplay):
-                raise BackendNotFound("collection receipt is no longer retained")
-            if replay.receipt.status != "collected":
-                raise BackendConflict("only a successful collection can be saved")
-            return (
-                self._control.get_instrument_session(session_id),
-                instrument.description.model_copy(deep=True),
-                replay,
+    ) -> RetainedCollection:
+        """Read retained evidence without device access or session/lease lookup."""
+        return self.pending_collections.require((session_id, instrument_id, command_id))
+
+    def session_recovery(self, session_id: str) -> InstrumentSessionRecoveryReceipt:
+        """Observe durable status without renewing, cleanup, or driver calls."""
+        try:
+            session = self._control.get_instrument_session(session_id)
+        except ControlPlaneNotFound as error:
+            raise BackendNotFound(str(error)) from error
+        with self._control.read_transaction() as connection:
+            # Explicit attention resolution acknowledges uncertainty, not success.
+            # A crash can leave a finished-unknown event before quarantine is written.
+            unresolved = cast(
+                "tuple[int] | None",
+                connection.execute(
+                    "SELECT 1 FROM durable_events e WHERE "
+                    "json_extract(e.payload_json, '$.session_id')=? AND "
+                    "e.event_id > COALESCE((SELECT MAX(r.event_id) "
+                    "FROM durable_events r "
+                    "WHERE r.kind='instrument_session_attention_resolved' AND "
+                    "json_extract(r.payload_json, '$.session_id')=?), 0) AND ("
+                    "(e.kind IN ('instrument_apply_finished', "
+                    "'instrument_invoke_finished', "
+                    "'instrument_collect_finished') AND "
+                    "json_extract(e.payload_json, '$.status') "
+                    "IN ('unknown', 'invalid_receipt')) "
+                    "OR (e.kind='instrument_session_finish_selected' AND NOT EXISTS "
+                    "(SELECT 1 FROM durable_events c WHERE "
+                    "c.kind='instrument_session_finish_actions_completed' AND "
+                    "json_extract(c.payload_json, '$.session_id')=? AND "
+                    "c.event_id > e.event_id))) LIMIT 1",
+                    (session_id, session_id, session_id),
+                ).fetchone(),
             )
+        with self._sessions_lock:
+            retained = session_id in self._sessions
+        return InstrumentSessionRecoveryReceipt(
+            session_id=session.session_id,
+            state=session.state,
+            end_status=session.end_status,
+            attention_reason=session.attention_reason,
+            active_operation_id=session.active_operation_id,
+            active_operation_kind=session.active_operation_kind,
+            runtime_retained=retained,
+            has_unresolved_operations=(
+                session.state == "attention_required"
+                or session.active_operation_id is not None
+                or unresolved is not None
+            ),
+        )
 
     def finish_plan(self, session_id: str) -> InstrumentFinishPlan:
         runtime = self._live_runtime(session_id)
@@ -3421,14 +3577,11 @@ class InstrumentRuntime:
         # Reuse the original ownership and typed command paths. The close endpoint
         # retains its existing keep-current semantics for programmatic callers.
         session = self._control.get_instrument_session(session_id)
-        if (
-            session.state != "closed"
-            and command.mode == "configured_finish"
-            and not self.finish_plan(session_id).configured_finish_available
-        ):
-            raise BackendConflict(
-                "no configured finish action for every selected device"
-            )
+        configured_finish_available = (
+            session.state == "closed"
+            or command.mode != "configured_finish"
+            or self.finish_plan(session_id).configured_finish_available
+        )
         payload = {"session_id": session_id, **command.model_dump(mode="json")}
         with self._control.write_transaction() as connection:
             row = cast(
@@ -3450,6 +3603,14 @@ class InstrumentRuntime:
             elif session.state == "closed":
                 raise BackendConflict(
                     "session already closed without this finish selection"
+                )
+            elif not configured_finish_available:
+                # A generic conflict may occur after admission. Only this fenced
+                # absence of a selection proves the UI may choose a new command.
+                raise InstrumentFinishRejected(
+                    session_id,
+                    command.operation_id,
+                    "no configured finish action for every selected device",
                 )
             else:
                 self._control.append_event_in_transaction(
@@ -3581,6 +3742,7 @@ class InstrumentRuntime:
         )
 
     def _cleanup_session_runtime(self, session_id: str) -> None:
+        self.pending_collections.release_python_owned(session_id)
         with self._sessions_lock:
             context = self._sessions.get(session_id)
         if context is None:
@@ -3826,6 +3988,7 @@ class InstrumentRuntime:
                 run_contexts=run_contexts,
             )
         finally:
+            self.pending_collections.clear()
             if deadline is not None:
                 deadline.cancel()
             if endpoint is not None:

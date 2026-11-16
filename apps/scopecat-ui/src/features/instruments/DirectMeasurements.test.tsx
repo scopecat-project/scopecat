@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { DirectMeasurements } from "./DirectMeasurements";
+import { DirectMeasurements, SavedCurve } from "./DirectMeasurements";
 import {
   comparisonGroups,
   conditionDifferences,
@@ -48,12 +48,44 @@ const receipt: InstrumentCollectReceipt = {
     },
   },
 };
+function previewFixture() {
+  return {
+    method: "exact_slice",
+    status: "collected",
+    raw_bytes: 32,
+    fields: [
+      { request_id: "x", values: [10, 20], unit: "Hz" },
+      { request_id: "signal", values: [3, 4], unit: "V" },
+    ].map((field) => ({
+      ...field,
+      kind: "array",
+      dtype: "float64",
+      unit_truncated: false,
+      shape: [2],
+      total_count: 2,
+      start: 0,
+      returned_count: 2,
+      next_start: null,
+      complete: true,
+      truncated_indices: [],
+      metadata: {},
+      metadata_truncated: false,
+    })),
+    fields_truncated: false,
+    metadata: {},
+    metadata_truncated: false,
+    problems: [],
+    problems_truncated: false,
+  };
+}
 function saved(mount: string[], nested: string[]): SavedMeasurement {
   return {
     id: "record",
     saved_at: "2026-01-01T00:00:00Z",
+    receipt_validation: "verified" as const,
     collected_at: "2026-01-01T00:00:00Z",
     selection: {
+      title: "",
       session_id: "closed",
       instrument_id: "scope",
       command_id: "capture",
@@ -66,6 +98,7 @@ function saved(mount: string[], nested: string[]): SavedMeasurement {
     observed_before_collection: null,
     receipt_digest: "digest",
     intent: {
+      retain_result: true,
       instrument_id: "scope",
       command_id: "capture",
       interface_id: "test.scope/v1",
@@ -95,10 +128,10 @@ async function reopen(record: SavedMeasurement) {
   vi.mocked(listDirectMeasurements).mockResolvedValue({ items: [record] });
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (request: Request | string) => {
-      const url = typeof request === "string" ? request : request.url;
-      return url.endsWith("/receipt")
-        ? new Response(new ArrayBuffer(0))
+    vi.fn(async (request: Request | string | URL) => {
+      const url = request instanceof Request ? request.url : String(request);
+      return url.endsWith("/preview")
+        ? Response.json(previewFixture())
         : new Response(JSON.stringify(record), { headers: { "Content-Type": "application/json" } });
     }),
   );
@@ -121,7 +154,7 @@ it.each([
 ])("reopens the exact stored acquisition at mount %j and nested path %j", async (mount, nested) => {
   await reopen(saved(mount, nested));
   expect(await screen.findByTestId("chart")).toHaveTextContent('"data":[[10,3],[20,4]]');
-  expect(screen.getByText("完整回执与采集证据（含复数原值）")).toBeVisible();
+  expect(screen.getByText("有界证据摘要（不是完整回执）")).toBeVisible();
 });
 it("keeps the receipt accessible when its recorded component cannot be resolved", async () => {
   const record = saved(["rack", "scope"], ["channels", "2"]);
@@ -129,7 +162,7 @@ it("keeps the receipt accessible when its recorded component cannot be resolved"
   await reopen(record);
   expect(await screen.findByText(/无法解析保存的采集契约/)).toBeVisible();
   expect(screen.queryByTestId("chart")).not.toBeInTheDocument();
-  const summary = screen.getByText("完整回执与采集证据（含复数原值）");
+  const summary = screen.getByText("有界证据摘要（不是完整回执）");
   const details = summary.closest("details")!;
   details.open = true;
   fireEvent(details, new Event("toggle"));
@@ -150,10 +183,10 @@ it("separates equal labels by identity and retains bounded selections across sea
   );
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (request: Request | string) => {
-      const url = typeof request === "string" ? request : request.url;
-      return url.endsWith("/receipt")
-        ? new Response(new ArrayBuffer(0))
+    vi.fn(async (request: Request | string | URL) => {
+      const url = request instanceof Request ? request.url : String(request);
+      return url.endsWith("/preview")
+        ? Response.json(previewFixture())
         : new Response(JSON.stringify(items[0]), {
             headers: { "Content-Type": "application/json" },
           });
@@ -385,3 +418,92 @@ it("allows only the explicit sweep/retained-trace family with compatible complet
   traceContract.results[1]!.axes![0]!.unit = "s";
   expect(comparisonGroups(entries, "magnitude").groups).toHaveLength(0);
 });
+
+it.each([false, true])(
+  "preserves saved receipt metadata with explicit hideHeading=%s independently of readOnly",
+  async (hideHeading) => {
+    const record = saved([], []);
+    record.selection.title = "Retained title";
+    record.selection.note = "Original note";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request | string | URL) =>
+        (request instanceof Request ? request.url : String(request)).endsWith("/preview")
+          ? Response.json(previewFixture())
+          : Response.json({
+              ...record,
+              notes: [
+                {
+                  operation_id: "note-1",
+                  note: "Retained annotation",
+                  anomalous: false,
+                  recorded_at: "2026-01-02T00:00:00Z",
+                },
+              ],
+            }),
+      ),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SavedCurve record={record} readOnly hideHeading={hideHeading} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByTestId("chart")).toHaveTextContent('"data":[[10,3],[20,4]]');
+    expect(await screen.findByText(/Retained annotation/)).toBeVisible();
+    expect(screen.queryAllByRole("heading")).toHaveLength(hideHeading ? 0 : 1);
+    expect(
+      screen.getByText(hideHeading ? "Original note" : "Retained title · Original note"),
+    ).toBeVisible();
+    expect(screen.queryByRole("heading")?.textContent ?? "").toBe(
+      hideHeading ? "" : "Retained title · Original note",
+    );
+    expect(screen.getByText(/record ·/)).toHaveTextContent(
+      new Date(record.collected_at).toLocaleString(),
+    );
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "追加标记（不修改原结果）" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("设备、线路和设置来源")).toBeVisible();
+  },
+);
+
+it.each(["unverified", "invalid"] as const)(
+  "shows saved %s originals without loading or comparing their previews",
+  async (receipt_validation) => {
+    const record = {
+      ...saved([], []),
+      id: `diagnostic-${receipt_validation}`,
+      receipt_validation,
+      validation_reason: "original diagnostic",
+      validation_code: "contract-check",
+    };
+    const paths: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request | URL | string) => {
+        const url = request instanceof Request ? request.url : String(request);
+        paths.push(url);
+        return Response.json(record);
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SavedCurve record={record} readOnly />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("original diagnostic")).toBeVisible();
+    expect(screen.getByRole("link", { name: "下载原始回执（非预览）" })).toHaveAttribute(
+      "download",
+    );
+    expect(screen.queryByTestId("chart")).not.toBeInTheDocument();
+    expect(paths.some((path) => path.endsWith("/preview"))).toBe(false);
+    const comparison = comparisonGroups([{ record, acquisition, receipt }], "magnitude");
+    expect(comparison.groups).toEqual([]);
+    expect(comparison.excluded[0]).toContain("不参与比较");
+  },
+);
