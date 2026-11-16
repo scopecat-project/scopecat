@@ -1,6 +1,7 @@
 """The ordinary gate and qualification shards must cover every test file."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,6 +64,14 @@ def test_platform_smoke_requires_actual_passes(
     def current_revision(*_a: object, **_kw: object):
         return "test-sha"
 
-    monkeypatch.setattr(platform_smoke.subprocess, "check_output", current_revision)
+    # Replace only the runner boundary: platform.platform() also uses the real
+    # subprocess.check_output on macOS and expects bytes from the file command.
+    monkeypatch.setattr(
+        platform_smoke,
+        "subprocess",
+        SimpleNamespace(
+            check_output=current_revision, run=platform_smoke.subprocess.run
+        ),
+    )
     # This temporary probe has no xdist config; main still supplies -n 0.
     assert platform_smoke.main() == expected
