@@ -148,6 +148,7 @@ for (const failure of [false, true]) {
       const chart = page.getByRole("img", { name: "s_parameter 局部曲线" }).locator("svg");
       if (failure) {
         await expect(page.getByRole("alert")).toContainText("图表暂时无法显示");
+        await expect(page.getByRole("alert")).toContainText("请勿刷新正在控制设备的窗口");
         await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeEnabled();
         await expect(
           page.getByRole("button", { name: "Acquire sweep", exact: true }),
