@@ -675,6 +675,11 @@ it("keeps context across experiments and preserves the original submission after
 });
 
 it("pins a picked target across head refresh and pages, then clears it on catalog scope change", async () => {
+  // Start with the subject-bearing experiment. Otherwise the default "first"
+  // experiment may autosave before selectPrepared(), so switching back restores
+  // its own historical input (and requires review) instead of carrying context
+  // into a newly selected experiment. Exercise that distinction deterministically.
+  catalog = [prepared, { ...prepared, id: "first", title: "Default experiment" }];
   const ref = {
     catalog_id: "project-a",
     target_id: "chip-target",
@@ -699,10 +704,12 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
   const fallback = globalThis.fetch;
   const previews: SubmissionRequest[] = [];
   const resolutions: unknown[] = [];
+  const restoredTargets: unknown[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
+      if (path.endsWith("/launch-drafts/read")) restoredTargets.push(await request.clone().json());
       if (path.endsWith("/measurement-targets"))
         return Response.json({ items: [head], next_cursor: null });
       if (path.endsWith("/measurement-targets/resolve")) {
@@ -741,6 +748,10 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
     }),
   );
   const view = render(<Harness />);
+  await screen.findByText("实验输入已保存到应用数据。", { exact: true });
+  expect(restoredTargets).toEqual([
+    { workspace_id: "legacy", experiment: "prepared", draft_id: "default" },
+  ]);
   await selectPrepared();
   fireEvent.click(screen.getByRole("button", { name: "浏览样品、批次与记录集" }));
   const picker = await screen.findByLabelText("Registered target");
@@ -760,6 +771,10 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
   await returnToLaunch();
   fireEvent.change(screen.getByLabelText("实验类型"), { target: { value: "first" } });
   await previewReady();
+  expect(restoredTargets).toEqual([
+    { workspace_id: "legacy", experiment: "prepared", draft_id: "default" },
+    { workspace_id: "legacy", experiment: "first", draft_id: "default" },
+  ]);
   expect(resolutions.length).toBeGreaterThan(0);
   expect(resolutions.every((value) => JSON.stringify(value) === JSON.stringify(ref))).toBe(true);
   expect(previews.at(-1)?.selection).toMatchObject({
