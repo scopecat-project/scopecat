@@ -278,7 +278,7 @@ it("keeps save and compact selection above content with the full recent list bel
 it("shares one selected result between the compact selector and full list without losing save drafts", async () => {
   show();
   const select = screen.getByRole("combobox", { name: "选择近期结果" });
-  const options = within(select).getAllByRole("option") as HTMLOptionElement[];
+  const options = within(select).getAllByRole<HTMLOptionElement>("option");
   const first = options[1]!;
   expect(select).toHaveValue(options[0]!.value);
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
@@ -318,15 +318,15 @@ it("does not present another original when the current result is outside the rec
     </QueryClientProvider>,
   );
   const select = screen.getByRole("combobox", { name: "选择近期结果" });
-  const displayed = within(select).getByRole("option", {
+  const displayed = within(select).getByRole<HTMLOptionElement>("option", {
     name: /当前显示（近期列表外）/,
-  }) as HTMLOptionElement;
+  });
   expect(displayed).toBeDisabled();
   expect(displayed.selected).toBe(true);
   expect(select).toHaveValue(displayed.value);
   expect(screen.getByLabelText("当前测量结果")).toHaveTextContent("Curve two");
   expect(onSelect).not.toHaveBeenCalled();
-  const recent = within(select).getByRole("option", { name: /^1\./ }) as HTMLOptionElement;
+  const recent = within(select).getByRole<HTMLOptionElement>("option", { name: /^1\./ });
   fireEvent.change(select, { target: { value: recent.value } });
   expect(onSelect).toHaveBeenCalledExactlyOnceWith(results[0]);
 });
@@ -348,7 +348,7 @@ it("uses a bounded workspace with one recent selector and no duplicate history l
 it("keeps per-result drafts when switching the workspace selector and returning from save", async () => {
   show(true);
   const select = screen.getByRole("combobox", { name: "选择近期结果" });
-  const options = within(select).getAllByRole("option") as HTMLOptionElement[];
+  const options = within(select).getAllByRole<HTMLOptionElement>("option");
   fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
   let dialog = screen.getByRole("dialog");
   fireEvent.change(within(dialog).getByLabelText("标题"), { target: { value: "Workspace draft" } });
