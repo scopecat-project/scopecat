@@ -20,6 +20,16 @@ from scopecat_app.desktop import (
 from scopecat_app.desktop_session import DesktopSession
 
 
+@pytest.fixture(autouse=True)
+def fake_native_show(monkeypatch: pytest.MonkeyPatch):
+    # These state-machine tests use Mock windows, not a Cocoa event loop.
+    # Platform scheduling and lifecycle guards are tested in test_desktop_platform.
+    def show(window: Any) -> None:
+        window.show()
+
+    monkeypatch.setattr("scopecat_app.desktop.show_window", show)
+
+
 @pytest.mark.parametrize("stop", [False, True])
 def test_file_work_allows_other_windows_and_participates_in_quit(stop: bool):
     runtime = Mock()
