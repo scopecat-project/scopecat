@@ -27,6 +27,16 @@ export function CalibrationAssessments({
               </p>
               <p>已比较参数： {assessment.dependencies.compared_parameters?.join(", ") || "无"}</p>
               <p>已改变参数： {assessment.dependencies.changed_parameters?.join(", ") || "无"}</p>
+              {assessment.dependencies.row_comparisons?.map((row, index) => (
+                <p key={index} className="break-words">
+                  选择行： {row.selector.parameter} [
+                  {row.selector.equals
+                    .map((cell) => `${cell.id}=${JSON.stringify(cell.value)}`)
+                    .join(", ")}
+                  ]：{calibrationReasonLabel(row.reason)} 匹配行数：
+                  {row.before_count ?? "未知"} → {row.after_count ?? "未知"}
+                </p>
+              ))}
             </>
           )}
         </div>

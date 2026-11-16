@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import type { components } from "../src/api-schema";
 import { ROOT, startProject, stopProject, uv } from "./daemon";
 
 const PREPARE = `
@@ -89,10 +90,44 @@ test("calibration control, evidence and logs preserve precise meaning at wide an
       .filter({ has: page.getByRole("heading", { name: "q0 · 已通过", exact: true }) });
     await stage.getByText("检查适用证据： q0", { exact: true }).click();
     await stage.getByLabel("证据最大有效时长（小时）").fill("2");
+    // Presentation-only selector details over real retained evidence. Server tests
+    // separately qualify comparison and restart/restore; this fixture cannot do so.
+    await page.route("**/calibration-checks/report", async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as components["schemas"]["CalibrationReport"];
+      body.items[0].selection.status = "recheck";
+      body.items[0].availability.status = "recheck";
+      body.items[0].assessments[0].status = "recheck";
+      body.items[0].assessments[0].reasons = ["dependency_inputs_changed"];
+      body.items[0].assessments[0].dependencies = {
+        status: "changed",
+        reasons: ["dependency_values_changed"],
+        compared_parameters: ["synthetic"],
+        changed_parameters: ["synthetic"],
+        row_comparisons: [
+          {
+            selector: {
+              parameter: "synthetic",
+              equals: [{ id: "group", shape: "scalar", value: "long-selector-".repeat(12) }],
+            },
+            status: "changed",
+            reason: "selection_membership_changed",
+            before_count: 1,
+            after_count: 2,
+          },
+        ],
+      };
+      body.items[0].selection.assessment = body.items[0].assessments[0];
+      await route.fulfill({ response, json: body });
+    });
     await stage.getByRole("button", { name: "检查证据： q0", exact: true }).press("Enter");
     const report = stage.getByRole("region", { name: "证据报告： q0" });
     await expect(report).toBeVisible();
     await expect(report.getByText(/评估时间/)).toBeVisible();
+    await report.getByText("保留检查为何适用或需要重查", { exact: true }).click();
+    await expect(report.getByText(/选择行： synthetic/)).toContainText(
+      "选择成员已变化。 匹配行数：1 → 2",
+    );
     await expect(report.getByRole("link", { name: "打开所选测量" })).toHaveAttribute(
       "href",
       /\?run=.+#runs/,

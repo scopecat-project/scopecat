@@ -74,6 +74,7 @@ from scopecat.daemon.wire import (
 )
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.run_outcome import RunOutcome
+from scopecat.kernel.value_types import Float, Scalar, String, Table, TableColumn
 from scopecat.project import load_project
 from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
 from scopecat.records.calibration_check import (
@@ -84,6 +85,7 @@ from scopecat.records.calibration_check import (
 from scopecat.records.calibration_dependencies import (
     CalibrationDependencies,
     DependencyCoverage,
+    TableRowDependency,
 )
 from scopecat.records.calibration_policy import (
     CalibrationProfile,
@@ -93,6 +95,13 @@ from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import config_content_hash
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.measurement_context import MeasurementContext
+from scopecat.records.parameter import (
+    ParameterCatalog,
+    ParameterDefinition,
+    ParameterSnapshot,
+    ScalarParameterValue,
+    TableParameterValue,
+)
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run_request import RunRequest
@@ -513,10 +522,56 @@ def check_case(
 
 
 @contextmanager
-def _check_case(tmp_path: Path) -> Generator[CheckCase]:
+def _check_case(tmp_path: Path, *, selected_rows: bool = False) -> Generator[CheckCase]:
     from scopecat_testkit.server.instruments import signal_endpoint
 
     config = load_config()
+    if selected_rows:
+        config = config.model_copy(
+            update={
+                "system": config.system.model_copy(
+                    update={
+                        "parameter_catalog": ParameterCatalog(
+                            id="synthetic-selected",
+                            definitions=(
+                                *config.parameter_catalog.definitions,
+                                ParameterDefinition(
+                                    id="readout",
+                                    value_type=Table(
+                                        columns=(
+                                            TableColumn(
+                                                id="target", value_type=Scalar(String())
+                                            ),
+                                            TableColumn(
+                                                id="group", value_type=Scalar(String())
+                                            ),
+                                            TableColumn(
+                                                id="amplitude",
+                                                value_type=Scalar(Float()),
+                                            ),
+                                        ),
+                                        primary_key=("target",),
+                                    ),
+                                ),
+                            ),
+                        )
+                    }
+                ),
+                "parameter_snapshot": ParameterSnapshot(
+                    id="synthetic-selected",
+                    values=(
+                        *config.parameter_snapshot.values,
+                        TableParameterValue(
+                            id="readout",
+                            rows=(
+                                {"target": "q0", "group": "read", "amplitude": 1.0},
+                                {"target": "q1", "group": "other", "amplitude": 2.0},
+                            ),
+                        ),
+                    ),
+                ),
+            }
+        )
     with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
         app = runtime.application
         setup = app.setup.import_recipe(
@@ -1773,3 +1828,276 @@ def test_check_result_registration_rejects_wrong_evidence_and_retains_negative(
                 app.calibration_checks.report(report_query).items[0].selection.status
                 == "out_of_spec"
             )
+
+
+def _publish_synthetic_selector_check(
+    runtime: LocalDaemonRuntime,
+    declaration: CalibrationCheckRequest,
+    child: RunSubmission,
+    *,
+    passed: bool,
+) -> None:
+    """Seed retained decision evidence, not acquisition or physical qualification."""
+    app = runtime.application
+    service = app.automation
+    parent = service.submit(_command(declaration)).run
+    lease = service.acquire_lease(
+        ProcedureWorkerLeaseAcquireCommand(
+            procedure_run_id=parent.procedure_run_id,
+            worker_id="synthetic",
+            expected_run_revision=parent.revision,
+        )
+    )
+    measured_step = service.begin_step(
+        ProcedureStepBeginCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=lease.run.revision,
+            step_key="measure",
+            operation="run",
+            intent_hash="sha256:" + "b" * 64,
+        )
+    )
+    child = child.model_copy(
+        update={
+            "plan": child.plan.model_copy(
+                update={
+                    "point_count": 0,
+                    "initial_point_count": 0,
+                    "point_limit": 0,
+                }
+            )
+        }
+    )
+    measured = app.submit_run(child)
+    executor = app.executor.start_executor(
+        measured.run_id, ExecutorStartRequest(executor_id="synthetic")
+    )
+    app.executor.commit_terminal(
+        measured.run_id,
+        TerminalRunCommitCommand(
+            lease_id=executor.lease_id,
+            outcome=RunOutcome(
+                run_id=measured.run_id, result="succeeded", certainty="known"
+            ),
+        ),
+    )
+    done = service.complete_step(
+        ProcedureStepCompleteCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=measured_step.run.revision,
+            step_key="measure",
+            attempt=measured_step.step.attempt,
+            expected_step_revision=measured_step.step.revision,
+            output=RunOutputRef(run_id=measured.run_id),
+        )
+    )
+    analysis_step = service.begin_step(
+        ProcedureStepBeginCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=done.run.revision,
+            step_key="assess",
+            operation="analysis",
+            intent_hash="sha256:" + "c" * 64,
+        )
+    )
+    saved = app.runs.save_run_analysis(
+        measured.run_id,
+        AnalysisSaveCommand(
+            title="Synthetic selector check",
+            analysis_key="synthetic-selector",
+            outputs=(
+                AnalysisFactOutputPayload(
+                    kind="fact",
+                    id=declaration.result_output,
+                    title="Synthetic check",
+                    content=AnalysisFact(
+                        schema_id=CHECK_RESULT.id,
+                        schema_codec=CHECK_RESULT.schema_codec,
+                        schema_hash=CHECK_RESULT.schema_hash,
+                        codec=PYTHON_JSON_CODEC,
+                        value=CHECK_RESULT.encode(
+                            CalibrationCheckResult(declaration.scope, passed)
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    service.complete_step(
+        ProcedureStepCompleteCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=analysis_step.run.revision,
+            step_key="assess",
+            attempt=analysis_step.step.attempt,
+            expected_step_revision=analysis_step.step.revision,
+            output=AnalysisPublicationOutputRef(
+                subject=RunAnalysisSubject(run_id=measured.run_id),
+                analysis_record_id=saved.record.id,
+            ),
+        )
+    )
+
+
+@pytest.mark.parametrize("passed", [True, False])
+def test_selector_reports_survive_restart_and_current_format_restore(
+    tmp_path: Path, passed: bool
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    manifest = source / "scopecat.toml"
+    manifest.write_text("[lab]\n")
+    selector = TableRowDependency(
+        parameter="readout", equals=(ScalarParameterValue(id="group", value="read"),)
+    )
+    coverage = DependencyCoverage(
+        parameters=(),
+        rows=(selector,),
+        basis="Synthetic model uses complete read-group rows, no external inputs.",
+    )
+    contract = CalibrationDependencies(
+        qualification="synthetic-row-v1",
+        execution=coverage,
+        physical=coverage,
+        analysis=DependencyCoverage(parameters=(), basis="Retained arrays only."),
+    )
+    with _check_case(source, selected_rows=True) as (runtime, declaration, child):
+        declaration = declaration.model_copy(update={"dependencies": contract})
+        _publish_synthetic_selector_check(runtime, declaration, child, passed=passed)
+        requirement = CalibrationRequirement(
+            id="readout",
+            scope=declaration.scope,
+            max_age=timedelta(hours=1),
+            dependencies=contract,
+        )
+        profile = CalibrationProfile(id="selected-rows-v1", requirements=(requirement,))
+        runtime.application.calibration_profiles.save(profile)
+        baseline = child.config.parameter_snapshot
+        changes = (
+            (
+                "unrelated",
+                (
+                    {"target": "q0", "group": "read", "amplitude": 1.0},
+                    {"target": "q1", "group": "other", "amplitude": 9.0},
+                ),
+                "usable" if passed else "out_of_spec",
+                "selected_rows_unchanged",
+            ),
+            (
+                "read",
+                (
+                    {"target": "q0", "group": "read", "amplitude": 9.0},
+                    {"target": "q1", "group": "other", "amplitude": 2.0},
+                ),
+                "recheck",
+                "selected_rows_changed",
+            ),
+            (
+                "member",
+                (
+                    {"target": "q0", "group": "read", "amplitude": 1.0},
+                    {"target": "q1", "group": "other", "amplitude": 2.0},
+                    {"target": "q2", "group": "read", "amplitude": 3.0},
+                ),
+                "recheck",
+                "selection_membership_changed",
+            ),
+        )
+        queries: list[tuple[CalibrationProfileReportQuery, str, str]] = []
+        for identity, rows, status, reason in changes:
+            revision = runtime.application.config.save_parameters(
+                ParameterSaveCommand(
+                    revision_id=identity,
+                    actor="test",
+                    catalog=child.config.parameter_catalog,
+                    parameters=ParameterSnapshot(
+                        id=identity,
+                        values=(
+                            *(
+                                value
+                                for value in baseline.values
+                                if value.id != "readout"
+                            ),
+                            TableParameterValue(id="readout", rows=rows),
+                        ),
+                    ),
+                )
+            )
+            queries.append(
+                (
+                    CalibrationProfileReportQuery(
+                        context=replace(
+                            declaration.context,
+                            parameters=revision.ref,
+                        )
+                    ),
+                    status,
+                    reason,
+                )
+            )
+        schema = runtime.application.config.save_parameters(
+            ParameterSaveCommand(
+                revision_id="schema",
+                actor="test",
+                parameters=baseline,
+                catalog=child.config.parameter_catalog.model_copy(
+                    update={"id": "changed-schema"}
+                ),
+            )
+        )
+        schema_query = CalibrationProfileReportQuery(
+            context=replace(declaration.context, parameters=schema.ref)
+        )
+        unknown_requirement = requirement.model_copy(
+            update={"dependencies": contract.model_copy(update={"physical": None})}
+        )
+
+        def assert_reports(active: LocalDaemonRuntime) -> None:
+            assert (
+                active.application.calibration_profiles.get(profile.id).profile
+                == profile
+            )
+            with TestClient(active.app()) as client:
+                for query, status, reason in queries:
+                    response = client.post(
+                        f"/api/v1/calibration-profiles/{profile.id}/report",
+                        json=query.model_dump(mode="json"),
+                    )
+                    assert response.status_code == 200, response.text
+                    report = CalibrationReport.model_validate(response.json())
+                    assert report.items[0].selection.status == status
+                    comparison = report.items[0].assessments[0].dependencies
+                    assert comparison is not None
+                    assert comparison.row_comparisons[0].reason == reason
+                    assert comparison.row_comparisons[0].selector == selector
+                response = client.post(
+                    f"/api/v1/calibration-profiles/{profile.id}/report",
+                    json=schema_query.model_dump(mode="json"),
+                )
+                assert response.status_code == 200, response.text
+                report = CalibrationReport.model_validate(response.json())
+                assert report.items[0].selection.status == "recheck"
+                comparison = report.items[0].assessments[0].dependencies
+                assert comparison is not None
+                assert comparison.reasons == ("parameter_schema_changed",)
+                response = client.post(
+                    "/api/v1/calibration-checks/report",
+                    json=CalibrationReportQuery(
+                        context=queries[0][0].context,
+                        requirements=(unknown_requirement,),
+                    ).model_dump(mode="json"),
+                )
+                assert response.status_code == 200, response.text
+                report = CalibrationReport.model_validate(response.json())
+                assert report.items[0].selection.status == "unknown"
+
+        assert_reports(runtime)
+    with LocalDaemonRuntime(source) as restarted:
+        assert_reports(restarted)
+    create_snapshot(load_project(manifest), tmp_path / "snapshot")
+    restore_snapshot(tmp_path / "snapshot", tmp_path / "restored")
+    with LocalDaemonRuntime(tmp_path / "restored") as restored:
+        assert_reports(restored)
