@@ -219,6 +219,7 @@ export function BoundedMeasurement({
           <span className={workspace ? "sr-only" : undefined}>复数表示</span>{" "}
           <select
             aria-label="复数表示"
+            className={formControl}
             value={state.representation}
             onChange={(event) => update({ representation: event.target.value as Representation })}
           >
@@ -243,7 +244,9 @@ export function BoundedMeasurement({
       {view.error && (
         <p role="alert">
           {view.error.message}
-          <button onClick={view.retry}>重试预览</button>
+          <button className={secondaryButton} onClick={view.retry}>
+            重试预览
+          </button>
         </p>
       )}
       {unavailable.length > 0 && (
@@ -554,6 +557,7 @@ export function BoundedMeasurement({
                     结果字段{" "}
                     <select
                       aria-label="精确结果字段"
+                      className={formControl}
                       value={selected?.request_id ?? ""}
                       onChange={(event) =>
                         update(
