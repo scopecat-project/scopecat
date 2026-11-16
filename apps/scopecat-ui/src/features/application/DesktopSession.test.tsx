@@ -241,7 +241,7 @@ it("shows progress immediately and prevents duplicate quit requests", async () =
   });
   expect(shortcut.defaultPrevented).toBe(true);
   expect(screen.getByRole("status")).toHaveTextContent("Checking unfinished work");
-  expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   act(() => window.scopecatRequestExit?.());
   fireEvent.keyDown(window, { key: "q", ctrlKey: true, repeat: true });
   expect(request_exit).toHaveBeenCalledTimes(1);

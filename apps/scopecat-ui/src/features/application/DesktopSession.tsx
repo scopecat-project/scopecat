@@ -183,6 +183,7 @@ export function useDesktopAvailable() {
 
 export function DesktopSession() {
   const [open, setOpen] = useState(false);
+  const [checkingExit, setCheckingExit] = useState(false);
   const [progress, setProgress] = useState<string>();
   const pending = useRef(false);
   const closeInProgress = useRef(false);
@@ -277,14 +278,14 @@ export function DesktopSession() {
       }
       closeInProgress.current = active.size > 0;
       releaseLaunchClose(detail.requestId);
-      releaseDeviceClose(detail.requestId);
       const cancelled = cancelledRequests.current.delete(detail.requestId);
+      releaseDeviceClose(detail.requestId, cancelled);
+      // Cancellation releases only the close intent. Submitted operations keep
+      // their own pending/unknown/failed state in the device or draft owner.
       setCloseNotice(
         "message" in detail && typeof detail.message === "string" && detail.message
           ? detail.message
-          : cancelled
-            ? "已取消本次关闭等待。已提交的保存或设备操作没有撤销，仍需核查结果。"
-            : undefined,
+          : undefined,
       );
     };
     window.addEventListener("scopecat:close-preflight", preflight);
@@ -389,12 +390,14 @@ export function DesktopSession() {
       if (!window.pywebview || pending.current || closeInProgress.current) return;
       pending.current = true;
       setOpen(true);
+      setCheckingExit(true);
       setActivity(undefined);
       setProgress("Checking unfinished work and closing Scopecat…");
       setError(undefined);
       void window.pywebview?.api
         .request_exit()
         .then((work) => {
+          setCheckingExit(false);
           if (work === "cancelled") {
             pending.current = false;
             setProgress(undefined);
@@ -409,6 +412,7 @@ export function DesktopSession() {
           }
         })
         .catch((failure) => {
+          setCheckingExit(false);
           setError(failure instanceof Error ? failure.message : String(failure));
           pending.current = false;
           setProgress(undefined);
@@ -551,16 +555,20 @@ export function DesktopSession() {
     </>
   );
 
+  // Preflight owns the foreground. A second modal would trap focus above the
+  // device review that request_exit is waiting for, including in this window.
+  const showExitDialog = open && !checkingExit && activeCloses.length === 0;
+
   return (
     <>
-      {closeNotice && !open && (
+      {(closeNotice || (open && progress)) && !showExitDialog && (
         <p role="status" className="border-b border-line bg-panel px-4 py-2 text-sm">
-          {closeNotice}
+          {closeNotice ?? progress}
         </p>
       )}
-      {!open && <div className="px-4 text-sm">{closeControls}</div>}
+      {!showExitDialog && <div className="px-4 text-sm">{closeControls}</div>}
       <Dialog.Root
-        open={open}
+        open={showExitDialog}
         onOpenChange={(next) => {
           if (!busy) {
             if (!next) void changeWaiting(false);

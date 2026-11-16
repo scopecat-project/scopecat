@@ -34,3 +34,16 @@ it("converts representation without changing the physical value", () => {
   expect(convertControlNumber("180", "deg", "rad")).toBe(String(Math.PI));
   expect(convertControlNumber("1G", "MHz", "kHz")).toBe("1000000");
 });
+
+it.each([
+  ["4.1", "GHz", "Hz", "4100000000"],
+  ["4.2", "GHz", "Hz", "4200000000"],
+  ["4200 MHz", "GHz", "Hz", "4200000000"],
+  ["4.1GHz", "MHz", "Hz", "4100000000"],
+  ["4100000000", "Hz", "GHz", "4.1"],
+  ["4.1e9 Hz", "GHz", "Hz", "4100000000"],
+  ["4.099999999", "GHz", "Hz", "4099999999"],
+  ["0.1", "A", "uA", "100000"],
+])("scales decimal %s from %s to %s exactly", (text, from, to, expected) => {
+  expect(convertControlNumber(text, from, to)).toBe(expected);
+});

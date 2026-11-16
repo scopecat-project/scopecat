@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { ReceiptProvider } from "../../ui/Receipts";
 import type { AnalysisPublication } from "../../types";
 import { readOnlyCode } from "../../lib/read-only-code";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
@@ -47,6 +48,7 @@ it("copies the supplied owner and exact publication rather than its input or log
       copyTarget={{ kind: "run", runId: "owner" }}
       getArtifactDownload={vi.fn()}
     />,
+    { wrapper: ReceiptProvider },
   );
   fireEvent.click(screen.getByRole("button", { name: "复制只读代码" }));
   await screen.findByText("只读代码已复制。");

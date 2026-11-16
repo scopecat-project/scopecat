@@ -66,14 +66,14 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await editor.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(editor).toBeHidden();
     await page.getByRole("button", { name: "操作", exact: true }).click();
-    await page.getByRole("button", { name: "连接", exact: true }).click();
+    await page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
     await expect(page.getByText("交互会话已连接", { exact: true })).toBeVisible();
     // A modest 1025-point virtual trace exceeds one preview page without
     // allocating a large load. Saved originals must retain all points.
     await page.getByRole("spinbutton", { name: /Sweep points/ }).fill("1025");
     const applyInitial = page.getByRole("button", { name: "应用暂存修改", exact: true });
     await applyInitial.click();
-    await expect(applyInitial).toBeDisabled();
+    await expect(applyInitial).toBeHidden();
     // Collection starts without per-result metadata. Use only the virtual driver.
     const sweep = page.getByTitle("scopecat.network_sweep/v1 / ", { exact: true });
     let collections = 0;
@@ -120,6 +120,23 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     });
     expect(trace.values).toHaveLength(512);
     expect((await previewResponse.body()).byteLength).toBeLessThanOrEqual(256 * 1024);
+    const layout = page.getByTestId("instrument-workbench-layout");
+    async function revealResults() {
+      await expect(layout).toBeVisible();
+      const compact = (await layout.getAttribute("data-compact")) === "true";
+      if (compact) {
+        await page
+          .getByRole("group", { name: "显示区域", exact: true })
+          .getByRole("button", { name: "结果", exact: true })
+          .click();
+      } else if ((await layout.getAttribute("data-collection-collapsed")) === "true") {
+        await page.getByRole("button", { name: "展开结果", exact: true }).click();
+      }
+      await expect(layout).toHaveAttribute("data-collection-collapsed", "false");
+    }
+    // C retains the user's control-only view after collecting; reveal explicitly.
+    await expect(layout).toHaveAttribute("data-collection-collapsed", "true");
+    await revealResults();
     const current = page.getByRole("region", { name: "当前测量结果", exact: true });
     await expect(current.getByRole("img", { name: /局部曲线/ })).toBeVisible();
     const original = await current.getByText(/^s_parameter · (?:完整|局部)/).textContent();
@@ -204,35 +221,34 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     await expect(recent).toHaveCount(2);
     await expect(current.getByText(/^s_parameter · 完整 1–3 \/ 3/)).toBeVisible();
     expect(original).not.toContain("1–3 / 3");
-    await page.getByTestId(firstId!).click();
-    await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
-    for (const width of [1920, 900]) {
+    await page
+      .getByRole("combobox", { name: "选择近期结果", exact: true })
+      .selectOption((await page.getByTestId(firstId!).getAttribute("value")) ?? "");
+    await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
+    for (const width of [1920, 1280]) {
       await page.setViewportSize({ width, height: 1080 });
-      await page.getByRole("button", { name: "收起采集面板", exact: true }).click();
+      await expect(layout).toHaveAttribute("data-compact", "false");
+      await page.getByRole("button", { name: "收起结果", exact: true }).click();
       await expect(current).toBeHidden();
-      const layout = page.getByTestId("instrument-workbench-layout");
-      const controls = page.getByTestId("instrument-control-panel");
-      const collection = page.getByRole("region", { name: "交互采集", exact: true });
-      const expand = collection.getByRole("button", { name: "展开采集面板", exact: true });
+      const controls = page.getByRole("region", { name: "控制工作区", exact: true });
+      const collection = page.getByRole("region", { name: "采集操作", exact: true });
+      const expand = page.getByRole("button", { name: "展开结果", exact: true });
       await expect(layout).toHaveAttribute("data-collection-collapsed", "true");
       await expect(expand).toBeVisible();
-      await expect(collection.getByText("2 条待保存", { exact: true })).toBeVisible();
+      await expect(collection).toBeVisible();
+      await expect(page.getByRole("group", { name: "显示区域", exact: true })).toContainText(
+        "2 条待保存",
+      );
       await expect(async () => {
         const bounds = await layout.boundingBox();
         const panel = await controls.boundingBox();
-        const entry = await collection.boundingBox();
-        const button = await expand.boundingBox();
         expect(bounds).not.toBeNull();
         expect(panel).not.toBeNull();
-        expect(entry).not.toBeNull();
-        expect(button).not.toBeNull();
-        // Controls return to the workspace's left edge; do not require them
-        // to stretch across the entire screen just to remove the empty column.
-        expect(panel!.x).toBeGreaterThanOrEqual(bounds!.x - 1);
-        expect(panel!.x - bounds!.x).toBeLessThanOrEqual(24);
-        expect(panel!.y).toBeGreaterThanOrEqual(entry!.y + entry!.height - 1);
-        expect(entry!.height).toBeLessThanOrEqual(96);
-        expect(button!.height).toBeLessThanOrEqual(48);
+        // C returns to a centered control-only workspace, keeping collection
+        // actions with controls rather than placing a collapsed strip above it.
+        expect(
+          Math.abs(panel!.x + panel!.width / 2 - bounds!.x - bounds!.width / 2),
+        ).toBeLessThanOrEqual(2);
         expect(panel!.x + panel!.width).toBeLessThanOrEqual(width + 1);
         expect(
           await page.evaluate<number>("document.documentElement.scrollWidth"),
@@ -245,7 +261,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
       await expand.click();
       await expect(layout).toHaveAttribute("data-collection-collapsed", "false");
       await expect(recent).toHaveCount(2);
-      await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
       await expect(page.getByTestId(firstId!)).toContainText("待保存");
       await expect(current.getByText(/^s_parameter · (?:完整|局部)/)).toHaveText(original!);
       await expect(page.getByRole("button", { name: "保存所选结果", exact: true })).toBeEnabled();
@@ -254,9 +270,26 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
 
     for (const width of [1920, 900]) {
       await page.setViewportSize({ width, height: 1080 });
+      await expect(layout).toHaveAttribute("data-compact", width === 900 ? "true" : "false");
+      await revealResults();
       const save = page.getByRole("button", { name: "保存所选结果", exact: true });
       await expect(save).toBeInViewport();
-      await expect(page.getByTestId(firstId!)).toBeInViewport();
+      const selector = page.getByRole("combobox", { name: "选择近期结果", exact: true });
+      await expect(selector).toBeInViewport();
+      // Native keyboard selection shares the full-list identity and remembered preview state.
+      await current.getByRole("combobox", { name: "复数表示" }).selectOption("phase");
+      await current.getByRole("button", { name: "下一页数据" }).click();
+      await expect(current.getByText(/^s_parameter · 局部 513–1024/)).toBeVisible();
+      await selector.focus();
+      await page.keyboard.press("Home");
+      await expect(current.getByText(/^s_parameter · 完整 1–3/)).toBeVisible();
+      await page.keyboard.press("End");
+      await expect(current.getByText(/^s_parameter · 局部 513–1024/)).toBeVisible();
+      await expect(current.getByRole("combobox", { name: "复数表示" })).toHaveValue("phase");
+      await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
+      await current.getByRole("button", { name: "上一页数据" }).click();
+      await expect(current.getByText(/^s_parameter · (?:完整|局部)/)).toHaveText(original!);
+      await current.getByRole("combobox", { name: "复数表示" }).selectOption("magnitude");
       const chart = current.getByRole("img", { name: /局部曲线/ });
       await expect(chart).toBeVisible();
       const box = await chart.boundingBox();
@@ -279,7 +312,10 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
     page.once("dialog", (dialog) => void dialog.accept());
     await page.reload();
     await expect(recent).toHaveCount(2);
-    await page.getByTestId(firstId!).click();
+    await revealResults();
+    await page
+      .getByRole("combobox", { name: "选择近期结果", exact: true })
+      .selectOption((await page.getByTestId(firstId!).getAttribute("value")) ?? "");
     await expect(current.getByText(/^s_parameter · (?:完整|局部)/)).toHaveText(original!);
     await expect(current.getByText(/从后台恢复的原采集结果/)).toBeVisible();
     expect(collections).toBe(2);
@@ -379,7 +415,7 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
       resultPage.getByRole("textbox", { name: "搜索已加载记录", exact: true }),
     ).toHaveCount(0);
     await expect(page).toHaveURL(controlUrl);
-    await expect(page.getByTestId(firstId!)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId(firstId!)).toHaveJSProperty("selected", true);
     await resultPage.reload();
     await expect(
       savedResult.getByRole("heading", { name: "First retained VNA trace", level: 1 }),
@@ -388,7 +424,9 @@ test("direct VNA collect, select, save, Data and daemon restart preserve the res
 
     // Historical browsing remains in the main application, separate from the
     // single-result browser tab. The original control session is already closed.
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     await page.getByRole("button", { name: /Data$/ }).click();
     await page.getByRole("button", { name: "直接测量", exact: true }).click();
     const history = page.getByRole("region", { name: "直接测量数据", exact: true });

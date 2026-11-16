@@ -139,3 +139,35 @@ it("retains value ranges and legend selection only within the opted-in measureme
   expect(runtime.chart.setOption).toHaveBeenLastCalledWith(appended, { notMerge: true });
   expect(runtime.chart.off).toHaveBeenCalledWith("datazoom", expect.any(Function));
 });
+
+it("fills its constrained container and resizes after hide/reveal without a fixed-height fallback", () => {
+  let resize: ResizeObserverCallback | undefined;
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        resize = callback;
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const view = render(<EChartRuntime height="fill" option={{ series: [] }} />);
+  const element = view.container.firstElementChild as HTMLElement;
+  expect(element).toHaveStyle({ height: "100%" });
+  expect(runtime.init).toHaveBeenLastCalledWith(
+    element,
+    undefined,
+    expect.objectContaining({ height: 1 }),
+  );
+  Object.defineProperty(element, "clientHeight", { configurable: true, value: 460 });
+  Object.defineProperty(element, "clientWidth", { configurable: true, value: 800 });
+  resize!([], {} as ResizeObserver);
+  expect(runtime.chart.resize).toHaveBeenLastCalledWith({ height: 460, width: 800 });
+  Object.defineProperty(element, "clientHeight", { configurable: true, value: 0 });
+  resize!([], {} as ResizeObserver);
+  expect(runtime.chart.resize).toHaveBeenLastCalledWith({ height: 1, width: 800 });
+  Object.defineProperty(element, "clientHeight", { configurable: true, value: 320 });
+  resize!([], {} as ResizeObserver);
+  expect(runtime.chart.resize).toHaveBeenLastCalledWith({ height: 320, width: 800 });
+});

@@ -1,0 +1,139 @@
+/* The workbench is a parameter sheet, not a stack of management cards. */
+.device-parameter-group {
+  min-width: 0;
+}
+.device-parameter-group > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 0 6px;
+  border: 0;
+  background: transparent;
+}
+.device-parameter-group > header h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.device-parameter-group > header code {
+  font-size: 11px;
+}
+.device-parameter-group + .device-parameter-group {
+  border-top: 1px solid var(--color-line);
+}
+.device-parameter-section > header {
+  padding: 16px 0 8px;
+  background: transparent;
+}
+.device-parameter-section > header h5 {
+  font-size: 12px;
+  font-weight: 600;
+}
+.device-parameter-section > header small {
+  font-size: 10px;
+}
+.device-parameter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px 24px;
+  padding: 12px 0 20px;
+}
+@container controls (min-width: 240px) {
+  .device-parameter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container controls (min-width: 780px) {
+  .device-parameter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container controls (min-width: 1280px) {
+  .device-parameter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.device-parameter-field {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  max-width: 26rem;
+  gap: 7px;
+  position: relative;
+}
+.device-parameter-field [data-testid="property-label"] {
+  font-weight: 400;
+  color: var(--color-text-dim);
+  font-size: 12px;
+}
+.device-parameter-field input:not([type="checkbox"]),
+.device-parameter-field select {
+  min-height: 35px;
+  font-weight: 400;
+  font-size: 13px;
+}
+.device-parameter-staged {
+  color: var(--color-text-soft);
+  font-size: 11px;
+}
+.device-parameter-field > button {
+  padding: 0;
+  font-size: 11px;
+}
+.device-parameter-notes {
+  border-top: 1px solid var(--color-line);
+  padding: 12px 0;
+  color: var(--color-text-dim);
+  font-size: 11px;
+}
+.device-parameter-notes summary {
+  cursor: pointer;
+}
+.device-parameter-notes dl {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+}
+.device-parameter-notes dt {
+  font-weight: 500;
+}
+.device-parameter-notes dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.device-parameter-field-wide {
+  grid-column: 1 / -1;
+  max-width: 54rem;
+}
+.device-parameter-source {
+  color: var(--color-text-dim);
+  font-size: 11px;
+}
+
+@container controls (max-width: 360px) {
+  .device-parameter-grid {
+    column-gap: 12px;
+    row-gap: 16px;
+  }
+  .device-parameter-field input:not([type="checkbox"]),
+  .device-parameter-field select {
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: 12px;
+  }
+  .device-parameter-field input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .device-parameter-field input[type="number"]::-webkit-inner-spin-button,
+  .device-parameter-field input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .device-parameter-field > span.grid > span {
+    min-width: 26px;
+    padding-left: 3px;
+    padding-right: 3px;
+    font-size: 10px;
+  }
+}

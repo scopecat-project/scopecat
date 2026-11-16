@@ -123,7 +123,7 @@ function DeviceControlApp({ deviceId }: { deviceId: string }) {
     refetchInterval: 5_000,
   });
   return (
-    <main className="min-h-screen bg-canvas p-3">
+    <main className="device-control-app min-h-screen min-w-0 bg-white">
       <DesktopSession />
       <Suspense fallback={<p>正在加载设备控制…</p>}>
         <InstrumentsWorkspace controlDeviceId={deviceId} daemonUnavailable={health.isError} />

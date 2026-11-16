@@ -88,7 +88,9 @@ test("device control windows hand off sessions without sharing writable views", 
     await page.reload();
     await page.getByRole("button", { name: "打开控制窗口", exact: true }).first().click();
     await page.getByRole("button", { name: "打开控制窗口", exact: true }).first().click();
-    await expect(page.getByRole("button", { name: "连接", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true })).toHaveCount(
+      0,
+    );
     expect(await page.evaluate("openedDevices.length")).toBe(2);
     await capture(page, "01-device-management");
     for (const device of devices) {
@@ -99,8 +101,8 @@ test("device control windows hand off sessions without sharing writable views", 
         control.getByRole("heading", { name: device.device.label, exact: true, level: 1 }),
       ).toBeVisible();
       await expect(control.getByRole("button", { name: "添加设备", exact: true })).toHaveCount(0);
-      await control.getByRole("button", { name: "连接", exact: true }).click();
-      await expect(control.getByText("交互会话已连接", { exact: true })).toBeVisible();
+      await control.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
+      await expect(control.getByText("已连接", { exact: true })).toBeVisible();
     }
     const control = controls[0];
     await capture(control, "02-connected-controller");
@@ -108,7 +110,9 @@ test("device control windows hand off sessions without sharing writable views", 
     const outsider = await context.newPage();
     controls.push(outsider);
     await outsider.goto(`${url}/?device-control=${encodeURIComponent(devices[0].device.id)}`);
-    await expect(outsider.getByRole("button", { name: "连接", exact: true })).toHaveCount(0);
+    await expect(
+      outsider.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toHaveCount(0);
     await expect(outsider.getByText("手动控制不可用", { exact: true })).toBeVisible();
     // Lost release receipt retains controls and an explicit recovery entry.
     await control.route("**/instrument-sessions/*/close", async (route) => {
@@ -163,16 +167,19 @@ test("device control windows hand off sessions without sharing writable views", 
     await control.evaluate(
       'window.dispatchEvent(new CustomEvent("scopecat:close-release", {detail: {requestId: "retry"}}))',
     );
-    await expect(control.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      control.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     await capture(control, "04-control-released");
     // Another device stays connected while the first is handed off.
-    await expect(controls[1].getByText("交互会话已连接", { exact: true })).toBeVisible();
-    await outsider.getByRole("button", { name: "刷新占用", exact: true }).click();
-    await outsider.getByRole("button", { name: "连接", exact: true }).click();
-    await expect(outsider.getByText("交互会话已连接", { exact: true })).toBeVisible();
+    await expect(controls[1].getByText("已连接", { exact: true })).toBeVisible();
+    await outsider.getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }).click();
+    await expect(outsider.getByText("已连接", { exact: true })).toBeVisible();
     await outsider.getByRole("button", { name: "释放控制", exact: true }).click();
     await controls[1].getByRole("button", { name: "释放控制", exact: true }).click();
-    await expect(controls[1].getByRole("button", { name: "连接", exact: true })).toBeEnabled();
+    await expect(
+      controls[1].getByRole("button", { name: /^连接(?:并读取)?$/, exact: true }),
+    ).toBeEnabled();
     // Main management is one table, with history kept out of the daily list.
     await page.getByTitle(`查看仪器 ${devices[0].device.id}`).click();
     await page.getByRole("button", { name: "停用设备", exact: true }).click();

@@ -96,7 +96,9 @@ it("uses real zero-minimum Tailwind grid tracks through the wide-to-narrow resul
     );
     for (const label of ["当前测量结果", "有界结果预览"]) {
       const card = screen.getByRole("region", { name: label });
-      expect(getComputedStyle(card).gridTemplateColumns).toBe("repeat(1, minmax(0px, 1fr))");
+      expect(["repeat(1, minmax(0px, 1fr))", "minmax(0px, 1fr)"]).toContain(
+        getComputedStyle(card).gridTemplateColumns,
+      );
       expect(getComputedStyle(card).minWidth).toBe("0px");
       expect(getComputedStyle(card).maxWidth).toBe("100%");
       expect(card).not.toHaveClass("overflow-hidden");

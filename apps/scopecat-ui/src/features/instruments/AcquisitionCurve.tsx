@@ -7,6 +7,15 @@ import type {
 import { CollectResultData } from "./CollectResultData";
 import { EChart } from "../../ui/EChart";
 
+// Tick labels are display-only; series coordinates and tooltip values stay exact.
+function compactTick(value: number) {
+  if (value === 0) return "0";
+  const magnitude = Math.abs(value);
+  // Do not round to fixed significant digits: zoomed ticks around a large offset
+  // (for example 5 GHz with a 1 MHz span) must keep distinct displayed values.
+  return magnitude >= 10_000 || magnitude < 0.001 ? value.toExponential() : String(value);
+}
+
 type Representation = "magnitude" | "phase" | "real" | "imag";
 const labels: Record<Representation, string> = {
   magnitude: "幅值",
@@ -96,7 +105,7 @@ export function AcquisitionCurve({
           return (
             <section key={result.id} className="min-w-0">
               <p className="text-xs [overflow-wrap:anywhere]">
-                {yLabel}；横轴 {xLabel}；完整 {y.length} 点
+                纵轴 {yLabel}；横轴 {xLabel}；完整 {y.length} 点
               </p>
               <EChart
                 ariaLabel={`${result.id} 完整曲线`}
@@ -131,6 +140,24 @@ export function AcquisitionCurve({
                     nameTextStyle: { textMargin: 3 },
                     axisLabel: { hideOverlap: true, textMargin: 3 },
                   },
+                  // Match the chart's own width, including a narrow split in a wide window.
+                  // Full names/units remain in the wrapping caption above. Reset every override
+                  // explicitly when widening: ECharts media options merge into the current option.
+                  media: [
+                    {
+                      query: { maxWidth: 420 },
+                      option: {
+                        xAxis: { name: "", axisLabel: { formatter: compactTick } },
+                        yAxis: { name: "", axisLabel: { formatter: compactTick } },
+                      },
+                    },
+                    {
+                      option: {
+                        xAxis: { name: xLabel, axisLabel: { formatter: undefined } },
+                        yAxis: { name: yLabel, axisLabel: { formatter: undefined } },
+                      },
+                    },
+                  ],
                   dataZoom: [{ type: "inside" }, { type: "slider" }],
                   series: [
                     { type: "line", name: yLabel, data, showSymbol: false, connectNulls: false },

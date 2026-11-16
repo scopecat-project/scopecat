@@ -166,7 +166,10 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     expect(saved.otherRunId).not.toBe(saved.runId);
     const header = page.getByTestId("run-detail-header");
     await header.getByRole("button", { name: "复制只读代码" }).click();
-    await expect(header.getByRole("status")).toHaveText("只读代码已复制。");
+    await expect(page.getByRole("region", { name: "通知", exact: true })).toContainText(
+      "只读代码已复制。",
+    );
+    await page.getByRole("button", { name: "关闭通知" }).click();
     const runCode = await page.locator("html").getAttribute("data-copied");
     const detail = await (
       await page.request.get(`${endpoint.base_url}/api/v1/runs/${saved.runId}`)
@@ -183,7 +186,9 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     await old.locator("summary").click();
     await expect(old.getByTestId("publication-id")).toHaveText(saved.run[0]);
     await old.getByRole("button", { name: "复制只读代码" }).click();
-    await expect(old.getByRole("status")).toHaveText("只读代码已复制。");
+    await expect(page.getByRole("region", { name: "通知", exact: true })).toContainText(
+      "只读代码已复制。",
+    );
     const analysisCode = await page.locator("html").getAttribute("data-copied");
     expect(analysisCode).toBe(
       readOnlyCode({ kind: "run", runId: saved.runId, publicationId: saved.run[0] }),

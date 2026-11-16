@@ -484,8 +484,11 @@ that matching result names describe the same physical trace.
 The curve view matches each observable to its declared returned coordinate and
 offers magnitude, phase in radians, real and imaginary representations. Missing
 or mismatched coordinates are reported rather than replaced with guessed sweep
-settings. Invalid samples remain gaps. Expand **结果数据（数值与可用性）**
-to read bounded numeric windows, including complex components. Preview windows
+settings. Invalid samples remain gaps. Open **数据详情** in the device result workspace (or expand
+**结果数据（数值与可用性）** in other previews) to read bounded numeric windows,
+including complex components. The device workspace shows one measured field at a
+time; when several are available, select the field explicitly. Raw-value and curve
+windows are retained independently, and returning from details restores the curve. Preview windows
 are exact contiguous C-order slices, not a downsampled overview of the whole
 result. The view states the original shape, window range and total length;
 omitted regions may contain features not visible in the current window.
@@ -495,12 +498,74 @@ decimal strings; unsafe integers are not silently rounded into curves. Saving
 always uses the full original, never the displayed preview. Technical receipt
 and source evidence remain in a separate disclosure.
 
-The acquisition panel is optional. Collect without entering a title, line or
+The dedicated device window uses one toolbar for device identity, availability and
+session actions, below the OS-owned title bar. Workspace navigation forms a persistent
+rail on wide windows and a compact, wrapping band on narrow windows; switching a
+control page can restore a hidden control area without discarding its state.
+
+On wide windows, devices with acquisition capabilities start with controls and
+results side by side. An empty results area is distinct from a device without
+acquisition capabilities: the latter reserves no results column unless it has a
+retained result to review. Parameter fields adapt to the available width rather
+than remaining in a fixed-width centered form. Acquisition and read/apply actions
+stay outside the scrolling parameter sheet. Collecting does not reopen a results
+area that you have explicitly hidden; use **展开结果** to return to it. The compact **近期结果**
+selector stays beside the save actions above the preview. The chart fills the
+remaining space rather than scrolling with a result page; numeric details scroll
+within their own view. Switching results retains their curve and raw-value windows,
+complex representation and unsent save metadata. Technical receipt/download
+information is available through **结果详情**, without consuming chart height. **收起控制** makes more
+room for results, and **收起结果** returns to control-only work. Each area can be
+shown independently, with a visible way to return to the other area.
+
+When both areas are shown, drag their divider to change the proportions. The
+separator also supports Left/Right, Shift+Left/Right for larger steps, and Home/End
+for its bounds. Double-click restores its initial split. Hiding and reopening an
+area preserves the split within the current workbench. Controls scroll independently;
+the result canvas stays fixed while its data-details view scrolls separately.
+When the container is too narrow for two usable areas, **控制 / 结果** switches
+between the same mounted views rather than rebuilding their controls.
+
+**参数**, **连接配置** and **Python 示例** remain explicit control-area views.
+Parameter descriptions and previous observations are available together without
+repeating them beside every input. Staged values remain visibly marked as not yet
+written, and write-only/read-only and non-hardware observation sources stay clear. Viewing them
+does not release the session or perform a device action. Connection editing keeps
+its existing ownership restrictions: release control before editing in device
+management. Switching views, hiding an area or resizing preserves staged input,
+operation arguments, selected result, curve representation and save-dialog target.
+These layout choices do not add automatic hardware refresh or a generic stop command.
+
+Quantity controls choose a readable engineering unit from the first observation
+(for example, `5.1 GHz` rather than `5100000000 Hz`) and keep that selected unit
+while observations change. Use the unit selector or enter a supported suffix such
+as `5100 MHz`. Changing the display unit alone does not stage or write a value;
+editing still requires **应用暂存修改**. Bounds are checked in the property's
+canonical unit, and unchanged observations retain their original value. Unknown
+and logarithmic units are not automatically rescaled. Digit-by-digit immediate
+hardware adjustment is not part of this editor.
+
+The device window's toolbar and panes share continuous edges; the divider's drag
+hit area overlays the boundary instead of reserving a blank column. Cancelling
+an unsubmitted close returns to work without an operation warning. Actual pending,
+failed or uncertain operations remain with their owning controls; cancelling a
+wait does not undo a submitted device operation. Short copy-success receipts use
+transient notifications, not permanent space in the work surface.
+
+For a device with a declared lifecycle capture plan, **连接并读取** acquires the
+manual session and returns its initial captured state. It does not apply configured
+defaults or promise every member is readable. **读取设备状态** explicitly repeats
+that capture within the owned session; ordinary connection/driver errors remain
+visible. A device without a capture plan retains the **连接** action. Ownership
+status updates through the existing periodic queries; a manual retry is shown on
+query failure rather than as a routine occupancy-refresh button.
+
+The results area is optional. Collect without entering a title, line or
 note, then use **近期结果** to select an earlier receipt. **保存所选结果** opens a
 dialog for that selected result's title, optional measurement object and note.
 New collections do not change the dialog's target. Cancel preserves the result;
 saving marks it retained without removing it from the recent list. Hiding the
-panel preserves its selection and returns device controls to the primary area.
+results area preserves its selection; it does not discard or save a receipt.
 
 A save retry retains the original payload even when the response was lost. Use
 **重试保存** to confirm that operation before editing its attribution; the stable

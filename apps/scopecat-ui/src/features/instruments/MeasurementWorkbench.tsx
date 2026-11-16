@@ -54,6 +54,7 @@ export function acquisitionTargets(
 export function MeasurementWorkbench({
   collapsed,
   onCollapsedChange,
+  layoutManaged = false,
   description,
   connected,
   disabled,
@@ -70,6 +71,7 @@ export function MeasurementWorkbench({
   onSaveAttempt,
   onSaved,
 }: {
+  layoutManaged?: boolean;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   description?: InstrumentDescription;
@@ -88,6 +90,8 @@ export function MeasurementWorkbench({
   onSaveAttempt: (selection: MeasurementSave) => void;
   onSaved: (commandId: string, recordId?: string, selection?: MeasurementSave) => void;
 }) {
+  const host = useRef<HTMLElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
   const cache = useQueryClient();
   const [displayStore] = useState<MeasurementDisplayStore>(() => new Map());
   const [target, setTarget] = useState<CurrentMeasurementResult>();
@@ -176,130 +180,180 @@ export function MeasurementWorkbench({
   };
   return (
     <section
+      ref={host}
       aria-label="交互采集"
       className={classes(
         "min-w-0",
-        collapsed ? "justify-self-start" : "rounded-md border border-line bg-panel-soft p-3",
+        layoutManaged
+          ? "device-result-workbench"
+          : collapsed
+            ? "justify-self-start"
+            : "rounded-md border border-line bg-panel-soft p-3",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {!collapsed && <h3 className="text-sm font-semibold">采集</h3>}
-        <button
-          className={secondaryButton}
-          onClick={() => onCollapsedChange(!collapsed)}
-          aria-expanded={!collapsed}
-        >
-          {collapsed ? "展开采集面板" : "收起采集面板"}
-        </button>
-        {collapsed && pending.length > 0 && (
-          <span className="text-xs text-text-dim">{pending.length} 条待保存</span>
-        )}
-      </div>
-      <div hidden={collapsed}>
-        <div className="my-3 flex flex-wrap gap-2">
-          {targets.map((item) => (
-            <div key={acquisitionKey(item)}>
-              <button
-                className={primaryButton}
-                disabled={!connected || disabled}
-                onClick={() => onCollect(item)}
-                title={`${item.interfaceId} / ${item.componentPath.join("/")}`}
-              >
-                {collectingTarget && acquisitionKey(collectingTarget) === acquisitionKey(item)
-                  ? "采集中…"
-                  : `${item.acquisition.label ?? item.acquisition.id} Collect`}
-              </button>
-              <details className="mt-1 text-xs text-text-dim">
-                <summary>{item.acquisition.label ?? item.acquisition.id} 说明</summary>
-                {item.acquisition.description && <p>{item.acquisition.description}</p>}
-                <p>
-                  {item.acquisition.results.map((result) => result.label ?? result.id).join(" · ")}
-                </p>
-              </details>
-              {collectResults[acquisitionKey(item)]?.status &&
-                collectResults[acquisitionKey(item)]?.status !== "collected" && (
-                  <p role="status" className="text-xs text-yellow">
-                    {instrumentReceiptLabel(collectResults[acquisitionKey(item)]?.status ?? "")}
-                  </p>
-                )}
-            </div>
-          ))}
+      {!layoutManaged && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {!collapsed && <h3 className="text-sm font-semibold">采集</h3>}
+          <button
+            className={secondaryButton}
+            onClick={() => onCollapsedChange(!collapsed)}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? "展开采集面板" : "收起采集面板"}
+          </button>
+          {collapsed && pending.length > 0 && (
+            <span className="text-xs text-text-dim">{pending.length} 条待保存</span>
+          )}
         </div>
-        {pending.length >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
-        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_11rem] lg:grid-cols-[minmax(0,1fr)_15rem]">
-          <div className="min-w-0">
-            {current && (
-              <div
-                role="group"
-                aria-label="所选结果操作"
-                className="mb-2 flex flex-wrap items-center gap-2"
-              >
-                {canSave && (
-                  <button className={primaryButton} disabled={saveDisabled} onClick={openSave}>
-                    保存所选结果
-                  </button>
-                )}
-                {commandId && current.savedRecordId && (
-                  <>
-                    <span role="status">已保存</span>
-                    <SavedMeasurementLink recordId={current.savedRecordId} />
-                  </>
-                )}
-              </div>
-            )}
+      )}
+      <div hidden={collapsed} className={layoutManaged ? "device-result-body" : undefined}>
+        {!layoutManaged && (
+          <MeasurementAcquisitionActions
+            description={description}
+            connected={connected}
+            disabled={disabled}
+            collectingTarget={collectingTarget}
+            collectResults={collectResults}
+            pendingCount={pending.length}
+            onCollect={onCollect}
+          />
+        )}
+        <div className={layoutManaged ? "device-result-content" : "grid min-w-0 gap-3"}>
+          {current && (
+            <div
+              role="group"
+              aria-label="所选结果操作"
+              className={classes(
+                "flex flex-wrap items-center gap-2",
+                layoutManaged && "device-result-toolbar",
+              )}
+            >
+              {canSave && (
+                <button
+                  ref={saveButton}
+                  className={primaryButton}
+                  disabled={saveDisabled}
+                  onClick={openSave}
+                >
+                  保存所选结果
+                </button>
+              )}
+              {recent.length > 0 && (
+                <label className="flex min-w-0 max-w-full flex-1 basis-48 items-center gap-2 text-xs">
+                  <span className="shrink-0">近期结果</span>
+                  <select
+                    aria-label="选择近期结果"
+                    className={classes(formControl, "w-full min-w-0 max-w-64")}
+                    value={measurementKey(current.selection)}
+                    onChange={(event) => {
+                      const result = recent.find(
+                        (item) => measurementKey(item.selection) === event.target.value,
+                      );
+                      if (result) onSelect(result);
+                    }}
+                  >
+                    {!recent.some((item) => sameMeasurement(item.selection, current.selection)) && (
+                      <option value={measurementKey(current.selection)} disabled>
+                        当前显示（近期列表外） ·{" "}
+                        {current.selection.title ||
+                          current.target.acquisition.label ||
+                          current.target.acquisition.id}
+                      </option>
+                    )}
+                    {recent
+                      .map((_, index) => recent[recent.length - index - 1]!)
+                      .map((item, index) => (
+                        <option
+                          key={measurementKey(item.selection)}
+                          data-testid={
+                            layoutManaged ? `recent-result-${item.selection.command_id}` : undefined
+                          }
+                          value={measurementKey(item.selection)}
+                        >
+                          {recent.length - index}.{" "}
+                          {item.selection.title ||
+                            item.target.acquisition.label ||
+                            item.target.acquisition.id}
+                          {" · "}
+                          {item.savedRecordId
+                            ? "已保存"
+                            : pending.some((entry) =>
+                                  sameMeasurement(entry.selection, item.selection),
+                                )
+                              ? "待保存"
+                              : "未保存"}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+              {commandId && current.savedRecordId && (
+                <>
+                  <span role="status">已保存</span>
+                  <SavedMeasurementLink recordId={current.savedRecordId} />
+                </>
+              )}
+            </div>
+          )}
+          <div className={layoutManaged ? "device-result-current" : "min-w-0"}>
             {current ? (
               <CurrentMeasurement
                 result={current}
                 staged={staged}
                 sessionId={sessionId}
                 displayStore={displayStore}
+                workspace={layoutManaged}
               />
             ) : (
               <p className="py-16 text-center text-sm text-text-dim">采集后在这里查看曲线</p>
             )}
           </div>
-          <aside aria-label="近期结果" className="order-first min-w-0 md:order-last">
-            <h4 className="mb-2 text-xs font-semibold">近期结果 · {recent.length}</h4>
-            <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:max-h-[28rem] md:overflow-x-hidden md:overflow-y-auto md:pb-0">
-              {recent
-                .map((_, index) => recent[recent.length - index - 1]!)
-                .map((item, index) => (
-                  <button
-                    key={measurementKey(item.selection)}
-                    data-testid={`recent-result-${item.selection.command_id}`}
-                    aria-pressed={!!current && sameMeasurement(current.selection, item.selection)}
-                    title={
-                      item.selection.title ||
-                      item.target.acquisition.label ||
-                      item.target.acquisition.id
-                    }
-                    onClick={() => onSelect(item)}
-                    className={classes(
-                      secondaryButton,
-                      "h-auto w-36 min-w-0 shrink-0 flex-col items-start whitespace-normal text-left md:w-auto",
-                      !!current &&
-                        sameMeasurement(current.selection, item.selection) &&
-                        "border-blue",
-                    )}
-                  >
-                    <strong className="line-clamp-2 break-words">
-                      {recent.length - index}.{" "}
-                      {item.selection.title ||
+          {(!layoutManaged || !current) && (
+            <aside aria-label="近期结果" className="min-w-0">
+              <h4 className="mb-2 text-xs font-semibold">近期结果 · {recent.length}</h4>
+              <div className="grid gap-2">
+                {recent
+                  .map((_, index) => recent[recent.length - index - 1]!)
+                  .map((item, index) => (
+                    <button
+                      key={measurementKey(item.selection)}
+                      data-testid={`recent-result-${item.selection.command_id}`}
+                      aria-pressed={!!current && sameMeasurement(current.selection, item.selection)}
+                      title={
+                        item.selection.title ||
                         item.target.acquisition.label ||
-                        item.target.acquisition.id}
-                    </strong>
-                    <span className="text-xs">
-                      {new Date(item.receivedAt).toLocaleTimeString()} ·{" "}
-                      {item.savedRecordId
-                        ? "已保存"
-                        : pending.some((entry) => sameMeasurement(entry.selection, item.selection))
-                          ? "待保存"
-                          : "未保存"}
-                    </span>
-                  </button>
-                ))}
-            </div>
-          </aside>
+                        item.target.acquisition.id
+                      }
+                      onClick={() => onSelect(item)}
+                      className={classes(
+                        secondaryButton,
+                        "h-auto w-full min-w-0 flex-col items-start whitespace-normal text-left",
+                        !!current &&
+                          sameMeasurement(current.selection, item.selection) &&
+                          "border-blue",
+                      )}
+                    >
+                      <strong className="line-clamp-2 break-words">
+                        {recent.length - index}.{" "}
+                        {item.selection.title ||
+                          item.target.acquisition.label ||
+                          item.target.acquisition.id}
+                      </strong>
+                      <span className="text-xs">
+                        {new Date(item.receivedAt).toLocaleTimeString()} ·{" "}
+                        {item.savedRecordId
+                          ? "已保存"
+                          : pending.some((entry) =>
+                                sameMeasurement(entry.selection, item.selection),
+                              )
+                            ? "待保存"
+                            : "未保存"}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </aside>
+          )}
         </div>
       </div>
       <Dialog.Root
@@ -311,7 +365,25 @@ export function MeasurementWorkbench({
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdrop} />
           <Dialog.Viewport className={dialogViewport}>
-            <Dialog.Popup className={classes(dialogPopup, "p-4")}>
+            <Dialog.Popup
+              className={classes(dialogPopup, "p-4")}
+              finalFocus={() => {
+                if (!layoutManaged) return true;
+                if (!host.current?.closest("[hidden]"))
+                  return (
+                    saveButton.current ??
+                    host.current?.closest<HTMLElement>(".device-pane-scroll") ??
+                    true
+                  );
+                // Resizing can restore a wide control-only layout while the portal is open.
+                // Return focus to its visible results entry, without opening results or losing drafts.
+                return (
+                  host.current
+                    .closest(".device-control-layout")
+                    ?.querySelector<HTMLButtonElement>('[data-pane="results"]') ?? true
+                );
+              }}
+            >
               <Dialog.Title className={dialogTitle}>保存测量</Dialog.Title>
               <Dialog.Description className="text-xs text-text-dim">
                 {target?.target.acquisition.label ?? target?.target.acquisition.id} ·{" "}
@@ -371,6 +443,66 @@ export function MeasurementWorkbench({
           </Dialog.Viewport>
         </Dialog.Portal>
       </Dialog.Root>
+    </section>
+  );
+}
+
+/** Acquisition stays in the control pane, independent of result visibility. */
+export function MeasurementAcquisitionActions({
+  description,
+  connected,
+  disabled,
+  collectingTarget,
+  collectResults,
+  pendingCount,
+  onCollect,
+}: {
+  description?: InstrumentDescription;
+  connected: boolean;
+  disabled: boolean;
+  collectingTarget?: InstrumentAcquisitionTarget;
+  collectResults: Record<string, InstrumentCollectReceipt>;
+  pendingCount: number;
+  onCollect: (target: InstrumentAcquisitionTarget) => void;
+}) {
+  const targets = acquisitionTargets(description);
+  if (!targets.length) return null;
+  return (
+    <section aria-label="采集操作">
+      <div className="flex flex-wrap gap-2">
+        {targets.map((item) => (
+          <div key={acquisitionKey(item)}>
+            <button
+              className={primaryButton}
+              disabled={!connected || disabled}
+              onClick={() => onCollect(item)}
+              title={`${item.interfaceId} / ${item.componentPath.join("/")}`}
+            >
+              {collectingTarget && acquisitionKey(collectingTarget) === acquisitionKey(item)
+                ? "采集中…"
+                : (item.acquisition.label ?? item.acquisition.id)}
+            </button>
+
+            {collectResults[acquisitionKey(item)]?.status &&
+              collectResults[acquisitionKey(item)]?.status !== "collected" && (
+                <p role="status" className="text-xs text-yellow">
+                  {instrumentReceiptLabel(collectResults[acquisitionKey(item)]?.status ?? "")}
+                </p>
+              )}
+          </div>
+        ))}
+      </div>
+      <details className="mt-1 text-xs text-text-dim">
+        <summary>采集说明</summary>
+        {targets.map((item) => (
+          <div key={acquisitionKey(item)} className="mt-2">
+            <strong>{item.acquisition.label ?? item.acquisition.id}</strong>
+            {item.acquisition.description && <p>{item.acquisition.description}</p>}
+            <p>{item.acquisition.results.map((result) => result.label ?? result.id).join(" · ")}</p>
+          </div>
+        ))}
+      </details>
+      {pendingCount >= 20 && <p role="status">请先保存待保存结果，再继续采集。</p>}
     </section>
   );
 }

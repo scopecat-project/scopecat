@@ -1,3 +1,5 @@
+import { formatInstrumentQuantity } from "./instrument-quantity";
+import "./instrument-parameter-surface.css";
 import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { AlertTriangle, Database, LoaderCircle, Play } from "lucide-react";
@@ -35,6 +37,7 @@ export function InterfaceCard({
   description,
   instrumentInterface,
   mountPath,
+  presentation,
   connected,
   state,
   drafts,
@@ -54,6 +57,7 @@ export function InterfaceCard({
   description: InstrumentDescription;
   instrumentInterface: InstrumentInterface;
   mountPath: string[];
+  presentation?: "workbench";
   connected: boolean;
   state?: InstrumentState;
   drafts: Record<string, DraftValue>;
@@ -87,7 +91,11 @@ export function InterfaceCard({
     return null;
   return (
     <article
-      className="@container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel-soft"
+      className={
+        presentation === "workbench"
+          ? "device-parameter-group @container/controls"
+          : "device-interface-card @container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel"
+      }
       data-testid={`interface-card-${instrumentInterface.id}-${mountPath.join("-") || "root"}`}
     >
       <header className="flex items-start justify-between gap-3.5 border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3 @max-[460px]/controls:flex-col">
@@ -96,9 +104,10 @@ export function InterfaceCard({
             {instrumentInterface.label ?? interfaceFallbackLabel(instrumentInterface.id)}
           </h4>
           {instrumentInterface.description && (
-            <p className="mt-1.5 mb-0 max-w-[760px] text-xs leading-[1.45] text-text-dim">
-              {instrumentInterface.description}
-            </p>
+            <details className="mt-1 text-xs text-text-dim">
+              <summary>接口说明</summary>
+              <p>{instrumentInterface.description}</p>
+            </details>
           )}
           {mountPath.length > 0 && (
             <code className="mt-1.5 block text-xs text-text-dim">{mountPath.join(" / ")}</code>
@@ -107,6 +116,7 @@ export function InterfaceCard({
       </header>
 
       <InterfaceEndpoint
+        presentation={presentation}
         interfaceId={instrumentInterface.id}
         componentPath={mountPath}
         member={instrumentInterface}
@@ -134,6 +144,7 @@ export function InterfaceCard({
 
 export function DeviceStateCard({
   deviceState,
+  presentation,
   connected,
   state,
   drafts,
@@ -141,6 +152,7 @@ export function DeviceStateCard({
   onStage,
 }: {
   deviceState: InstrumentDeviceState;
+  presentation?: "workbench";
   connected: boolean;
   state?: InstrumentState;
   drafts: Record<string, DraftValue>;
@@ -149,7 +161,11 @@ export function DeviceStateCard({
 }) {
   return (
     <article
-      className="@container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel-soft"
+      className={
+        presentation === "workbench"
+          ? "device-parameter-group @container/controls"
+          : "device-interface-card @container/controls min-w-0 overflow-hidden rounded-md border border-line bg-panel"
+      }
       data-testid={`device-state-card-${deviceState.id}`}
     >
       <header className="border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3">
@@ -164,7 +180,7 @@ export function DeviceStateCard({
         )}
       </header>
       {(deviceState.members ?? []).length > 0 && (
-        <div className={controlGrid}>
+        <div className={presentation === "workbench" ? "device-parameter-grid" : controlGrid}>
           {(deviceState.members ?? []).map((member) => {
             const target = deviceStateTarget(
               deviceState.id,
@@ -173,6 +189,7 @@ export function DeviceStateCard({
             );
             return (
               <PropertyEditor
+                compact={presentation === "workbench"}
                 key={stateMemberKey(target)}
                 property={member.property}
                 observation={stateObservation(state, target)}
@@ -185,6 +202,17 @@ export function DeviceStateCard({
             );
           })}
         </div>
+      )}
+      {presentation === "workbench" && (deviceState.members ?? []).length > 0 && (
+        <ParameterNotes
+          entries={(deviceState.members ?? []).map((member) => ({
+            property: member.property,
+            observation: stateObservation(
+              state,
+              deviceStateTarget(deviceState.id, member.component_path ?? [], member.property.id),
+            ),
+          }))}
+        />
       )}
     </article>
   );
@@ -201,6 +229,7 @@ function InterfaceEndpoint({
   componentPath,
   rootDepth,
   member,
+  presentation,
   connected,
   state,
   drafts,
@@ -222,6 +251,7 @@ function InterfaceEndpoint({
   componentPath: string[];
   rootDepth: number;
   member: InterfaceMember;
+  presentation?: "workbench";
   connected: boolean;
   state?: InstrumentState;
   drafts: Record<string, DraftValue>;
@@ -248,7 +278,15 @@ function InterfaceEndpoint({
   return (
     <>
       {hasLocalControls && (
-        <section className={componentPath.length > rootDepth ? "border-t border-line" : undefined}>
+        <section
+          className={
+            presentation === "workbench"
+              ? "device-parameter-section"
+              : componentPath.length > rootDepth
+                ? "border-t border-line"
+                : undefined
+          }
+        >
           {componentPath.length > rootDepth && (
             <header className="bg-panel-strong px-[13px] py-2.5">
               <h5 className="m-0 text-xs text-text-soft">
@@ -262,13 +300,14 @@ function InterfaceEndpoint({
           )}
 
           {properties.length > 0 && (
-            <div className={controlGrid}>
+            <div className={presentation === "workbench" ? "device-parameter-grid" : controlGrid}>
               {properties.map((property) => {
                 const target = interfaceStateTarget(interfaceId, componentPath, property.id);
                 const effectiveProperty = resolveInterfaceProperty(description, target, property);
                 const key = stateMemberKey(target);
                 return (
                   <PropertyEditor
+                    compact={presentation === "workbench"}
                     key={property.id}
                     property={effectiveProperty}
                     observation={stateObservation(state, target)}
@@ -281,6 +320,18 @@ function InterfaceEndpoint({
                 );
               })}
             </div>
+          )}
+
+          {presentation === "workbench" && properties.length > 0 && (
+            <ParameterNotes
+              entries={properties.map((property) => {
+                const target = interfaceStateTarget(interfaceId, componentPath, property.id);
+                return {
+                  property: resolveInterfaceProperty(description, target, property),
+                  observation: stateObservation(state, target),
+                };
+              })}
+            />
           )}
 
           {operations.length > 0 && (
@@ -340,6 +391,7 @@ function InterfaceEndpoint({
       )}
       {(member.components ?? []).map((child) => (
         <InterfaceEndpoint
+          presentation={presentation}
           key={child.id}
           description={description}
           interfaceId={interfaceId}
@@ -669,13 +721,58 @@ function AcquisitionControl({
   );
 }
 
+function formatObservationValue(value: InstrumentStateObservation["value"]): string {
+  if (typeof value === "object" && value !== null && "value" in value && "unit" in value)
+    return formatInstrumentQuantity(value.value, value.unit);
+  if (typeof value === "boolean") return value ? "开启" : "关闭";
+  if (typeof value === "object") return JSON.stringify(value);
+  return typeof value === "string" ? value || "（空字符串）" : String(value);
+}
+
+function ParameterNotes({
+  entries,
+}: {
+  entries: { property: InstrumentProperty; observation?: InstrumentStateObservation }[];
+}) {
+  return (
+    <details className="device-parameter-notes">
+      <summary>参数说明与观测</summary>
+      <dl>
+        {entries.map(({ property, observation }, index) => (
+          <div key={`${property.id}-${index}`}>
+            <dt>
+              {property.label ?? titleCase(property.id)} · {accessLabel(property.access)}
+            </dt>
+            {property.description && <dd>{property.description}</dd>}
+            <dd>
+              {observation ? (
+                <>
+                  上次观测值：{formatObservationValue(observation.value)} · 观测来源{" "}
+                  {observationSourceLabels[observation.source]} ·{" "}
+                  {observation.observed_at
+                    ? new Date(observation.observed_at).toLocaleString()
+                    : "观察时间未知，新鲜度未知"}
+                </>
+              ) : (
+                "暂无观测，当前设备值未知"
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 function PropertyEditor({
+  compact = false,
   property,
   observation,
   draft,
   editable,
   onChange,
 }: {
+  compact?: boolean;
   property: InstrumentProperty;
   observation?: InstrumentStateObservation;
   draft?: DraftValue;
@@ -686,8 +783,13 @@ function PropertyEditor({
   return (
     <Controls.Field
       className={classes(
-        editorRow,
-        dirty && "bg-accent-soft shadow-[inset_2px_0_var(--color-accent)]",
+        compact ? "device-parameter-field" : editorRow,
+        compact &&
+          property.value_type.type === "string" &&
+          !property.value_type.choices &&
+          "device-parameter-field-wide",
+        dirty &&
+          (compact ? "is-staged" : "bg-accent-soft shadow-[inset_2px_0_var(--color-accent)]"),
       )}
       data-testid={`interface-property-${property.id}`}
     >
@@ -698,11 +800,12 @@ function PropertyEditor({
             data-testid="property-label"
           >
             {property.label ?? titleCase(property.id)}
+            {compact && dirty && <span className="device-parameter-staged"> · 未写入</span>}
           </strong>
         </span>
-        <small className="flex-none text-xs font-extrabold tracking-[0.04em] text-text-dim uppercase">
-          {accessLabel(property.access)}
-        </small>
+        {(!compact || property.access !== "read_write") && (
+          <small className="flex-none text-xs text-text-dim">{accessLabel(property.access)}</small>
+        )}
       </span>
       <InstrumentPropertyInput
         property={property}
@@ -711,10 +814,18 @@ function PropertyEditor({
         editable={editable}
         onChange={onChange}
       />
-      {property.description && (
+      {compact &&
+        observation &&
+        (observation.source !== "hardware_query" || !observation.observed_at) && (
+          <small className="device-parameter-source">
+            {observationSourceLabels[observation.source]}
+            {!observation.observed_at && " · 时间未知"}
+          </small>
+        )}
+      {!compact && property.description && (
         <small className={propertyDescription}>{property.description}</small>
       )}
-      {observation && (
+      {!compact && observation && (
         <small className={propertyDescription}>
           观测来源 {observationSourceLabels[observation.source]}
           {observation.observed_at
@@ -907,6 +1018,34 @@ const availabilityTone = {
 
 export function receiptTone(status: string): string {
   return ["applied", "unchanged", "invoked"].includes(status) ? positiveReceipt : warningReceipt;
+}
+
+/** Whether the backend lifecycle capture plan includes any state member.
+ * Mirrors capture_state_members: resolve physical mounts and implementation overrides,
+ * rather than treating every declared/editable property as an initial read target.
+ */
+export function hasInstrumentCaptureState(description: InstrumentDescription | undefined): boolean {
+  if (!description) return false;
+  const captures = (interfaceId: string, path: string[], member: InterfaceMember): boolean =>
+    (member.properties ?? []).some(
+      (property) =>
+        resolveInterfaceProperty(
+          description,
+          interfaceStateTarget(interfaceId, path, property.id),
+          property,
+        ).capture,
+    ) ||
+    (member.components ?? []).some((child) => captures(interfaceId, [...path, child.id], child));
+  return (
+    (description.interfaces ?? []).some((instrumentInterface) =>
+      interfaceMountPaths(description, instrumentInterface.id).some((path) =>
+        captures(instrumentInterface.id, path, instrumentInterface),
+      ),
+    ) ||
+    (description.device_schemas ?? []).some((schema) =>
+      (schema.members ?? []).some((member) => member.property.capture),
+    )
+  );
 }
 
 export function instrumentStateTargets(

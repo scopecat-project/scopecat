@@ -424,7 +424,11 @@ export function InstrumentsWorkspace({
       setClosingWindow(true);
       setWindowError(undefined);
       const thaw = () => {
-        window.dispatchEvent(new Event("scopecat:device-close-cancelled"));
+        window.dispatchEvent(
+          new CustomEvent("scopecat:device-close-cancelled", {
+            detail: { userCancelled: signal.reason?.userCancelled === true },
+          }),
+        );
         setClosingWindow(false);
       };
       signal.addEventListener("abort", thaw, { once: true });
@@ -606,6 +610,62 @@ export function InstrumentsWorkspace({
     }
     void api.open_device_window(id).catch((error) => setWindowError(errorMessage(error)));
   };
+  const connectionDetails = selectedDevice ? (
+    <div className="grid gap-3 text-sm">
+      <p className="text-text-dim">
+        已保存的连接配置。查看不会连接或断开设备；编辑请先释放控制，再前往设备管理。
+      </p>
+      <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
+      <dl className="grid gap-2" aria-label="已保存连接设置">
+        {connectionOptionFields(
+          catalog.data?.drivers
+            .find((driver) => driver.driver_id === selectedDevice.revision.content.driver.driver_id)
+            ?.connections.find(
+              (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
+            )?.options_schema,
+        ).map((field) => {
+          const value = selectedDevice.revision.content.connection.options?.[field.id];
+          return (
+            <div key={field.id} className="min-w-0">
+              <dt className="font-semibold">{field.label}</dt>
+              <dd className="break-all">
+                {field.sensitive ? (
+                  value == null ? (
+                    "未设置"
+                  ) : (
+                    "已设置（已隐藏）"
+                  )
+                ) : value == null ? (
+                  (field.choiceLabels?.[""] ?? "未指定")
+                ) : field.stringMap && typeof value === "object" && !Array.isArray(value) ? (
+                  <ul>
+                    {Object.entries(value).map(([name, entry]) => (
+                      <li key={name}>
+                        {name}：{typeof entry === "string" ? entry : "复杂值"}
+                      </li>
+                    ))}
+                  </ul>
+                ) : typeof value === "string" ? (
+                  (field.choiceLabels?.[value] ?? value)
+                ) : typeof value === "boolean" ? (
+                  value ? (
+                    "是"
+                  ) : (
+                    "否"
+                  )
+                ) : typeof value === "number" ? (
+                  String(value)
+                ) : (
+                  "复杂设置（编辑时查看）"
+                )}
+              </dd>
+              {field.description && <dd className="text-sm text-text-dim">{field.description}</dd>}
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  ) : undefined;
   const inspector =
     selected &&
     selectedDevice &&
@@ -617,8 +677,9 @@ export function InstrumentsWorkspace({
           revision ? { revision_id: revision.id, content_hash: revision.content_hash } : undefined
         }
         displayLabel={selectedDevice.device.label}
-        hideHeading={!!controlDeviceId}
+        primaryHeading={!!controlDeviceId}
         registeredDeviceId={selectedDevice.device.id}
+        configuration={connectionDetails}
         session={session}
         recoverySession={recoverySession}
         sessionError={sessionError}
@@ -669,26 +730,28 @@ export function InstrumentsWorkspace({
   );
   if (controlDeviceId)
     return (
-      <section aria-label="设备控制" className="min-w-0">
-        <div className="p-5 pb-0 max-[680px]:px-[13px]">
-          {selected ? (
-            <InstrumentHeading
-              primary
-              instrument={selected}
-              session={session}
-              displayLabel={selectedDevice?.device.label}
-              releaseUnconfirmed={releaseUnconfirmed}
-              actions={<Controls.Button onClick={refresh}>刷新占用</Controls.Button>}
-            />
-          ) : (
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+      <section aria-label="设备控制" className="device-control-window min-w-0">
+        {!(
+          selected &&
+          selectedDevice &&
+          (selectedDevice.device.state === "available" || session || recoverySession)
+        ) && (
+          <div className="px-4 pt-3 max-[680px]:px-3">
+            {selected ? (
+              <InstrumentHeading
+                primary
+                instrument={selected}
+                session={session}
+                displayLabel={selectedDevice?.device.label}
+                releaseUnconfirmed={releaseUnconfirmed}
+              />
+            ) : (
               <h1 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">
                 {selectedDevice?.device.label ?? "设备控制"}
               </h1>
-              <Controls.Button onClick={refresh}>刷新占用</Controls.Button>
-            </header>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         {closingWindow && <p role="status">正在等待当前操作完成并释放控制…</p>}
         {!closingWindow && releasePending && (
           <p role="status">仍在等待释放回执，暂不能重试或操作设备。</p>
@@ -696,9 +759,17 @@ export function InstrumentsWorkspace({
         {windowError && <p role="alert">{windowError}</p>}
         {connectionRecovery}
         {(devicesQuery.error || accessQuery.error || instrumentsQuery.error) && (
-          <p role="alert">
-            {errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}
-          </p>
+          <div role="alert" className="flex flex-wrap items-center gap-2">
+            <p>{errorMessage(devicesQuery.error ?? accessQuery.error ?? instrumentsQuery.error)}</p>
+            <Controls.Button
+              onClick={() => {
+                refresh();
+                void accessQuery.refetch();
+              }}
+            >
+              重试状态查询
+            </Controls.Button>
+          </div>
         )}
         {selected?.owner_kind === "run" &&
           selected.owner_id &&
@@ -983,62 +1054,7 @@ export function InstrumentsWorkspace({
               className="grid gap-3 rounded-lg border border-line bg-panel p-3"
               aria-label="连接与环境"
             >
-              <p>{connectionSummary(selectedDevice.revision.content.connection)}</p>
-              <dl className="grid gap-2" aria-label="已保存连接设置">
-                {connectionOptionFields(
-                  catalog.data?.drivers
-                    .find(
-                      (driver) =>
-                        driver.driver_id === selectedDevice.revision.content.driver.driver_id,
-                    )
-                    ?.connections.find(
-                      (spec) => spec.kind === selectedDevice.revision.content.connection.kind,
-                    )?.options_schema,
-                ).map((field) => {
-                  const value = selectedDevice.revision.content.connection.options?.[field.id];
-                  return (
-                    <div key={field.id} className="min-w-0">
-                      <dt className="font-semibold">{field.label}</dt>
-                      <dd className="break-all">
-                        {field.sensitive ? (
-                          value == null ? (
-                            "未设置"
-                          ) : (
-                            "已设置（已隐藏）"
-                          )
-                        ) : value == null ? (
-                          (field.choiceLabels?.[""] ?? "未指定")
-                        ) : field.stringMap &&
-                          typeof value === "object" &&
-                          !Array.isArray(value) ? (
-                          <ul>
-                            {Object.entries(value).map(([name, entry]) => (
-                              <li key={name}>
-                                {name}：{typeof entry === "string" ? entry : "复杂值"}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : typeof value === "string" ? (
-                          (field.choiceLabels?.[value] ?? value)
-                        ) : typeof value === "boolean" ? (
-                          value ? (
-                            "是"
-                          ) : (
-                            "否"
-                          )
-                        ) : typeof value === "number" ? (
-                          String(value)
-                        ) : (
-                          "复杂设置（编辑时查看）"
-                        )}
-                      </dd>
-                      {field.description && (
-                        <dd className="text-sm text-text-dim">{field.description}</dd>
-                      )}
-                    </div>
-                  );
-                })}
-              </dl>
+              {connectionDetails}
               {selectedDevice.device.state !== "retired" && (
                 <>
                   <p>使用“编辑设备”修改连接与驱动环境。设备调试不需要样品或实验路由。</p>

@@ -1,0 +1,34 @@
+/* One application toolbar below, never inside, the OS-owned title bar. */
+.device-window-toolbar {
+  min-width: 0;
+}
+.device-window-toolbar .device-window-heading {
+  flex: 1 1 13rem;
+  padding: 0;
+  border: 0;
+}
+.device-window-toolbar .device-window-heading h1 {
+  font-size: 0.95rem;
+}
+.device-window-toolbar .device-session-panel--inline {
+  display: contents;
+}
+.device-window-toolbar .device-session-panel--inline > div {
+  width: auto;
+  flex-basis: auto;
+}
+.device-window-toolbar > .device-pending-actions {
+  margin-left: auto;
+}
+.device-control-app .device-inspector {
+  padding: 0;
+  gap: 0;
+}
+.device-control-app .device-window-toolbar {
+  padding: 8px 12px;
+}
+@media (max-width: 680px) {
+  .device-window-toolbar .device-window-heading {
+    flex-basis: 100%;
+  }
+}

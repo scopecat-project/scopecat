@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { InstrumentExitDialog } from "../instruments/InstrumentExitDialog";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DesktopSession } from "./DesktopSession";
@@ -159,7 +161,8 @@ it.each(["window", "application"])(
     expect(launchCloseBlocked()).toBe(true);
     act(() => send("scopecat:close-release", "hanging"));
     expect(launchCloseBlocked()).toBe(false);
-    expect(screen.getByText(/已提交的保存或设备操作没有撤销/)).toBeInTheDocument();
+    expect(screen.queryByText(/已提交的保存或设备操作没有撤销/)).toBeNull();
+    expect(screen.queryByText(/正在等待操作完成/)).toBeNull();
     await act(async () => finish("saved"));
     expect(acknowledge.mock.calls).toEqual([["hanging", "pending"]]);
     unregister();
@@ -167,7 +170,11 @@ it.each(["window", "application"])(
 );
 
 it("keeps the close fence after a failed cancellation and accepts the instrument dialog event", async () => {
-  const unregister = registerDeviceClose(() => new Promise(() => {}));
+  let signal!: AbortSignal;
+  const unregister = registerDeviceClose((next) => {
+    signal = next;
+    return new Promise(() => {});
+  });
   const cancel = vi
     .fn()
     .mockRejectedValueOnce(new Error("bridge disconnected"))
@@ -183,12 +190,14 @@ it("keeps the close fence after a failed cancellation and accepts the instrument
   fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
   expect(await screen.findByText(/取消关闭等待未确认/)).toBeInTheDocument();
   expect(launchCloseBlocked()).toBe(true);
+  expect(signal.aborted).toBe(false);
   act(() => {
     window.dispatchEvent(new Event("scopecat:cancel-close-wait"));
   });
   await waitFor(() => expect(cancel.mock.calls).toEqual([["modal"], ["modal"]]));
   act(() => send("scopecat:close-release", "modal"));
   expect(launchCloseBlocked()).toBe(false);
+  expect(signal.reason).toEqual({ userCancelled: true });
   unregister();
 });
 
@@ -285,5 +294,90 @@ it("ignores an old cancellation reply after another close begins and deduplicate
   fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
   await waitFor(() => expect(cancel.mock.calls).toEqual([["old"], ["new"]]));
   act(() => send("scopecat:close-release", "new"));
+  unregister();
+});
+
+it("keeps the real device review accessible during same-window application preflight", async () => {
+  let completeExit!: (value: "cancelled") => void;
+  const requestExit = vi.fn(
+    () =>
+      new Promise<"cancelled">((resolve) => {
+        completeExit = resolve;
+      }),
+  );
+  const acknowledge = vi.fn().mockResolvedValue(undefined);
+  const cancel = vi.fn(async () => {
+    send("scopecat:close-release", "same-window");
+    completeExit("cancelled");
+    return true;
+  });
+  const detach = registerDeviceClose(() => new Promise(() => {}));
+  vi.stubGlobal("pywebview", {
+    api: {
+      request_exit: requestExit,
+      complete_close_preflight: acknowledge,
+      cancel_close_preflight: cancel,
+      exit_status: vi
+        .fn()
+        .mockResolvedValue({ finishing: [], deferred: [], blockers: [], file_operations: 0 }),
+    },
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["instrument-finish-plan", "same-session"], {
+    actions: [],
+    configured_finish_available: false,
+  });
+  const onCancel = vi.fn();
+  render(
+    <QueryClientProvider client={client}>
+      <InstrumentExitDialog
+        sessionId="same-session"
+        pending={[]}
+        stagedCount={0}
+        onSaved={vi.fn()}
+        onCancel={onCancel}
+        onFinished={vi.fn()}
+        closeWaiting
+        sessionUnavailable
+      />
+      <DesktopSession />
+    </QueryClientProvider>,
+  );
+  act(() => {
+    window.scopecatRequestExit?.();
+    send("scopecat:close-preflight", "same-window");
+    window.scopecatRequestExit?.();
+  });
+  expect(requestExit).toHaveBeenCalledTimes(1);
+  const dialogs = screen.getAllByRole("dialog");
+  expect(dialogs).toHaveLength(1);
+  expect(dialogs[0]).toHaveTextContent("结束控制前的待办");
+  expect(screen.queryByRole("dialog", { name: "Quit Scopecat" })).not.toBeInTheDocument();
+  // The device popup, rather than a second modal above it, owns cancellation.
+  fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
+  await waitFor(() => expect(cancel).toHaveBeenCalledExactlyOnceWith("same-window"));
+  expect(screen.queryByRole("dialog", { name: "Quit Scopecat" })).not.toBeInTheDocument();
+  expect(launchCloseBlocked()).toBe(false);
+  detach();
+  client.clear();
+});
+
+it("returns from an unsubmitted close without an operation warning", async () => {
+  const unregister = registerDeviceClose(() => new Promise(() => {}));
+  const cancel = vi.fn().mockResolvedValue(true);
+  vi.stubGlobal("pywebview", {
+    api: {
+      complete_close_preflight: vi.fn().mockResolvedValue(undefined),
+      cancel_close_preflight: cancel,
+    },
+  });
+  render(<DesktopSession />);
+  act(() => send("scopecat:close-preflight", "unsubmitted"));
+  fireEvent.click(screen.getByRole("button", { name: "取消本次关闭等待" }));
+  await waitFor(() => expect(cancel).toHaveBeenCalledExactlyOnceWith("unsubmitted"));
+  act(() => send("scopecat:close-release", "unsubmitted"));
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.queryByRole("button", { name: "取消本次关闭等待" })).toBeNull();
+  expect(launchCloseBlocked()).toBe(false);
   unregister();
 });

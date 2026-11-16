@@ -40,7 +40,7 @@ it("keeps a failed finish selection and retries the identical command", async ()
     status: "closed",
   });
   const onFinished = show();
-  const configured = screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" });
+  const configured = screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" });
   await waitFor(() => expect(configured).toBeEnabled());
   fireEvent.click(configured);
   expect(await screen.findByRole("alert")).toHaveTextContent("未知");
@@ -60,7 +60,7 @@ it("does not guess a finish action when the device has no configured scope", asy
     configured_finish_available: false,
   });
   show();
-  expect(screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "保持当前状态并结束" }));
   await waitFor(() =>
     expect(finishInstrumentSession).toHaveBeenCalledWith("session", {
@@ -89,7 +89,7 @@ it("unlocks a rejected selection only with the matching structured pre-admission
     status: "closed",
   });
   const onFinished = show();
-  const configured = screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" });
+  const configured = screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" });
   await waitFor(() => expect(configured).toBeEnabled());
   fireEvent.click(configured);
   expect(await screen.findByRole("alert")).toHaveTextContent("未被接纳");
@@ -118,7 +118,7 @@ it.each([
   show();
   fireEvent.click(screen.getByRole("button", { name: "保持当前状态并结束" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("未知");
-  expect(screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" })).toBeDisabled();
 });
 
 it("bounds a hung finish and retains its identity across dismissal; late success does not exit", async () => {
@@ -151,10 +151,10 @@ it("bounds a hung finish and retains its identity across dismissal; late success
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" })).toBeEnabled(),
   );
   vi.useFakeTimers();
-  fireEvent.click(screen.getByRole("button", { name: "执行上述关闭 / 归零配置并结束" }));
+  fireEvent.click(screen.getByRole("button", { name: "执行已配置的关闭 / 归零动作并结束" }));
   await act(async () => {
     await vi.advanceTimersByTimeAsync(INSTRUMENT_REQUEST_WAIT_MS);
   });

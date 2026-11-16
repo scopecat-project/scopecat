@@ -47,7 +47,7 @@ export function prepareDeviceClose(
   return result;
 }
 
-export function releaseDeviceClose(requestId: string) {
-  requests.get(requestId)?.controller.abort();
+export function releaseDeviceClose(requestId: string, userCancelled = false) {
+  requests.get(requestId)?.controller.abort({ userCancelled });
   requests.delete(requestId);
 }
