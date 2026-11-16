@@ -638,7 +638,12 @@ it("keeps preview clickable during a background catalog read and blocks a failed
 });
 
 it("keeps context across experiments and preserves the original submission after context edits", async () => {
+  // This tests first-time selection, not recovery of a previously opened draft.
+  // An initial "first" save can still be pending when switching back to it;
+  // recovery correctly restores that draft's empty context instead of chip-a.
+  catalog = [prepared, { ...prepared, id: "first", title: "Default experiment" }];
   render(<Harness />);
+  await screen.findByText("实验输入已保存到应用数据。", { exact: true });
   await selectPrepared();
   fireEvent.click(screen.getByRole("button", { name: "浏览样品、批次与记录集" }));
   await screen.findByRole("option", { name: "Batch A" });
