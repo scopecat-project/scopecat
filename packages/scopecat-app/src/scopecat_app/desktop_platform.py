@@ -45,10 +45,58 @@ def log_native_backend() -> None:
 
 
 def show_window(window: webview.Window) -> None:
+    if sys.platform == "darwin":
+        if window.events.closed.is_set():
+            return
+        if (
+            not window.events.shown.is_set()
+            and threading.current_thread() is threading.main_thread()
+        ):
+            # The tray can create a child on Cocoa's loop. Its creation is also
+            # queued there, so waiting for shown here would block that creation.
+            threading.Thread(
+                target=_wait_and_show_cocoa, args=(window,), daemon=True
+            ).start()
+        else:
+            _queue_cocoa_show(window)
+        return
     # Show before restoring: WinForms can retain minimized placement while hidden.
     window.show()
     window.restore()
     window.show()
+
+
+def _queue_cocoa_show(window: webview.Window) -> None:
+    # Preserve pywebview's bounded readiness contract outside the Cocoa loop.
+    if not window.events.shown.wait(20):
+        raise RuntimeError("The requested window has not been shown")
+    if not window.events.closed.is_set():
+        _cocoa_schedule(lambda: _show_cocoa_window(window))
+
+
+def _wait_and_show_cocoa(window: webview.Window) -> None:
+    try:
+        _queue_cocoa_show(window)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Could not show the requested Cocoa window"
+        )
+
+
+def _show_cocoa_window(window: webview.Window) -> None:
+    from AppKit import NSApplication
+
+    # Check when the queued callback executes, not when it was requested.
+    # Cocoa can retain the NSWindow after pywebview removes its WebView.
+    if window.events.closed.is_set() or window.native is None:
+        return
+    native = window.native
+    # Unconditional deminiaturize on an already visible window can finish its
+    # front-order animation after close, resurrecting an empty native shell.
+    if native.isMiniaturized():
+        native.deminiaturize_(None)
+    native.makeKeyAndOrderFront_(None)
+    NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
 
 
 def hide_window(window: webview.Window) -> None:
