@@ -339,3 +339,114 @@ def test_linux_gtk_reports_only_from_its_event_loop(monkeypatch: pytest.MonkeyPa
     callbacks.pop()()
     changed.assert_called_once_with(True)
     stop()
+
+
+@pytest.mark.parametrize("minimized", [False, True])
+def test_cocoa_show_restores_only_minimized_live_windows(
+    monkeypatch: pytest.MonkeyPatch, minimized: bool
+):
+    from scopecat_app.desktop_platform import show_window
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    queue: list[Callable[[], None]] = []
+    native, app = Mock(), Mock()
+    native.isMiniaturized.return_value = minimized
+    shown, closed = threading.Event(), threading.Event()
+    shown.set()
+    window = Mock(native=native, events=SimpleNamespace(shown=shown, closed=closed))
+    monkeypatch.setitem(
+        sys.modules,
+        "AppKit",
+        SimpleNamespace(NSApplication=SimpleNamespace(sharedApplication=lambda: app)),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "PyObjCTools",
+        SimpleNamespace(AppHelper=SimpleNamespace(callAfter=queue.append)),
+    )
+    show_window(window)
+    # An unconditional Cocoa restore can finish its animation after close and
+    # reorder the NSWindow after its WebView was removed.
+    window.restore.assert_not_called()
+    native.makeKeyAndOrderFront_.assert_not_called()
+    queue.pop()()
+    assert native.deminiaturize_.call_count == int(minimized)
+    native.makeKeyAndOrderFront_.assert_called_once()
+    app.activateIgnoringOtherApps_.assert_called_once_with(True)
+
+
+def test_cocoa_queued_show_cannot_resurrect_a_closed_window(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from scopecat_app.desktop_platform import show_window
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    queue: list[Callable[[], None]] = []
+    native, app = Mock(), Mock()
+    shown, closed = threading.Event(), threading.Event()
+    shown.set()
+    window = Mock(native=native, events=SimpleNamespace(shown=shown, closed=closed))
+    monkeypatch.setitem(
+        sys.modules,
+        "AppKit",
+        SimpleNamespace(NSApplication=SimpleNamespace(sharedApplication=lambda: app)),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "PyObjCTools",
+        SimpleNamespace(AppHelper=SimpleNamespace(callAfter=queue.append)),
+    )
+    show_window(window)
+    closed.set()
+    assert queue
+    queue.pop()()
+    native.assert_not_called()
+    assert not native.mock_calls
+    assert not app.mock_calls
+
+
+@pytest.mark.parametrize("closed_before_ready", [False, True])
+def test_cocoa_first_show_does_not_block_native_creation(
+    monkeypatch: pytest.MonkeyPatch, closed_before_ready: bool
+):
+    from scopecat_app.desktop_platform import show_window
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    shown, closed, queued, waiting = (threading.Event() for _ in range(4))
+    callbacks: list[Callable[[], None]] = []
+    threads: list[threading.Thread] = []
+    real_thread = threading.Thread
+
+    def start_worker(
+        *, target: Callable[..., None], args: tuple[object, ...], daemon: bool
+    ):
+        thread = real_thread(target=target, args=args, daemon=daemon)
+        threads.append(thread)
+        return thread
+
+    def wait_ready(timeout: float):
+        waiting.set()
+        return shown.wait(min(timeout, 2))
+
+    def schedule(callback: Callable[[], None]):
+        callbacks.append(callback)
+        queued.set()
+
+    monkeypatch.setattr("scopecat_app.desktop_platform.threading.Thread", start_worker)
+    monkeypatch.setattr("scopecat_app.desktop_platform._cocoa_schedule", schedule)
+    ready = SimpleNamespace(is_set=shown.is_set, wait=wait_ready)
+    window = Mock(events=SimpleNamespace(shown=ready, closed=closed))
+    try:
+        show_window(window)
+        assert waiting.wait(1)
+        assert not callbacks  # The main loop is free to create the native window.
+        if closed_before_ready:
+            closed.set()
+        shown.set()
+        threads[0].join(2)
+        assert not threads[0].is_alive()
+        assert len(callbacks) == (0 if closed_before_ready else 1)
+    finally:
+        shown.set()
+        for thread in threads:
+            thread.join(2)
