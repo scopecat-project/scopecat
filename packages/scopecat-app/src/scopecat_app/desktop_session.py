@@ -9,6 +9,10 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 from .application_runtime import ApplicationRuntime
 
 
+class CloseCancelled(ValueError):
+    """The user cancelled this close intent, without a failure."""
+
+
 class ClosePreflightAborted(ValueError):
     """A retained view invalidated its close certificate."""
 
@@ -195,7 +199,9 @@ class DesktopSession:
                 # If cancelling drain fails, retain the admission fence but stop
                 # prompting until the user explicitly retries cancellation.
                 self._poll_suspended = True
-                self._exit_error = str(error)
+                self._exit_error = (
+                    "" if isinstance(error, CloseCancelled) else str(error)
+                )
                 try:
                     self.runtime.set_exit_wait(False)
                 except Exception as cancel_error:
@@ -203,6 +209,8 @@ class DesktopSession:
                     raise ValueError(self._exit_error) from cancel_error
                 self._waiting.clear()
                 self.close_cancelled()
+                if isinstance(error, CloseCancelled):
+                    return
                 raise
             finally:
                 self._operation_lock.release()

@@ -16,6 +16,16 @@ from scopecat_app.desktop_session import DesktopSession
 from scopecat_server.services.application_open import ApplicationOpenService
 
 
+@pytest.fixture(autouse=True)
+def fake_native_show(monkeypatch: pytest.MonkeyPatch):
+    # Object identity tests replace native rendering, including Cocoa scheduling.
+    # Keep the focus assertions here; platform lifetime checks have their own tests.
+    def show(window: Mock) -> None:
+        window.show()
+
+    monkeypatch.setattr("scopecat_app.desktop.show_window", show)
+
+
 @pytest.mark.parametrize("page", ["http://127.0.0.1:3210", "http://localhost:5179/"])
 @pytest.mark.parametrize(
     "target,query,fragment",

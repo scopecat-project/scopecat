@@ -33,6 +33,10 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         arguments[i + 3] = argv[i];
         if (!strcmp(argv[i], "--check-result")) check = YES;
+#ifdef SCOPECAT_TRIAL
+        // Explicit one-shot verification must return failures without a modal.
+        if (!strcmp(argv[i], "--trial-window-probe")) check = YES;
+#endif
     }
     // Keep the native process's bundle identity, while argv[0] selects the
     // bundled interpreter for sys.executable and backend subprocesses.
@@ -47,7 +51,11 @@ int main(int argc, char **argv) {
         @autoreleasepool {
             NSAlert *alert = [[NSAlert alloc] init];
             alert.messageText = @"Scopecat 启动未完成";
+#ifdef SCOPECAT_TRIAL
+            alert.informativeText = @"试用构建拒绝启动。请检查包内固定 home、locator 与启动参数；不会回退正式数据目录。";
+#else
             alert.informativeText = @"请保留应用和数据。错误详情位于 ~/Library/Application Support/Scopecat/native-start.log。";
+#endif
             [alert runModal];
         }
     }

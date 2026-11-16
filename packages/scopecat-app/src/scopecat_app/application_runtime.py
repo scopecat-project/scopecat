@@ -110,6 +110,9 @@ class ApplicationRuntime:
     """
 
     def __init__(self, home: Path):
+        from scopecat.trial_policy import validate_home
+
+        validate_home(home)
         self.home = home.resolve()
         legacy = self.home / "runtime"
         if not legacy.exists() and (self.home / "installation.json").exists():

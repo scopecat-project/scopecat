@@ -32,7 +32,10 @@ class Request(BaseModel):
 
 
 def main() -> None:
+    from scopecat.trial_policy import validate_home
+
     request = Request.model_validate_json(sys.argv[1])
+    validate_home(Path(request.root))
     # Qualification checks the application installation, not any author environment.
     project = (
         ApplicationInstance.open(request.root) if request.action != "probe" else None

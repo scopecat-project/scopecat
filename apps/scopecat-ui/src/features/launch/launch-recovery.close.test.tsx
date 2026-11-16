@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { useLaunchRecovery, restoreDraft, type DraftRecord } from "./launch-recovery";
-import { prepareLaunchClose, releaseLaunchClose } from "./launch-close-barrier";
+import { launchCloseSources, prepareLaunchClose, releaseLaunchClose } from "./launch-close-barrier";
 import type { LaunchDraft } from "./LaunchDraft";
 import { defaultSelection } from "./scientific-selection";
 
@@ -76,6 +76,12 @@ it("commits the synchronous input, flushes debounce and retains failed sessions 
   await waitFor(() => expect(view.result.current.recovery.status).toContain("尚未确认保存"));
   const failedOperation = commands.at(-1)?.operation_id;
   view.unmount();
+  expect(launchCloseSources()).toContainEqual({
+    workspace: "author",
+    experiment: "signal",
+    draft: "default",
+    canReturn: false,
+  });
   await expect(prepareLaunchClose("detached")).resolves.toBe("blocked");
   releaseLaunchClose("detached");
   view = mount();
@@ -90,6 +96,12 @@ it("commits the synchronous input, flushes debounce and retains failed sessions 
     expect(await prepareLaunchClose("recovered")).toBe("saved");
   });
   releaseLaunchClose("recovered");
+  expect(launchCloseSources()).not.toContainEqual({
+    workspace: "author",
+    experiment: "signal",
+    draft: "default",
+    canReturn: true,
+  });
   view.unmount();
   cleanup();
   vi.unstubAllGlobals();

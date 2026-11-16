@@ -489,6 +489,8 @@ fast_paths = [
 integration_paths = [
   "packages/scopecat-app/tests/test_package_versions.py",
   "packages/scopecat-app/tests/test_native_console.py",
+  "packages/scopecat-app/tests/test_trial_package.py",
+  "packages/scopecat-app/tests/test_trial_window_probe.py",
   "packages/scopecat-app/tests/test_windows_native_host.py",
   "packages/scopecat-app/tests/test_native_windows_probe.py",
   "packages/scopecat-app/tests/test_native_replacement.py",
@@ -506,6 +508,7 @@ integration_paths = [
   "packages/scopecat-app/tests/test_entry.py",
   "packages/scopecat-app/tests/test_first_run_journey.py",
   "packages/scopecat-app/tests/test_desktop_session.py",
+  "packages/scopecat-app/tests/test_saved_measurement_windows.py",
   "packages/scopecat-app/tests/test_desktop_objects.py",
   "packages/scopecat-app/tests/test_desktop_backup.py",
   "packages/scopecat-app/tests/test_desktop_platform.py",

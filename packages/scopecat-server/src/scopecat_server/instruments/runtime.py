@@ -28,6 +28,7 @@ from scopecat.daemon.wire import (
     InstrumentSessionLeaseReceipt,
     InstrumentSessionOpenCommand,
     InstrumentSessionOpenReceipt,
+    InstrumentSessionRecoveryReceipt,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
     RunInstrumentProvisionCommand,
@@ -190,6 +191,7 @@ from .finish import (
     InstrumentFinishAction,
     InstrumentFinishCommand,
     InstrumentFinishPlan,
+    InstrumentFinishRejected,
 )
 from .owner import InstrumentBackendOwner
 
@@ -3392,6 +3394,54 @@ class InstrumentRuntime:
                 replay,
             )
 
+    def session_recovery(self, session_id: str) -> InstrumentSessionRecoveryReceipt:
+        """Observe durable status without renewing, cleanup, or driver calls."""
+        try:
+            session = self._control.get_instrument_session(session_id)
+        except ControlPlaneNotFound as error:
+            raise BackendNotFound(str(error)) from error
+        with self._control.read_transaction() as connection:
+            # Explicit attention resolution acknowledges uncertainty, not success.
+            # A crash can leave a finished-unknown event before quarantine is written.
+            unresolved = cast(
+                "tuple[int] | None",
+                connection.execute(
+                    "SELECT 1 FROM durable_events e WHERE "
+                    "json_extract(e.payload_json, '$.session_id')=? AND "
+                    "e.event_id > COALESCE((SELECT MAX(r.event_id) "
+                    "FROM durable_events r "
+                    "WHERE r.kind='instrument_session_attention_resolved' AND "
+                    "json_extract(r.payload_json, '$.session_id')=?), 0) AND ("
+                    "(e.kind IN ('instrument_apply_finished', "
+                    "'instrument_invoke_finished', "
+                    "'instrument_collect_finished') AND "
+                    "json_extract(e.payload_json, '$.status') "
+                    "IN ('unknown', 'invalid_receipt')) "
+                    "OR (e.kind='instrument_session_finish_selected' AND NOT EXISTS "
+                    "(SELECT 1 FROM durable_events c WHERE "
+                    "c.kind='instrument_session_finish_actions_completed' AND "
+                    "json_extract(c.payload_json, '$.session_id')=? AND "
+                    "c.event_id > e.event_id))) LIMIT 1",
+                    (session_id, session_id, session_id),
+                ).fetchone(),
+            )
+        with self._sessions_lock:
+            retained = session_id in self._sessions
+        return InstrumentSessionRecoveryReceipt(
+            session_id=session.session_id,
+            state=session.state,
+            end_status=session.end_status,
+            attention_reason=session.attention_reason,
+            active_operation_id=session.active_operation_id,
+            active_operation_kind=session.active_operation_kind,
+            runtime_retained=retained,
+            has_unresolved_operations=(
+                session.state == "attention_required"
+                or session.active_operation_id is not None
+                or unresolved is not None
+            ),
+        )
+
     def finish_plan(self, session_id: str) -> InstrumentFinishPlan:
         runtime = self._live_runtime(session_id)
         with runtime.lock:
@@ -3421,14 +3471,11 @@ class InstrumentRuntime:
         # Reuse the original ownership and typed command paths. The close endpoint
         # retains its existing keep-current semantics for programmatic callers.
         session = self._control.get_instrument_session(session_id)
-        if (
-            session.state != "closed"
-            and command.mode == "configured_finish"
-            and not self.finish_plan(session_id).configured_finish_available
-        ):
-            raise BackendConflict(
-                "no configured finish action for every selected device"
-            )
+        configured_finish_available = (
+            session.state == "closed"
+            or command.mode != "configured_finish"
+            or self.finish_plan(session_id).configured_finish_available
+        )
         payload = {"session_id": session_id, **command.model_dump(mode="json")}
         with self._control.write_transaction() as connection:
             row = cast(
@@ -3450,6 +3497,14 @@ class InstrumentRuntime:
             elif session.state == "closed":
                 raise BackendConflict(
                     "session already closed without this finish selection"
+                )
+            elif not configured_finish_available:
+                # A generic conflict may occur after admission. Only this fenced
+                # absence of a selection proves the UI may choose a new command.
+                raise InstrumentFinishRejected(
+                    session_id,
+                    command.operation_id,
+                    "no configured finish action for every selected device",
                 )
             else:
                 self._control.append_event_in_transaction(

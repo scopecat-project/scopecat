@@ -111,40 +111,9 @@ test("control inputs and headings stay readable and complete curves resize at ev
       .locator("..");
     await expect(header.getByText("已连接", { exact: true })).toBeVisible();
     await expect(header.getByRole("button", { name: "刷新占用" })).toBeVisible();
-    for (const name of ["线路名称", "测量备注"]) {
-      const input = page.getByRole("textbox", { name, exact: true });
-      await expect(input).toHaveValue("");
-      const appearance = await input.evaluate((element) => {
-        const css = element.ownerDocument.defaultView!.getComputedStyle(element);
-        const bounds = element.getBoundingClientRect();
-        return {
-          border: css.borderTopWidth,
-          background: css.backgroundColor,
-          height: bounds.height,
-          right: bounds.right,
-        };
-      });
-      expect(parseFloat(appearance.border)).toBeGreaterThanOrEqual(1);
-      expect(appearance.background).not.toBe("rgba(0, 0, 0, 0)");
-      expect(appearance.height).toBeGreaterThanOrEqual(36);
-      expect(appearance.right).toBeLessThanOrEqual(390);
-    }
-    const line = page.getByRole("textbox", { name: "线路名称", exact: true });
-    await line.focus();
-    await page.keyboard.press("Tab");
-    const note = page.getByRole("textbox", { name: "测量备注", exact: true });
-    await expect(note).toBeFocused();
-    expect(
-      await note.evaluate(
-        (element) => element.ownerDocument.defaultView!.getComputedStyle(element).outlineStyle,
-      ),
-    ).not.toBe("none");
-    await line.fill("layout-line");
-    await page.getByRole("checkbox", { name: "已人工确认当前接线为 layout-line" }).check();
-    await note.fill("layout-only");
-    const sweep = page.getByTestId("interface-card-scopecat.network_sweep/v1-root");
-    const read = page.getByTestId("interface-card-scopecat.existing_network_trace/v1-root");
-    await sweep.getByRole("button", { name: "收集 Collect", exact: true }).click();
+    const sweep = page.getByTitle("scopecat.network_sweep/v1 / ", { exact: true });
+    const read = page.getByTitle("scopecat.existing_network_trace/v1 / ", { exact: true });
+    await sweep.click();
     // Keep the same region and curve locatable while deliberately hidden below.
     const current = page.getByRole("region", {
       name: "当前测量结果",
@@ -162,6 +131,81 @@ test("control inputs and headings stay readable and complete curves resize at ev
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
     }
+    // A 1920px viewport still leaves only a narrow settings column. Fields
+    // must adapt to that container rather than using viewport-wide two columns.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    for (const id of ["start_frequency", "stop_frequency"]) {
+      const row = page.getByTestId(`interface-property-${id}`);
+      const label = row.getByTestId("property-label");
+      const input = row.getByRole("spinbutton");
+      await expect(label).toBeVisible();
+      await expect(input).toBeVisible();
+      await expect(async () => {
+        const geometry = await row.evaluate((element) => {
+          const labelNode = element.querySelector('[data-testid="property-label"]')!;
+          const inputNode = element.querySelector('input[type="number"]')!;
+          // This helper must travel with the browser-evaluated callback.
+          // oxlint-disable-next-line unicorn/consistent-function-scoping
+          const rect = (node: {
+            getBoundingClientRect(): { left: number; right: number; top: number; bottom: number };
+          }) => {
+            const bounds = node.getBoundingClientRect();
+            return {
+              left: bounds.left,
+              right: bounds.right,
+              top: bounds.top,
+              bottom: bounds.bottom,
+            };
+          };
+          return {
+            row: rect(element),
+            container: rect(element.parentElement),
+            card: rect(element.closest("article")),
+            label: rect(labelNode),
+            input: rect(inputNode),
+            labelWidth: labelNode.clientWidth,
+            labelContentWidth: labelNode.scrollWidth,
+          };
+        });
+        expect(geometry.labelContentWidth).toBeLessThanOrEqual(geometry.labelWidth + 1);
+        for (const bounds of [geometry.label, geometry.input]) {
+          for (const container of [geometry.row, geometry.container, geometry.card]) {
+            expect(bounds.left).toBeGreaterThanOrEqual(container.left - 1);
+            expect(bounds.right).toBeLessThanOrEqual(container.right + 1);
+            expect(bounds.top).toBeGreaterThanOrEqual(container.top - 1);
+            expect(bounds.bottom).toBeLessThanOrEqual(container.bottom + 1);
+          }
+        }
+        const overlapX =
+          Math.min(geometry.label.right, geometry.input.right) -
+          Math.max(geometry.label.left, geometry.input.left);
+        const overlapY =
+          Math.min(geometry.label.bottom, geometry.input.bottom) -
+          Math.max(geometry.label.top, geometry.input.top);
+        expect(overlapX > 1 && overlapY > 1).toBe(false);
+      }).toPass({ timeout: 5_000 });
+    }
+    const startInput = await page
+      .getByTestId("interface-property-start_frequency")
+      .getByRole("spinbutton")
+      .boundingBox();
+    const stopInput = await page
+      .getByTestId("interface-property-stop_frequency")
+      .getByRole("spinbutton")
+      .boundingBox();
+    expect(startInput).not.toBeNull();
+    expect(stopInput).not.toBeNull();
+    const inputsOverlapX =
+      Math.min(startInput!.x + startInput!.width, stopInput!.x + stopInput!.width) -
+      Math.max(startInput!.x, stopInput!.x);
+    const inputsOverlapY =
+      Math.min(startInput!.y + startInput!.height, stopInput!.y + stopInput!.height) -
+      Math.max(startInput!.y, stopInput!.y);
+    expect(inputsOverlapX > 1 && inputsOverlapY > 1).toBe(false);
+    await testInfo.attach("device-control-fields-1920", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
     // Resize the containing panel without changing the viewport, then hide/show it.
     await current.evaluate((element) => {
       element.style.width = "360px";
@@ -185,9 +229,42 @@ test("control inputs and headings stay readable and complete curves resize at ev
         await expectFittedCurve(curve);
       }
     }
-    await page.getByRole("button", { name: "保存此结果", exact: true }).click();
-    await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
-    await read.getByRole("button", { name: "收集 Collect", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    const saveDialog = page.getByRole("dialog", { name: "保存测量", exact: true });
+    for (const name of ["标题", "线路名称", "备注"]) {
+      const input = saveDialog.getByRole("textbox", { name, exact: true });
+      await expect(input).toHaveValue("");
+      const appearance = await input.evaluate((element) => {
+        const css = element.ownerDocument.defaultView!.getComputedStyle(element);
+        const bounds = element.getBoundingClientRect();
+        return {
+          border: css.borderTopWidth,
+          background: css.backgroundColor,
+          height: bounds.height,
+          right: bounds.right,
+        };
+      });
+      expect(parseFloat(appearance.border)).toBeGreaterThanOrEqual(1);
+      expect(appearance.background).not.toBe("rgba(0, 0, 0, 0)");
+      expect(appearance.height).toBeGreaterThanOrEqual(36);
+      expect(appearance.right).toBeLessThanOrEqual(390);
+    }
+    const line = saveDialog.getByRole("textbox", { name: "线路名称", exact: true });
+    await line.focus();
+    await page.keyboard.press("Tab");
+    const note = saveDialog.getByRole("textbox", { name: "备注", exact: true });
+    await expect(note).toBeFocused();
+    expect(
+      await note.evaluate(
+        (element) => element.ownerDocument.defaultView!.getComputedStyle(element).outlineStyle,
+      ),
+    ).not.toBe("none");
+    await line.fill("layout-line");
+    await note.fill("layout-only");
+    await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(saveDialog).toBeHidden();
+    await read.click();
     await expectFittedCurve(curve);
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
@@ -198,16 +275,17 @@ test("control inputs and headings stay readable and complete curves resize at ev
         contentType: "image/png",
       });
     }
-    await page.getByRole("button", { name: "保存此结果", exact: true }).click();
-    await expect(page.getByRole("button", { name: "保存此结果", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "保存所选结果", exact: true }).click();
+    await saveDialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(saveDialog).toBeHidden();
+    const resultHref = await page
+      .getByRole("link", { name: "查看已保存结果", exact: true })
+      .getAttribute("href");
+    expect(resultHref).toBeTruthy();
     await page.getByRole("button", { name: "释放控制", exact: true }).click();
     await page.getByRole("button", { name: "保持当前状态并结束", exact: true }).click();
     await expect(page.getByRole("button", { name: "连接", exact: true })).toBeEnabled();
-    await page.reload();
-    await page
-      .getByRole("checkbox", { name: /选择记录/ })
-      .first()
-      .check();
+    await page.goto(`${url}${resultHref}`);
     const savedCurve = page.getByRole("img", { name: "s_parameter 完整曲线" });
     for (const width of [390, 1280, 390]) {
       await page.setViewportSize({ width, height: 900 });

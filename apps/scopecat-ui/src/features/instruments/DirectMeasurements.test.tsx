@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { DirectMeasurements } from "./DirectMeasurements";
+import { DirectMeasurements, SavedCurve } from "./DirectMeasurements";
 import {
   comparisonGroups,
   conditionDifferences,
@@ -54,6 +54,7 @@ function saved(mount: string[], nested: string[]): SavedMeasurement {
     saved_at: "2026-01-01T00:00:00Z",
     collected_at: "2026-01-01T00:00:00Z",
     selection: {
+      title: "",
       session_id: "closed",
       instrument_id: "scope",
       command_id: "capture",
@@ -385,3 +386,54 @@ it("allows only the explicit sweep/retained-trace family with compatible complet
   traceContract.results[1]!.axes![0]!.unit = "s";
   expect(comparisonGroups(entries, "magnitude").groups).toHaveLength(0);
 });
+
+it.each([false, true])(
+  "preserves saved receipt metadata with explicit hideHeading=%s independently of readOnly",
+  async (hideHeading) => {
+    const record = saved([], []);
+    record.selection.title = "Retained title";
+    record.selection.note = "Original note";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request | string) =>
+        (typeof request === "string" ? request : request.url).endsWith("/receipt")
+          ? new Response(new ArrayBuffer(0))
+          : Response.json({
+              ...record,
+              notes: [
+                {
+                  operation_id: "note-1",
+                  note: "Retained annotation",
+                  anomalous: false,
+                  recorded_at: "2026-01-02T00:00:00Z",
+                },
+              ],
+            }),
+      ),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SavedCurve record={record} readOnly hideHeading={hideHeading} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByTestId("chart")).toHaveTextContent('"data":[[10,3],[20,4]]');
+    expect(await screen.findByText(/Retained annotation/)).toBeVisible();
+    expect(screen.queryAllByRole("heading")).toHaveLength(hideHeading ? 0 : 1);
+    expect(
+      screen.getByText(hideHeading ? "Original note" : "Retained title · Original note"),
+    ).toBeVisible();
+    expect(screen.queryByRole("heading")?.textContent ?? "").toBe(
+      hideHeading ? "" : "Retained title · Original note",
+    );
+    expect(screen.getByText(/record ·/)).toHaveTextContent(
+      new Date(record.collected_at).toLocaleString(),
+    );
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "追加标记（不修改原结果）" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("设备、线路和设置来源")).toBeVisible();
+  },
+);

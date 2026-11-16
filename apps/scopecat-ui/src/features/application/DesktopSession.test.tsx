@@ -3,9 +3,15 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DesktopSession } from "./DesktopSession";
+import { registerDeviceClose } from "../instruments/device-close";
+import {
+  retainLaunchCloseParticipant,
+  resetLaunchCloseWindowForTests,
+} from "../launch/launch-close-barrier";
 
 afterEach(() => {
   cleanup();
+  resetLaunchCloseWindowForTests();
   delete window.pywebview;
 });
 
@@ -253,3 +259,93 @@ it("does not intercept quit keys in an ordinary browser", () => {
   expect(shortcut.defaultPrevented).toBe(false);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+
+it("keeps one close review through repeated native quit signals and allows cancel", async () => {
+  const complete_close_preflight = vi.fn().mockResolvedValue(undefined);
+  const request_exit = vi.fn().mockReturnValue(new Promise(() => {}));
+  window.pywebview = {
+    api: {
+      complete_close_preflight,
+      request_exit,
+      exit_status: vi
+        .fn()
+        .mockResolvedValue({ finishing: [], deferred: [], blockers: [], file_operations: 0 }),
+    },
+  } as unknown as NonNullable<Window["pywebview"]>;
+  let cancel!: () => void;
+  const controller = vi.fn(async (_signal: AbortSignal, choosing: () => Promise<void>) => {
+    await choosing();
+    return new Promise<"cancelled">((resolve) => {
+      cancel = () => resolve("cancelled");
+    });
+  });
+  const unregister = registerDeviceClose(controller);
+  render(<DesktopSession />);
+  const requestId = "native-x";
+  const preflight = () =>
+    window.dispatchEvent(new CustomEvent("scopecat:close-preflight", { detail: { requestId } }));
+  act(() => {
+    preflight();
+    preflight();
+  });
+  await waitFor(() => expect(complete_close_preflight).toHaveBeenCalledWith("native-x", "pending"));
+  act(() => {
+    window.scopecatRequestExit?.();
+    window.scopecatRequestExit?.();
+  });
+  fireEvent.keyDown(window, { key: "q", ctrlKey: true });
+  expect(request_exit).not.toHaveBeenCalled();
+  expect(controller).toHaveBeenCalledTimes(1);
+  await act(async () => cancel());
+  await waitFor(() =>
+    expect(complete_close_preflight).toHaveBeenCalledWith("native-x", "cancelled"),
+  );
+  act(() => {
+    window.dispatchEvent(new CustomEvent("scopecat:close-release", { detail: { requestId } }));
+  });
+  expect(screen.queryByText(/窗口已保留/)).not.toBeInTheDocument();
+  request_exit.mockResolvedValueOnce("cancelled");
+  act(() => window.scopecatRequestExit?.());
+  expect(request_exit).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  unregister();
+});
+
+it.each(["blocked", "unknown"] as const)(
+  "does not hide %s input behind a cancelled device review",
+  async (failure) => {
+    const complete_close_preflight = vi.fn().mockResolvedValue(undefined);
+    window.pywebview = { api: { complete_close_preflight } } as unknown as NonNullable<
+      Window["pywebview"]
+    >;
+    const unregister = registerDeviceClose(async () => "cancelled");
+    retainLaunchCloseParticipant(
+      {},
+      { freeze: vi.fn(), flush: async () => failure, saved: () => false },
+    );
+    render(<DesktopSession />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("scopecat:close-preflight", { detail: { requestId: "mixed-result" } }),
+      );
+    });
+    await waitFor(() =>
+      expect(complete_close_preflight.mock.calls).toEqual([
+        ["mixed-result", "pending"],
+        ["mixed-result", failure],
+      ]),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("窗口已保留");
+    expect(screen.getByRole("status")).toHaveTextContent("失败或未知结果");
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("scopecat:close-release", {
+          detail: { requestId: "mixed-result", message: "Input remains unconfirmed" },
+        }),
+      );
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Input remains unconfirmed");
+    unregister();
+  },
+);

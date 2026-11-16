@@ -11,14 +11,7 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { ApiError } from "../../api-client";
-import {
-  classes,
-  eyebrow,
-  fieldLabel,
-  formControl,
-  primaryButton,
-  secondaryButton,
-} from "../../ui/styles";
+import { classes, eyebrow, primaryButton, secondaryButton } from "../../ui/styles";
 import type { InstrumentPropertyDraft } from "./InstrumentPropertyInput";
 import {
   applyInstrumentConfiguredDefaults,
@@ -58,14 +51,13 @@ import {
   operationKey,
 } from "./InstrumentInterfaceControls";
 import { DevicePythonGuide } from "./DevicePythonGuide";
-import {
-  DirectMeasurements,
-  type PendingMeasurement,
-  type MeasurementSave,
-} from "./DirectMeasurements";
+import { type PendingMeasurement, type MeasurementSave } from "./DirectMeasurements";
 import { InstrumentExitDialog } from "./InstrumentExitDialog";
-import { CurrentMeasurement, type CurrentMeasurementResult } from "./CurrentMeasurement";
+import { type CurrentMeasurementResult } from "./CurrentMeasurement";
+import { MeasurementWorkbench, acquisitionTargets } from "./MeasurementWorkbench";
 import { InstrumentSessionPanel } from "./InstrumentSessionPanel";
+import { useInstrumentFinishRecovery } from "./instrument-finish-recovery";
+import { getInstrumentSessionRecovery } from "./instrument-session-recovery";
 
 type DraftValue = InstrumentPropertyDraft;
 
@@ -77,30 +69,36 @@ interface InstrumentInspectorProps {
   registeredDeviceId?: string;
   releaseUnconfirmed?: boolean;
   session?: InstrumentSession;
+  recoverySession?: InstrumentSession;
   sessionError?: string;
+  sessionErrorBlocksClose?: boolean;
   connectPending: boolean;
   closePending: boolean;
   onConnect: () => void;
   onClose: () => void;
+  onRecoveryFinished?: () => void;
+  onRestoreSession?: () => void;
+  restorePending?: boolean;
   onSessionLost: (message: string) => void;
   onDisconnectOwner: () => void;
   exitRequest?: number;
+  onExitCancelled?: () => void;
   onCloseProblem?: (problem: boolean) => void;
 }
 
 export function InstrumentInspector(props: InstrumentInspectorProps) {
   const [currentMeasurement, setCurrentMeasurement] = useState<CurrentMeasurementResult>();
-  const { instrument, session } = props;
+  const { instrument, session, recoverySession } = props;
   const instrumentId = instrument.instrument_id;
-  const connected = session?.instrument_ids.includes(instrumentId) ?? false;
+  const retainedSession = session ?? recoverySession;
   const description =
-    session?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
+    retainedSession?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
     instrument.description ??
     undefined;
   const targetKey = [...instrumentStateTargets(description).keys()];
   const inspectorKey = JSON.stringify([
     instrumentId,
-    connected ? session?.session_id : null,
+    retainedSession?.session_id ?? null,
     targetKey,
   ]);
   return (
@@ -121,14 +119,20 @@ function InstrumentInspectorContent({
   registeredDeviceId,
   releaseUnconfirmed = false,
   session,
+  recoverySession,
   sessionError,
+  sessionErrorBlocksClose = true,
   connectPending,
   closePending,
   onConnect,
   onClose,
+  onRecoveryFinished,
+  onRestoreSession,
+  restorePending = false,
   onSessionLost,
   onDisconnectOwner,
   onCloseProblem,
+  onExitCancelled,
   exitRequest = 0,
   currentMeasurement,
   setCurrentMeasurement,
@@ -139,8 +143,24 @@ function InstrumentInspectorContent({
   const queryClient = useQueryClient();
   const instrumentId = instrument.instrument_id;
   const connected = session?.instrument_ids.includes(instrumentId) ?? false;
+  const retainedSession = session ?? recoverySession;
+  const finishRecovery = useInstrumentFinishRecovery(retainedSession?.session_id);
+  const finishFixed = !!finishRecovery.state && finishRecovery.state.phase !== "rejected";
+  const recovery = useQuery({
+    queryKey: ["instrument-session-recovery", recoverySession?.session_id],
+    queryFn: () => getInstrumentSessionRecovery(recoverySession!.session_id),
+    enabled: !!recoverySession && !session,
+    refetchInterval: 3000,
+  });
+  const recoverySessionClosed =
+    !recovery.isFetching &&
+    !recovery.error &&
+    recovery.data?.state === "closed" &&
+    !recovery.data.runtime_retained &&
+    !recovery.data.active_operation_id &&
+    !recovery.data.active_operation_kind;
   const description =
-    session?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
+    retainedSession?.descriptions.find((candidate) => candidate.instrument_id === instrumentId) ??
     instrument.description ??
     undefined;
   const sharedObservation = useQuery({
@@ -172,24 +192,55 @@ function InstrumentInspectorContent({
   const [invokeResults, setInvokeResults] = useState<Record<string, InstrumentInvokeReceipt>>({});
   const [outputTouched, setOutputTouched] = useState(false);
   const [showFinishChoice, setShowFinishChoice] = useState(false);
-  const [nextLineOpen, setNextLineOpen] = useState(false);
-  const [nextLineLabel, setNextLineLabel] = useState("");
+  const [isolationReviewed, setIsolationReviewed] = useState(false);
   const [dismissedExitRequest, setDismissedExitRequest] = useState(exitRequest);
-  const finishChoiceOpen = showFinishChoice || (!!session && exitRequest !== dismissedExitRequest);
+  const finishChoiceOpen =
+    showFinishChoice || (!!retainedSession && exitRequest !== dismissedExitRequest);
   const dismissFinishChoice = () => {
     setShowFinishChoice(false);
     setDismissedExitRequest(exitRequest);
   };
-  const markPreviousResult = (reason: string) =>
+  useEffect(() => {
+    const cancel = () => {
+      finishRecovery.cancelWaiting();
+      if (finishChoiceOpen) setShowFinishChoice(true);
+      setDismissedExitRequest(exitRequest);
+    };
+    window.addEventListener("scopecat:device-close-cancelled", cancel);
+    return () => window.removeEventListener("scopecat:device-close-cancelled", cancel);
+  }, [exitRequest, finishChoiceOpen, finishRecovery]);
+  const [collectionCollapsed, setCollectionCollapsed] = useState(false);
+  const [recentMeasurements, setRecentMeasurements] = useState<CurrentMeasurementResult[]>([]);
+  const markPreviousResult = (reason: string) => {
     setCurrentMeasurement((current) =>
       current ? { ...current, relationshipChanged: reason } : current,
     );
+    setRecentMeasurements((current) =>
+      current.map((item) => ({ ...item, relationshipChanged: reason })),
+    );
+  };
   const [pendingMeasurements, setPendingMeasurements] = useState<PendingMeasurement[]>([]);
-  const [seriesId, setSeriesId] = useState(() => createInstrumentCommandId("series"));
-  const [lineId, setLineId] = useState(() => createInstrumentCommandId("line"));
-  const [lineLabel, setLineLabel] = useState("");
-  const [lineConfirmed, setLineConfirmed] = useState(false);
-  const [measurementNote, setMeasurementNote] = useState("");
+  const [seriesId] = useState(() => createInstrumentCommandId("series"));
+  const markMeasurementSaved = (commandId: string, recordId?: string) => {
+    setPendingMeasurements((items) =>
+      items.filter((item) => item.selection.command_id !== commandId),
+    );
+    setCurrentMeasurement((item) =>
+      item?.selection.command_id === commandId ? { ...item, savedRecordId: recordId } : item,
+    );
+    setRecentMeasurements((items) => {
+      const updated = items.map((item) =>
+        item.selection.command_id === commandId ? { ...item, savedRecordId: recordId } : item,
+      );
+      const saved = updated.filter((item) => item.savedRecordId);
+      const keep = new Set(saved.slice(-20).map((item) => item.selection.command_id));
+      if (currentMeasurement?.selection.command_id === commandId && !keep.has(commandId)) {
+        keep.delete(keep.values().next().value ?? "");
+        keep.add(commandId);
+      }
+      return updated.filter((item) => !item.savedRecordId || keep.has(item.selection.command_id));
+    });
+  };
   const collectionSelections = useRef<Record<string, MeasurementSave>>({});
   const applyCommandIdRef = useRef<string | undefined>(undefined);
   const configuredDefaultsOperationIdRef = useRef<string | undefined>(undefined);
@@ -232,6 +283,7 @@ function InstrumentInspectorContent({
       if (receipt.status === "applied") {
         setOutputTouched(true);
         collectCommandIdsRef.current = {};
+        collectionSelections.current = {};
         invokeCommandIdsRef.current = {};
         setCollectResults({});
         markPreviousResult("此后已执行设置或设备动作");
@@ -260,6 +312,7 @@ function InstrumentInspectorContent({
         if (receipt.status === "applied") setOutputTouched(true);
         applyCommandIdRef.current = undefined;
         collectCommandIdsRef.current = {};
+        collectionSelections.current = {};
         invokeCommandIdsRef.current = {};
         setApplyResult(undefined);
         setDrafts({});
@@ -315,7 +368,13 @@ function InstrumentInspectorContent({
       const selection = collectionSelections.current[commandId];
       if (receipt.status === "collected" && selection) {
         setOutputTouched(true);
-        setCurrentMeasurement({ target, receipt, selection, receivedAt: new Date().toISOString() });
+        const result = { target, receipt, selection, receivedAt: new Date().toISOString() };
+        setCurrentMeasurement(result);
+        setRecentMeasurements((current) =>
+          current.some((item) => item.selection.command_id === commandId)
+            ? current
+            : [...current, result],
+        );
         setPendingMeasurements((current) =>
           current.some((item) => item.selection.command_id === commandId)
             ? current
@@ -324,6 +383,7 @@ function InstrumentInspectorContent({
       }
       if (receipt.status !== "collected")
         markPreviousResult("最近一次采集未成功，当前仍是上次成功结果");
+      delete collectionSelections.current[commandId];
       const key = acquisitionKey(target);
       delete collectCommandIdsRef.current[key];
       setCollectResults((current) => ({ ...current, [key]: receipt }));
@@ -364,6 +424,7 @@ function InstrumentInspectorContent({
       if (receipt.status === "invoked") {
         setOutputTouched(true);
         collectCommandIdsRef.current = {};
+        collectionSelections.current = {};
         setCollectResults({});
         markPreviousResult("此后已执行设置或设备动作");
         readMutation.mutate();
@@ -378,7 +439,9 @@ function InstrumentInspectorContent({
   });
   const resolveMutation = useMutation({
     mutationKey: ["device-control", instrumentId],
-    mutationFn: () => {
+    mutationFn: (originalSessionId?: string) => {
+      if (originalSessionId && originalSessionId === recoverySession?.session_id)
+        return resolveInstrumentAttention(originalSessionId);
       if (instrument.owner_kind !== "instrument_session" || !instrument.owner_id) {
         throw new Error("此待处理状态不属于交互会话。");
       }
@@ -386,6 +449,7 @@ function InstrumentInspectorContent({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["instruments"] });
+      await queryClient.invalidateQueries({ queryKey: ["instrument-session-recovery"] });
     },
   });
 
@@ -417,6 +481,7 @@ function InstrumentInspectorContent({
     applyCommandIdRef.current = undefined;
     configuredDefaultsOperationIdRef.current = undefined;
     collectCommandIdsRef.current = {};
+    collectionSelections.current = {};
     invokeCommandIdsRef.current = {};
     setDrafts({});
     setApplyResult(undefined);
@@ -440,10 +505,11 @@ function InstrumentInspectorContent({
       session_id: requireSession(session).session_id,
       instrument_id: instrumentId,
       command_id: commandId,
+      title: "",
       series_id: seriesId,
-      line_id: lineLabel ? lineId : "",
-      line_label: lineLabel,
-      note: measurementNote,
+      line_id: "",
+      line_label: "",
+      note: "",
     };
     collectMutation.mutate({
       target,
@@ -478,14 +544,24 @@ function InstrumentInspectorContent({
     mutationError(collectMutation.error) ??
     mutationError(invokeMutation.error) ??
     mutationError(resolveMutation.error);
+  const closeError =
+    (sessionErrorBlocksClose ? sessionError : undefined) ??
+    mutationError(readMutation.error) ??
+    mutationError(applyMutation.error) ??
+    mutationError(configuredDefaultsMutation.error) ??
+    mutationError(collectMutation.error) ??
+    mutationError(invokeMutation.error) ??
+    mutationError(resolveMutation.error);
   const interactionPending =
     readMutation.isPending ||
     applyMutation.isPending ||
     configuredDefaultsMutation.isPending ||
     collectMutation.isPending ||
     invokeMutation.isPending;
+  const recoveryCloseAllowed =
+    recoverySessionClosed && !interactionPending && !resolveMutation.isPending;
   const interactionDisabled =
-    closePending || interactionPending || releaseUnconfirmed || finishChoiceOpen;
+    closePending || interactionPending || releaseUnconfirmed || finishChoiceOpen || finishFixed;
   const configuredDefaultsDisabled =
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
@@ -502,9 +578,22 @@ function InstrumentInspectorContent({
     Object.values(invokeResults).some((receipt) => receipt.status !== "invoked");
   useEffect(() => {
     onCloseProblem?.(
-      !!interactionError || failedReceipt || pendingMeasurements.length > 0 || outputTouched,
+      !!closeError ||
+        failedReceipt ||
+        pendingMeasurements.length > 0 ||
+        outputTouched ||
+        stagedCount > 0 ||
+        finishFixed,
     );
-  }, [interactionError, failedReceipt, onCloseProblem, pendingMeasurements.length, outputTouched]);
+  }, [
+    closeError,
+    failedReceipt,
+    onCloseProblem,
+    pendingMeasurements.length,
+    outputTouched,
+    stagedCount,
+    finishFixed,
+  ]);
 
   return (
     <section
@@ -529,8 +618,10 @@ function InstrumentInspectorContent({
         connected={connected}
         releaseUnconfirmed={releaseUnconfirmed}
         connectPending={connectPending}
+        connectDisabled={!!recoverySession}
         closePending={closePending}
         interactionPending={interactionPending}
+        recoveryBlocked={finishFixed || (!!recoverySession && pendingMeasurements.length > 0)}
         refreshPending={readMutation.isPending}
         stateAvailable={declaredTargets.size > 0}
         configuredDefaultsVisible={hasConfiguredDefaults}
@@ -540,7 +631,18 @@ function InstrumentInspectorContent({
         resolvePending={resolveMutation.isPending}
         onConnect={onConnect}
         onClose={() => {
-          if (pendingMeasurements.length > 0 || outputTouched) setShowFinishChoice(true);
+          if (
+            finishFixed ||
+            pendingMeasurements.length > 0 ||
+            outputTouched ||
+            stagedCount > 0 ||
+            applyMutation.error ||
+            configuredDefaultsMutation.error ||
+            collectMutation.error ||
+            invokeMutation.error ||
+            failedReceipt
+          )
+            setShowFinishChoice(true);
           else onClose();
         }}
         onDisconnectOwner={onDisconnectOwner}
@@ -565,6 +667,110 @@ function InstrumentInspectorContent({
           {interactionError}
         </div>
       )}
+      {finishFixed && !finishChoiceOpen && (
+        <section className="grid gap-2 rounded border border-line p-3" aria-label="收尾结果待核查">
+          <p className="text-xs">
+            原收尾选择已提交，常规设备操作暂不可用。取消关闭等待不会取消动作；请核查原请求结果。
+          </p>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => setShowFinishChoice(true)}
+          >
+            核查原收尾结果
+          </button>
+        </section>
+      )}
+
+      {recoverySession && !session && (
+        <section className="grid gap-2 rounded border border-line p-3" aria-label="恢复原会话待办">
+          <h3 className="text-sm font-semibold">原会话已中断，结果与待办仍保留</h3>
+          <p className="text-xs">
+            近期结果、{pendingMeasurements.length} 条未保存结果和 {stagedCount}{" "}
+            项未发送设置仍属于原会话。
+            可选择原结果尝试保存，不会重新采集。后台若已释放回执，首次保存可能失败；已保存记录可按原身份核查。
+            当前设备输出与未确认操作不会因会话中断而变成已停止或已取消。
+          </p>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => setShowFinishChoice(true)}
+          >
+            核查原会话与保存待办
+          </button>
+          {recovery.isPending && <p role="status">正在只读核查原会话…</p>}
+          {recovery.error && (
+            <p role="alert">
+              无法核实原会话：{recovery.error.message}。未保存结果和未知操作仍保留。
+            </p>
+          )}
+          {recovery.data && (
+            <p className="text-xs" role="status">
+              {recovery.data.state === "closed"
+                ? "后台已确认原会话结束。"
+                : recovery.data.state === "active"
+                  ? "原会话仍在后台活动。"
+                  : "原会话仍需处理隔离，请先保存结果，再按现有入口核对设备。"}
+              {recovery.data.has_unresolved_operations
+                ? " 仍有未决动作，不能把关闭窗口视为动作已取消。"
+                : " 后台未登记未决动作；这不证明物理输出已停止。"}
+              {!recovery.data.runtime_retained &&
+                " 后台不再保留该会话的未保存回执，首次保存可能不可用。"}
+            </p>
+          )}
+          <button
+            type="button"
+            className={secondaryButton}
+            disabled={recovery.isFetching}
+            onClick={() => void recovery.refetch()}
+          >
+            重新核查原会话
+          </button>
+          {recovery.data?.state === "active" &&
+            !recovery.data.has_unresolved_operations &&
+            !finishFixed && (
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={restorePending || recovery.isFetching || !!recovery.error}
+                onClick={onRestoreSession}
+              >
+                恢复原会话控制
+              </button>
+            )}
+          {recovery.data?.state === "attention_required" && (
+            <div className="grid gap-2 border-t border-line pt-2">
+              <p className="text-xs">
+                请先核对设备和未确认操作。处理隔离沿用后台的隔离解除流程，可能清理原会话资源；不会补采或证明输出已停止。
+                请先尝试保存。若后台回执已释放，处理隔离也不能找回它；本页曲线和未保存标记仍保留，之后仍须明确处置。
+              </p>
+              <label className="text-xs">
+                <input
+                  type="checkbox"
+                  checked={isolationReviewed}
+                  disabled={resolveMutation.isPending || finishRecovery.state?.phase === "pending"}
+                  onChange={(event) => setIsolationReviewed(event.target.checked)}
+                />{" "}
+                已核查设备，理解处理隔离可能释放原会话的后台回执
+              </label>
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={
+                  !isolationReviewed ||
+                  resolveMutation.isPending ||
+                  finishRecovery.state?.phase === "pending" ||
+                  recovery.isFetching ||
+                  !!recovery.error
+                }
+                onClick={() => resolveMutation.mutate(recoverySession.session_id)}
+              >
+                处理原会话隔离（保留本页结果）
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {configuredDefaultsResult && (
         <p
@@ -586,297 +792,257 @@ function InstrumentInspectorContent({
         </div>
       )}
 
-      {finishChoiceOpen && session && (
+      {finishChoiceOpen && retainedSession && (
         <InstrumentExitDialog
-          sessionId={session.session_id}
+          sessionId={retainedSession.session_id}
+          finishRecovery={finishRecovery}
+          sessionUnavailable={!session}
+          recoveryCloseAllowed={recoveryCloseAllowed}
+          recoveryUnresolved={recovery.data?.has_unresolved_operations ?? true}
+          closeWaiting={exitRequest !== dismissedExitRequest}
+          reviewRequest={exitRequest}
+          onRecoveryFinished={() => {
+            setPendingMeasurements([]);
+            setOutputTouched(false);
+            dismissFinishChoice();
+            onRecoveryFinished?.();
+          }}
           pending={pendingMeasurements}
           stagedCount={stagedCount}
           problem={interactionError}
-          onSaved={(commandId) =>
-            setPendingMeasurements((current) =>
-              current.filter((item) => item.selection.command_id !== commandId),
+          onSaveAttempt={(attempt) =>
+            setPendingMeasurements((items) =>
+              items.map((item) =>
+                item.selection.command_id === attempt.selection.command_id
+                  ? { ...item, saveAttempted: true }
+                  : item,
+              ),
             )
           }
-          onCancel={dismissFinishChoice}
+          onSaved={markMeasurementSaved}
+          onCancel={() => {
+            dismissFinishChoice();
+            onExitCancelled?.();
+          }}
           onFinished={() => {
             setPendingMeasurements([]);
             setOutputTouched(false);
             dismissFinishChoice();
-            onClose();
+            if (recoverySession) onRecoveryFinished?.();
+            else onClose();
           }}
         />
       )}
-      {currentMeasurement && (
-        <CurrentMeasurement
-          result={currentMeasurement}
+      <div
+        data-testid="instrument-workbench-layout"
+        data-collection-collapsed={collectionCollapsed}
+        className={classes(
+          "grid min-w-0 items-start gap-4",
+          !collectionCollapsed &&
+            (acquisitionTargets(description).length > 0 || currentMeasurement) &&
+            "xl:grid-cols-[minmax(0,1fr)_24rem]",
+        )}
+      >
+        <MeasurementWorkbench
+          collapsed={collectionCollapsed}
+          onCollapsedChange={setCollectionCollapsed}
+          description={description}
+          connected={connected}
+          disabled={interactionDisabled || pendingMeasurements.length >= 20}
+          collectingTarget={
+            collectMutation.isPending ? collectMutation.variables?.target : undefined
+          }
+          collectResults={collectResults}
+          recent={recentMeasurements}
+          current={currentMeasurement}
           staged={stagedCount > 0}
           sessionId={session?.session_id}
+          pending={pendingMeasurements}
+          saveDisabled={finishChoiceOpen}
+          onCollect={collectAcquisition}
+          onSelect={setCurrentMeasurement}
+          onSaveAttempt={(selection) => {
+            setRecentMeasurements((items) =>
+              items.map((item) =>
+                item.selection.command_id === selection.command_id ? { ...item, selection } : item,
+              ),
+            );
+            setCurrentMeasurement((item) =>
+              item?.selection.command_id === selection.command_id ? { ...item, selection } : item,
+            );
+            setPendingMeasurements((items) =>
+              items.map((item) =>
+                item.selection.command_id === selection.command_id
+                  ? { ...item, selection, saveAttempted: true }
+                  : item,
+              ),
+            );
+          }}
+          onSaved={markMeasurementSaved}
         />
-      )}
-      <DirectMeasurements
-        instrumentId={instrumentId}
-        onResume={(selection) => {
-          setSeriesId(selection.series_id ?? createInstrumentCommandId("series"));
-          setLineId(selection.line_id ?? createInstrumentCommandId("line"));
-          setLineLabel(selection.line_label ?? "");
-          setLineConfirmed(false);
-          setNextLineOpen(false);
-          setMeasurementNote("");
-        }}
-        pending={finishChoiceOpen ? [] : pendingMeasurements}
-        onSaved={(commandId) =>
-          setPendingMeasurements((current) =>
-            current.filter((item) => item.selection.command_id !== commandId),
-          )
-        }
-      />
-      {connected && (
-        <section className="grid gap-2 border border-line p-3 text-xs">
-          <h3>本次测量对象（可留空）</h3>
-          <p>
-            {lineLabel
-              ? lineConfirmed
-                ? `当前线路已就绪：${lineLabel}`
-                : `待确认接线：${lineLabel}`
-              : "未标注测量对象；不表示采集执行结果未知。"}
-          </p>
-          <label className={fieldLabel}>
-            线路名称
-            <input
-              className={formControl}
-              aria-label="线路名称"
-              value={lineLabel}
-              disabled={interactionDisabled}
-              onChange={(event) => {
-                setLineLabel(event.target.value);
-                setLineConfirmed(false);
-              }}
-            />
-          </label>
-          <label className={fieldLabel}>
-            备注 / 异常标记
-            <input
-              className={formControl}
-              aria-label="测量备注"
-              value={measurementNote}
-              disabled={interactionDisabled}
-              onChange={(event) => setMeasurementNote(event.target.value)}
-            />
-          </label>
-          {lineLabel && (
-            <label>
-              <input
-                type="checkbox"
-                checked={lineConfirmed}
-                disabled={interactionDisabled}
-                onChange={(event) => setLineConfirmed(event.target.checked)}
-              />
-              已人工确认当前接线为 {lineLabel}
-            </label>
-          )}
-          <button
-            type="button"
-            className={secondaryButton}
-            disabled={interactionDisabled || nextLineOpen}
-            onClick={() => {
-              setNextLineOpen(true);
-              setNextLineLabel("");
-            }}
-          >
-            开始下一条线路…
-          </button>
-          {nextLineOpen && (
-            <section className="grid gap-2 rounded border border-line p-2" aria-label="下一条线路">
-              <p>当前线路和备注会保留，直到明确切换。已采集记录不会重新归属。</p>
-              <label className={fieldLabel}>
-                下一条线路名称{" "}
-                <input
-                  className={formControl}
-                  aria-label="下一条线路名称"
-                  value={nextLineLabel}
-                  disabled={interactionDisabled}
-                  onChange={(event) => setNextLineLabel(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className={secondaryButton}
-                disabled={interactionDisabled || !nextLineLabel.trim()}
-                onClick={() => {
-                  setLineId(createInstrumentCommandId("line"));
-                  setLineLabel(nextLineLabel.trim());
-                  setLineConfirmed(false);
-                  setMeasurementNote("");
-                  setNextLineOpen(false);
-                }}
-              >
-                切换并确认接线
-              </button>
-              <button
-                type="button"
-                className={secondaryButton}
-                onClick={() => setNextLineOpen(false)}
-              >
-                取消换线
-              </button>
-            </section>
-          )}
-          <p>
-            仪器设置保持不变；同一线路再次采集会追加新尝试。改名不会修改已采集结果，换线请用“开始下一条线路”。
-          </p>
-          {pendingMeasurements.length >= 20 && (
-            <p role="status">请先保存待保存结果，再继续采集。</p>
-          )}
-        </section>
-      )}
 
-      {description ? (
-        <>
+        {description ? (
           <div
-            className="mt-[3px] flex items-end justify-between max-[460px]:flex-col max-[460px]:items-start"
-            data-testid="interface-heading"
-          >
-            <div>
-              <span className={eyebrow}>设备控制</span>
-              <h3 className="m-0 text-[0.9rem] font-[650]">接口</h3>
-            </div>
-          </div>
-
-          <div className="text-xs leading-normal text-text-dim">
-            <p>
-              Invoke 调用 operation；Collect 调用 acquisition，可能发起新采集，也可能读取既有结果。
-              请以各项契约说明为准；Collect 不会自动替你准备 payload 或调用另一个 operation。
-              查看能力或展开帮助不会连接设备或发送设备命令。
-            </p>
-            <p>
-              {connected
-                ? interactionDisabled
-                  ? "当前交互尚未结束，请等待完成后继续。"
-                  : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
-                : instrument.availability === "active"
-                  ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
-                  : instrument.availability === "quarantined"
-                    ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
-                    : instrument.availability === "unavailable"
-                      ? "设备不可用。请先处理上方驱动或连接配置问题。"
-                      : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
-            </p>
-            <AuthorWorkflowLinks />
-            {registeredDeviceId && (
-              <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
+            data-testid="instrument-control-panel"
+            className={classes(
+              "grid min-w-0 gap-3",
+              collectionCollapsed
+                ? "w-full max-w-6xl"
+                : "xl:max-h-[calc(100vh-15rem)] xl:overflow-y-auto",
             )}
-          </div>
+          >
+            <div
+              className="mt-[3px] flex items-end justify-between max-[460px]:flex-col max-[460px]:items-start"
+              data-testid="interface-heading"
+            >
+              <div>
+                <span className={eyebrow}>设备控制</span>
+                <h3 className="m-0 text-[0.9rem] font-[650]">接口</h3>
+              </div>
+            </div>
 
-          {(description.interfaces ?? []).length > 0 ||
-          (description.device_schemas ?? []).length > 0 ? (
-            <div className="grid gap-2.5">
-              {(description.interfaces ?? []).flatMap((instrumentInterface) =>
-                interfaceMountPaths(description, instrumentInterface.id).map((mountPath) => (
-                  <InterfaceCard
-                    key={`${instrumentInterface.id}:${mountPath.join("/")}`}
-                    description={description}
-                    instrumentInterface={instrumentInterface}
-                    mountPath={mountPath}
+            <details className="text-xs leading-normal text-text-dim">
+              <summary>接口说明与 Python</summary>
+              <p>
+                Invoke 调用 operation；Collect 调用
+                acquisition，可能发起新采集，也可能读取既有结果。 请以各项契约说明为准；Collect
+                不会自动替你准备 payload 或调用另一个 operation。
+                查看能力或展开帮助不会连接设备或发送设备命令。
+              </p>
+              <p>
+                {connected
+                  ? interactionDisabled
+                    ? "当前交互尚未结束，请等待完成后继续。"
+                    : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
+                  : instrument.availability === "active"
+                    ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
+                    : instrument.availability === "quarantined"
+                      ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
+                      : instrument.availability === "unavailable"
+                        ? "设备不可用。请先处理上方驱动或连接配置问题。"
+                        : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
+              </p>
+              <AuthorWorkflowLinks />
+              {registeredDeviceId && (
+                <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
+              )}
+            </details>
+
+            {(description.interfaces ?? []).length > 0 ||
+            (description.device_schemas ?? []).length > 0 ? (
+              <div
+                className={classes(
+                  "grid min-w-0 items-start gap-2.5",
+                  collectionCollapsed &&
+                    "grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] [&>article]:max-w-xl",
+                )}
+              >
+                {(description.interfaces ?? []).flatMap((instrumentInterface) =>
+                  interfaceMountPaths(description, instrumentInterface.id).map((mountPath) => (
+                    <InterfaceCard
+                      key={`${instrumentInterface.id}:${mountPath.join("/")}`}
+                      description={description}
+                      instrumentInterface={instrumentInterface}
+                      mountPath={mountPath}
+                      connected={connected}
+                      interactionDisabled={interactionDisabled}
+                      state={state}
+                      drafts={declaredDrafts}
+                      collectResults={collectResults}
+                      hideCollectionPlots
+                      hideAcquisitions
+                      invokeResults={invokeResults}
+                      collectionDisabled={pendingMeasurements.length >= 20}
+                      collectingTarget={
+                        collectMutation.isPending ? collectMutation.variables?.target : undefined
+                      }
+                      invokingTarget={
+                        invokeMutation.isPending ? invokeMutation.variables?.target : undefined
+                      }
+                      onStage={(target, draft) => stage(target, draft)}
+                      onCollect={(target) => {
+                        if (pendingMeasurements.length < 20) collectAcquisition(target);
+                      }}
+                      onInvoke={(target, operationArguments) =>
+                        invokeOperation(target, operationArguments)
+                      }
+                      onOperationEdit={editOperation}
+                    />
+                  )),
+                )}
+                {(description.device_schemas ?? []).map((deviceState) => (
+                  <DeviceStateCard
+                    key={deviceState.id}
+                    deviceState={deviceState}
                     connected={connected}
                     interactionDisabled={interactionDisabled}
                     state={state}
                     drafts={declaredDrafts}
-                    collectResults={collectResults}
-                    hideCollectionPlots
-                    invokeResults={invokeResults}
-                    collectionDisabled={
-                      (!!lineLabel && !lineConfirmed) || pendingMeasurements.length >= 20
-                    }
-                    collectingTarget={
-                      collectMutation.isPending ? collectMutation.variables?.target : undefined
-                    }
-                    invokingTarget={
-                      invokeMutation.isPending ? invokeMutation.variables?.target : undefined
-                    }
                     onStage={(target, draft) => stage(target, draft)}
-                    onCollect={(target) => {
-                      if ((!lineLabel || lineConfirmed) && pendingMeasurements.length < 20)
-                        collectAcquisition(target);
-                    }}
-                    onInvoke={(target, operationArguments) =>
-                      invokeOperation(target, operationArguments)
-                    }
-                    onOperationEdit={editOperation}
                   />
-                )),
-              )}
-              {(description.device_schemas ?? []).map((deviceState) => (
-                <DeviceStateCard
-                  key={deviceState.id}
-                  deviceState={deviceState}
-                  connected={connected}
-                  interactionDisabled={interactionDisabled}
-                  state={state}
-                  drafts={declaredDrafts}
-                  onStage={(target, draft) => stage(target, draft)}
-                />
-              ))}
-            </div>
-          ) : (
-            <InspectorEmpty
-              icon={<CircleOff />}
-              title="无交互接口"
-              detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
-            />
-          )}
-
-          {connected && stagedCount > 0 && (
-            <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
-              <div className="grid gap-0.5 max-[460px]:col-span-full">
-                <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
-                <small className="text-xs text-text-dim">
-                  数值仅保留在本地，直到一次性应用全部暂存修改。
-                </small>
+                ))}
               </div>
-              <button
-                type="button"
-                className={secondaryButton}
-                onClick={resetStaged}
-                disabled={applyMutation.isPending}
-              >
-                <RotateCcw size={14} />
-                重置
-              </button>
-              <button
-                type="button"
-                className={primaryButton}
-                onClick={applyStaged}
-                disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
-                title={
-                  interactionDisabled
-                    ? "请等待当前仪器交互完成"
-                    : invalidDraft
-                      ? "应用前请修正无效的暂存值"
-                      : undefined
-                }
-              >
-                {applyMutation.isPending ? (
-                  <LoaderCircle className="animate-spin" size={14} />
-                ) : (
-                  <Check size={14} />
-                )}
-                应用暂存修改
-              </button>
-            </div>
-          )}
-          {applyResult && (
-            <p className={classes(receiptStyle, receiptTone(applyResult))}>
-              应用回执： {instrumentReceiptLabel(applyResult)}
-            </p>
-          )}
-        </>
-      ) : (
-        <InspectorEmpty
-          icon={<CircleOff />}
-          title="设备控制不可用"
-          detail="请核对列出的问题，或编辑此仪器的连接配置。"
-        />
-      )}
+            ) : (
+              <InspectorEmpty
+                icon={<CircleOff />}
+                title="无交互接口"
+                detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
+              />
+            )}
+
+            {connected && stagedCount > 0 && (
+              <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
+                <div className="grid gap-0.5 max-[460px]:col-span-full">
+                  <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
+                  <small className="text-xs text-text-dim">
+                    数值仅保留在本地，直到一次性应用全部暂存修改。
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={resetStaged}
+                  disabled={applyMutation.isPending}
+                >
+                  <RotateCcw size={14} />
+                  重置
+                </button>
+                <button
+                  type="button"
+                  className={primaryButton}
+                  onClick={applyStaged}
+                  disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
+                  title={
+                    interactionDisabled
+                      ? "请等待当前仪器交互完成"
+                      : invalidDraft
+                        ? "应用前请修正无效的暂存值"
+                        : undefined
+                  }
+                >
+                  {applyMutation.isPending ? (
+                    <LoaderCircle className="animate-spin" size={14} />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  应用暂存修改
+                </button>
+              </div>
+            )}
+            {applyResult && (
+              <p className={classes(receiptStyle, receiptTone(applyResult))}>
+                应用回执： {instrumentReceiptLabel(applyResult)}
+              </p>
+            )}
+          </div>
+        ) : (
+          <InspectorEmpty
+            icon={<CircleOff />}
+            title="设备控制不可用"
+            detail="请核对列出的问题，或编辑此仪器的连接配置。"
+          />
+        )}
+      </div>
     </section>
   );
 }

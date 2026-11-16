@@ -214,6 +214,7 @@ from scopecat.daemon.wire import (
     InstrumentSessionLeaseReceipt,
     InstrumentSessionOpenCommand,
     InstrumentSessionOpenReceipt,
+    InstrumentSessionRecoveryReceipt,
     MeasurementFlushCommand,
     MeasurementFlushReceipt,
     MeasurementHeaderCommand,
@@ -434,6 +435,8 @@ from scopecat_server.http.procedure_operator import (
 from scopecat_server.instruments.finish import (
     InstrumentFinishCommand,
     InstrumentFinishPlan,
+    InstrumentFinishRejected,
+    InstrumentFinishRejectionResponse,
 )
 from scopecat_server.launch_recovery import (
     LaunchAttemptPage,
@@ -2125,6 +2128,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> InstrumentSessionOpenReceipt:
         return application.instruments.open_session(command)
 
+    @app.get(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/recovery")
+    def instrument_session_recovery(
+        session_id: str,
+    ) -> InstrumentSessionRecoveryReceipt:
+        return application.instruments.session_recovery(session_id)
+
     @app.post(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/heartbeat")
     def renew_instrument_session(
         session_id: str,
@@ -2279,11 +2288,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def instrument_finish_plan(session_id: str) -> InstrumentFinishPlan:
         return application.instruments.finish_plan(session_id)
 
-    @app.post(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/finish")
+    @app.post(
+        f"{_API_PREFIX}/instrument-sessions/{{session_id}}/finish",
+        responses={409: {"model": InstrumentFinishRejectionResponse}},
+    )
     def finish_instrument_session(
         session_id: str, command: InstrumentFinishCommand
     ) -> InstrumentSessionEndReceipt:
-        return application.instruments.finish_session(session_id, command)
+        try:
+            return application.instruments.finish_session(session_id, command)
+        except InstrumentFinishRejected as error:
+            raise HTTPException(
+                status_code=409, detail=error.rejection.model_dump(mode="json")
+            ) from error
 
     @app.post(f"{_API_PREFIX}/instrument-sessions/{{session_id}}/close")
     def close_instrument_session(

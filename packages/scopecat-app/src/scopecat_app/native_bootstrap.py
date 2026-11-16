@@ -13,6 +13,13 @@ from typing import Protocol, cast
 
 from filelock import FileLock
 
+from scopecat.trial_policy import (
+    checked_path,
+    current_policy,
+    read_policy,
+    validate_arguments,
+)
+
 from .application_runtime import ApplicationRuntime
 from .bundle import MANIFEST, file_hash
 from .installation_paths import InstallationPaths
@@ -23,6 +30,7 @@ class Arguments(Protocol):
     home: Path | None
     check_result: Path | None
     entry: Path | None
+    trial_window_probe: bool
 
 
 def prepare(args: Arguments, paths: InstallationPaths) -> None:
@@ -91,14 +99,59 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
     )
 
 
-def main() -> None:
+def main(*, expected_trial_digest: str | None = None) -> None:
     os.environ["PYTHONUTF8"] = "1"
-    parser = argparse.ArgumentParser(description=__doc__)
+    policy = current_policy()
+    if (policy is None) != (expected_trial_digest is None):
+        raise ValueError("Trial bootstrap and runtime policy do not match")
+    validate_arguments(sys.argv[1:], native=True)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=policy is None)
     parser.add_argument("--payload", type=Path, required=True)
     parser.add_argument("--home", type=Path, help="Isolated installation root")
     parser.add_argument("--entry", type=Path, help=argparse.SUPPRESS)
-    parser.add_argument("--check-result", type=Path, help="Prepare without opening UI")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check-result", type=Path, help="Prepare without opening UI")
+    mode.add_argument(
+        "--trial-window-probe", action="store_true", help=argparse.SUPPRESS
+    )
     args = cast("Arguments", cast("object", parser.parse_args()))
+    if policy is not None:
+        assert expected_trial_digest is not None
+        if read_policy(policy.resources, expected_trial_digest) != policy:
+            raise ValueError("Trial policy changed before startup")
+        entry = (
+            policy.resources.parents[1]
+            if sys.platform == "darwin"
+            else policy.resources.parent / "Scopecat.exe"
+        )
+        if (
+            checked_path(args.payload) != policy.resources / "payload"
+            or args.entry is None
+            or checked_path(args.entry) != entry
+        ):
+            raise ValueError(
+                "Trial payload or native entry does not match this package"
+            )
+        if args.check_result and not checked_path(args.check_result).is_relative_to(
+            policy.home
+        ):
+            raise ValueError("Trial check output must stay inside its isolated home")
+    if args.trial_window_probe:
+        if policy is None:
+            raise ValueError("The native window probe requires a marked trial package")
+        if sys.platform not in ("darwin", "win32"):
+            raise ValueError("The native window probe requires a supported native host")
+        if sys.platform == "darwin":
+            from .desktop_platform import macos_bundle_identifier
+
+            if macos_bundle_identifier() != f"org.scopecat.trial.{policy.identity}":
+                raise ValueError("Trial probe native bundle identity does not match")
+        # Fixed packaged entry only. It owns its preflight, report and one-shot
+        # lifecycle; do not prepare, start a regular desktop, or restart here.
+        from .trial_window_probe import run as run_trial_window_probe
+
+        run_trial_window_probe(policy.home)
+        return
     paths = (
         InstallationPaths.isolated(args.home)
         if args.home
