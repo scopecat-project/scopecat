@@ -1,3 +1,4 @@
+import { PendingResultSettings } from "./PendingResultSettings";
 import { OperatorSettings } from "./OperatorSettings";
 import { ActionRow, Notice, Button, Field, Input, Select } from "../../ui/Controls";
 import { pageTitle, sectionTitle, pageContent, classes } from "../../ui/styles";
@@ -80,6 +81,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
         应用设置
       </h2>
       <OperatorSettings />
+      <PendingResultSettings />
       {operation.error && <Notice role="alert">{errorMessage(operation.error)}</Notice>}
       {picker.error && <Notice role="alert">{errorMessage(picker.error)}</Notice>}
       {operation.data && <Notice role="status">{operation.data}</Notice>}

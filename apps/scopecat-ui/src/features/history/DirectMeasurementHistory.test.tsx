@@ -24,6 +24,7 @@ function measurement(id: string, title?: string): SavedMeasurement {
   return {
     id,
     saved_at: "2026-11-01T01:00:00Z",
+    receipt_validation: "verified" as const,
     collected_at: "2026-11-01T00:59:00Z",
     selection: {
       session_id: "closed-session",
@@ -44,6 +45,7 @@ function measurement(id: string, title?: string): SavedMeasurement {
       interfaces: [],
     },
     intent: {
+      retain_result: true,
       instrument_id: "vna",
       command_id: id,
       interface_id: "network",

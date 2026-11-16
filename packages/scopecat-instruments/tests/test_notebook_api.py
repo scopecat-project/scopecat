@@ -710,6 +710,7 @@ def test_notebook_collect_sends_unspecified_results_without_reading_state() -> N
         component_path=list(DC_MONITOR_MEASURE_CURRENT.component_path),
         acquisition_id=DC_MONITOR_MEASURE_CURRENT.acquisition_id,
         result_ids=[],
+        retain_result=False,
     )
 
 
@@ -743,6 +744,7 @@ def test_notebook_collect_sends_explicit_result_identity() -> None:
     assert daemon.state_reads == 0
     assert daemon.collect_intent is not None
     assert daemon.collect_intent.result_ids == [DC_MONITOR_CURRENT_RESULT.result_id]
+    assert daemon.collect_intent.retain_result is False
 
 
 def test_declared_live_client_rejects_incomplete_provider_readback() -> None:

@@ -38,6 +38,9 @@ from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.driver_sources import restore_driver_source
 from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
+from scopecat_server.services.pending_result_settings import (
+    PendingResultSettingsService,
+)
 from scopecat_server.services.point_plans import RunPointPlanService
 from scopecat_server.services.procedure_schedules import ProcedureScheduleService
 from scopecat_server.services.resource_waits import ProcedureResourceWaits
@@ -201,6 +204,7 @@ class LocalDaemonRuntime:
                 runs=runs,
             )
             payloads = CommandPayloadService()
+            pending_result_settings = PendingResultSettingsService(self.state_dir)
 
             services = ProjectStateServices(
                 runs=runs,
@@ -284,6 +288,8 @@ class LocalDaemonRuntime:
                 shutdown_grace_seconds=instrument_shutdown_grace.total_seconds(),
                 session_lease_ttl=instrument_session_lease_ttl,
                 retain_measurements_before_fence=retain_measurements_before_fence,
+                pending_settings=pending_result_settings,
+                pending_spool_root=self.state_dir / "pending-results",
             )
             executor = ExecutorService(
                 confirmation_runtime_id=confirmation_runtime_id,
@@ -322,6 +328,7 @@ class LocalDaemonRuntime:
                 procedure_schedules=procedure_schedules,
                 point_plans=point_plans,
                 samples=samples,
+                pending_result_settings=pending_result_settings,
             )
             startup_stage("daemon application ready; bootstrapping config registry")
             try:

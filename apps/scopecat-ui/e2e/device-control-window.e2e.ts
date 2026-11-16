@@ -119,8 +119,12 @@ test("device control windows hand off sessions without sharing writable views", 
       'window.dispatchEvent(new CustomEvent("scopecat:close-preflight", {detail: {requestId: "failed"}}))',
     );
     await expect
-      .poll(() => control.evaluate("closeReplies"))
+      .poll(() => control.evaluate("closeReplies.filter((reply) => reply.status !== 'pending')"))
       .toEqual([{ id: "failed", status: "unknown" }]);
+    // Pending acknowledges bounded preflight progress, never a successful close.
+    expect(await control.evaluate("closeReplies.every((reply) => reply.id === 'failed')")).toBe(
+      true,
+    );
     await control.evaluate(
       'window.dispatchEvent(new CustomEvent("scopecat:close-release", {detail: {requestId: "failed"}}))',
     );
@@ -146,11 +150,16 @@ test("device control windows hand off sessions without sharing writable views", 
       'window.dispatchEvent(new CustomEvent("scopecat:close-preflight", {detail: {requestId: "retry"}}))',
     );
     await expect
-      .poll(() => control.evaluate("closeReplies"))
+      .poll(() => control.evaluate("closeReplies.filter((reply) => reply.status !== 'pending')"))
       .toEqual([
         { id: "failed", status: "unknown" },
         { id: "retry", status: "saved" },
       ]);
+    expect(
+      await control.evaluate(
+        "closeReplies.every((reply) => ['failed', 'retry'].includes(reply.id))",
+      ),
+    ).toBe(true);
     await control.evaluate(
       'window.dispatchEvent(new CustomEvent("scopecat:close-release", {detail: {requestId: "retry"}}))',
     );

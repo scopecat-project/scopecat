@@ -27,7 +27,6 @@ const description: InstrumentDescription = {
 };
 const results: CurrentMeasurementResult[] = ["one", "two"].map((id) => ({
   target: acquisitionTargets(description)[0]!,
-  receipt: { status: "collected", problems: [] },
   selection: {
     session_id: "session",
     instrument_id: "vna",
@@ -48,7 +47,6 @@ function Harness() {
     results.map((item) => ({
       selection: item.selection,
       acquisition: item.target.acquisition,
-      receipt: item.receipt,
     })),
   );
   return (
@@ -201,7 +199,6 @@ it.each([true, false])(
               ? results.map((item) => ({
                   selection: item.selection,
                   acquisition: item.target.acquisition,
-                  receipt: item.receipt,
                 }))
               : []
           }
@@ -221,3 +218,56 @@ it.each([true, false])(
     expect(saveDirectMeasurement).not.toHaveBeenCalled();
   },
 );
+
+it("warns before saving an unverified original without blocking its preservation", async () => {
+  const item = {
+    ...results[1]!,
+    receipt_validation: "unverified" as const,
+    validation_reason: "budget exceeded",
+  };
+  vi.mocked(saveDirectMeasurement).mockResolvedValue({
+    id: "diagnostic-original",
+  } as SavedMeasurement);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MeasurementWorkbench
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
+        description={description}
+        connected
+        disabled={false}
+        collectResults={{}}
+        recent={[item]}
+        current={item}
+        staged={false}
+        pending={[
+          {
+            selection: item.selection,
+            acquisition: item.target.acquisition,
+            receipt_validation: item.receipt_validation,
+          },
+        ]}
+        onCollect={vi.fn()}
+        onSelect={vi.fn()}
+        onSaveAttempt={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存所选结果" }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText("未验证原件（验证未完成）")).toBeVisible();
+  expect(within(dialog).getByText(/保存不表示它是合格科学数据/)).toBeVisible();
+  fireEvent.click(within(dialog).getByRole("button", { name: /^保存$/ }));
+  await waitFor(() => expect(saveDirectMeasurement).toHaveBeenCalledWith(item.selection));
+});
+
+it("places selected-result actions before the potentially tall content while retaining the recent-results column", () => {
+  show();
+  const actions = screen.getByLabelText("所选结果操作");
+  const content = screen.getByLabelText("当前测量结果");
+  expect(actions.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(actions).getByRole("button", { name: "保存所选结果" })).toBeVisible();
+  expect(screen.getByLabelText("近期结果")).toHaveClass("md:order-last");
+  expect(screen.getByTestId("recent-result-one")).toBeVisible();
+});

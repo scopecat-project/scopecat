@@ -41,6 +41,7 @@ from scopecat.sdk.instruments.contracts import (
 from ..errors import BackendConflict
 from .actors import OwnedInstrument
 from .backend import InstrumentBackendError
+from .retained_receipt import RawCollectReceipt
 
 type InstrumentCommandFailureReason = Literal[
     "instrument_acquisition_prepare_unknown",
@@ -190,6 +191,33 @@ def execute_instrument_collect(
             raise InstrumentCommandExecutionError(
                 "instrument_collect_rejection_state_unknown",
                 "instrument rejected collection and state synchronization failed",
+            ) from error
+    return receipt
+
+
+def execute_instrument_collect_raw(
+    instrument: OwnedInstrument,
+    request: BackendCollectRequest,
+    *,
+    maximum_receipt_bytes: int,
+) -> RawCollectReceipt:
+    try:
+        receipt = instrument.collect_raw(
+            request, maximum_receipt_bytes=maximum_receipt_bytes
+        )
+    except Exception as error:
+        raise InstrumentCommandExecutionError(
+            "instrument_collect_unknown",
+            "instrument collect failed with unknown state",
+            problems=_worker_error_problems(error),
+        ) from error
+    if receipt.status == "not_collected":
+        try:
+            instrument.adopt_state(observe_instrument(instrument))
+        except BackendConflict as error:
+            raise InstrumentCommandExecutionError(
+                "instrument_collect_rejection_state_unknown",
+                "instrument collect rejected but state synchronization failed",
             ) from error
     return receipt
 

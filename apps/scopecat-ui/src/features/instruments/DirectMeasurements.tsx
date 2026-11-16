@@ -1,3 +1,9 @@
+import {
+  ReceiptValidationNotice,
+  OriginalReceiptDownload,
+  isVerifiedReceipt,
+  type ReceiptValidation,
+} from "./ReceiptValidation";
 import { useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -8,27 +14,21 @@ import {
   type SavedMeasurement,
 } from "./direct-measurement-api";
 export type { MeasurementSave } from "./direct-measurement-api";
-import type {
-  InstrumentAcquisition,
-  InstrumentCollectReceipt,
-  InstrumentInterface,
-} from "../../api-contract";
+import type { InstrumentAcquisition, InstrumentInterface } from "../../api-contract";
 import {
   COMPARISON_LIMIT,
   MeasurementComparison,
   measurementGroupKey,
-  measurementReceiptQuery,
 } from "./MeasurementComparison";
-import { AcquisitionCurve, CollectReceiptDetails } from "./AcquisitionCurve";
+import { BoundedMeasurement } from "./BoundedMeasurement";
 import { interfaceMountPaths } from "./InstrumentInterfaceControls";
 import { createInstrumentCommandId } from "./instrument-api";
 import { secondaryButton } from "../../ui/styles";
 
-export interface PendingMeasurement {
+export interface PendingMeasurement extends ReceiptValidation {
   saveAttempted?: boolean;
   selection: MeasurementSave;
   acquisition: InstrumentAcquisition;
-  receipt: InstrumentCollectReceipt;
 }
 
 export function DirectMeasurements({
@@ -82,7 +82,7 @@ export function DirectMeasurements({
     <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded border border-line p-3 [overflow-wrap:anywhere]">
       <h3 className="text-sm font-semibold">直接测量记录</h3>
       <p className="text-xs text-text-dim">
-        保存只保留已返回的完整回执，不会重新采集。未保存结果仅在当前控制会话内可保存，请在结束控制前保存。历史记录的线路归属不会随当前线路修改。
+        保存只保留已返回的完整回执，不会重新采集。后台仍运行时，未保存结果可在控制会话结束后保存或明确放弃。历史记录的线路归属不会随当前线路修改。
       </p>
       {pending.map((item) => (
         <div key={item.selection.command_id} className="border-b border-line pb-2">
@@ -90,6 +90,7 @@ export function DirectMeasurements({
             待保存：{item.selection.line_label || "未标注测量对象"} ·{" "}
             {item.acquisition.label ?? item.acquisition.id} · {item.selection.note}
           </span>
+          <ReceiptValidationNotice value={item} />
           <button
             type="button"
             className={secondaryButton}
@@ -252,7 +253,6 @@ export function SavedCurve({
     },
   });
 
-  const receipt = useQuery(measurementReceiptQuery(record));
   const acquisition = recordedAcquisition(record);
   return (
     <section className="min-w-0 border-t border-line pt-2">
@@ -311,16 +311,12 @@ export function SavedCurve({
         )}
         {annotate.error && <p role="alert">{annotate.error.message}</p>}
       </div>
-      {receipt.error && <p role="alert">{receipt.error.message}</p>}
-      {receipt.data &&
-        (acquisition ? (
-          <AcquisitionCurve receipt={receipt.data} acquisition={acquisition} />
-        ) : (
-          <>
-            <p role="alert">无法解析保存的采集契约或组件路径；完整回执仍可查看。</p>
-            <CollectReceiptDetails receipt={receipt.data} />
-          </>
-        ))}
+      {!acquisition && <p role="alert">无法解析保存的采集契约或组件路径；仍可读取有界数值窗口。</p>}
+      <ReceiptValidationNotice value={record} />
+      <OriginalReceiptDownload recordId={record.id} />
+      {isVerifiedReceipt(record) && (
+        <BoundedMeasurement source={{ recordId: record.id }} acquisition={acquisition} />
+      )}
       <details>
         <summary>设备、线路和设置来源</summary>
         <p className="text-xs">
