@@ -373,6 +373,11 @@ export function BoundedMeasurement({
                           }
                         >
                           <EChart
+                            recoveryHint={
+                              <p className="mt-2 text-sm">
+                                若重试仍失败，请先保存未保存的原结果，再用“查看已保存结果”在独立窗口打开。请勿刷新正在控制设备的窗口。
+                              </p>
+                            }
                             ariaLabel={`${field.request_id} 局部曲线`}
                             height={workspace ? "fill" : 260}
                             pointCount={y.length}

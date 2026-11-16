@@ -19,6 +19,7 @@ function retryRuntime() {
 class ChartBoundary extends Component<
   {
     height: number | "fill";
+    recoveryHint?: ReactNode;
     children: (Runtime: ReturnType<typeof createRuntime>) => ReactNode;
   },
   { failed: boolean; Runtime: ReturnType<typeof createRuntime> }
@@ -37,7 +38,7 @@ class ChartBoundary extends Component<
           className="min-w-0 overflow-auto p-3 text-sm text-text-soft"
           style={{ height: this.props.height === "fill" ? "100%" : this.props.height }}
         >
-          <p>图表暂时无法显示。原结果仍由外层页面保留，可继续查看数据或保存。</p>
+          <p>图表暂时无法显示，其他操作仍可使用。</p>
           <button
             type="button"
             className={secondaryButton}
@@ -46,6 +47,7 @@ class ChartBoundary extends Component<
             重试图表
           </button>
           <p className="mt-2 text-xs">重试只加载图表，不会重新采集或重新连接设备。</p>
+          {this.props.recoveryHint}
         </div>
       );
     return this.props.children(this.state.Runtime);
@@ -64,10 +66,12 @@ export function EChart({
   interactionKey,
   interactionStore,
   resetRange,
+  recoveryHint,
 }: {
   interactionKey?: string;
   interactionStore?: ChartInteractionStore;
   resetRange?: number;
+  recoveryHint?: ReactNode;
   ariaLabel: string;
   description?: string;
   height: number | "fill";
@@ -81,7 +85,7 @@ export function EChart({
 
   return (
     <>
-      <ChartBoundary height={height}>
+      <ChartBoundary height={height} recoveryHint={recoveryHint}>
         {(EChartRuntime) => (
           <Suspense
             fallback={
