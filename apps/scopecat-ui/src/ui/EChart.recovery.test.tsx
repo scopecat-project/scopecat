@@ -39,7 +39,7 @@ it("contains import rejection, keeps outer owner and retries the loader only on 
   vi.spyOn(console, "error").mockImplementation(() => {});
   loader.load.mockRejectedValueOnce(new TypeError("module unavailable"));
   loader.load.mockResolvedValueOnce({ default: () => <svg data-testid="drawn" /> });
-  render(<Harness />);
+  const mounted = render(<Harness />);
   expect(await screen.findByRole("alert")).toHaveTextContent("图表暂时无法显示");
   fireEvent.change(screen.getByLabelText("save draft"), { target: { value: "retained edits" } });
   expect(loader.load).toHaveBeenCalledTimes(1);
@@ -49,6 +49,11 @@ it("contains import rejection, keeps outer owner and retries the loader only on 
   expect(screen.getByLabelText("save draft")).toHaveValue("retained edits");
   fireEvent.click(screen.getByRole("button", { name: "save original" }));
   expect(screen.getByLabelText("save draft")).toHaveValue("saved original");
+  expect(loader.load).toHaveBeenCalledTimes(2);
+  mounted.unmount();
+  render(<Harness />);
+  expect(await screen.findByTestId("drawn")).toBeVisible();
+  expect(screen.queryByRole("alert")).toBeNull();
   expect(loader.load).toHaveBeenCalledTimes(2);
 });
 

@@ -10,7 +10,11 @@ function createRuntime() {
   return lazy(loadChartRuntime);
 }
 
-const InitialRuntime = createRuntime();
+let CurrentRuntime = createRuntime();
+function retryRuntime() {
+  CurrentRuntime = createRuntime();
+  return CurrentRuntime;
+}
 
 class ChartBoundary extends Component<
   {
@@ -19,7 +23,7 @@ class ChartBoundary extends Component<
   },
   { failed: boolean; Runtime: ReturnType<typeof createRuntime> }
 > {
-  override state = { failed: false, Runtime: InitialRuntime };
+  override state = { failed: false, Runtime: CurrentRuntime };
 
   static getDerivedStateFromError() {
     return { failed: true };
@@ -37,7 +41,7 @@ class ChartBoundary extends Component<
           <button
             type="button"
             className={secondaryButton}
-            onClick={() => this.setState({ failed: false, Runtime: createRuntime() })}
+            onClick={() => this.setState({ failed: false, Runtime: retryRuntime() })}
           >
             重试图表
           </button>
