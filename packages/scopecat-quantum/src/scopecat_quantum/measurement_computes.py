@@ -13,7 +13,9 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from scopecat import (
     ArrayDimension,
     ArrayType,
+    ComplexType,
     ExperimentContext,
+    IntType,
     ModuleContext,
     ProductBundle,
     ProductRef,
@@ -23,6 +25,73 @@ from scopecat import (
 )
 
 _BINARY_IQ_DISCRIMINATOR_SCHEMA = "scopecat-quantum.binary-iq-discriminator.v1"
+
+
+@dataclass(frozen=True, slots=True)
+class IqShotStatistics(ProductBundle):
+    """Count and coherent mean of one complete, finite integrated-IQ shot array.
+
+    Returning this bundle records only the statistics. Return the input product
+    alongside it to keep the original shots as well. No input is deleted.
+    """
+
+    count: Annotated[
+        ProductRef[int],
+        ScalarType(IntType(minimum=1)),
+    ]
+    mean: Annotated[
+        ProductRef[complex],
+        ScalarType(ComplexType(unit="ratio")),
+    ]
+
+
+@IqShotStatistics.kernel
+def _iq_shot_statistics(
+    *,
+    iq_shots: Annotated[
+        NDArray[np.complex128],
+        ArrayType(
+            dtype="complex128",
+            unit="ratio",
+            dimensions=(ArrayDimension("shot", None, kind="shot", unit="count"),),
+        ),
+    ],
+) -> tuple[int, complex]:
+    if iq_shots.size == 0:
+        raise ValueError("IQ shot statistics require at least one shot")
+    if not np.isfinite(iq_shots).all():
+        raise ValueError("IQ shot statistics require finite real and imaginary values")
+    count = int(iq_shots.size)
+    mean = complex(_component_mean(iq_shots.real), _component_mean(iq_shots.imag))
+    return count, mean
+
+
+def _component_mean(values: NDArray[np.float64]) -> float:
+    # Normalize each component before averaging. Dividing by count first can
+    # still overflow on summation or erase equal subnormal values.
+    scale = float(cast("np.float64", np.max(np.abs(values))))
+    return 0.0 if scale == 0 else float(np.mean(values / scale)) * scale
+
+
+def iq_shot_statistics(
+    context: ModuleContext | ExperimentContext,
+    iq_shots: ProductRef,
+    /,
+    *,
+    id: str | None = None,
+) -> IqShotStatistics:
+    """Reduce one acquired complex128 ratio [shot/count] array at each point.
+
+    All shots must be finite and the array must be nonempty. The count includes
+    every shot; it is not a state-discrimination count. The complex mean retains
+    phase, rather than averaging magnitudes. Unavailable inputs use the ordinary
+    compute propagation rule. This has no cross-chunk state or device feedback.
+    Omit ``id`` to allocate a unique compute ID in the current context; explicit
+    IDs must be unique within that context.
+    """
+    if iq_shots.value_spec.unit != "ratio":
+        raise TypeError("IQ shot statistics require explicit ratio units")
+    return context.compute(id, fn=_iq_shot_statistics, iq_shots=iq_shots)
 
 
 class IqCentroid(BaseModel):
@@ -145,5 +214,7 @@ __all__ = [
     "BinaryIqDiscriminator",
     "BinaryIqProbabilityProducts",
     "IqCentroid",
+    "IqShotStatistics",
     "binary_iq_probabilities",
+    "iq_shot_statistics",
 ]
