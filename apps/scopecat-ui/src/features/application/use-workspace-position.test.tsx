@@ -52,7 +52,7 @@ function Workspace({ view }: { view: string }) {
 function retainedRun() {
   const result = render(<Workspace view="runs" />);
   flushFrames();
-  const input = screen.getByRole("textbox", { name: "Run notes" }) as HTMLInputElement;
+  const input = screen.getByRole<HTMLInputElement>("textbox", { name: "Run notes" });
   input.focus();
   input.setSelectionRange(1, 4);
   input.dispatchEvent(new Event("selectionchange", { bubbles: true }));

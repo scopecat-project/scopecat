@@ -59,7 +59,7 @@ it("selects acquisition offsets and entities without hiding unavailable traces o
   expect(requests.at(-1)!.url.searchParams.get("offset")).toBe("21");
   expect(screen.queryByRole("img")).toBeNull();
   expect(screen.getByText("不可用 · missing")).toBeTruthy();
-  const waveform = screen.getByLabelText("波形") as HTMLSelectElement;
+  const waveform = screen.getByLabelText<HTMLSelectElement>("波形");
   const phase = Array.from(waveform.options).find((option) => option.value.endsWith(":phase"))!;
   fireEvent.change(waveform, { target: { value: phase.value } });
   expect((await screen.findByRole("alert")).textContent).toBe(
