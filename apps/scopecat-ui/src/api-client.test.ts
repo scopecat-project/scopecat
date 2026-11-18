@@ -121,3 +121,22 @@ it("recognizes structured preview rejection only from the declared HTTP contract
     new ApiError("bad detail", 422, { ...detail, problems: [null] }).launchRejection,
   ).toBeUndefined();
 });
+
+it("recognizes binding-only launch rejection without ordinary compiler problems", () => {
+  const bindings = {
+    kind: "binding_requirements",
+    workspace_id: "work",
+    experiment_id: "capture",
+    version: "1",
+    inputs_hash: "sha256:inputs",
+    supported: true,
+    requirements: [{ port_id: "vna", interface_id: "network/v1" }],
+    diagnostics: [],
+  };
+  const detail = { kind: "launch_rejection", message: "Choose bindings", problems: [], bindings };
+  expect(new ApiError("Choose bindings", 422, detail).launchRejection).toEqual(detail);
+  expect(
+    new ApiError("Invalid", 422, { ...detail, bindings: { ...bindings, requirements: [null] } })
+      .launchRejection,
+  ).toBeUndefined();
+});

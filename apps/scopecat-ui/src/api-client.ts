@@ -82,7 +82,7 @@ function isLaunchRejection(value: unknown): value is LaunchRejection {
     value.kind !== "launch_rejection" ||
     typeof value.message !== "string" ||
     !Array.isArray(value.problems) ||
-    !value.problems.length
+    (!value.problems.length && !isBindingRequirements(value.bindings))
   )
     return false;
   if (
@@ -108,6 +108,32 @@ function isLaunchRejection(value: unknown): value is LaunchRejection {
       [scenario.capabilities, scenario.limitations].every(
         (items) => Array.isArray(items) && items.every((item) => typeof item === "string"),
       ))
+  );
+}
+
+function isBindingRequirements(value: unknown): boolean {
+  if (
+    !isObject(value) ||
+    value.kind !== "binding_requirements" ||
+    typeof value.supported !== "boolean" ||
+    !["workspace_id", "experiment_id", "version", "inputs_hash"].every(
+      (key) => typeof value[key] === "string",
+    )
+  )
+    return false;
+  return (
+    Array.isArray(value.requirements) &&
+    value.requirements.every(
+      (item) =>
+        isObject(item) &&
+        typeof item.port_id === "string" &&
+        typeof item.interface_id === "string" &&
+        (item.role_id == null || typeof item.role_id === "string"),
+    ) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(
+      (item) => isObject(item) && typeof item.code === "string" && typeof item.message === "string",
+    )
   );
 }
 
