@@ -979,7 +979,11 @@ function InstrumentInspectorContent({
             {connected && <p>执行前请先释放当前手动控制。</p>}
             <AuthorWorkflowLinks />
             {registeredDeviceId && description && (
-              <DevicePythonGuide deviceId={registeredDeviceId} description={description} />
+              <DevicePythonGuide
+                deviceId={registeredDeviceId}
+                deviceLabel={displayLabel}
+                description={description}
+              />
             )}
           </div>
         }

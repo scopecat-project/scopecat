@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import * as Controls from "../../ui/Controls";
 import type { InstrumentDescription } from "../../api-contract";
 import { interfaceMountPaths } from "./InstrumentInterfaceControls";
 
@@ -5,13 +7,22 @@ const guide = "https://scopecat-project.github.io/scopecat/how-to/device-to-pyth
 const networkSweep = "scopecat.network_sweep/v1";
 
 /** Curated, versioned examples: never infer Python imports from driver identifiers. */
-export function networkSweepExamples(deviceId: string, mountPath: string[]) {
+export function networkSweepExamples(deviceId: string, mountPath: string[], deviceLabel?: string) {
+  // Display-only context: keep arbitrary labels on one comment line, never in lookup code.
+  const labelComment =
+    deviceLabel === undefined
+      ? ""
+      : `# Device name (display only): ${JSON.stringify(deviceLabel).replace(
+          /[\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
+          (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+        )}\n`;
+
   const mount = mountPath.length ? `, component_path=tuple(${JSON.stringify(mountPath)})` : "";
   return {
     live: `import scopecat as sc
 from scopecat_instruments import network_sweep
 
-DEVICE_ID = ${JSON.stringify(deviceId)}
+${labelComment}DEVICE_ID = ${JSON.stringify(deviceId)}
 VNA = network_sweep(DEVICE_ID${mount})
 
 # Running this block connects and performs a sweep. Review settings first.
@@ -46,23 +57,27 @@ def capture(
 
 export function DevicePythonGuide({
   deviceId,
+  deviceLabel,
   description,
 }: {
   deviceId: string;
+  deviceLabel?: string;
   description: InstrumentDescription;
 }) {
   const supported = description.interfaces?.some((item) => item.id === networkSweep);
   const mounts = supported ? interfaceMountPaths(description, networkSweep) : [];
   return (
     <section aria-label="在 Python 中使用此设备" className="grid gap-2 text-xs leading-normal">
+      {deviceLabel !== undefined && <p>设备名称：{deviceLabel}</p>}
       <p>
-        登记 ID：<code>{deviceId}</code>
+        稳定登记 ID：<code>{deviceId}</code>
       </p>
+      <p>名称仅供辨认；代码仍使用完整登记 ID。请在原数据空间运行并核对当前连接设置。</p>
       {mounts.length === 0 ? (
         <p>此能力暂无内置 Python 示例，请参阅驱动的客户端文档。</p>
       ) : (
         mounts.map((mountPath) => {
-          const examples = networkSweepExamples(deviceId, mountPath);
+          const examples = networkSweepExamples(deviceId, mountPath, deviceLabel);
           return (
             <section key={JSON.stringify(mountPath)} className="grid gap-2">
               <h4>Network sweep · {mountPath.join(" / ") || "整机"}</h4>
@@ -76,6 +91,7 @@ export function DevicePythonGuide({
                 apply，不需要实验 setup。
               </p>
               <Code
+                key={examples.live}
                 label={`即时调试 Python ${mountPath.join("/") || "整机"}`}
                 value={examples.live}
               />
@@ -85,6 +101,7 @@ export function DevicePythonGuide({
                 setup、准备检查，再显式提交。
               </p>
               <Code
+                key={examples.experiment}
                 label={`实验声明 Python ${mountPath.join("/") || "整机"}`}
                 value={examples.experiment}
               />
@@ -110,14 +127,39 @@ export function DevicePythonGuide({
 }
 
 function Code({ label, value }: { label: string; value: string }) {
+  const [status, setStatus] = useState<"idle" | "copying" | "copied" | "manual">("idle");
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  async function copy() {
+    setStatus("copying");
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(value);
+      if (mounted.current) setStatus("copied");
+    } catch {
+      if (mounted.current) setStatus("manual");
+    }
+  }
   return (
-    <textarea
-      aria-label={label}
-      readOnly
-      value={value}
-      rows={Math.min(value.split("\n").length, 18)}
-      className="w-full rounded border border-line bg-panel p-2 font-mono text-xs"
-      onFocus={(event) => event.currentTarget.select()}
-    />
+    <div className="grid gap-2">
+      <Controls.Button aria-label={`复制${label}`} disabled={status === "copying"} onClick={copy}>
+        {status === "copying" ? "正在复制…" : "复制 Python 示例"}
+      </Controls.Button>
+      {status === "copied" && <p role="status">示例已复制，未执行代码。</p>}
+      {status === "manual" && <p role="status">无法访问剪贴板，请选中下面的完整示例手动复制。</p>}
+      <textarea
+        aria-label={label}
+        readOnly
+        value={value}
+        rows={Math.min(value.split("\n").length, 18)}
+        className="w-full rounded border border-line bg-panel p-2 font-mono text-xs"
+        onFocus={(event) => event.currentTarget.select()}
+      />
+    </div>
   );
 }
