@@ -120,7 +120,7 @@ class SetupDefinition(_SetupModel):
 class SetupDefinitionRevision(_SetupModel):
     id: str = Field(min_length=1)
     definition: SetupDefinition
-    purpose: Literal["experiment", "device_access"] = "experiment"
+    purpose: Literal["experiment", "device_access", "execution"] = "experiment"
     actor: str = Field(min_length=1)
     note: str = ""
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

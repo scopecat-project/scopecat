@@ -195,6 +195,14 @@ def _resolve_configuration(
         ):
             raise ValueError("parameter selection differs from reviewed inputs")
         setup = old.setup if isinstance(old, ParameterRunConfigSource) else choice.setup
+        if (
+            setup is None
+            and request.instrument_bindings is not None
+            and request.action == "preview"
+        ):
+            setup = lab.config.client.resolve_instrument_bindings(
+                request.instrument_bindings
+            ).ref
         if setup is None:
             raise ValueError(
                 "Select an experiment setup alongside the parameters; "

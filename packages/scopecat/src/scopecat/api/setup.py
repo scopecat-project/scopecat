@@ -11,6 +11,12 @@ from scopecat.daemon.wire import (
     SetupSaveCommand,
 )
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.instrument_bindings import (
+    BindingCheck,
+    BindingOptions,
+    BindingRequirements,
+    InstrumentBindingPlan,
+)
 from scopecat.records.setup import (
     ExecutableSetupSnapshot,
     SetupDefinition,
@@ -23,6 +29,14 @@ from scopecat.records.setup import (
 class LabSetupOperations:
     client: DaemonClient
     operator: str
+
+    def binding_options(self, requirements: BindingRequirements) -> BindingOptions:
+        """Inspect declared endpoints without connecting or selecting a default."""
+        return self.client.instrument_binding_options(requirements)
+
+    def check_bindings(self, plan: InstrumentBindingPlan) -> BindingCheck:
+        """Check explicit endpoints/policies; success is not execution readiness."""
+        return self.client.check_instrument_bindings(plan)
 
     def templates(self) -> tuple[ConfigurationTemplateView, ...]:
         """Discover fixed recipes offered by this service's installed adapter."""
