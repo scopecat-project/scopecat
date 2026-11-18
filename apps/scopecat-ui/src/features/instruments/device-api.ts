@@ -74,3 +74,20 @@ export function getLocalDriverSources(signal?: AbortSignal) {
 export function manageLocalDriverSource(body: DriverSourceCommand) {
   return apiData(apiClient.POST("/api/v1/devices/driver-sources", { body }));
 }
+
+// Reads provider declarations only; never opens a device session.
+export function getDeviceDeclaration(
+  deviceId: string,
+  connectionRevisionId: string,
+  signal?: AbortSignal,
+) {
+  return apiData(
+    apiClient.GET("/api/v1/devices/{device_id}/declaration", {
+      params: {
+        path: { device_id: deviceId },
+        query: { connection_revision_id: connectionRevisionId },
+      },
+      signal,
+    }),
+  );
+}

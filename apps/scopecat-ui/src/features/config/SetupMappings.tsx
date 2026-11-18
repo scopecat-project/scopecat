@@ -1,5 +1,6 @@
 import { useState } from "react";
 import * as Controls from "../../ui/Controls";
+import { DeclaredEndpointFields, type MappingDeclarations } from "./DeclaredEndpointFields";
 import type { SetupDefinition } from "./setup-api";
 
 export function mappingProblems(draft: SetupDefinition): string[] {
@@ -41,8 +42,10 @@ export function mappingProblems(draft: SetupDefinition): string[] {
 export function SetupMappings({
   draft,
   onChange,
+  declarations = {},
 }: {
   draft: SetupDefinition;
+  declarations?: MappingDeclarations;
   onChange: (value: SetupDefinition) => void;
 }) {
   const [entity, setEntity] = useState("");
@@ -161,21 +164,21 @@ export function SetupMappings({
             ))}
           </Controls.Select>
         </Controls.Field>
+        <DeclaredEndpointFields
+          declaration={declarations[instrument]}
+          interfaceId={interfaceId}
+          path={path.split("/").filter(Boolean)}
+          label="已声明能力与端点"
+          interfaceLabel="能力接口 ID（高级手填）"
+          pathLabel="设备组件路径（/ 分隔，可留空）"
+          onChange={(capability, segments) => {
+            setInterfaceId(capability);
+            setPath(segments.join("/"));
+          }}
+        />
         <Controls.Field>
-          能力接口 ID（从设备声明复制）
-          <Controls.Input
-            value={interfaceId}
-            onChange={(event) => setInterfaceId(event.target.value)}
-            placeholder="scopecat.rf_output/v2"
-          />
-        </Controls.Field>
-        <Controls.Field>
-          逻辑通道（可留空）
+          逻辑通道（可留空，不从设备端点推断）
           <Controls.Input value={channel} onChange={(event) => setChannel(event.target.value)} />
-        </Controls.Field>
-        <Controls.Field>
-          设备组件路径（/ 分隔，可留空）
-          <Controls.Input value={path} onChange={(event) => setPath(event.target.value)} />
         </Controls.Field>
         <Controls.Button
           disabled={
@@ -254,35 +257,38 @@ export function SetupMappings({
               <p>
                 {endpoint.interface_id} · 逻辑通道 {endpoint.channel_id ?? "未指定"}
               </p>
-              <Controls.Field>
-                替换组件路径 {route.id} / {endpointIndex + 1}
-                <ComponentPathInput
-                  value={endpoint.component_path?.join("/") ?? ""}
-                  onChange={(raw) =>
-                    onChange({
-                      ...draft,
-                      routing: {
-                        ...draft.routing,
-                        routes: routes.map((item, i) =>
-                          i === index
-                            ? {
-                                ...item,
-                                endpoints: item.endpoints.map((point, j) =>
-                                  j === endpointIndex
-                                    ? {
-                                        ...point,
-                                        component_path: raw.split("/").filter(Boolean),
-                                      }
-                                    : point,
-                                ),
-                              }
-                            : item,
-                        ),
-                      },
-                    })
-                  }
-                />
-              </Controls.Field>
+              <DeclaredEndpointFields
+                declaration={declarations[route.instrument_id]}
+                interfaceId={endpoint.interface_id}
+                path={endpoint.component_path ?? []}
+                label={`已声明能力与端点 ${route.id} / ${endpointIndex + 1}`}
+                interfaceLabel={`能力接口 ID ${route.id} / ${endpointIndex + 1}`}
+                pathLabel={`替换组件路径 ${route.id} / ${endpointIndex + 1}`}
+                onChange={(capability, segments) =>
+                  onChange({
+                    ...draft,
+                    routing: {
+                      ...draft.routing,
+                      routes: routes.map((item, i) =>
+                        i === index
+                          ? {
+                              ...item,
+                              endpoints: item.endpoints.map((point, j) =>
+                                j === endpointIndex
+                                  ? {
+                                      ...point,
+                                      interface_id: capability,
+                                      component_path: segments,
+                                    }
+                                  : point,
+                              ),
+                            }
+                          : item,
+                      ),
+                    },
+                  })
+                }
+              />
             </div>
           ))}
           <Controls.Button
@@ -306,32 +312,11 @@ export function SetupMappings({
             ))}
           </ul>
         ) : (
-          <p>未发现本地引用缺失或重复候选；这不替代保存时的驱动契约检查和实验准备检查。</p>
+          <p>
+            未发现本地引用缺失或重复候选。能力与端点的声明检查见各映射；保存允许未完成配置，不代表实验可运行，运行前仍需准备检查。
+          </p>
         )}
       </div>
     </section>
-  );
-}
-
-// Keep unfinished separators in the editor while the setup draft retains only
-// canonical component segments. External path changes replace stale local text.
-function ComponentPathInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (raw: string) => void;
-}) {
-  const [editing, setEditing] = useState<{ raw: string; canonical: string }>();
-  return (
-    <Controls.Input
-      value={editing?.canonical === value ? editing.raw : value}
-      onChange={(event) => {
-        const raw = event.target.value;
-        setEditing({ raw, canonical: raw.split("/").filter(Boolean).join("/") });
-        onChange(raw);
-      }}
-      onBlur={() => setEditing(undefined)}
-    />
   );
 }

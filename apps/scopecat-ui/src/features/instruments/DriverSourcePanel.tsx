@@ -74,6 +74,7 @@ export function DriverSourcePanel({
           "instruments",
           "instrument-drivers",
           "device-drivers",
+          "device-declaration",
         ].map((key) => client.invalidateQueries({ queryKey: [key] })),
       );
     },

@@ -1191,3 +1191,65 @@ def test_reactivation_checks_durable_blockers_in_write_transaction(
         current = runtime.application.devices.get("signal")
         assert current.device.state == "retired"
         assert current.device.head.revision_id == "signal-v1"
+
+
+@pytest.mark.parametrize("device_id", ["signal", "rack-a/signal"])
+def test_device_declaration_is_pure_and_revision_specific(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device_id: str
+) -> None:
+    endpoint = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=endpoint) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        saved = _register(client, device_id)
+
+        def unexpected(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError(
+                "declaration must not connect or prepare device access"
+            )
+
+        monkeypatch.setattr(endpoint, "connect", unexpected)
+        monkeypatch.setattr(runtime.application.devices, "access_setup", unexpected)
+        query = {"connection_revision_id": saved["revision"]["id"]}
+        response = client.get(f"/api/v1/devices/{device_id}/declaration", params=query)
+        assert response.status_code == 200, response.text
+        assert response.json()["instrument_id"] == device_id
+        assert response.json()["interfaces"]
+        assert client.get(f"/api/v1/devices/{device_id}/declaration").status_code == 422
+        stale = client.get(
+            f"/api/v1/devices/{device_id}/declaration",
+            params={"connection_revision_id": "old-revision"},
+        )
+        assert stale.status_code == 409
+        assert client.get("/api/v1/devices").json()["items"][0] == saved
+        monkeypatch.setattr(endpoint, "_artifact_hash", "sha256:" + "0" * 64)
+        changed = client.get(f"/api/v1/devices/{device_id}/declaration", params=query)
+        assert changed.status_code == 409
+        assert "declaration" in changed.text
+
+
+def test_device_declaration_missing_is_unknown_not_an_empty_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.sdk.instruments.provider import InstrumentProviderDescription
+
+    endpoint = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=endpoint) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        saved = _register(client)
+
+        def missing(
+            _bindings: tuple[InstrumentBindingSpec, ...],
+        ) -> InstrumentProviderDescription:
+            return InstrumentProviderDescription(provider_id=endpoint.provider_id)
+
+        monkeypatch.setattr(endpoint, "describe", missing)
+        response = client.get(
+            "/api/v1/devices/signal/declaration",
+            params={"connection_revision_id": saved["revision"]["id"]},
+        )
+        assert response.status_code == 409
+        assert "declaration is unavailable" in response.text

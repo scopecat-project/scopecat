@@ -114,6 +114,7 @@ _OPERATIONS = {
     ("/api/v1/devices", "get"),
     ("/api/v1/devices", "post"),
     ("/api/v1/devices/drivers", "get"),
+    ("/api/v1/devices/{device_id}/declaration", "get"),
     ("/api/v1/devices/driver-sources", "get"),
     ("/api/v1/devices/driver-sources", "post"),
     ("/api/v1/devices/driver-source", "get"),

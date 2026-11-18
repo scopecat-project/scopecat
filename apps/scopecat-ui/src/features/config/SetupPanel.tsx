@@ -1,9 +1,9 @@
 import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
 import { errorMessage } from "../../lib/presentation";
-import { getDevices } from "../instruments/device-api";
+import { getDevices, getDeviceDeclaration } from "../instruments/device-api";
 import { SetupMappings } from "./SetupMappings";
 import { ConfigurationTemplatesPanel } from "./ConfigurationTemplatesPanel";
 import { getSetupDefinitions, saveSetupDefinition, type SetupDefinition } from "./setup-api";
@@ -28,6 +28,30 @@ export function SetupPanel({
   const [selected, setSelected] = useState("");
   const [name, setName] = useState("");
   const [draft, setDraft] = useState<SetupDefinition>();
+  const boundDevices = (draft?.instruments ?? []).map((binding) => ({
+    binding,
+    device: devices.data?.items.find((item) => item.device.id === binding.device_id),
+  }));
+  const declarationQueries = useQueries({
+    queries: boundDevices.map(({ binding, device }) => ({
+      queryKey: ["device-declaration", binding.device_id, device?.revision.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        getDeviceDeclaration(binding.device_id, device!.revision.id, signal),
+      enabled: Boolean(device),
+      retry: false,
+    })),
+  });
+  const declarations = Object.fromEntries(
+    boundDevices.map(({ binding, device }, index) => [
+      binding.id,
+      {
+        description: declarationQueries[index]?.isSuccess
+          ? declarationQueries[index]?.data
+          : undefined,
+        pending: Boolean(device) && declarationQueries[index]?.isPending,
+      },
+    ]),
+  );
   const [alias, setAlias] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const refresh = async () => {
@@ -246,7 +270,7 @@ export function SetupPanel({
               添加绑定
             </Controls.Button>
           </fieldset>
-          <SetupMappings draft={draft} onChange={setDraft} />
+          <SetupMappings draft={draft} onChange={setDraft} declarations={declarations} />
           <Controls.Button
             disabled={!name.trim() || !operator.trim() || save.isPending}
             onClick={() => save.mutate()}

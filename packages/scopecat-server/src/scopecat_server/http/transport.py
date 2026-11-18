@@ -416,6 +416,7 @@ from scopecat.sdk.instruments.commands import (
     InvokeCommand,
     InvokeReceipt,
 )
+from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.execution import (
     RunHardwareBatchReceipt,
     RunHardwareFinalizationReceipt,
@@ -1574,6 +1575,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/devices")
     def list_devices() -> DeviceList:
         return DeviceList(items=application.devices.list())
+
+    @app.get(f"{_API_PREFIX}/devices/{{device_id:path}}/declaration")
+    def device_declaration(
+        device_id: str, connection_revision_id: str
+    ) -> InstrumentDescription:
+        return application.devices.declaration(
+            device_id, connection_revision_id=connection_revision_id
+        )
 
     @app.get(f"{_API_PREFIX}/devices/drivers")
     def device_drivers() -> DriverImplementationList:
