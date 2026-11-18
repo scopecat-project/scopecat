@@ -1,10 +1,12 @@
+import { ProgressiveBindings } from "./ProgressiveBindings";
+import type { BindingPlan, BindingRequest } from "./instrument-bindings-api";
 import { Notice, Button, Field, Select, Input } from "../../ui/Controls";
 import { readParameterDraft, freezeParameterDraft } from "../config/parameter-draft-api";
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { reviewedForRequest } from "./scientific-selection";
 import { useEffect, useLayoutEffect, useId, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
@@ -36,6 +38,7 @@ export function LaunchForm({
   catalogReady: boolean;
   active?: boolean;
 }) {
+  const queryClient = useQueryClient();
   const allFields = Object.entries(entry.request.properties ?? {});
   const fields = allFields.filter((pair): pair is [string, FormField] => canRenderField(pair[1]));
   const fieldsByName = new Map(fields);
@@ -194,6 +197,58 @@ export function LaunchForm({
         ]),
     );
   }
+  const bindingContext = JSON.stringify([
+    draft.draftId,
+    draft.experiment,
+    draft.definition,
+    draft.workspaceId,
+    draft.codeRevision,
+    draft.sourceBaseline,
+    draft.values,
+    draft.controls,
+    draft.selection,
+    draft.actor,
+    draft.collection,
+    draft.workingInput,
+    workingCurrent,
+    active,
+  ]);
+  const [bindingSelection, setBindingSelection] = useState<{ key: string; plan: BindingPlan }>();
+  if (bindingSelection && bindingSelection.key !== bindingContext) setBindingSelection(undefined);
+  const selectedBindings =
+    bindingSelection?.key === bindingContext ? bindingSelection.plan : undefined;
+  const latestBindingContext = useRef(bindingContext);
+  useLayoutEffect(() => {
+    latestBindingContext.current = bindingContext;
+  }, [bindingContext]);
+  const needsBindings =
+    draft.selection.configuration.kind === "parameters" && !draft.selection.configuration.setup;
+  function bindingRequest(): BindingRequest {
+    return {
+      scan_mode: "cartesian" as const,
+      parameter_sweeps: [],
+      action: "preview" as const,
+      experiment: entry.id,
+      version: entry.version,
+      selection: draft.selection,
+      record_collection: draft.collection || undefined,
+      manual_line: draft.manualLine,
+      plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
+      decision_source: draft.handoff
+        ? {
+            run_id: draft.handoff.source_run,
+            analysis_id: draft.handoff.source_analysis,
+            publication_hash: draft.handoff.source_hash,
+          }
+        : (draft.lineSource ?? draft.plan?.definition.source),
+      inputs: inputValues(),
+      control_edits: controlEdits(drafts),
+      actor,
+      request_key: "",
+      code_revision: draft.codeRevision ?? draft.sourceBaseline,
+      workspace_id: draft.workspaceId,
+    };
+  }
   const canPrepare =
     active &&
     entry.actions.includes("preview") &&
@@ -205,7 +260,7 @@ export function LaunchForm({
     recovery.ready &&
     !recovery.conflict &&
     Boolean(actor.trim()) &&
-    !(draft.selection.configuration.kind === "parameters" && !draft.selection.configuration.setup);
+    (!needsBindings || Boolean(selectedBindings));
   async function prepare(startAfter: boolean) {
     if (!canPrepare || pending || (startAfter && (attempt || !attemptsReady))) return;
     const operation = beginPreparation();
@@ -236,30 +291,7 @@ export function LaunchForm({
         throw new Error("Working inputs changed. Review and use current inputs before starting.");
     }
     try {
-      const request = {
-        scan_mode: "cartesian" as const,
-        parameter_sweeps: [],
-        action: "preview" as const,
-        experiment: entry.id,
-        version: entry.version,
-        selection: draft.selection,
-        record_collection: draft.collection || undefined,
-        manual_line: draft.manualLine,
-        plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
-        decision_source: draft.handoff
-          ? {
-              run_id: draft.handoff.source_run,
-              analysis_id: draft.handoff.source_analysis,
-              publication_hash: draft.handoff.source_hash,
-            }
-          : (draft.lineSource ?? draft.plan?.definition.source),
-        inputs: inputValues(),
-        control_edits: controlEdits(drafts),
-        actor,
-        request_key: "",
-        code_revision: draft.codeRevision ?? draft.sourceBaseline,
-        workspace_id: draft.workspaceId,
-      };
+      const request = { ...bindingRequest(), instrument_bindings: selectedBindings };
       await checkWorkingInput();
       if (!intended()) return;
       const checked =
@@ -477,6 +509,38 @@ export function LaunchForm({
           <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
         </fieldset>
       </div>
+      {needsBindings && (
+        <ProgressiveBindings
+          key={bindingContext}
+          request={bindingRequest}
+          onSaved={() => {
+            void queryClient.invalidateQueries({ queryKey: ["setup-definitions"] });
+            void queryClient.invalidateQueries({ queryKey: ["setup-revisions"] });
+          }}
+          actor={actor}
+          disabled={
+            !active ||
+            !catalogReady ||
+            !workingCurrent ||
+            !recovery.ready ||
+            recovery.conflict ||
+            Boolean(pending) ||
+            Boolean(draft.needsReview) ||
+            Boolean(draft.unresolvedFields?.length)
+          }
+          onEdit={() => {
+            setBindingSelection(undefined);
+            update((current) => invalidateDraft(current, "设备选择已变化，请检查后重新准备。"));
+          }}
+          onChecked={(plan) => {
+            if (latestBindingContext.current !== bindingContext) return;
+            setBindingSelection({ key: bindingContext, plan });
+            update((current) =>
+              invalidateDraft(current, "设备绑定已检查；预览和开始仍会核对精确输入。"),
+            );
+          }}
+        />
+      )}
       <section aria-label="预览与开始" className="space-y-2 border-b border-line pb-3">
         <h4 className="sr-only">开始或检查</h4>
         <p className="text-sm text-text-dim">开始前会检查输入。预览只检查输入，不执行采集。</p>
