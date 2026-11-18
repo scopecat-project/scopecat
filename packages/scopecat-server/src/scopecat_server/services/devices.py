@@ -35,6 +35,7 @@ from scopecat.records.setup import (
     SetupInstrumentBinding,
     SetupRevision,
 )
+from scopecat.sdk.instruments.contracts import InstrumentDescription
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.instruments.actors import (
@@ -310,6 +311,49 @@ class DeviceService:
     def get(self, device_id: str) -> DeviceView:
         with self._errors(), self.control.read_transaction() as connection:
             return DeviceRepository(connection).view(device_id)
+
+    def declaration(
+        self, device_id: str, *, connection_revision_id: str
+    ) -> InstrumentDescription:
+        """Read the exact registered connection's pure declaration, never connect."""
+        view = self.get(device_id)
+        if view.revision.id != connection_revision_id:
+            raise BackendConflict(
+                "device connection revision changed; reload declarations"
+            )
+        content = view.revision.content
+        endpoint = self.endpoint
+        if (
+            endpoint is None
+            or endpoint.driver_catalog.get(content.driver.driver_id) is None
+            or driver_reference(endpoint, content.driver.driver_id) != content.driver
+        ):
+            raise BackendConflict(
+                "registered driver declaration is unavailable or has changed"
+            )
+        result = endpoint.describe(
+            (
+                InstrumentBindingSpec(
+                    id=device_id,
+                    driver_id=content.driver.driver_id,
+                    connection=content.connection,
+                ),
+            )
+        )
+        matches = [
+            item for item in result.instruments if item.instrument_id == device_id
+        ]
+        if result.problems or len(matches) != 1:
+            raise BackendConflict(
+                "registered driver declaration is unavailable for this device"
+            )
+        if self.get(device_id).revision.id != connection_revision_id:
+            raise BackendConflict(
+                "device connection revision changed; reload declarations"
+            )
+        if self.endpoint is not endpoint:
+            raise BackendConflict("registered driver changed; reload declarations")
+        return matches[0]
 
     def access_setup(
         self, device_id: str, *, require_driver: bool = True

@@ -69,6 +69,7 @@ it("only activates on explicit submission and refreshes device and driver views"
     "instruments",
     "instrument-drivers",
     "device-drivers",
+    "device-declaration",
   ]) {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [key] });
   }
