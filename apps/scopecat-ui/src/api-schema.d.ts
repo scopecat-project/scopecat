@@ -1050,6 +1050,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiment-launcher/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Experiment Binding Requirements */
+        post: operations["experiment_binding_requirements_api_v1_experiment_launcher_bindings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/experiment-launcher/preview": {
         parameters: {
             query?: never;
@@ -3135,6 +3152,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/bindings/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Instrument Binding Check */
+        post: operations["instrument_binding_check_api_v1_setup_bindings_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/bindings/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Instrument Binding Options */
+        post: operations["instrument_binding_options_api_v1_setup_bindings_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/definitions": {
         parameters: {
             query?: never;
@@ -4585,6 +4636,88 @@ export interface components {
             values: components["schemas"]["RunRequestScalarValue-Output"][];
         };
         BatchScope: components["schemas"]["UnscopedBatch"] | components["schemas"]["DeclaredBatch"];
+        /** BindingCandidate */
+        BindingCandidate: {
+            /**
+             * Component Path
+             * @default []
+             */
+            component_path: string[];
+            /** Connection Revision Id */
+            connection_revision_id: string;
+            /** Device Id */
+            device_id: string;
+            /** Device Label */
+            device_label: string;
+            /** Interface Id */
+            interface_id: string;
+            /** Port Id */
+            port_id: string;
+        };
+        /** BindingCheck */
+        BindingCheck: {
+            definition?: components["schemas"]["SetupDefinition"] | null;
+            /**
+             * Diagnostics
+             * @default []
+             */
+            diagnostics: components["schemas"]["BindingDiagnostic"][];
+        };
+        /** BindingDiagnostic */
+        BindingDiagnostic: {
+            /** Code */
+            code: string;
+            /** Device Id */
+            device_id?: string | null;
+            /** Message */
+            message: string;
+            /** Port Id */
+            port_id?: string | null;
+        };
+        /** BindingOptions */
+        BindingOptions: {
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: components["schemas"]["BindingCandidate"][];
+            /**
+             * Diagnostics
+             * @default []
+             */
+            diagnostics: components["schemas"]["BindingDiagnostic"][];
+            requirements: components["schemas"]["BindingRequirements"];
+        };
+        /** BindingRequirements */
+        BindingRequirements: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            /**
+             * Diagnostics
+             * @default []
+             */
+            diagnostics: components["schemas"]["BindingDiagnostic"][];
+            /** Experiment Id */
+            experiment_id: string;
+            /** Inputs Hash */
+            inputs_hash: string;
+            /**
+             * Kind
+             * @default binding_requirements
+             * @constant
+             */
+            kind: "binding_requirements";
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["InstrumentRequirement"][];
+            /** Supported */
+            supported: boolean;
+            /** Version */
+            version: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
         /**
          * BlobPayloadBody
          * @description Content-addressed locator resolved by the payload transport boundary.
@@ -7723,6 +7856,33 @@ export interface components {
             kind: "instrument";
             result_id: components["schemas"]["_NonEmptyText"];
         };
+        /** InstrumentBindingChoice */
+        InstrumentBindingChoice: {
+            /**
+             * Component Path
+             * @default []
+             */
+            component_path: string[];
+            /** Connection Revision Id */
+            connection_revision_id: string;
+            /** Device Id */
+            device_id: string;
+            failure_action: components["schemas"]["InstrumentFailureAction"];
+            /** Port Id */
+            port_id: string;
+            run_start: components["schemas"]["InstrumentRunStartPolicy"];
+            success_action: components["schemas"]["InstrumentSuccessAction"];
+        };
+        /** InstrumentBindingPlan */
+        InstrumentBindingPlan: {
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["InstrumentBindingChoice"][];
+            requirements: components["schemas"]["BindingRequirements"];
+            scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
+        };
         /**
          * InstrumentBindingSpec
          * @description Provider-visible identity and connection for one configured instrument.
@@ -7923,6 +8083,15 @@ export interface components {
         InstrumentReleaseReceipt: {
             /** Instrument Ids */
             instrument_ids: components["schemas"]["NonEmptyText"][];
+        };
+        /** InstrumentRequirement */
+        InstrumentRequirement: {
+            /** Interface Id */
+            interface_id: string;
+            /** Port Id */
+            port_id: string;
+            /** Role Id */
+            role_id?: string | null;
         };
         /** @enum {string} */
         InstrumentRunStartPolicy: "preserve" | "apply_default_state";
@@ -8899,6 +9068,7 @@ export interface components {
         };
         /** LaunchRejection */
         LaunchRejection: {
+            bindings?: components["schemas"]["BindingRequirements"] | null;
             /**
              * Kind
              * @default launch_rejection
@@ -8930,7 +9100,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "list" | "preview" | "submit";
+            action: "list" | "preview" | "submit" | "bindings";
             /**
              * Actor
              * @default operator
@@ -8952,6 +9122,7 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            instrument_bindings?: components["schemas"]["InstrumentBindingPlan"] | null;
             manual_line?: components["schemas"]["ManualLineSelection"] | null;
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
@@ -8989,7 +9160,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "list" | "preview" | "submit";
+            action: "list" | "preview" | "submit" | "bindings";
             /**
              * Actor
              * @default operator
@@ -9011,6 +9182,7 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            instrument_bindings?: components["schemas"]["InstrumentBindingPlan"] | null;
             manual_line?: components["schemas"]["ManualLineSelection"] | null;
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
@@ -13789,7 +13961,7 @@ export interface components {
              * @default experiment
              * @enum {string}
              */
-            purpose: "experiment" | "device_access";
+            purpose: "experiment" | "device_access" | "execution";
             /**
              * Recorded At
              * Format: date-time
@@ -16546,6 +16718,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    experiment_binding_requirements_api_v1_experiment_launcher_bindings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchRequest-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingRequirements"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchRejectionResponse"];
                 };
             };
         };
@@ -20845,6 +21050,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SampleArtifactPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instrument_binding_check_api_v1_setup_bindings_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentBindingPlan"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instrument_binding_options_api_v1_setup_bindings_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindingRequirements"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingOptions"];
                 };
             };
             /** @description Validation Error */

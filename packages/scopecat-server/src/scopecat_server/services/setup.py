@@ -22,6 +22,7 @@ from scopecat.records.device import (
     DeviceSafetyPolicy,
     connection_access_alias,
 )
+from scopecat.records.instrument_bindings import InstrumentBindingPlan
 from scopecat.records.parameter_revision import (
     ParameterRevision,
     ParameterRevisionContent,
@@ -38,6 +39,7 @@ from scopecat.records.setup import (
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.services.devices import DeviceService
+from scopecat_server.services.instrument_bindings import check_bindings
 from scopecat_server.setup_access import setup_config
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -191,6 +193,38 @@ class SetupService:
     def list(self) -> tuple[SetupRevision, ...]:
         with self._errors(), self._registry.read_unit_of_work() as work:
             return work.setups.list_revisions()
+
+    def resolve_bindings(self, plan: InstrumentBindingPlan) -> SetupRevision:
+        """At preparation, retain an exact execution-only setup; never select it."""
+        with self._errors():
+            checked = check_bindings(self._devices, plan)
+            if checked.definition is None:
+                raise ValueError("; ".join(d.message for d in checked.diagnostics))
+            definition = checked.definition
+        with self._errors(), self._control.write_transaction() as connection:
+            devices = DeviceRepository(connection)
+            for choice in plan.choices:
+                if (
+                    devices.view(choice.device_id).revision.id
+                    != choice.connection_revision_id
+                ):
+                    raise ValueError(
+                        "Device connection changed; inspect and choose again"
+                    )
+            repository = SQLiteSetupRepository(connection)
+            identity = "execution:" + definition.content_hash.removeprefix("sha256:")
+            repository.save_definition(
+                SetupDefinitionRevision(
+                    id=identity,
+                    definition=definition,
+                    purpose="execution",
+                    actor="progressive-bindings",
+                )
+            )
+            revision = repository.resolve(identity)
+            self._validate_resolution(connection, revision)
+            validate_config_profile(setup_config(revision))
+            return revision
 
     def save(self, command: SetupSaveCommand) -> SetupRevision:
         with self._control.write_transaction() as connection:

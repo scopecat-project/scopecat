@@ -13,6 +13,9 @@ from scopecat.records.author_workspace import (
 )
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
+from scopecat.records.instrument_bindings import (
+    InstrumentBindingPlan,
+)
 from scopecat.records.manual_line import ManualLineSelection
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
@@ -41,7 +44,10 @@ class LaunchRequest(BaseModel):
     )
     workspace_id: AuthorWorkspaceId
     code_revision: AuthorRevisionRef | None = None
-    action: Literal["list", "preview", "submit"]
+    action: Literal["list", "preview", "submit", "bindings"]
+    instrument_bindings: InstrumentBindingPlan | None = Field(
+        default=None, exclude_if=_absent_collection
+    )
     experiment: str = ""
     version: str = ""
     request_key: str = ""
@@ -82,6 +88,15 @@ class LaunchRequest(BaseModel):
                 **(
                     {"manual_line": self.manual_line.model_dump(mode="json")}
                     if self.manual_line
+                    else {}
+                ),
+                **(
+                    {
+                        "instrument_bindings": self.instrument_bindings.model_dump(
+                            mode="json"
+                        )
+                    }
+                    if self.instrument_bindings is not None
                     else {}
                 ),
                 "codec": "scopecat.launch-request.v2",

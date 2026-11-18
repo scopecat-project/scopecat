@@ -341,6 +341,12 @@ from scopecat.records.instrument import (
     InstrumentStateReadback,
     InstrumentStateSnapshot,
 )
+from scopecat.records.instrument_bindings import (
+    BindingCheck,
+    BindingOptions,
+    BindingRequirements,
+    InstrumentBindingPlan,
+)
 from scopecat.records.launch_rejection import LaunchRejectionResponse
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_line_scan import (
@@ -487,6 +493,7 @@ from scopecat_server.services.direct_measurements import (
     DirectMeasurementSave,
     PendingDirectMeasurementPage,
 )
+from scopecat_server.services.instrument_bindings import binding_options, check_bindings
 from scopecat_server.services.manual_lines import ManualLineScanPage, ManualLineScanView
 from scopecat_server.services.operator_settings import OperatorSettings
 from scopecat_server.services.pending_result_settings import (
@@ -1068,6 +1075,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             operation = {
                 "list": "catalog loading",
                 "preview": "preview",
+                "bindings": "binding requirements",
                 "submit": "submission",
             }[command.action]
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -1111,7 +1119,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(
                 422,
                 rejection.model_dump(mode="json")
-                if rejection.problems
+                if rejection.problems or rejection.bindings is not None
                 else rejection.message,
             )
         return completed.stdout
@@ -1195,6 +1203,29 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 response,
             )
         )
+
+    @app.post(
+        f"{_API_PREFIX}/experiment-launcher/bindings",
+        responses={422: {"model": LaunchRejectionResponse}},
+    )
+    def experiment_binding_requirements(
+        command: LaunchRequest, response: Response
+    ) -> BindingRequirements:
+        if command.action != "bindings":
+            raise HTTPException(422, "Expected bindings action")
+        return BindingRequirements.model_validate_json(launch_call(command, response))
+
+    @app.post(f"{_API_PREFIX}/setup/bindings/options")
+    def instrument_binding_options(command: BindingRequirements) -> BindingOptions:
+        return binding_options(application.devices, command)
+
+    @app.post(f"{_API_PREFIX}/setup/bindings/check")
+    def instrument_binding_check(command: InstrumentBindingPlan) -> BindingCheck:
+        return check_bindings(application.devices, command)
+
+    @app.post(f"{_API_PREFIX}/setup/bindings/resolve")
+    def instrument_binding_resolve(command: InstrumentBindingPlan) -> SetupRevision:
+        return application.setup.resolve_bindings(command)
 
     @app.post(
         f"{_API_PREFIX}/experiment-launcher/preview",

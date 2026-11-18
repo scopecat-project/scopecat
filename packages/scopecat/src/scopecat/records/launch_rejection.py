@@ -2,16 +2,24 @@
 
 from typing import Literal, cast
 
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from scopecat.kernel.problems import ModelLocation, Problem
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
+from scopecat.records.instrument_bindings import BindingRequirements
+
+
+def _absent_bindings(value: object) -> bool:
+    return value is None
 
 
 class LaunchRejection(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["launch_rejection"] = "launch_rejection"
     message: str
+    bindings: BindingRequirements | None = Field(
+        default=None, exclude_if=_absent_bindings
+    )
     problems: tuple[Problem, ...] = ()
     scenario: SoftwareExecutionScenario | None = None
 

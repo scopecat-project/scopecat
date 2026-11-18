@@ -99,6 +99,10 @@ from scopecat.records.author_revision import (
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentPlanSave
 from scopecat.records.experimental_batch import require_batch_match
+from scopecat.records.instrument_bindings import (
+    BindingRequirements,
+    InstrumentBindingPlan,
+)
 from scopecat.records.launch_rejection import AuthorLaunchRejected, LaunchRejection
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementRecord
@@ -652,6 +656,23 @@ class AuthorProject(DaemonClient):
             )
         return science
 
+    def binding_requirements(
+        self,
+        experiment: str | ExperimentRequest[object, object],
+        *,
+        inputs: dict[str, JsonValue] | None = None,
+        code_revision: AuthorRevisionRef | None = None,
+    ) -> BindingRequirements:
+        """Inspect supported config-free instrument demands on the retained source."""
+        request = self._launch_request(
+            experiment, inputs=inputs, code_revision=code_revision
+        )
+        return self._post_model(
+            "/api/v1/experiment-launcher/bindings",
+            request.model_copy(update={"action": "bindings"}),
+            BindingRequirements,
+        )
+
     def prepare(
         self,
         experiment: str | ExperimentRequest[object, object],
@@ -671,7 +692,55 @@ class AuthorProject(DaemonClient):
         batch: str | SessionDefault | None = INHERIT,
         record_collection: str | SessionDefault | None = INHERIT,
         decision_source: PlanAnalysisSource | None = None,
+        instrument_bindings: InstrumentBindingPlan | None = None,
     ) -> AuthorPreparedLaunch:
+        """Prepare exact inputs; freeze progressive bindings only here."""
+        request = self._launch_request(
+            experiment,
+            control_edits=control_edits,
+            fixed=fixed,
+            scans=scans,
+            parameters=parameters,
+            candidate=candidate,
+            code_revision=code_revision,
+            inputs=inputs,
+            selection=selection,
+            target=target,
+            overrides=overrides,
+            sample=sample,
+            actor=actor,
+            batch=batch,
+            record_collection=record_collection,
+            decision_source=decision_source,
+        )
+        if instrument_bindings is not None:
+            request = request.model_copy(
+                update={"instrument_bindings": instrument_bindings}
+            )
+        preview = self.preview(request)
+        request = request.model_copy(update={"reviewed": preview.reviewed})
+        return AuthorPreparedLaunch(self, request, preview)
+
+    def _launch_request(
+        self,
+        experiment: str | ExperimentRequest[object, object],
+        *,
+        control_edits: dict[str, ControlEdit] | None = None,
+        fixed: Mapping[str, SupportsFloat | Quantity] | None = None,
+        scans: Mapping[str, Iterable[SupportsFloat | Quantity]] | None = None,
+        parameters: ParameterEditor | None = None,
+        candidate: ParameterCandidate | CandidateConfig | None = None,
+        code_revision: AuthorRevisionRef | None = None,
+        inputs: dict[str, JsonValue] | None = None,
+        selection: ScientificSelection | SessionDefault = INHERIT,
+        target: str | TargetRevisionRef | SessionDefault | None = INHERIT,
+        overrides: tuple[ParameterUpdate, ...] = (),
+        sample: str | SessionDefault | None = INHERIT,
+        actor: str | SessionDefault = INHERIT,
+        batch: str | SessionDefault | None = INHERIT,
+        record_collection: str | SessionDefault | None = INHERIT,
+        decision_source: PlanAnalysisSource | None = None,
+    ) -> LaunchRequest:
         """Freeze inputs and an optional exact saved conclusion for this launch.
 
         The source records why this experiment was chosen, independently of its
@@ -767,9 +836,7 @@ class AuthorProject(DaemonClient):
             code_revision=catalog.code_revision,
             workspace_id=catalog.workspace_id,
         )
-        preview = self.preview(request)
-        request = request.model_copy(update={"reviewed": preview.reviewed})
-        return AuthorPreparedLaunch(self, request, preview)
+        return request
 
     def prepare_plan(
         self,

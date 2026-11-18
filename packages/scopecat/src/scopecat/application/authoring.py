@@ -23,6 +23,7 @@ from scopecat.api.run import RunHandle
 from scopecat.application.author_inputs import author_input_model
 from scopecat.application.controls import control_catalog, control_values, edit_controls
 from scopecat.application.inspection import LaunchInspection
+from scopecat.application.instrument_bindings import inspect_instrument_requirements
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
@@ -75,6 +76,7 @@ from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_selection import ParameterConfiguration
 
 
 def _absent_collection(value: object) -> bool:
@@ -431,6 +433,11 @@ class AuthorExperiments:
             None,
         )
         if selected is None:
+            if request.action == "bindings" or request.instrument_bindings is not None:
+                raise LaunchRequestRejected(
+                    "Progressive binding requires an ordinary authored instrument "
+                    "experiment"
+                )
             if (
                 request.manual_line is not None
                 or request.record_collection is not None
@@ -459,6 +466,44 @@ class AuthorExperiments:
         inputs = cast("dict[str, JsonValue]", validated_inputs.model_dump(mode="json"))
         if request.record_collection is not None:
             lab.record_collection(request.record_collection)
+        choice = request.selection.configuration
+        needs_binding = (
+            isinstance(choice, ParameterConfiguration)
+            and choice.setup is None
+            and request.reviewed is None
+        )
+        if (
+            request.action == "bindings"
+            or request.instrument_bindings is not None
+            or needs_binding
+        ):
+            requirements = inspect_instrument_requirements(
+                selected.declaration,
+                inputs=validated_inputs.model_dump(),
+                serialized_inputs=inputs,
+                workspace_id=request.workspace_id,
+                code_revision=selected.code_revision,
+                version=selected.entry.version,
+            )
+            if request.action == "bindings":
+                return requirements
+            if request.instrument_bindings is not None:
+                if request.instrument_bindings.requirements != requirements:
+                    raise LaunchRequestRejected(
+                        "Requirements changed; inspect the request and choose again"
+                    )
+                if not needs_binding and request.reviewed is None:
+                    raise LaunchRequestRejected(
+                        "Choose either an exact setup or progressive bindings, not both"
+                    )
+            elif needs_binding:
+                error = LaunchRequestRejected(
+                    "Select instrument bindings or an existing setup"
+                )
+                error.diagnostic = error.diagnostic.model_copy(
+                    update={"bindings": requirements}
+                )
+                raise error
         resolved = resolve_launch_config(lab, request)
         config, source = resolved.config, resolved.reviewed.config_source
         request = request.model_copy(update={"reviewed": resolved.reviewed})

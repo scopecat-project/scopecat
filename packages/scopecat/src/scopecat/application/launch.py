@@ -27,6 +27,7 @@ from scopecat.records.author_workspace import (
 )
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
+from scopecat.records.instrument_bindings import BindingRequirements
 from scopecat.records.launch_rejection import LaunchRejection
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
@@ -121,7 +122,9 @@ class LaunchPreview(BaseModel):
     controls: tuple[LaunchControlValue, ...] = ()
 
 
-type LaunchResult = LaunchCatalog | LaunchPreview | LaunchSubmission
+type LaunchResult = (
+    LaunchCatalog | LaunchPreview | LaunchSubmission | BindingRequirements
+)
 type LaunchProvider = Callable[[LabClient, LaunchRequest], LaunchResult]
 
 

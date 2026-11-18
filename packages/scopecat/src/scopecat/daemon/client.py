@@ -314,6 +314,12 @@ from scopecat.records.instrument import (
     InstrumentStateReadback,
     InstrumentStateSnapshot,
 )
+from scopecat.records.instrument_bindings import (
+    BindingCheck,
+    BindingOptions,
+    BindingRequirements,
+    InstrumentBindingPlan,
+)
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement import MeasurementDatasetSchema
 from scopecat.records.measurement_recording import (
@@ -1378,6 +1384,25 @@ class DaemonClient:
 
     def setup_revisions(self) -> SetupRevisionList:
         return self._get_model(f"{_API_PREFIX}/setup/revisions", SetupRevisionList)
+
+    def instrument_binding_options(
+        self, command: BindingRequirements
+    ) -> BindingOptions:
+        return self._post_model(
+            f"{_API_PREFIX}/setup/bindings/options", command, BindingOptions
+        )
+
+    def check_instrument_bindings(self, command: InstrumentBindingPlan) -> BindingCheck:
+        return self._post_model(
+            f"{_API_PREFIX}/setup/bindings/check", command, BindingCheck
+        )
+
+    def resolve_instrument_bindings(
+        self, command: InstrumentBindingPlan
+    ) -> SetupRevision:
+        return self._post_model(
+            f"{_API_PREFIX}/setup/bindings/resolve", command, SetupRevision
+        )
 
     def save_setup(self, command: SetupSaveCommand) -> SetupRevision:
         return self._post_idempotent_model(
