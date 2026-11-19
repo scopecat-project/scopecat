@@ -90,7 +90,12 @@ export function DeviceContextPicker({
           重新检查设备连接
         </button>
       )}
-      {revisions.isSuccess && items.length === 0 && <p>暂无已保存配置，请在参数与绑定中创建。</p>}
+      {revisions.isSuccess && items.length === 0 && (
+        <p>
+          暂无已保存的命名配置。普通仪器实验可在准备页查看需求并明确选择设备；复杂需求请按诊断提供
+          setup。
+        </p>
+      )}
       <p className="text-sm">仅应用于本页。选择不会连接设备，也不会改变已提交任务。</p>
       {value.setup && <SetupContextSummary revision={value.setup} />}
     </div>
