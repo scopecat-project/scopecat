@@ -5,6 +5,7 @@ import type { MethodResponse } from "openapi-fetch";
 import { ApiError, apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 import { errorMessage } from "../../lib/presentation";
+import { connectionSummary, getDriverCatalog } from "../instruments/instrument-api";
 import { getDevices } from "../instruments/device-api";
 import { getParameterRevisions } from "./parameter-api";
 import { getSetupDefinitions } from "./setup-api";
@@ -70,6 +71,10 @@ export function ConfigurationExchange({
     queryFn: ({ signal }) => getSetupDefinitions(signal),
   });
   const devices = useQuery({ queryKey: ["devices"], queryFn: ({ signal }) => getDevices(signal) });
+  const drivers = useQuery({
+    queryKey: ["instrument-drivers"],
+    queryFn: ({ signal }) => getDriverCatalog(signal),
+  });
   const sources = useQuery({
     queryKey: ["exchange-sources"],
     queryFn: () => apiData(apiClient.GET("/api/v1/author-workspaces")),
@@ -515,7 +520,13 @@ export function ConfigurationExchange({
                             .filter((item) => item.device.state !== "retired")
                             .map((item) => (
                               <option key={item.device.id} value={item.device.id}>
-                                {item.device.label}
+                                {item.device.label} ·{" "}
+                                {drivers.data?.drivers.find(
+                                  (driver) =>
+                                    driver.driver_id === item.revision.content.driver.driver_id,
+                                )?.label ?? item.revision.content.driver.driver_id}{" "}
+                                · {connectionSummary(item.revision.content.connection)} · ID:{" "}
+                                {item.device.id}
                               </option>
                             ))}
                         </Controls.Select>
@@ -527,7 +538,8 @@ export function ConfigurationExchange({
                       <Controls.Button onClick={() => void devices.refetch()}>
                         刷新本地设备
                       </Controls.Button>
-                      导入不会连接设备。
+                      刷新后请重新核对型号、连接和登记
+                      ID。创建时使用当前列表中的登记修订，服务端仍会检查修订是否有效。导入不会连接设备。
                     </p>
                   )}
                 </>

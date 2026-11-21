@@ -180,3 +180,17 @@ it("allows retry after clipboard failure and reports only the successful retry",
   expect(write).toHaveBeenNthCalledWith(1, networkSweepExamples("exact-id", []).live);
   expect(write).toHaveBeenNthCalledWith(2, networkSweepExamples("exact-id", []).live);
 });
+
+it("guides explicit preparation-time binding and names the unsupported-demand fallback", () => {
+  render(<DevicePythonGuide deviceId="registered-vna" description={description} />);
+  expect(screen.getByText(/无需先创建具名 setup/)).toBeVisible();
+  expect(screen.getByText(/明确选择登记设备、端点和生命周期策略/)).toBeVisible();
+  expect(screen.getByText(/按准备诊断核对原因，再提供明确的 setup/)).toBeVisible();
+  expect(screen.getByRole("link", { name: /Python 渐进绑定/ })).toHaveAttribute(
+    "href",
+    expect.stringContaining("progressive-instrument-bindings"),
+  );
+  expect(screen.getByRole("textbox", { name: "实验声明 Python 整机" })).toHaveValue(
+    networkSweepExamples("registered-vna", []).experiment,
+  );
+});

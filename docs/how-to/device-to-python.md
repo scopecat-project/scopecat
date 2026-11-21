@@ -3,7 +3,7 @@
 先用公开的 `scopecat.virtual.vna`（Virtual VNA）完成这条旅程。它只生成合成响应，
 不代表真实样品。需要已启用提供该驱动的来源；如果驱动列表没有它，先完成
 [驱动来源配置](control-instruments.md#update-driver-source-while-the-application-is-running)，
-不要用真实设备替代。多来源管理与空白应用模拟设备入口由 #1434/#565 跟踪。
+不要用真实设备替代。空白应用可在“设备与驱动”启用“模拟设备体验（无硬件）”，再添加 Virtual VNA。
 
 ## 从设备页复制声明
 
@@ -30,8 +30,9 @@
 不要在 Notebook 临时生成 client 或切到应用自用 Python。
 
 普通无实体仪器实验也可使用[渐进绑定](progressive-instrument-bindings.md)：
-从请求查看需求、选择登记设备端点，再准备；不必先建立具名 setup。
-以下保留显式命名用途和 setup 的教学路径。
+从请求查看需求、明确选择登记设备端点和生命周期策略，检查绑定、准备，再显式运行；不必先建立具名 setup。页面原样 `demo-readout` 声明支持这条路径，角色不要求预先登记在设备上。
+GUI 使用实验准备页的“检查本实验所需设备”，Python 使用链接中的同一后端 API。复杂实体、拓扑、领域或嵌套模块需求若不受支持，应按诊断提供明确的 setup。
+以下保留可选的命名 setup 复用教学路径。
 
 ## 明确实验用途和映射
 

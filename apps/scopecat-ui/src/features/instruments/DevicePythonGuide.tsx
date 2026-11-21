@@ -3,7 +3,7 @@ import * as Controls from "../../ui/Controls";
 import type { InstrumentDescription } from "../../api-contract";
 import { interfaceMountPaths } from "./InstrumentInterfaceControls";
 
-const guide = "https://scopecat-project.github.io/scopecat/how-to/device-to-python/";
+const guide = "https://scopecat-project.github.io/scopecat/how-to/progressive-instrument-bindings/";
 const networkSweep = "scopecat.network_sweep/v1";
 
 /** Curated, versioned examples: never infer Python imports from driver identifiers. */
@@ -97,8 +97,9 @@ export function DevicePythonGuide({
               />
               <h5>在实验中声明能力</h5>
               <p>
-                保存到作者模块。ensure 只声明期望设置，定义和创建请求不采集；需选择
-                setup、准备检查，再显式提交。
+                保存到作者模块。ensure
+                只声明期望设置，定义和创建请求不采集。此普通仪器示例可在实验准备时查看需求，明确选择登记设备、端点和生命周期策略，检查绑定并准备，再显式运行。无需先创建具名
+                setup；需要复用时可另存命名配置。
               </p>
               <Code
                 key={examples.experiment}
@@ -106,21 +107,21 @@ export function DevicePythonGuide({
                 value={examples.experiment}
               />
               <p>
-                示例角色 demo-readout 是教学用途名称，不是此设备已有角色。请在“参数与绑定 → 实验
-                setup”核对逻辑别名绑定到登记 ID <code>{deviceId}</code>；路由端点使用{" "}
-                <code>{networkSweep}</code>，组件路径 <code>{JSON.stringify(mountPath)}</code>。
+                示例角色 demo-readout
+                是实验声明的用途，不要求设备预先拥有此角色。准备时核对所选登记设备 ID{" "}
+                <code>{deviceId}</code>、能力 <code>{networkSweep}</code> 和端点{" "}
+                <code>{JSON.stringify(mountPath)}</code>（空路径为整机）。也可选择已有的兼容 setup。
               </p>
             </section>
           );
         })
       )}
       <p>
-        本页不选择实验
-        setup，也不判断接线。没有兼容路由时，请补充经核对的绑定、角色和端点；有多条候选时，明确实验用途并选择唯一匹配路由，不要靠连接顺序消除歧义。路由的
-        instrument_id 是 setup 逻辑别名，不是登记 ID。
+        本页仅提供示例，不选择设备绑定或判断接线。多条候选必须明确选择；检查通过仍需准备和显式运行。依赖实体、复杂拓扑、领域执行或嵌套模块等不支持渐进绑定的需求，请按准备诊断核对原因，再提供明确的
+        setup；可在“参数与绑定 → 实验 setup”配置。
       </p>
       <a className="text-accent underline" href={guide} target="_blank" rel="noreferrer">
-        模拟 VNA 完整旅程：setup、修改参数、准备、运行与重开
+        Python 渐进绑定：查看需求、选端点、准备与运行
       </a>
     </section>
   );

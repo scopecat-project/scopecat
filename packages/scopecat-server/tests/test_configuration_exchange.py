@@ -496,3 +496,90 @@ def test_current_snapshot_preserves_original_receipt_and_editable_copy(
             runtime.application.config.parameter_revision("Saved copy").parameters
             == original.parameters
         )
+
+
+def test_same_name_binding_uses_selected_device_and_rejects_stale_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.daemon.device_views import DeviceView
+    from scopecat.daemon.wire import DeviceSaveCommand
+
+    endpoint = signal_endpoint()
+    with (
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=load_config(), instrument_endpoint=endpoint
+        ) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        original = seed(runtime).model_copy(
+            update={"setup": runtime.application.setup.definition("initial")}
+        )
+        assert original.setup is not None
+        role = original.setup.definition.instruments[0]
+        source = runtime.application.devices.get(role.device_id)
+        content = source.revision.content.model_copy(update={"access_aliases": ()})
+        views: list[DeviceView] = []
+        for identity in ("same-a", "same-b"):
+            views.append(
+                runtime.application.devices.save(
+                    DeviceSaveCommand(
+                        device_id=identity,
+                        label="Same instrument",
+                        revision_id=identity + "-v1",
+                        connection=content,
+                        expected_head=None,
+                        actor="receiver",
+                    )
+                )
+            )
+        selected = views[1]
+        mappings = {
+            item.id: runtime.application.devices.get(item.device_id).device.head
+            for item in original.setup.definition.instruments
+        }
+        mappings[role.id] = selected.device.head
+        command = ConfigurationDerive(
+            document=original,
+            name="Selected B",
+            actor="receiver",
+            operation_id="selected-b",
+            include_setup=True,
+            bindings=mappings,
+        )
+        # Update after selection. The old reference is rejected rather than followed.
+        refreshed = runtime.application.devices.save(
+            DeviceSaveCommand(
+                device_id=selected.device.id,
+                label=selected.device.label,
+                revision_id="same-b-v2",
+                connection=content,
+                expected_head=selected.device.head,
+                actor="receiver",
+            )
+        )
+
+        def no_connect(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("configuration derivation must not connect devices")
+
+        monkeypatch.setattr(endpoint, "connect", no_connect)
+        stale = client.post(ROOT + "/derive", json=command.model_dump(mode="json"))
+        assert stale.status_code == 422, stale.text
+        assert "Selected B" not in {
+            r.id for r in runtime.application.config.parameter_revisions()
+        }
+        command = command.model_copy(
+            update={"bindings": {**mappings, role.id: refreshed.device.head}}
+        )
+        result = client.post(ROOT + "/derive", json=command.model_dump(mode="json"))
+        assert result.status_code == 200, result.text
+        definition = runtime.application.setup.definition("Selected B setup").definition
+        assert (
+            next(
+                item for item in definition.instruments if item.id == role.id
+            ).device_id
+            == "same-b"
+        )
+        assert (
+            refreshed.device.head.model_dump(mode="json")
+            in result.json()["setup"]["resolution"]["devices"]
+        )
