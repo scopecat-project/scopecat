@@ -8,8 +8,18 @@ vi.mock("./parameter-api", () => ({
   getParameterRevisions: async () => ({ items: [{ id: "saved" }] }),
 }));
 vi.mock("./setup-api", () => ({ getSetupDefinitions: async () => ({ items: [] }) }));
-vi.mock("../instruments/device-api", () => ({ getDevices: async () => ({ items: [] }) }));
-const document = {
+const devices = vi.hoisted(() => ({ items: [] as unknown[] }));
+vi.mock("../instruments/device-api", () => ({
+  getDevices: async () => ({ items: devices.items }),
+}));
+vi.mock("../instruments/instrument-api", async (original) => ({
+  ...(await original<typeof import("../instruments/instrument-api")>()),
+  getDriverCatalog: async () => ({ drivers: [{ driver_id: "virtual-vna", label: "Virtual VNA" }] }),
+}));
+const document: { setup?: { definition: { instruments: { id: string }[] } } } & Record<
+  string,
+  unknown
+> & { parameter_origin: { revision_id: string; content_hash: string } } = {
   label: "Shared inputs",
   format: "scopecat.configuration-exchange.v1",
   origin_store: "sender",
@@ -28,6 +38,8 @@ const save = vi.fn(),
 let failDerive = true;
 let attempts: string[];
 beforeEach(() => {
+  devices.items = [];
+  delete document.setup;
   attempts = [];
   failDerive = true;
   save.mockReset().mockResolvedValue(null);
@@ -148,4 +160,83 @@ it("retains the derive actor when another operation refreshes the shared automat
   await screen.findByText(/已创建参数分支/);
   expect(attempts[1]).toBe(attempts[0]);
   expect(resolve).toHaveBeenCalledTimes(1);
+});
+
+function device(id: string, host: string, revision = `${id}-r1`) {
+  return {
+    device: {
+      id,
+      label: "同名 VNA",
+      state: "available",
+      head: { device_id: id, revision_id: revision, content_hash: "sha256:" + "c".repeat(64) },
+    },
+    revision: {
+      id: revision,
+      content: {
+        driver: { driver_id: "virtual-vna" },
+        connection: {
+          kind: "tcpip_socket",
+          host,
+          port: 5025,
+          options: { password: "NEVER-SHOW-CREDENTIAL" },
+        },
+      },
+    },
+  };
+}
+it("distinguishes same-name devices and submits explicitly chosen B with the refreshed head", async () => {
+  devices.items = [device("device-a", "192.0.2.10"), device("device-b", "192.0.2.20")];
+  document.setup = { definition: { instruments: [{ id: "vna-role" }] } };
+  mount();
+  await upload();
+  fireEvent.click(screen.getByLabelText("同时创建我的 setup"));
+  const select = screen.getByRole("combobox", { name: "本地设备对应角色 vna-role" });
+  expect(select).toHaveValue("");
+  expect(
+    screen.getByRole("option", {
+      name: /同名 VNA · Virtual VNA · TCP\/IP · 192.0.2.10:5025 · ID: device-a/,
+    }),
+  ).toBeVisible();
+  expect(screen.getByRole("option", { name: /192.0.2.20:5025 · ID: device-b/ })).toBeVisible();
+  expect(screen.queryByText(/NEVER-SHOW-CREDENTIAL/)).not.toBeInTheDocument();
+  fireEvent.change(select, { target: { value: "device-a" } });
+  fireEvent.change(select, { target: { value: "device-b" } });
+  devices.items = [
+    device("device-a", "192.0.2.10"),
+    device("device-b", "192.0.2.21", "device-b-r2"),
+  ];
+  fireEvent.click(screen.getByRole("button", { name: "刷新本地设备" }));
+  await screen.findByRole("option", { name: /192.0.2.21:5025 · ID: device-b/ });
+  expect(select).toHaveValue("device-b");
+  expect(screen.getByText(/创建时使用当前列表中的登记修订/)).toBeVisible();
+  failDerive = false;
+  fireEvent.click(screen.getByRole("button", { name: "创建我的副本" }));
+  await screen.findByText(/已创建参数分支/);
+  expect(JSON.parse(attempts[0]!).bindings).toEqual({
+    "vna-role": {
+      device_id: "device-b",
+      revision_id: "device-b-r2",
+      content_hash: "sha256:" + "c".repeat(64),
+    },
+  });
+});
+
+it("requires a new explicit choice if the selected local device is retired on refresh", async () => {
+  devices.items = [device("device-a", "192.0.2.10"), device("device-b", "192.0.2.20")];
+  document.setup = { definition: { instruments: [{ id: "vna-role" }] } };
+  mount();
+  await upload();
+  fireEvent.click(screen.getByLabelText("同时创建我的 setup"));
+  const select = screen.getByRole("combobox", { name: "本地设备对应角色 vna-role" });
+  fireEvent.change(select, { target: { value: "device-b" } });
+  const retired = device("device-b", "192.0.2.20");
+  retired.device.state = "retired";
+  devices.items = [device("device-a", "192.0.2.10"), retired];
+  fireEvent.click(screen.getByRole("button", { name: "刷新本地设备" }));
+  await vi.waitFor(() =>
+    expect(screen.queryByRole("option", { name: /ID: device-b/ })).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "创建我的副本" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Choose a local device");
+  expect(attempts).toHaveLength(0);
 });
