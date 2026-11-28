@@ -47,7 +47,7 @@ jobs:
       # SARIF reports findings without failing the job; operational errors still fail.
       # This is advisory initially: do not make it a required check without triage.
       - name: Scan workflows and local actions
-        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        uses: zizmorcore/zizmor-action@1b4550e929643b8b26a62303c6bd64814271a4f1 # v0.9.2
         with:
           persona: regular
           advanced-security: true
